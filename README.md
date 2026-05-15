@@ -54,3 +54,15 @@ npx expo start --android
 npx expo start --ios
 npx expo start --web
 ```
+
+## Preview APK + OTA Updates
+- Build the installable preview APK once:
+  ```bash
+  eas build --platform android --profile preview
+  ```
+- Publish future non-native preview updates (JS/UI/logic only):
+  ```bash
+  eas update --channel preview --message "..."
+  ```
+- Native dependency/config changes still require a new preview APK build.
+

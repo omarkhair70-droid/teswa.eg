@@ -26,6 +26,19 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "<EXPO_EAS_PROJECT_ID>"
+      }
+    }
   }
 }
