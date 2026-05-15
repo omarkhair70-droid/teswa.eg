@@ -1,0 +1,34 @@
+{
+  "name": "teswa-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "export:web": "expo export --platform web"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.1.0",
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "@supabase/supabase-js": "^2.52.0",
+    "expo": "~55.0.0",
+    "expo-router": "~6.0.0",
+    "expo-status-bar": "~3.1.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.82.0",
+    "react-native-safe-area-context": "~5.8.0",
+    "react-native-screens": "~4.18.0",
+    "react-native-url-polyfill": "^2.0.0",
+    "react-native-web": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.3"
+  }
+}
