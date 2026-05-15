@@ -26,7 +26,7 @@
     "react-native-screens": "~4.23.0",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.21.0",
-    "expo-splash-screen": "~31.0.10"
+    "expo-splash-screen": "~55.0.21"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
