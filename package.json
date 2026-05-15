@@ -31,7 +31,8 @@
     "expo-auth-session": "~55.0.16",
     "expo-web-browser": "~55.0.16",
     "expo-crypto": "~55.0.15",
-    "expo-linking": "~55.0.15"
+    "expo-linking": "~55.0.15",
+    "expo-image-picker": "~55.0.20"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
