@@ -26,6 +26,20 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/494945c6-ca94-41c5-afb6-45b9119915ff",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "494945c6-ca94-41c5-afb6-45b9119915ff"
+      }
+    }
   }
 }
