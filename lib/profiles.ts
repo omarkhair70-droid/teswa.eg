@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase/client';
 
+const PROFILE_FETCH_TIMEOUT_MS = 12_000;
+export const PROFILE_FETCH_TIMEOUT_CODE = 'PROFILE_FETCH_TIMEOUT';
+
 export type AppProfile = {
   id: string;
   display_name: string | null;
@@ -17,11 +20,21 @@ export async function fetchMyProfile(userId: string): Promise<AppProfile | null>
     console.log('[Profiles] fetchMyProfile userId', userId);
   }
 
-  const { data, error } = await supabase
+  const profileRequest = supabase
     .from('profiles')
     .select('id, display_name, username, bio, city')
     .eq('id', userId)
     .maybeSingle();
+
+  const timeoutRequest = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      const timeoutError = new Error(PROFILE_FETCH_TIMEOUT_CODE);
+      timeoutError.name = PROFILE_FETCH_TIMEOUT_CODE;
+      reject(timeoutError);
+    }, PROFILE_FETCH_TIMEOUT_MS);
+  });
+
+  const { data, error } = await Promise.race([profileRequest, timeoutRequest]);
 
   if (__DEV__) {
     console.log('[Profiles] fetchMyProfile data', data);
