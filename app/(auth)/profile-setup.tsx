@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 const UPSERT_TIMEOUT_MS = 12_000;
 
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -33,17 +33,18 @@ export default function ProfileSetupScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const saveProfileOnce = () =>
+  const saveProfileOnce = (userId: string) =>
     withTimeout(
       supabase
         .from('profiles')
-        .upsert({ id: user!.id, display_name: displayName.trim(), username: username.trim().toLowerCase() }, { onConflict: 'id' }),
+        .upsert({ id: userId, display_name: displayName.trim(), username: username.trim().toLowerCase() }, { onConflict: 'id' }),
       UPSERT_TIMEOUT_MS,
       'PROFILE_UPSERT_TIMEOUT',
     );
 
   const submit = async () => {
     if (!user || loading) return;
+    const currentUserId = user.id;
     if (!displayName.trim() || !username.trim()) return setError('من فضلك اكتب الاسم واسم المستخدم.');
     if (!USERNAME_REGEX.test(username)) return setError('اسم المستخدم لازم يكون من 3 إلى 20 حرف أو رقم أو _.');
 
@@ -57,11 +58,7 @@ export default function ProfileSetupScreen() {
       setLoading(true);
       setError('');
 
-      if (__DEV__) console.log('[ProfileSetup] save started');
-
-      if (__DEV__) console.log('[ProfileSetup] upsert attempt 1 started');
-      const attemptOneResult = await saveProfileOnce();
-      if (__DEV__) console.log('[ProfileSetup] upsert attempt 1 completed');
+      const attemptOneResult = await saveProfileOnce(currentUserId);
 
       if (attemptOneResult.error) {
         handleUpsertError(attemptOneResult.error);
@@ -76,8 +73,7 @@ export default function ProfileSetupScreen() {
 
         try {
           if (__DEV__) console.log('[ProfileSetup] upsert attempt 2 started');
-          const attemptTwoResult = await saveProfileOnce();
-          if (__DEV__) console.log('[ProfileSetup] upsert attempt 2 completed');
+          const attemptTwoResult = await saveProfileOnce(currentUserId);
 
           if (attemptTwoResult.error) {
             handleUpsertError(attemptTwoResult.error);

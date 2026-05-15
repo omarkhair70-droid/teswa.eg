@@ -35,7 +35,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const checkProfileForUser = async (userId: string, reason: string) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
     if (existingCheck) {
-      if (__DEV__) console.log('[Auth] profile check deduped', { userId, reason });
       await existingCheck;
       return;
     }
@@ -45,12 +44,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setLoadingProfile(true);
     setProfileCheckError(null);
 
-    if (__DEV__) console.log('[Auth] profile check started', { userId, reason });
     const checkPromise = (async () => {
       try {
         const profile = await fetchMyProfile(userId);
         const completed = isProfileComplete(profile);
-        if (__DEV__) console.log('[Auth] profile check finished', { userId, completed });
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
         setProfileCompleted(completed);
         setProfileCheckError(null);
