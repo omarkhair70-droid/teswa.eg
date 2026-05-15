@@ -190,8 +190,8 @@ export async function createSwapOffer(input: {
     note: null,
   });
 
-  if (eventError) {
-    return { ok: false, reason: 'unknown', message: 'تم إنشاء العرض لكن تعذر تسجيل الحدث. حاول مرة أخرى.' };
+  if (eventError && __DEV__) {
+    console.log('[offers] offer event insert failed', eventError);
   }
 
   const notificationBody = requested.title?.trim()
