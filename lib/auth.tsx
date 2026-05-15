@@ -33,17 +33,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const activeProfileCheckTokenRef = useRef(0);
 
   const checkProfileForUser = async (userId: string, reason: string) => {
-    activeProfileCheckTokenRef.current += 1;
-    const checkToken = activeProfileCheckTokenRef.current;
-    setLoadingProfile(true);
-    setProfileCheckError(null);
-
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
     if (existingCheck) {
       if (__DEV__) console.log('[Auth] profile check deduped', { userId, reason });
       await existingCheck;
       return;
     }
+
+    activeProfileCheckTokenRef.current += 1;
+    const checkToken = activeProfileCheckTokenRef.current;
+    setLoadingProfile(true);
+    setProfileCheckError(null);
 
     if (__DEV__) console.log('[Auth] profile check started', { userId, reason });
     const checkPromise = (async () => {
