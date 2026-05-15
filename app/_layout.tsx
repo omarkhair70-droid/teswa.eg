@@ -23,7 +23,7 @@ function RootNavigator() {
     const inLoginOrSignup = inAuth && (leaf === 'login' || leaf === 'signup');
     const inOAuthCallback = rootGroup === 'auth' && leaf === 'callback';
 
-    if (inOAuthCallback) {
+    if (inOAuthCallback && !user) {
       void SplashScreen.hideAsync();
       return;
     }
