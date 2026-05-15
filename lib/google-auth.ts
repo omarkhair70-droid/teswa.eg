@@ -13,24 +13,23 @@ const RECENT_CALLBACK_TTL_MS = 60_000;
 
 let inFlightCallbackCompletion = new Map<string, Promise<{ error: string | null }>>();
 let recentSuccessfulCallbacks = new Map<string, number>();
+type QueryParamValue = string | string[] | undefined;
+type OAuthCallbackParams = Record<string, QueryParamValue>;
 
 export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: string | null }> {
   const existing = inFlightCallbackCompletion.get(url);
   if (existing) {
-    if (__DEV__) console.log('[GoogleAuth] callback completion deduped');
     return existing;
   }
 
   const now = Date.now();
   const lastSuccessAt = recentSuccessfulCallbacks.get(url);
   if (lastSuccessAt && now - lastSuccessAt < RECENT_CALLBACK_TTL_MS) {
-    if (__DEV__) console.log('[GoogleAuth] callback completion deduped');
     return { error: null };
   }
 
-  if (__DEV__) console.log('[GoogleAuth] callback completion started');
   const completionPromise = (async () => {
-  const { params, errorCode } = QueryParams.getQueryParams(url);
+  const { params, errorCode } = QueryParams.getQueryParams(url) as { params: OAuthCallbackParams; errorCode: string | null };
 
   if (errorCode || params.error || params.error_description) {
     return { error: GOOGLE_AUTH_CALLBACK_FAILED };
@@ -60,7 +59,6 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
     if (!result.error) {
       recentSuccessfulCallbacks.set(url, Date.now());
     }
-    if (__DEV__) console.log('[GoogleAuth] callback completion finished');
     return result;
   } finally {
     inFlightCallbackCompletion.delete(url);
