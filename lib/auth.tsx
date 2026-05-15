@@ -68,10 +68,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
-      if (!nextSession?.user) setProfileCompleted(false);
+      if (!nextSession?.user) {
+        setProfileCompleted(false);
+        return;
+      }
+
+      try {
+        const profile = await fetchMyProfile(nextSession.user.id);
+        if (!mounted) return;
+        setProfileCompleted(isProfileComplete(profile));
+      } catch {
+        if (!mounted) return;
+        setProfileCompleted(false);
+      }
     });
 
     return () => {
@@ -80,11 +92,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      refreshProfile();
-    }
-  }, [user?.id]);
 
   const value = useMemo(
     () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, refreshProfile, setOnboardingCompletedState: setOnboardingCompleted }),

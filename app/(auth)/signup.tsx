@@ -17,7 +17,7 @@ export default function SignupScreen() {
   const [message, setMessage] = useState('');
 
   const submit = async () => {
-    if (loading) return;
+    if (loading || message) return;
     if (!email.trim() || !password.trim()) return setError('من فضلك أدخل البريد الإلكتروني وكلمة المرور.');
     if (password.length < 6) return setError('كلمة المرور لازم تكون 6 أحرف أو أكتر.');
     if (password !== confirmPassword) return setError('تأكيد كلمة المرور غير مطابق.');
@@ -29,13 +29,12 @@ export default function SignupScreen() {
     setLoading(false);
     if (signUpError) return setError('تعذر إنشاء الحساب. حاول مرة تانية.');
     if (!data.session) {
-      setMessage('تم إنشاء الحساب. راجع بريدك الإلكتروني لتأكيد الحساب ثم سجل دخولك.');
-      router.replace('/(auth)/login');
+      setMessage('تم إنشاء الحساب. راجع بريدك الإلكتروني لتأكيد الحساب، وبعدها ادخل من شاشة تسجيل الدخول.');
       return;
     }
     router.replace('/(auth)/profile-setup');
   };
 
-  return <AppScreen><View style={styles.header}><AppText weight="bold" style={styles.title}>إنشاء حساب</AppText></View><View style={styles.form}><AppInput placeholder="البريد الإلكتروني" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} /><AppInput placeholder="كلمة المرور" secureTextEntry value={password} onChangeText={setPassword} /><AppInput placeholder="تأكيد كلمة المرور" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />{Boolean(error) && <AppText style={styles.error}>{error}</AppText>}{Boolean(message) && <AppText>{message}</AppText>}<AppButton label={loading ? 'جاري إنشاء الحساب...' : 'إنشاء الحساب'} onPress={submit} /></View><Link href="/(auth)/login" asChild><Pressable><AppText style={styles.link}>لديك حساب؟ تسجيل الدخول</AppText></Pressable></Link></AppScreen>;
+  return <AppScreen><View style={styles.header}><AppText weight="bold" style={styles.title}>إنشاء حساب</AppText></View><View style={styles.form}><AppInput placeholder="البريد الإلكتروني" autoCapitalize="none" keyboardType="email-address" editable={!message} value={email} onChangeText={setEmail} /><AppInput placeholder="كلمة المرور" secureTextEntry editable={!message} value={password} onChangeText={setPassword} /><AppInput placeholder="تأكيد كلمة المرور" secureTextEntry editable={!message} value={confirmPassword} onChangeText={setConfirmPassword} />{Boolean(error) && <AppText style={styles.error}>{error}</AppText>}{Boolean(message) && <AppText>{message}</AppText>}<AppButton label={loading ? 'جاري إنشاء الحساب...' : (message ? 'الانتقال لتسجيل الدخول' : 'إنشاء الحساب')} onPress={message ? (() => router.replace('/(auth)/login')) : submit} /></View><Link href="/(auth)/login" asChild><Pressable><AppText style={styles.link}>لديك حساب؟ تسجيل الدخول</AppText></Pressable></Link></AppScreen>;
 }
 const styles = StyleSheet.create({ header: { marginTop: spacing.xl }, title: { fontSize: 28 }, form: { gap: spacing.md, marginTop: spacing.xl }, link: { textAlign: 'center', marginTop: spacing.lg }, error: { color: '#B3261E' } });

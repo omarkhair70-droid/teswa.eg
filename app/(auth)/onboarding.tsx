@@ -19,7 +19,7 @@ export default function OnboardingScreen() {
   const [index, setIndex] = useState(0);
   const { setOnboardingCompletedState } = useAuth();
 
-  const complete = async () => {
+  const goToLoginAndCompleteOnboarding = async () => {
     await setOnboardingCompleted(true);
     setOnboardingCompletedState(true);
     router.replace('/(auth)/login');
@@ -29,7 +29,7 @@ export default function OnboardingScreen() {
   return (
     <AppScreen style={styles.screen}>
       <View style={styles.topRow}>
-        <Pressable onPress={complete}><AppText muted>تخطي</AppText></Pressable>
+        <Pressable onPress={goToLoginAndCompleteOnboarding}><AppText muted>تخطي</AppText></Pressable>
       </View>
       <View style={styles.content}>
         <AppText weight="bold" style={styles.title}>{slides[index].title}</AppText>
@@ -38,8 +38,8 @@ export default function OnboardingScreen() {
       <View style={styles.dots}>{slides.map((_, i) => <View key={i} style={[styles.dot, i === index && styles.dotActive]} />)}</View>
       {isLast ? (
         <View style={styles.actions}>
-          <AppButton label="ابدأ وسجّل" onPress={complete} />
-          <Pressable onPress={() => router.replace('/(auth)/login')}><AppText style={styles.loginLink}>لديك حساب؟ تسجيل الدخول</AppText></Pressable>
+          <AppButton label="ابدأ وسجّل" onPress={goToLoginAndCompleteOnboarding} />
+          <Pressable onPress={goToLoginAndCompleteOnboarding}><AppText style={styles.loginLink}>لديك حساب؟ تسجيل الدخول</AppText></Pressable>
         </View>
       ) : (
         <AppButton label="التالي" onPress={() => setIndex((v) => Math.min(v + 1, slides.length - 1))} />
