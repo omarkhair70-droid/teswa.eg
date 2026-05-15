@@ -17,7 +17,13 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F9F3EA"
+        }
+      ]
     ]
   }
 }
