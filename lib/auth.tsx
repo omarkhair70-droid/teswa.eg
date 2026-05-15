@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase/client';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
 
+const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
+
 type AuthContextValue = {
   bootstrapReady: boolean;
   loadingProfile: boolean;
@@ -11,6 +13,7 @@ type AuthContextValue = {
   user: User | null;
   onboardingCompleted: boolean;
   profileCompleted: boolean;
+  profileCheckError: string | null;
   refreshProfile: () => Promise<void>;
   setOnboardingCompletedState: (value: boolean) => void;
 };
@@ -24,13 +27,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [profileCompleted, setProfileCompleted] = useState(false);
+  const [profileCheckError, setProfileCheckError] = useState<string | null>(null);
 
   const refreshProfile = async () => {
     if (!user) {
       setProfileCompleted(false);
+      setProfileCheckError(null);
       return;
     }
     setLoadingProfile(true);
+    setProfileCheckError(null);
     try {
       if (__DEV__) console.log('[Auth] profile check userId', user.id);
       const profile = await fetchMyProfile(user.id);
@@ -40,9 +46,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         console.log('[Auth] profile completed', completed);
       }
       setProfileCompleted(completed);
+      setProfileCheckError(null);
     } catch (error) {
       if (__DEV__) console.log('[Auth] profile fetch failed', error);
-      setProfileCompleted(false);
+      setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
     } finally {
       setLoadingProfile(false);
     }
@@ -62,6 +69,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
         setLoadingProfile(true);
+        setProfileCheckError(null);
         try {
           if (__DEV__) console.log('[Auth] profile check userId', currentSession.user.id);
           const profile = await fetchMyProfile(currentSession.user.id);
@@ -72,13 +80,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
           }
           if (!mounted) return;
           setProfileCompleted(completed);
+          setProfileCheckError(null);
         } catch (error) {
           if (__DEV__) console.log('[Auth] profile fetch failed', error);
           if (!mounted) return;
-          setProfileCompleted(false);
+          setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
         } finally {
           if (mounted) setLoadingProfile(false);
         }
+      } else {
+        setProfileCheckError(null);
       }
       if (mounted) setBootstrapReady(true);
     };
@@ -90,10 +101,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(nextSession?.user ?? null);
       if (!nextSession?.user) {
         setProfileCompleted(false);
+        setProfileCheckError(null);
         return;
       }
 
       setLoadingProfile(true);
+      setProfileCheckError(null);
       try {
         if (__DEV__) console.log('[Auth] profile check userId', nextSession.user.id);
         const profile = await fetchMyProfile(nextSession.user.id);
@@ -104,10 +117,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
         if (!mounted) return;
         setProfileCompleted(completed);
+        setProfileCheckError(null);
       } catch (error) {
         if (__DEV__) console.log('[Auth] profile fetch failed', error);
         if (!mounted) return;
-        setProfileCompleted(false);
+        setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       } finally {
         if (mounted) setLoadingProfile(false);
       }
@@ -121,8 +135,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
 
   const value = useMemo(
-    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, refreshProfile, setOnboardingCompletedState: setOnboardingCompleted }),
-    [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted],
+    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile, setOnboardingCompletedState: setOnboardingCompleted }),
+    [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
