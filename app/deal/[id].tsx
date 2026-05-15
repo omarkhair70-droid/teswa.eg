@@ -75,6 +75,7 @@ export default function Screen() {
 
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
+    setError(null);
     setSending(true);
     try {
       const result = await sendDealMessageFromMobile({ dealId: deal.id, currentUserId: user.id, body: messageBody });
@@ -101,7 +102,10 @@ export default function Screen() {
     setError(null);
     try {
       const result = await confirmDealCompletedFromMobile({ dealId: deal.id, currentUserId: user.id });
-      if (!result.ok) setError(result.message);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
       await load();
     } catch {
       setError('تعذر تأكيد الإتمام حالياً.');
