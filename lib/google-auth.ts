@@ -9,8 +9,27 @@ WebBrowser.maybeCompleteAuthSession();
 const GOOGLE_AUTH_ERROR = 'تعذر فتح تسجيل الدخول بجوجل. حاول مرة تانية.';
 const GOOGLE_AUTH_CANCELLED = 'تم إلغاء تسجيل الدخول بجوجل.';
 const GOOGLE_AUTH_CALLBACK_FAILED = 'تم الرجوع من جوجل، لكن تعذر إكمال تسجيل الدخول. حاول مرة تانية.';
+const RECENT_CALLBACK_TTL_MS = 60_000;
+
+let inFlightCallbackCompletion = new Map<string, Promise<{ error: string | null }>>();
+let recentSuccessfulCallbacks = new Map<string, number>();
 
 export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: string | null }> {
+  const existing = inFlightCallbackCompletion.get(url);
+  if (existing) {
+    if (__DEV__) console.log('[GoogleAuth] callback completion deduped');
+    return existing;
+  }
+
+  const now = Date.now();
+  const lastSuccessAt = recentSuccessfulCallbacks.get(url);
+  if (lastSuccessAt && now - lastSuccessAt < RECENT_CALLBACK_TTL_MS) {
+    if (__DEV__) console.log('[GoogleAuth] callback completion deduped');
+    return { error: null };
+  }
+
+  if (__DEV__) console.log('[GoogleAuth] callback completion started');
+  const completionPromise = (async () => {
   const { params, errorCode } = QueryParams.getQueryParams(url);
 
   if (errorCode || params.error || params.error_description) {
@@ -33,6 +52,25 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
 
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   return { error: exchangeError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
+  })();
+
+  inFlightCallbackCompletion.set(url, completionPromise);
+  try {
+    const result = await completionPromise;
+    if (!result.error) {
+      recentSuccessfulCallbacks.set(url, Date.now());
+    }
+    if (__DEV__) console.log('[GoogleAuth] callback completion finished');
+    return result;
+  } finally {
+    inFlightCallbackCompletion.delete(url);
+    const cutoff = Date.now() - RECENT_CALLBACK_TTL_MS;
+    for (const [callbackUrl, completedAt] of recentSuccessfulCallbacks.entries()) {
+      if (completedAt < cutoff) {
+        recentSuccessfulCallbacks.delete(callbackUrl);
+      }
+    }
+  }
 }
 
 export async function signInWithGoogle(): Promise<{ error: string | null }> {

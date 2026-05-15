@@ -1,4 +1,4 @@
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
@@ -28,6 +28,53 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [profileCompleted, setProfileCompleted] = useState(false);
   const [profileCheckError, setProfileCheckError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const inFlightProfileChecksRef = useRef<Map<string, Promise<void>>>(new Map());
+  const activeProfileCheckTokenRef = useRef(0);
+
+  const checkProfileForUser = async (userId: string, reason: string) => {
+    activeProfileCheckTokenRef.current += 1;
+    const checkToken = activeProfileCheckTokenRef.current;
+    setLoadingProfile(true);
+    setProfileCheckError(null);
+
+    const existingCheck = inFlightProfileChecksRef.current.get(userId);
+    if (existingCheck) {
+      if (__DEV__) console.log('[Auth] profile check deduped', { userId, reason });
+      await existingCheck;
+      return;
+    }
+
+    if (__DEV__) console.log('[Auth] profile check started', { userId, reason });
+    const checkPromise = (async () => {
+      try {
+        const profile = await fetchMyProfile(userId);
+        const completed = isProfileComplete(profile);
+        if (__DEV__) console.log('[Auth] profile check finished', { userId, completed });
+        if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
+        setProfileCompleted(completed);
+        setProfileCheckError(null);
+      } catch (error) {
+        if (__DEV__) console.log('[Auth] profile check failed', { userId, error });
+        if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
+        setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
+      } finally {
+        if (mountedRef.current && activeProfileCheckTokenRef.current === checkToken) {
+          setLoadingProfile(false);
+        }
+      }
+    })();
+
+    inFlightProfileChecksRef.current.set(userId, checkPromise);
+    try {
+      await checkPromise;
+    } finally {
+      const activeCheck = inFlightProfileChecksRef.current.get(userId);
+      if (activeCheck === checkPromise) {
+        inFlightProfileChecksRef.current.delete(userId);
+      }
+    }
+  };
 
   const refreshProfile = async () => {
     if (!user) {
@@ -35,63 +82,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setProfileCheckError(null);
       return;
     }
-    setLoadingProfile(true);
-    setProfileCheckError(null);
-    try {
-      if (__DEV__) console.log('[Auth] profile check userId', user.id);
-      const profile = await fetchMyProfile(user.id);
-      const completed = isProfileComplete(profile);
-      if (__DEV__) {
-        console.log('[Auth] profile result', profile);
-        console.log('[Auth] profile completed', completed);
-      }
-      setProfileCompleted(completed);
-      setProfileCheckError(null);
-    } catch (error) {
-      if (__DEV__) console.log('[Auth] profile fetch failed', error);
-      setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
-    } finally {
-      setLoadingProfile(false);
-    }
+    await checkProfileForUser(user.id, 'manual_refresh');
   };
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
     const bootstrap = async () => {
       const [onboardingDone, sessionResult] = await Promise.all([
         getOnboardingCompleted(),
         supabase.auth.getSession(),
       ]);
-      if (!mounted) return;
+      if (!mountedRef.current) return;
       setOnboardingCompleted(onboardingDone);
       const currentSession = sessionResult.data.session;
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
-        setLoadingProfile(true);
-        setProfileCheckError(null);
-        try {
-          if (__DEV__) console.log('[Auth] profile check userId', currentSession.user.id);
-          const profile = await fetchMyProfile(currentSession.user.id);
-          const completed = isProfileComplete(profile);
-          if (__DEV__) {
-            console.log('[Auth] profile result', profile);
-            console.log('[Auth] profile completed', completed);
-          }
-          if (!mounted) return;
-          setProfileCompleted(completed);
-          setProfileCheckError(null);
-        } catch (error) {
-          if (__DEV__) console.log('[Auth] profile fetch failed', error);
-          if (!mounted) return;
-          setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
-        } finally {
-          if (mounted) setLoadingProfile(false);
-        }
+        await checkProfileForUser(currentSession.user.id, 'bootstrap_session');
       } else {
         setProfileCheckError(null);
       }
-      if (mounted) setBootstrapReady(true);
+      if (mountedRef.current) setBootstrapReady(true);
     };
 
     bootstrap();
@@ -100,35 +111,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       if (!nextSession?.user) {
+        activeProfileCheckTokenRef.current += 1;
         setProfileCompleted(false);
+        setLoadingProfile(false);
         setProfileCheckError(null);
         return;
       }
 
-      setLoadingProfile(true);
-      setProfileCheckError(null);
-      try {
-        if (__DEV__) console.log('[Auth] profile check userId', nextSession.user.id);
-        const profile = await fetchMyProfile(nextSession.user.id);
-        const completed = isProfileComplete(profile);
-        if (__DEV__) {
-          console.log('[Auth] profile result', profile);
-          console.log('[Auth] profile completed', completed);
-        }
-        if (!mounted) return;
-        setProfileCompleted(completed);
-        setProfileCheckError(null);
-      } catch (error) {
-        if (__DEV__) console.log('[Auth] profile fetch failed', error);
-        if (!mounted) return;
-        setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
-      } finally {
-        if (mounted) setLoadingProfile(false);
-      }
+      await checkProfileForUser(nextSession.user.id, 'auth_state_change');
     });
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
+      activeProfileCheckTokenRef.current += 1;
       listener.subscription.unsubscribe();
     };
   }, []);
