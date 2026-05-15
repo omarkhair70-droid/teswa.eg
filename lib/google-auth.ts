@@ -1,5 +1,5 @@
 import { makeRedirectUri } from 'expo-auth-session';
-import * as Linking from 'expo-linking';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 
 import { supabase } from '@/lib/supabase/client';
@@ -36,12 +36,9 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
       return { error: GOOGLE_AUTH_CALLBACK_FAILED };
     }
 
-    const parsedUrl = Linking.parse(result.url);
-    const params = parsedUrl.queryParams ?? {};
-    if (parsedUrl.hostname === "" && parsedUrl.path === null) {
-      return { error: GOOGLE_AUTH_CALLBACK_FAILED };
-    }
-    if (params.error || params.error_description) {
+    const { params, errorCode } = QueryParams.getQueryParams(result.url);
+
+    if (errorCode || params.error || params.error_description) {
       return { error: GOOGLE_AUTH_CALLBACK_FAILED };
     }
 
