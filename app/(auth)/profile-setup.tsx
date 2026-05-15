@@ -33,42 +33,74 @@ export default function ProfileSetupScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const saveProfileOnce = () =>
+    withTimeout(
+      supabase
+        .from('profiles')
+        .upsert({ id: user!.id, display_name: displayName.trim(), username: username.trim().toLowerCase() }, { onConflict: 'id' }),
+      UPSERT_TIMEOUT_MS,
+      'PROFILE_UPSERT_TIMEOUT',
+    );
+
   const submit = async () => {
     if (!user || loading) return;
     if (!displayName.trim() || !username.trim()) return setError('من فضلك اكتب الاسم واسم المستخدم.');
     if (!USERNAME_REGEX.test(username)) return setError('اسم المستخدم لازم يكون من 3 إلى 20 حرف أو رقم أو _.');
+
+    const handleUpsertError = (upsertError: { code?: string }) => {
+      if (__DEV__) console.log('[ProfileSetup] upsert error', upsertError);
+      if (upsertError.code === '23505') return setError('اسم المستخدم ده مستخدم قبل كده.');
+      return setError('حصل خطأ أثناء حفظ البيانات. حاول مرة تانية.');
+    };
+
     try {
       setLoading(true);
       setError('');
 
       if (__DEV__) console.log('[ProfileSetup] save started');
 
-      const { error: upsertError } = await withTimeout(
-        supabase
-          .from('profiles')
-          .upsert({ id: user.id, display_name: displayName.trim(), username: username.trim().toLowerCase() }, { onConflict: 'id' }),
-        UPSERT_TIMEOUT_MS,
-        'PROFILE_UPSERT_TIMEOUT',
-      );
+      if (__DEV__) console.log('[ProfileSetup] upsert attempt 1 started');
+      const attemptOneResult = await saveProfileOnce();
+      if (__DEV__) console.log('[ProfileSetup] upsert attempt 1 completed');
 
-      if (__DEV__) console.log('[ProfileSetup] upsert completed');
-
-      if (upsertError) {
-        if (__DEV__) console.log('[ProfileSetup] upsert error', upsertError);
-        if (upsertError.code === '23505') return setError('اسم المستخدم ده مستخدم قبل كده.');
-        return setError('حصل خطأ أثناء حفظ البيانات. حاول مرة تانية.');
+      if (attemptOneResult.error) {
+        handleUpsertError(attemptOneResult.error);
+        return;
       }
 
       await refreshProfile();
       router.replace('/(tabs)/home');
     } catch (submitError) {
-      if (__DEV__) console.log('[ProfileSetup] save failed', submitError);
-
       if (submitError instanceof Error && submitError.message === 'PROFILE_UPSERT_TIMEOUT') {
-        setError('استغرق حفظ البيانات وقتًا أطول من المتوقع. حاول مرة تانية.');
-        return;
+        if (__DEV__) console.log('[ProfileSetup] upsert timeout, retrying once');
+
+        try {
+          if (__DEV__) console.log('[ProfileSetup] upsert attempt 2 started');
+          const attemptTwoResult = await saveProfileOnce();
+          if (__DEV__) console.log('[ProfileSetup] upsert attempt 2 completed');
+
+          if (attemptTwoResult.error) {
+            handleUpsertError(attemptTwoResult.error);
+            return;
+          }
+
+          await refreshProfile();
+          router.replace('/(tabs)/home');
+          return;
+        } catch (retryError) {
+          if (__DEV__) console.log('[ProfileSetup] retry failed', retryError);
+
+          if (retryError instanceof Error && retryError.message === 'PROFILE_UPSERT_TIMEOUT') {
+            setError('استغرق حفظ البيانات وقتًا أطول من المتوقع. حاول مرة تانية.');
+            return;
+          }
+
+          setError('حصل خطأ أثناء حفظ البيانات. حاول مرة تانية.');
+          return;
+        }
       }
 
+      if (__DEV__) console.log('[ProfileSetup] save failed', submitError);
       setError('حصل خطأ أثناء حفظ البيانات. حاول مرة تانية.');
     } finally {
       setLoading(false);
