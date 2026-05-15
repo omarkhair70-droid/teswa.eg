@@ -10,7 +10,8 @@
       "supportsTablet": true
     },
     "android": {
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.teswa.mobile"
     },
     "web": {
       "bundler": "metro",
