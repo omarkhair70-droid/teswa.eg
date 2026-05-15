@@ -13,11 +13,20 @@ export function isProfileComplete(profile: Pick<AppProfile, 'display_name' | 'us
 }
 
 export async function fetchMyProfile(userId: string): Promise<AppProfile | null> {
+  if (__DEV__) {
+    console.log('[Profiles] fetchMyProfile userId', userId);
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .select('id, display_name, username, bio, city')
     .eq('id', userId)
     .maybeSingle();
+
+  if (__DEV__) {
+    console.log('[Profiles] fetchMyProfile data', data);
+    console.log('[Profiles] fetchMyProfile error', error);
+  }
 
   if (error) throw error;
   return data;

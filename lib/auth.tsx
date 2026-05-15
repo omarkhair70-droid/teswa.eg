@@ -32,9 +32,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
     setLoadingProfile(true);
     try {
+      if (__DEV__) console.log('[Auth] profile check userId', user.id);
       const profile = await fetchMyProfile(user.id);
-      setProfileCompleted(isProfileComplete(profile));
-    } catch {
+      const completed = isProfileComplete(profile);
+      if (__DEV__) {
+        console.log('[Auth] profile result', profile);
+        console.log('[Auth] profile completed', completed);
+      }
+      setProfileCompleted(completed);
+    } catch (error) {
+      if (__DEV__) console.log('[Auth] profile fetch failed', error);
       setProfileCompleted(false);
     } finally {
       setLoadingProfile(false);
@@ -54,13 +61,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
+        setLoadingProfile(true);
         try {
+          if (__DEV__) console.log('[Auth] profile check userId', currentSession.user.id);
           const profile = await fetchMyProfile(currentSession.user.id);
+          const completed = isProfileComplete(profile);
+          if (__DEV__) {
+            console.log('[Auth] profile result', profile);
+            console.log('[Auth] profile completed', completed);
+          }
           if (!mounted) return;
-          setProfileCompleted(isProfileComplete(profile));
-        } catch {
+          setProfileCompleted(completed);
+        } catch (error) {
+          if (__DEV__) console.log('[Auth] profile fetch failed', error);
           if (!mounted) return;
           setProfileCompleted(false);
+        } finally {
+          if (mounted) setLoadingProfile(false);
         }
       }
       if (mounted) setBootstrapReady(true);
@@ -76,13 +93,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      setLoadingProfile(true);
       try {
+        if (__DEV__) console.log('[Auth] profile check userId', nextSession.user.id);
         const profile = await fetchMyProfile(nextSession.user.id);
+        const completed = isProfileComplete(profile);
+        if (__DEV__) {
+          console.log('[Auth] profile result', profile);
+          console.log('[Auth] profile completed', completed);
+        }
         if (!mounted) return;
-        setProfileCompleted(isProfileComplete(profile));
-      } catch {
+        setProfileCompleted(completed);
+      } catch (error) {
+        if (__DEV__) console.log('[Auth] profile fetch failed', error);
         if (!mounted) return;
         setProfileCompleted(false);
+      } finally {
+        if (mounted) setLoadingProfile(false);
       }
     });
 
