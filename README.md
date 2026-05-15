@@ -7,7 +7,11 @@ Core lines:
 - "قبل ما تسيبها، شوف تِسوى إيه."
 
 ## Phase Status
-Phase M1: **Foundation only**.
+Phase M1: **Completed**.
+
+Phase M2: **Completed** (Auth + Onboarding merged and verified in Android development build).
+
+Phase M3: **Marketplace browsing foundation implemented** (Home feed, Discover browse/search foundation, reusable item cards, and item details read-only data flow).
 
 Included now:
 - Expo + TypeScript + Expo Router scaffolding
@@ -16,10 +20,10 @@ Included now:
 - Placeholder route map for full app architecture
 - Supabase React Native client shell with env wiring
 
-Deferred to Phase M2:
-- Real auth and onboarding flows
-- Data fetching, feeds, offers, messages, notifications logic
-- Backend features and production integrations
+Deferred to Phase M4+ (still intentionally out of scope):
+- Item creation/editing and image upload
+- Offers, deals, chat/messages, notifications
+- Payments, advanced backend integrations
 
 ## Tech Stack
 - Expo (SDK 55 structure)
