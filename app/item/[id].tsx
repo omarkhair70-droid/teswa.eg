@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { AppCard } from '@/components/ui/AppCard';
@@ -80,7 +80,7 @@ export default function ItemDetailsScreen() {
       </AppCard>
 
       <View style={styles.ctaBox}>
-        <AppButton label="طلب التبديل سيأتي في المرحلة التالية" disabled />
+        <AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} />
       </View>
     </AppScreen>
   );
