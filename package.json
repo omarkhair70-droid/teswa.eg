@@ -30,7 +30,8 @@
     "expo-splash-screen": "~55.0.21",
     "expo-auth-session": "~55.0.16",
     "expo-web-browser": "~55.0.16",
-    "expo-crypto": "~55.0.15"
+    "expo-crypto": "~55.0.15",
+    "expo-linking": "~55.0.15"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",

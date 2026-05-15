@@ -15,12 +15,18 @@ function RootNavigator() {
     if (!bootstrapReady || loadingProfile) return;
 
     const rootGroup = segments[0];
-    const leaf = segments[1];
+    const leaf = segments.at(1);
     const inAuth = rootGroup === '(auth)';
     const inTabs = rootGroup === '(tabs)';
     const inProfileSetup = inAuth && leaf === 'profile-setup';
     const inOnboarding = inAuth && leaf === 'onboarding';
     const inLoginOrSignup = inAuth && (leaf === 'login' || leaf === 'signup');
+    const inOAuthCallback = rootGroup === 'auth' && leaf === 'callback';
+
+    if (inOAuthCallback && !user) {
+      void SplashScreen.hideAsync();
+      return;
+    }
 
     if (!user) {
       if (!onboardingCompleted && !inOnboarding) {
