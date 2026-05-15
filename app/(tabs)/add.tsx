@@ -89,7 +89,6 @@ export default function AddScreen() {
       desireMode, desireText: desireText.trim() || null,
       wantedTags: wantedTags.split(',').map((x) => x.trim()).filter(Boolean),
     }, assets, user.id);
-    setProgress('جارٍ نشر العنصر...');
     setSubmitting(false);
     if (!result.ok) { setError(result.message); return; }
     router.push(`/item/${result.itemId}`);

@@ -26,7 +26,7 @@ export type PublishItemPayload = {
 
 export type PublishItemResult =
   | { ok: true; itemId: string }
-  | { ok: false; reason: 'upload_failed' | 'item_insert_failed' | 'images_insert_failed' | 'tags_insert_failed' | 'invalid_input'; message: string };
+  | { ok: false; reason: 'upload_failed' | 'item_insert_failed' | 'images_insert_failed' | 'invalid_input'; message: string };
 
 export async function fetchActiveCategories(): Promise<ActiveCategory[]> {
   const { data, error } = await supabase.from('categories').select('id,name_ar').eq('is_active', true).order('sort_order', { ascending: true });
@@ -63,6 +63,7 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
       const { error: uploadError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).upload(path, body, { contentType, upsert: false });
       if (uploadError) {
+        await cleanupStorage(uploadedPaths);
         return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور. تأكد من الاتصال وحاول مرة أخرى.' };
       }
       uploadedPaths.push(path);
@@ -104,10 +105,8 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
     if (payload.wantedTags.length) {
       const { error: tagsError } = await supabase.from('item_wanted_tags').insert(payload.wantedTags.map((tag) => ({ item_id: itemId, tag })));
-      if (tagsError) {
-        await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
-        await cleanupStorage(uploadedPaths);
-        return { ok: false, reason: 'tags_insert_failed', message: 'تم حفظ العنصر لكن تعذر حفظ التفضيلات. حاول لاحقاً.' };
+      if (tagsError && __DEV__) {
+        console.log('[publishItem] wanted tags insert failed', { itemId, message: tagsError.message });
       }
     }
 
