@@ -3,7 +3,7 @@
     "name": "Teswa",
     "slug": "teswa-mobile",
     "scheme": "teswa",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -28,6 +28,12 @@
         }
       ],
       "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "نحتاج إذن الموقع لتحسين اكتشاف العناصر القريبة منك."
+        }
+      ],
       "react-native-compressor",
       [
         "expo-share-intent",
