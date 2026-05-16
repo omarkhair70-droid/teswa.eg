@@ -41,7 +41,7 @@ export default function Screen() {
       void refreshBadges();
     } catch { setError('تعذر تحميل الرسائل والعروض حالياً.'); }
     finally { setLoading(false); }
-  }, [user?.id]);
+  }, [refreshBadges, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 

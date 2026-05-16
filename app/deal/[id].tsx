@@ -38,8 +38,9 @@ export default function Screen() {
       } else {
         setDeal(result.deal);
         messageIdsRef.current = new Set(result.deal.messages.map((m: any) => m.id));
-        void markDealThreadReadFromMobile(id);
-        void refreshBadges();
+        void markDealThreadReadFromMobile(id).finally(() => {
+          void refreshBadges();
+        });
       }
     } catch (err) {
       if (__DEV__) console.log('[deal-room] load failed', { dealId: id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
@@ -47,7 +48,7 @@ export default function Screen() {
     } finally {
       setLoading(false);
     }
-  }, [id, user?.id]);
+  }, [id, user?.id, refreshBadges]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -67,8 +68,9 @@ export default function Screen() {
           };
         });
         if ((row.sender_id as string) !== user.id) {
-          void markDealThreadReadFromMobile(id);
-          void refreshBadges();
+          void markDealThreadReadFromMobile(id).finally(() => {
+            void refreshBadges();
+          });
         }
       })
       .subscribe((status) => {
@@ -79,7 +81,7 @@ export default function Screen() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [id, user?.id]);
+  }, [id, refreshBadges, user?.id]);
 
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
