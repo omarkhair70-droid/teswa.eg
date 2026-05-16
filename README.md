@@ -75,3 +75,20 @@ npx expo start --web
 - M10A **does not** send server-triggered remote push yet; delivery fanout is planned for **M10B**.
 - Because `expo-notifications` uses native config/plugins, M10A requires a **new Preview APK / EAS build** after merge (first install is not OTA-only).
 - When M10B begins, Android push delivery tests require valid Expo/EAS notification credentials.
+
+## M10B Server-side Remote Push Delivery
+
+M10B adds backend-only remote push fanout for new `public.notifications` inserts by routing Supabase Database Webhook events into the `send-notification-push` Edge Function, which then delivers to active Expo tokens from `public.push_devices`.
+
+Required Edge Function secret:
+- `TESWA_PUSH_WEBHOOK_SECRET`
+
+Required operational setup after merge:
+1. Deploy the Edge Function: `supabase/functions/send-notification-push`.
+2. Set the Edge Function secret `TESWA_PUSH_WEBHOOK_SECRET`.
+3. Create a Supabase Database Webhook on `public.notifications` for `INSERT` events.
+4. Configure the webhook URL to target the deployed `send-notification-push` function URL.
+5. Configure webhook request headers with:
+   - `x-teswa-push-webhook-secret: <same secret>`
+
+M10B is server-side/backend-only and does **not** require changing the mobile APK.
