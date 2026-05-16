@@ -154,16 +154,13 @@ export default function AddScreen() {
   };
 
   const handleDragEnd = ({ data }: { data: ImagePicker.ImagePickerAsset[] }) => {
-    setMediaState((prev) => {
-      const changed = prev.assets.length === data.length
-        && prev.assets.some((asset, index) => asset.uri !== data[index]?.uri);
+    const changed = assets.length === data.length
+      && assets.some((asset, index) => asset.uri !== data[index]?.uri);
 
-      if (changed) {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-      }
+    if (!changed) return;
 
-      return changed ? { ...prev, assets: [...data], feedback: null } : prev;
-    });
+    setMediaState((prev) => ({ ...prev, assets: [...data], feedback: null }));
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   };
 
   const validateCurrentStep = () => {
