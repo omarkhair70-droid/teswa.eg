@@ -5,6 +5,7 @@ import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
+const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
 
 type AuthContextValue = {
   bootstrapReady: boolean;
@@ -15,6 +16,7 @@ type AuthContextValue = {
   profileCompleted: boolean;
   profileCheckError: string | null;
   refreshProfile: () => Promise<void>;
+  signOut: () => Promise<{ ok: true } | { ok: false; message: string }>;
   setOnboardingCompletedState: (value: boolean) => void;
 };
 
@@ -82,6 +84,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await checkProfileForUser(user.id, 'manual_refresh');
   };
 
+  const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      if (__DEV__) console.log('[Auth] sign out failed', error);
+      return { ok: false, message: SIGN_OUT_ERROR_MESSAGE };
+    }
+
+    return { ok: true };
+  };
+
   useEffect(() => {
     mountedRef.current = true;
     const bootstrap = async () => {
@@ -125,9 +137,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-
   const value = useMemo(
-    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile, setOnboardingCompletedState: setOnboardingCompleted }),
+    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile, signOut, setOnboardingCompletedState: setOnboardingCompleted }),
     [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError],
   );
 
