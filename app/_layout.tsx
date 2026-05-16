@@ -45,7 +45,7 @@ function ShareIntentCoordinator() {
           fileSize: file.size ?? null,
           height: file.height ?? 0,
           mimeType: file.mimeType ?? null,
-          type: 'image',
+          type: 'image' as const,
           uri,
           width: file.width ?? 0,
         };
