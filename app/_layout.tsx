@@ -43,11 +43,11 @@ function ShareIntentCoordinator() {
           exif: null,
           fileName: file.fileName ?? `shared-image-${Date.now()}-${index}`,
           fileSize: file.size ?? null,
-          height: file.height ?? null,
+          height: file.height ?? 0,
           mimeType: file.mimeType ?? null,
           type: 'image',
           uri,
-          width: file.width ?? null,
+          width: file.width ?? 0,
         };
       })
       .filter((asset) => !!asset.uri);
