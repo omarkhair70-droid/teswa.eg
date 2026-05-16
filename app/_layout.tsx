@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
@@ -118,15 +119,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  gestureRoot: {
+    flex: 1,
+  },
 });
 
 export default function RootLayout() {
   useRTLSetup();
   return (
-    <AuthProvider>
-      <UnreadBadgesProvider>
-        <RootNavigator />
-      </UnreadBadgesProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <AuthProvider>
+        <UnreadBadgesProvider>
+          <RootNavigator />
+        </UnreadBadgesProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -147,14 +149,20 @@ export default function AddScreen() {
     setMediaState((prev) => ({ ...prev, assets: prev.assets.filter((_, i) => i !== index), feedback: null }));
   };
 
-  const moveAsset = (index: number, direction: -1 | 1) => {
+  const handleDragBegin = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  };
+
+  const handleDragEnd = ({ data }: { data: ImagePicker.ImagePickerAsset[] }) => {
     setMediaState((prev) => {
-      const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= prev.assets.length) return prev;
-      const next = [...prev.assets];
-      const [item] = next.splice(index, 1);
-      next.splice(nextIndex, 0, item);
-      return { ...prev, assets: next, feedback: null };
+      const changed = prev.assets.length === data.length
+        && prev.assets.some((asset, index) => asset.uri !== data[index]?.uri);
+
+      if (changed) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+      }
+
+      return changed ? { ...prev, assets: [...data], feedback: null } : prev;
     });
   };
 
@@ -249,7 +257,7 @@ export default function AddScreen() {
   return <AppScreen scrollable><View style={styles.headerCard}><View style={styles.header}><AppText weight='bold' style={styles.title}>نشر عنصر جديد</AppText><AppText muted>الخطوة {step + 1} من 6 — {steps[step]}</AppText></View><View style={styles.progressTrack}>{steps.map((_, i) => <View key={`step-dot-${i}`} style={[styles.progressDot, i < step && styles.progressDotCompleted, i === step && styles.progressDotCurrent]} />)}</View></View>
     {error && <AppCard><AppText style={styles.error}>{error}</AppText></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
-    {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable><Pressable onPress={() => moveAsset(0, 1)} disabled={assets.length === 1 || submitting} style={[styles.mediaPill, (assets.length === 1 || submitting) && styles.pillDisabled]}><AppText muted>التالي</AppText></Pressable></View></View>{assets.slice(1).length > 0 && <View style={styles.galleryGrid}>{assets.slice(1).map((a, idx) => { const realIndex = idx + 1; return <View key={a.uri} style={styles.galleryItem}><Image source={{ uri: a.uri }} style={styles.galleryPreview} /><AppText muted>#{realIndex + 1}</AppText><View style={styles.mediaActionRow}><Pressable onPress={() => moveAsset(realIndex, -1)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>أسبق</AppText></Pressable><Pressable onPress={() => moveAsset(realIndex, 1)} disabled={realIndex === assets.length - 1 || submitting} style={[styles.mediaPill, (realIndex === assets.length - 1 || submitting) && styles.pillDisabled]}><AppText muted>التالي</AppText></Pressable><Pressable onPress={() => removeAssetAt(realIndex)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></View>; })}</View>}<View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
+    {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
     {step === 1 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>تعريف الحاجة</AppText><AppText muted>أضف الأساسيات التي تساعد على الفهم السريع.</AppText></View><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
       <AppInput value={city} onChangeText={setCity} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={setArea} placeholder='المنطقة (اختياري)' /></View></AppCard>}
@@ -286,9 +294,14 @@ const styles = StyleSheet.create({
   coverPreview: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.border },
   coverBadge: { position: 'absolute', top: spacing.xs, left: spacing.xs, backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   coverBadgeText: { color: colors.surface, fontSize: 12 },
-  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  galleryItem: { width: '48%', borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.xs, gap: spacing.xs, backgroundColor: colors.surface },
-  galleryPreview: { width: '100%', aspectRatio: 1.4, borderRadius: 10, backgroundColor: colors.border },
+  draggableList: { marginTop: spacing.xs },
+  draggableContent: { gap: spacing.xs },
+  thumbCard: { width: 110, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.xs, gap: spacing.xs, backgroundColor: colors.surface },
+  coverThumbCard: { borderColor: colors.primary },
+  thumbCardActive: { opacity: 0.75 },
+  thumbImage: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: colors.border },
+  thumbMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  thumbCoverBadge: { backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   mediaActionRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   mediaPill: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: colors.background },
   pillDisabled: { opacity: 0.45 },
