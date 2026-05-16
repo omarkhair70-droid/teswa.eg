@@ -35,3 +35,30 @@ export async function fetchMyProfile(userId: string): Promise<AppProfile | null>
   if (error) throw error;
   return data;
 }
+
+
+export type AccountProfile = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  cover_url: string | null;
+  city: string | null;
+  area: string | null;
+  bio: string | null;
+  successful_swaps_count: number | null;
+  response_rate: number | null;
+  profile_tagline: string | null;
+  created_at: string;
+};
+
+export async function fetchMyAccountProfile(userId: string): Promise<AccountProfile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, username, avatar_url, cover_url, city, area, bio, successful_swaps_count, response_rate, profile_tagline, created_at')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
