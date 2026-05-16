@@ -42,7 +42,7 @@ function ShareIntentCoordinator() {
           duration: null,
           exif: null,
           fileName: file.fileName ?? `shared-image-${Date.now()}-${index}`,
-          fileSize: file.size ?? null,
+          fileSize: file.size ?? undefined,
           height: file.height ?? 0,
           mimeType: file.mimeType ?? null,
           type: 'image' as const,
