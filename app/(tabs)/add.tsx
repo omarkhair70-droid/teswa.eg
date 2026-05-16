@@ -141,7 +141,9 @@ export default function AddScreen() {
 
     const timer = setTimeout(() => {
       if (!hasMeaningfulAddItemDraft(currentDraft)) {
+        void clearAddItemDraft(user?.id);
         setHasSavedDraft(false);
+        setDraftNotice(null);
         return;
       }
       void saveAddItemDraft(user?.id, currentDraft);
