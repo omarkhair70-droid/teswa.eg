@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { fetchActiveCategories, ItemCondition, publishItem, type PublishProgress } from '@/lib/publish-item';
+import { consumePendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -30,6 +31,7 @@ const MAX_ASSETS = 4;
 
 export default function AddScreen() {
   const { user } = useAuth();
+  const { sharedIntent } = useLocalSearchParams<{ sharedIntent?: string }>();
   const [step, setStep] = useState(0);
   const [mediaState, setMediaState] = useState<{ assets: ImagePicker.ImagePickerAsset[]; feedback: string | null }>({ assets: [], feedback: null });
   const [categories, setCategories] = useState<{ id: string; name_ar: string }[]>([]);
@@ -76,7 +78,7 @@ export default function AddScreen() {
     };
   };
 
-  const appendAssets = (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending') => {
+  const appendAssets = (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending' | 'shareIntent') => {
     if (!incoming.length) return;
 
     setMediaState((prev) => {
@@ -87,6 +89,15 @@ export default function AddScreen() {
       };
     });
   };
+
+  useEffect(() => {
+    const inboundAssets = consumePendingInboundSharedMedia();
+    if (!inboundAssets.length) return;
+
+    setStep((prev) => (prev === 0 ? prev : 0));
+    setError(null);
+    appendAssets(inboundAssets, 'shareIntent');
+  }, [sharedIntent]);
 
   useEffect(() => {
     let mounted = true;

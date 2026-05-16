@@ -40,7 +40,8 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
     "react-native-url-polyfill": "^2.0.0",
-    "react-native-web": "^0.21.0"
+    "react-native-web": "^0.21.0",
+    "expo-share-intent": "^1.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",

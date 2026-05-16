@@ -3,7 +3,7 @@
     "name": "Teswa",
     "slug": "teswa-mobile",
     "scheme": "teswa",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -28,7 +28,19 @@
         }
       ],
       "expo-notifications",
-      "react-native-compressor"
+      "react-native-compressor",
+      [
+        "expo-share-intent",
+        {
+          "disableIOS": true,
+          "androidIntentFilters": [
+            "image/*"
+          ],
+          "androidMultiIntentFilters": [
+            "image/*"
+          ]
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "appVersion"
