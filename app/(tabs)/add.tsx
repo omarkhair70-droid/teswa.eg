@@ -58,22 +58,25 @@ export default function AddScreen() {
       });
   }, []);
 
+  const mergeAssets = (current: ImagePicker.ImagePickerAsset[], incoming: ImagePicker.ImagePickerAsset[]) => {
+    const seenUris = new Set(current.map((a) => a.uri));
+    const uniqueIncoming = incoming.filter((a) => {
+      if (!a.uri || seenUris.has(a.uri)) return false;
+      seenUris.add(a.uri);
+      return true;
+    });
+    const remaining = Math.max(MAX_ASSETS - current.length, 0);
+    const toAdd = uniqueIncoming.slice(0, remaining);
+    return {
+      next: [...current, ...toAdd],
+      wasTrimmed: uniqueIncoming.length > toAdd.length,
+    };
+  };
+
   const appendAssets = (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending') => {
     if (!incoming.length) return;
-    let wasTrimmed = false;
-
-    setAssets((prev) => {
-      const seenUris = new Set(prev.map((a) => a.uri));
-      const uniqueIncoming = incoming.filter((a) => {
-        if (!a.uri || seenUris.has(a.uri)) return false;
-        seenUris.add(a.uri);
-        return true;
-      });
-      const remaining = Math.max(MAX_ASSETS - prev.length, 0);
-      const toAdd = uniqueIncoming.slice(0, remaining);
-      wasTrimmed = uniqueIncoming.length > toAdd.length;
-      return [...prev, ...toAdd];
-    });
+    const { next, wasTrimmed } = mergeAssets(assets, incoming);
+    setAssets(next);
 
     if (wasTrimmed && source !== 'pending') {
       setError(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
@@ -101,10 +104,27 @@ export default function AddScreen() {
   }, []);
 
   const pickFromCamera = async () => {
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 });
-    if (result.canceled) return;
-    setError(null);
-    appendAssets(result.assets ?? [], 'camera');
+    const remaining = Math.max(MAX_ASSETS - assets.length, 0);
+    if (!remaining) {
+      setError('وصلت للحد الأقصى من الصور (4). احذف صورة لإضافة غيرها.');
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError('نحتاج إذن الكاميرا لالتقاط صورة للعنصر.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 });
+      if (result.canceled) return;
+      setError(null);
+      appendAssets(result.assets ?? [], 'camera');
+    } catch (err) {
+      if (__DEV__) console.log('[add-item] camera picker failed', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
+      setError('تعذر فتح الكاميرا حالياً. حاول مرة أخرى.');
+    }
   };
 
   const pickFromGallery = async () => {
@@ -114,7 +134,7 @@ export default function AddScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: MAX_ASSETS, quality: 0.9 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: remaining, quality: 0.9 });
     if (result.canceled) return;
     setError(null);
     appendAssets(result.assets ?? [], 'gallery');
