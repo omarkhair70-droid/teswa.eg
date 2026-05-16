@@ -31,24 +31,30 @@ export async function getNotificationPermissionStatus() {
   return settings.granted ? 'granted' as const : 'denied' as const;
 }
 
+export async function hasStoredPushToken() {
+  const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+  return Boolean(token?.trim());
+}
+
 function resolveProjectId() {
   return Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? null;
 }
 
 export async function requestAndRegisterPushDevice(userId: string) {
   if (Platform.OS === 'web') return { ok: false as const, reason: 'unsupported' as const };
-  await ensureAndroidNotificationChannel();
-  let perms = await Notifications.getPermissionsAsync();
-  if (!perms.granted) perms = await Notifications.requestPermissionsAsync();
-  if (!perms.granted) return { ok: false as const, reason: 'permission_denied' as const };
-
-  const projectId = resolveProjectId();
-  if (!projectId) {
-    if (__DEV__) console.log('[Push] missing projectId');
-    return { ok: false as const, reason: 'missing_project_id' as const };
-  }
 
   try {
+    await ensureAndroidNotificationChannel();
+    let perms = await Notifications.getPermissionsAsync();
+    if (!perms.granted) perms = await Notifications.requestPermissionsAsync();
+    if (!perms.granted) return { ok: false as const, reason: 'permission_denied' as const };
+
+    const projectId = resolveProjectId();
+    if (!projectId) {
+      if (__DEV__) console.log('[Push] missing projectId');
+      return { ok: false as const, reason: 'missing_project_id' as const };
+    }
+
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     const { data, error } = await supabase.rpc('register_push_device', { p_expo_push_token: token, p_platform: Platform.OS });
     if (error) {
@@ -65,15 +71,18 @@ export async function requestAndRegisterPushDevice(userId: string) {
 
 export async function syncPushDeviceRegistrationIfPermitted(userId: string) {
   if (Platform.OS === 'web') return { ok: true as const, skipped: 'unsupported' as const };
-  await ensureAndroidNotificationChannel();
-  const perms = await Notifications.getPermissionsAsync();
-  if (!perms.granted) return { ok: true as const, skipped: 'not_granted' as const };
-  const projectId = resolveProjectId();
-  if (!projectId) {
-    if (__DEV__) console.log('[Push] missing projectId');
-    return { ok: false as const, reason: 'missing_project_id' as const };
-  }
+
   try {
+    await ensureAndroidNotificationChannel();
+    const perms = await Notifications.getPermissionsAsync();
+    if (!perms.granted) return { ok: true as const, skipped: 'not_granted' as const };
+
+    const projectId = resolveProjectId();
+    if (!projectId) {
+      if (__DEV__) console.log('[Push] missing projectId');
+      return { ok: false as const, reason: 'missing_project_id' as const };
+    }
+
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     const { error } = await supabase.rpc('register_push_device', { p_expo_push_token: token, p_platform: Platform.OS });
     if (error) {

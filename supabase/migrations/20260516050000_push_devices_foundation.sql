@@ -80,6 +80,9 @@ begin
 end;
 $$;
 
+revoke all on function public.register_push_device(text, text) from public;
+revoke all on function public.register_push_device(text, text) from anon;
+revoke all on function public.register_push_device(text, text) from authenticated;
 grant execute on function public.register_push_device(text, text) to authenticated;
 
 create or replace function public.disable_my_push_device(
@@ -115,4 +118,7 @@ begin
 end;
 $$;
 
+revoke all on function public.disable_my_push_device(text) from public;
+revoke all on function public.disable_my_push_device(text) from anon;
+revoke all on function public.disable_my_push_device(text) from authenticated;
 grant execute on function public.disable_my_push_device(text) to authenticated;

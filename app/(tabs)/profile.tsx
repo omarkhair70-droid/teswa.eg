@@ -8,7 +8,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AccountProfile, fetchMyAccountProfile } from '@/lib/profiles';
-import { getNotificationPermissionStatus, requestAndRegisterPushDevice } from '@/lib/push-notifications';
+import { getNotificationPermissionStatus, hasStoredPushToken, requestAndRegisterPushDevice } from '@/lib/push-notifications';
 import { useUnreadBadges } from '@/lib/unread-badges';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
@@ -48,21 +48,46 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
-    getNotificationPermissionStatus()
-      .then((status) => {
-        if (status === 'granted') setPushState('enabled');
-      })
-      .catch(() => undefined);
+    let active = true;
+
+    const hydratePushState = async () => {
+      try {
+        const status = await getNotificationPermissionStatus();
+        if (!active) return;
+        if (status !== 'granted') {
+          setPushState('idle');
+          return;
+        }
+
+        const storedTokenExists = await hasStoredPushToken();
+        if (!active) return;
+        setPushState(storedTokenExists ? 'enabled' : 'idle');
+      } catch {
+        if (!active) return;
+        setPushState('idle');
+      }
+    };
+
+    void hydratePushState();
+
+    return () => {
+      active = false;
+    };
   }, [user?.id]);
 
   const handleEnablePush = async () => {
     if (!user?.id) return;
     setEnablingPush(true);
-    const result = await requestAndRegisterPushDevice(user.id);
-    if (result.ok) setPushState('enabled');
-    else if (result.reason === 'permission_denied') setPushState('denied');
-    else setPushState('error');
-    setEnablingPush(false);
+    try {
+      const result = await requestAndRegisterPushDevice(user.id);
+      if (result.ok) setPushState('enabled');
+      else if (result.reason === 'permission_denied') setPushState('denied');
+      else setPushState('error');
+    } catch {
+      setPushState('error');
+    } finally {
+      setEnablingPush(false);
+    }
   };
 
   const handleSignOut = async () => {
