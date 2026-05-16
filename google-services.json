@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "918426406146",
+    "project_id": "teswa-7d052",
+    "storage_bucket": "teswa-7d052.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:918426406146:android:c67c3083cfc793910b461b",
+        "android_client_info": {
+          "package_name": "com.teswa.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBALNW3jzN_Y0yOoOrkbymPOCREio6Nuc4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
