@@ -10,12 +10,14 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchMarketplaceItemById, MarketplaceItem } from '@/lib/marketplace-items';
+import { shareMarketplaceItem } from '@/lib/share-item';
 
 export default function ItemDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [item, setItem] = useState<MarketplaceItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const loadItem = useCallback(async () => {
     if (!id) return;
@@ -35,6 +37,18 @@ export default function ItemDetailsScreen() {
   useEffect(() => {
     loadItem();
   }, [loadItem]);
+
+  const handleShareItem = useCallback(async () => {
+    if (!item) return;
+
+    setShareError(null);
+
+    try {
+      await shareMarketplaceItem({ id: item.id, title: item.title });
+    } catch {
+      setShareError('تعذر فتح المشاركة حالياً. حاول مرة أخرى.');
+    }
+  }, [item]);
 
   if (!id) {
     return <AppScreen><EmptyState title="معرّف غير صالح" description="تعذر تحديد العنصر المطلوب." /></AppScreen>;
@@ -81,6 +95,8 @@ export default function ItemDetailsScreen() {
 
       <View style={styles.ctaBox}>
         <AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} />
+        <AppButton label="مشاركة العنصر" variant="neutral" onPress={handleShareItem} disabled={!item} />
+        {shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}
       </View>
     </AppScreen>
   );
@@ -91,6 +107,7 @@ const styles = StyleSheet.create({
   placeholder: { borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 24 },
   infoBlock: { gap: spacing.sm },
-  ctaBox: { marginTop: spacing.sm },
+  ctaBox: { marginTop: spacing.sm, gap: spacing.sm },
   stateBox: { gap: spacing.md },
+  shareErrorText: { color: colors.primary },
 });
