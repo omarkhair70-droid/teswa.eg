@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, View, Image } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
@@ -7,11 +8,26 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { MarketplaceItem } from '@/lib/marketplace-items';
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function ItemCard({ item }: { item: MarketplaceItem }) {
   const metadata = [item.category, item.condition, item.location].filter(Boolean).join(' • ');
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
-    <Pressable onPress={() => router.push(`/item/${item.id}`)} style={styles.pressable}>
+    <AnimatedPressable
+      onPress={() => router.push(`/item/${item.id}`)}
+      onPressIn={() => {
+        scale.value = withTiming(0.988, { duration: 90 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 16, stiffness: 250, mass: 0.75 });
+      }}
+      style={[styles.pressable, animatedStyle]}
+    >
       <AppCard>
         <View style={styles.wrapper}>
           {item.imageUrl ? (
@@ -29,7 +45,7 @@ export function ItemCard({ item }: { item: MarketplaceItem }) {
           </View>
         </View>
       </AppCard>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

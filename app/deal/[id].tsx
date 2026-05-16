@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
@@ -117,6 +118,7 @@ export default function Screen() {
         setError(result.message);
         return;
       }
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       await load();
     } catch (err) {
       if (__DEV__) console.log('[deal-room] confirm completion failed', { dealId: deal.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });

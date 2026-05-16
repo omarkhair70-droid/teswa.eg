@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
@@ -41,14 +42,17 @@ export default function OfferDetailScreen() {
       if (action === 'thinking') {
         const r = await markOfferThinkingFromMobile({ offerId: id, currentUserId: user.id, note });
         if (!r.ok) return setError(r.message);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         await loadOffer();
       } else if (action === 'reject') {
         const r = await softRejectOfferFromMobile({ offerId: id, currentUserId: user.id, note });
         if (!r.ok) return setError(r.message);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         await loadOffer();
       } else {
         const r = await acceptOfferFromMobile({ offerId: id, currentUserId: user.id });
         if (!r.ok || !r.dealId) return setError(r.ok ? 'تعذر فتح الصفقة.' : r.message);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         router.replace(`/deal/${r.dealId}`);
       }
     } catch (err) {
