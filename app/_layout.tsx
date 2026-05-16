@@ -35,14 +35,14 @@ function ShareIntentCoordinator() {
     const sharedImageAssets: ImagePickerAsset[] = sharedFiles
       .filter((file) => typeof file?.mimeType === 'string' && file.mimeType.startsWith('image/'))
       .map((file, index) => {
-        const uri = file.path || file.uri || '';
+        const uri = file.path || '';
         return {
           assetId: null,
           base64: null,
           duration: null,
           exif: null,
           fileName: file.fileName ?? `shared-image-${Date.now()}-${index}`,
-          fileSize: file.size ?? file.fileSize ?? null,
+          fileSize: file.size ?? null,
           height: file.height ?? null,
           mimeType: file.mimeType ?? null,
           type: 'image',
