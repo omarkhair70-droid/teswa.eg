@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "REPLACE_WITH_FIREBASE_PROJECT_NUMBER",
-    "project_id": "REPLACE_WITH_FIREBASE_PROJECT_ID",
-    "storage_bucket": "REPLACE_WITH_FIREBASE_STORAGE_BUCKET"
+    "project_number": "918426406146",
+    "project_id": "teswa-7d052",
+    "storage_bucket": "teswa-7d052.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "REPLACE_WITH_MOBILE_SDK_APP_ID",
+        "mobilesdk_app_id": "1:918426406146:android:c67c3083cfc793910b461b",
         "android_client_info": {
           "package_name": "com.teswa.mobile"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_FIREBASE_WEB_API_KEY"
+          "current_key": "AIzaSyBALNW3jzN_Y0yOoOrkbymPOCREio6Nuc4"
         }
       ],
       "services": {
