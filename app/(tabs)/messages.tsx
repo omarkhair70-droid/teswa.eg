@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { fetchOffersInbox, getOfferStatusLabel, OfferRowSummary } from '@/lib/offers';
 import { fetchDealConversationsForUser, DealConversation } from '@/lib/messages';
 import { getDealStatusLabel } from '@/lib/deals';
+import { useUnreadBadges } from '@/lib/unread-badges';
 
 function OfferRow({ offer, label }: { offer: OfferRowSummary; label: string }) {
   return <Pressable onPress={() => router.push(`/offer/${offer.id}`)}><AppCard><View style={styles.group}><AppText weight="semibold">{label}</AppText><AppText weight="semibold">{offer.requestedItem?.title ?? 'عنصر مطلوب غير متاح'}</AppText><AppText muted>مقابل: {offer.offeredItem?.title ?? 'عنصر معروض غير متاح'}</AppText><AppText muted>{getOfferStatusLabel(offer.status)}</AppText></View></AppCard></Pressable>;
@@ -27,6 +28,7 @@ export default function Screen() {
   const [incoming, setIncoming] = useState<OfferRowSummary[]>([]);
   const [sent, setSent] = useState<OfferRowSummary[]>([]);
   const [conversations, setConversations] = useState<DealConversation[]>([]);
+  const { refreshBadges } = useUnreadBadges();
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -36,6 +38,7 @@ export default function Screen() {
       setIncoming(offersData.incomingActionableOffers);
       setSent(offersData.sentOffers);
       setConversations(convosData);
+      void refreshBadges();
     } catch { setError('تعذر تحميل الرسائل والعروض حالياً.'); }
     finally { setLoading(false); }
   }, [user?.id]);

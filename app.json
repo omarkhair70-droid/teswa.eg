@@ -25,7 +25,8 @@
           "photosPermission": "نحتاج الوصول للصور لاختيار صور العنصر قبل نشره.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "runtimeVersion": {
       "policy": "appVersion"

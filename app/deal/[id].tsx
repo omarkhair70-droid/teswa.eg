@@ -10,6 +10,7 @@ import { spacing } from '@/constants/spacing';
 import { confirmDealCompletedFromMobile, fetchDealRoomById, getDealStatusLabel, getDealStatusNextStep, markDealThreadReadFromMobile, sendDealMessageFromMobile } from '@/lib/deals';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
+import { useUnreadBadges } from '@/lib/unread-badges';
 
 export default function Screen() {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ export default function Screen() {
   const [confirming, setConfirming] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'live' | 'unavailable'>('connecting');
   const messageIdsRef = useRef<Set<string>>(new Set());
+  const { refreshBadges } = useUnreadBadges();
 
   const load = useCallback(async () => {
     if (!id || !user?.id) return;
@@ -37,6 +39,7 @@ export default function Screen() {
         setDeal(result.deal);
         messageIdsRef.current = new Set(result.deal.messages.map((m: any) => m.id));
         void markDealThreadReadFromMobile(id);
+        void refreshBadges();
       }
     } catch (err) {
       if (__DEV__) console.log('[deal-room] load failed', { dealId: id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
@@ -63,7 +66,10 @@ export default function Screen() {
             messages: [...prev.messages, { id: row.id, dealId: row.deal_id, senderId: row.sender_id, body: row.body, createdAt: row.created_at }],
           };
         });
-        if ((row.sender_id as string) !== user.id) void markDealThreadReadFromMobile(id);
+        if ((row.sender_id as string) !== user.id) {
+          void markDealThreadReadFromMobile(id);
+          void refreshBadges();
+        }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') setRealtimeStatus('live');
