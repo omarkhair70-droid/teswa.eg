@@ -12,5 +12,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts"
+  ],
+  "exclude": [
+    "supabase/functions/**/*.ts"
   ]
 }

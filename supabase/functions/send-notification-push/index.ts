@@ -80,6 +80,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (typeof payload.type !== "string" || typeof payload.schema !== "string" || typeof payload.table !== "string") {
+      return jsonResponse(400, {
+        ok: false,
+        error: "malformed_payload",
+      });
+    }
+
+    if (payload.type !== "INSERT" || payload.schema !== "public" || payload.table !== "notifications") {
+      return jsonResponse(200, {
+        ok: true,
+        skipped: true,
+        reason: "unexpected_webhook_event",
+      });
+    }
+
     const record = payload.record;
     if (!isNotificationRecord(record)) {
       return jsonResponse(400, {
