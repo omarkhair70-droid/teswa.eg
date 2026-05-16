@@ -39,6 +39,7 @@ export default function AddScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState('');
+  const [publishFailure, setPublishFailure] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -289,6 +290,7 @@ export default function AddScreen() {
   };
   const back = () => {
     setError(null);
+    if (step === 5) setPublishFailure(null);
     setStep((s) => Math.max(s - 1, 0));
   };
 
@@ -304,6 +306,7 @@ export default function AddScreen() {
     }
     setSubmitting(true);
     setError(null);
+    setPublishFailure(null);
     setProgress('جارٍ تحسين الصور...');
     try {
       const totalAssets = assets.length;
@@ -336,8 +339,10 @@ export default function AddScreen() {
       );
       if (!result.ok) {
         setError(result.message);
+        setPublishFailure(result.message);
         return;
       }
+      setPublishFailure(null);
       await clearAddItemDraft(user.id);
       setHasSavedDraft(false);
       setDraftNotice(null);
@@ -345,7 +350,9 @@ export default function AddScreen() {
       router.push(`/item/${result.itemId}`);
     } catch (err) {
       if (__DEV__) console.log('[add-item] submit failed', { userId: user.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
-      setError('تعذر نشر العنصر حالياً. حاول مرة أخرى.');
+      const fallbackMessage = 'تعذر نشر العنصر حالياً. حاول مرة أخرى.';
+      setError(fallbackMessage);
+      setPublishFailure(fallbackMessage);
     } finally {
       setSubmitting(false);
       setProgress('');
@@ -376,6 +383,7 @@ export default function AddScreen() {
     {step === 2 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>حالة العنصر</AppText><AppText muted>اختر الحالة بدقة لرفع الثقة.</AppText></View><View style={styles.rowWrap}>{conditionOptions.map((c) => <Pressable key={c.key} onPress={() => setCondition(c.key)} style={[styles.chip, condition === c.key && styles.chipSelected]}><AppText>{c.label}</AppText></Pressable>)}</View><AppInput value={conditionNotes} onChangeText={setConditionNotes} placeholder='ملاحظات الحالة' /><AppInput value={description} onChangeText={setDescription} placeholder='الوصف' multiline /></View></AppCard>}
     {step === 3 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>قصة العنصر</AppText><AppText muted>تفاصيل مختصرة تساعد الطرف الآخر على القرار.</AppText></View><AppInput value={itemStory} onChangeText={setItemStory} placeholder='قصة العنصر (حد 600)' multiline /><AppText muted>{itemStory.length}/600</AppText><AppInput value={swapReason} onChangeText={setSwapReason} placeholder='سبب المبادلة (حد 240)' /><AppText muted>{swapReason.length}/240</AppText><AppInput value={goodFor} onChangeText={setGoodFor} placeholder='مفيد لمن؟ (حد 240)' /><AppText muted>{goodFor.length}/240</AppText></View></AppCard>}
     {step === 4 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>المقابل المطلوب</AppText><AppText muted>حدّد تفضيلك بشكل واضح وبسيط.</AppText></View><View style={styles.rowWrap}>{desireOptions.map((d) => <Pressable key={d.key} onPress={() => setDesireMode(d.key)} style={[styles.chip, desireMode === d.key && styles.chipSelected]}><AppText>{d.label}</AppText></Pressable>)}</View><AppInput value={desireText} onChangeText={setDesireText} placeholder='ماذا تريد بالمقابل؟' /><AppInput value={wantedTags} onChangeText={setWantedTags} placeholder='وسوم مطلوبة مفصولة بفواصل' /></View></AppCard>}
+    {step === 5 && publishFailure && <AppCard><View style={styles.gap}><AppText weight='bold'>لم يكتمل النشر</AppText><AppText>{publishFailure}</AppText><AppText muted>بيانات الإعلان محفوظة، يمكنك المحاولة مرة أخرى.</AppText><AppButton label='حاول النشر مرة أخرى' onPress={submit} disabled={submitting} /></View></AppCard>}
     {step === 5 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>مراجعة قبل النشر</AppText><AppText muted>تأكد من التفاصيل والصور قبل الإرسال.</AppText></View><View style={styles.reviewCover}><Image source={{ uri: reviewImages[0]?.uri }} style={styles.reviewCoverImage} />{reviewImages[0] && <View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>صورة الغلاف</AppText></View>}</View>{reviewImages.length > 1 && <View style={styles.row}>{reviewImages.slice(1).map((a) => <Image key={a.uri} source={{ uri: a.uri }} style={styles.preview} />)}</View>}<View style={styles.summaryBox}><AppText>العنوان: {title || '-'}</AppText><AppText>المدينة/المنطقة: {city || '-'} / {area || '-'}</AppText><AppText>الحالة: {conditionOptions.find((c) => c.key === condition)?.label || '-'}</AppText><AppText>المقابل: {desireOptions.find((d) => d.key === desireMode)?.label || '-'} {desireText ? `- ${desireText}` : ''}</AppText><AppText>الوسوم: {wantedTags || '-'}</AppText></View>{!!progress && <AppText muted>{progress}</AppText>}</View></AppCard>}
     <View style={styles.actions}><AppButton label='السابق' variant='neutral' onPress={back} disabled={step === 0 || submitting} />{step < 5 ? <AppButton label='التالي' onPress={next} disabled={submitting} /> : <AppButton label='انشر العنصر' onPress={submit} disabled={submitting} />}</View>
   </AppScreen>;
