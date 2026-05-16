@@ -11,7 +11,8 @@
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "package": "com.teswa.mobile"
+      "package": "com.teswa.mobile",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
