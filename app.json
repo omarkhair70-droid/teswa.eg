@@ -3,7 +3,7 @@
     "name": "Teswa",
     "slug": "teswa-mobile",
     "scheme": "teswa",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -27,7 +27,8 @@
           "microphonePermission": false
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "react-native-compressor"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
