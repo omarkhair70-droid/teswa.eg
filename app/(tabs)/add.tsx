@@ -179,7 +179,6 @@ export default function AddScreen() {
       if (!assets.length) return 'اختر صورة واحدة على الأقل.';
       if (assets.length > 4) return 'الحد الأقصى 4 صور.';
       for (const a of assets) {
-        if (a.fileSize && a.fileSize > 5 * 1024 * 1024) return 'حجم الصورة يجب ألا يتجاوز 5MB.';
         if (a.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(a.mimeType)) return 'نوع الصورة غير مدعوم.';
       }
     }
