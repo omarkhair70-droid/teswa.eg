@@ -18,7 +18,7 @@ function RootNavigator() {
     const rootGroup = segments[0];
     const leaf = segments.at(1);
     const inAuth = rootGroup === '(auth)';
-    const inTabs = rootGroup === '(tabs)';
+    const atRoot = !rootGroup;
     const inProfileSetup = inAuth && leaf === 'profile-setup';
     const inOnboarding = inAuth && leaf === 'onboarding';
     const inLoginOrSignup = inAuth && (leaf === 'login' || leaf === 'signup');
@@ -40,7 +40,7 @@ function RootNavigator() {
       return;
     } else if (!profileCompleted) {
       if (!inProfileSetup) router.replace('/(auth)/profile-setup');
-    } else if (inAuth) {
+    } else if (inAuth || atRoot) {
       router.replace('/(tabs)/home');
     }
 
