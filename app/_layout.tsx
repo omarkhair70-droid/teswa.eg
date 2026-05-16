@@ -40,7 +40,7 @@ function RootNavigator() {
       return;
     } else if (!profileCompleted) {
       if (!inProfileSetup) router.replace('/(auth)/profile-setup');
-    } else if (!inTabs) {
+    } else if (inAuth) {
       router.replace('/(tabs)/home');
     }
 
