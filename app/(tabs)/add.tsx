@@ -10,7 +10,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { useAuth } from '@/lib/auth';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { fetchActiveCategories, ItemCondition, publishItem } from '@/lib/publish-item';
+import { fetchActiveCategories, ItemCondition, publishItem, type PublishProgress } from '@/lib/publish-item';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -199,7 +199,7 @@ export default function AddScreen() {
     }
     setSubmitting(true);
     setError(null);
-    setProgress('جارٍ رفع الصور...');
+    setProgress('جارٍ تحسين الصور...');
     try {
       const totalAssets = assets.length;
       const result = await publishItem(
@@ -220,8 +220,13 @@ export default function AddScreen() {
         },
         assets,
         user.id,
-        (current, total) => {
-          setProgress(`جارٍ رفع الصورة ${current} من ${total || totalAssets}...`);
+        (progressState: PublishProgress) => {
+          const total = progressState.total || totalAssets;
+          if (progressState.phase === 'optimizing') {
+            setProgress(`جارٍ تحسين الصورة ${progressState.current} من ${total}...`);
+            return;
+          }
+          setProgress(`جارٍ رفع الصورة ${progressState.current} من ${total}...`);
         },
       );
       if (!result.ok) {

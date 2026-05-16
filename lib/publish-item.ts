@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { supabase } from '@/lib/supabase/client';
+import { compressItemImage } from '@/lib/media/compress-item-image';
 
 const ITEM_IMAGES_BUCKET = 'item-images';
 
@@ -44,7 +45,11 @@ async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
-export async function publishItem(payload: PublishItemPayload, assets: ImagePickerAsset[], userId: string, onProgress?: (current: number, total: number) => void): Promise<PublishItemResult> {
+export type PublishProgress =
+  | { phase: 'optimizing'; current: number; total: number }
+  | { phase: 'uploading'; current: number; total: number };
+
+export async function publishItem(payload: PublishItemPayload, assets: ImagePickerAsset[], userId: string, onProgress?: (progress: PublishProgress) => void): Promise<PublishItemResult> {
   if (!assets.length) return { ok: false, reason: 'invalid_input', message: 'الصور مطلوبة قبل النشر.' };
 
   const itemId = Crypto.randomUUID();
@@ -55,11 +60,19 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
     for (let i = 0; i < assets.length; i += 1) {
       const asset = assets[i];
-      const ext = asset.fileName?.split('.').pop() || (asset.mimeType?.split('/').pop() ?? 'jpg');
-      const safeName = sanitizeFileName(asset.fileName, `image-${i + 1}.${ext}`);
+      onProgress?.({ phase: 'optimizing', current: i + 1, total: assets.length });
+      const optimized = await compressItemImage(asset.uri);
+
+      const ext = optimized.usedCompressedOutput
+        ? optimized.extension
+        : asset.fileName?.split('.').pop() || (asset.mimeType?.split('/').pop() ?? 'jpg');
+      const baseName = optimized.usedCompressedOutput ? `image-${i + 1}.jpg` : asset.fileName;
+      const safeName = sanitizeFileName(baseName, `image-${i + 1}.${ext}`);
       const path = `items/${userId}/${itemId}/${Date.now()}-${safeName}`;
-      const contentType = asset.mimeType || 'image/jpeg';
-      const body = await fileUriToArrayBuffer(asset.uri);
+      const contentType = optimized.usedCompressedOutput ? optimized.contentType : asset.mimeType || 'image/jpeg';
+
+      onProgress?.({ phase: 'uploading', current: i + 1, total: assets.length });
+      const body = await fileUriToArrayBuffer(optimized.uri);
 
       const { error: uploadError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).upload(path, body, { contentType, upsert: false });
       if (uploadError) {
@@ -68,7 +81,7 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
         return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور. تأكد من الاتصال وحاول مرة أخرى.' };
       }
       uploadedPaths.push(path);
-      onProgress?.(i + 1, assets.length);
+
 
       const { data: publicUrlData } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(path);
       uploadedImages.push({ image_url: publicUrlData.publicUrl, is_primary: i === 0, sort_order: i });
