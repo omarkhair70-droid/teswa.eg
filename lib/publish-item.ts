@@ -44,7 +44,7 @@ async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
-export async function publishItem(payload: PublishItemPayload, assets: ImagePickerAsset[], userId: string): Promise<PublishItemResult> {
+export async function publishItem(payload: PublishItemPayload, assets: ImagePickerAsset[], userId: string, onProgress?: (current: number, total: number) => void): Promise<PublishItemResult> {
   if (!assets.length) return { ok: false, reason: 'invalid_input', message: 'الصور مطلوبة قبل النشر.' };
 
   const itemId = Crypto.randomUUID();
@@ -68,6 +68,7 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
         return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور. تأكد من الاتصال وحاول مرة أخرى.' };
       }
       uploadedPaths.push(path);
+      onProgress?.(i + 1, assets.length);
 
       const { data: publicUrlData } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(path);
       uploadedImages.push({ image_url: publicUrlData.publicUrl, is_primary: i === 0, sort_order: i });
