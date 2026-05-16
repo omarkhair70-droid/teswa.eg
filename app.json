@@ -46,7 +46,8 @@
             "image/*"
           ]
         }
-      ]
+      ],
+      "expo-image"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
