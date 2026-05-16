@@ -75,12 +75,14 @@ export default function AddScreen() {
 
   const appendAssets = (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending') => {
     if (!incoming.length) return;
-    const { next, wasTrimmed } = mergeAssets(assets, incoming);
-    setAssets(next);
 
-    if (wasTrimmed && source !== 'pending') {
-      setError(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
-    }
+    setAssets((prev) => {
+      const { next, wasTrimmed } = mergeAssets(prev, incoming);
+      if (wasTrimmed && source !== 'pending') {
+        setError(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
