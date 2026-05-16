@@ -29,7 +29,7 @@ const MAX_ASSETS = 4;
 export default function AddScreen() {
   const { user } = useAuth();
   const [step, setStep] = useState(0);
-  const [assets, setAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [mediaState, setMediaState] = useState<{ assets: ImagePicker.ImagePickerAsset[]; feedback: string | null }>({ assets: [], feedback: null });
   const [categories, setCategories] = useState<{ id: string; name_ar: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +48,7 @@ export default function AddScreen() {
   const [desireMode, setDesireMode] = useState<'specific' | 'flexible' | 'surprise'>('flexible');
   const [desireText, setDesireText] = useState('');
   const [wantedTags, setWantedTags] = useState('');
+  const assets = mediaState.assets;
 
   useEffect(() => {
     fetchActiveCategories()
@@ -76,12 +77,12 @@ export default function AddScreen() {
   const appendAssets = (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending') => {
     if (!incoming.length) return;
 
-    setAssets((prev) => {
-      const { next, wasTrimmed } = mergeAssets(prev, incoming);
-      if (wasTrimmed && source !== 'pending') {
-        setError(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
-      }
-      return next;
+    setMediaState((prev) => {
+      const { next, wasTrimmed } = mergeAssets(prev.assets, incoming);
+      return {
+        assets: next,
+        feedback: wasTrimmed && source !== 'pending' ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.` : null,
+      };
     });
   };
 
@@ -143,17 +144,17 @@ export default function AddScreen() {
   };
 
   const removeAssetAt = (index: number) => {
-    setAssets((prev) => prev.filter((_, i) => i !== index));
+    setMediaState((prev) => ({ ...prev, assets: prev.assets.filter((_, i) => i !== index), feedback: null }));
   };
 
   const moveAsset = (index: number, direction: -1 | 1) => {
-    setAssets((prev) => {
+    setMediaState((prev) => {
       const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
-      const next = [...prev];
+      if (nextIndex < 0 || nextIndex >= prev.assets.length) return prev;
+      const next = [...prev.assets];
       const [item] = next.splice(index, 1);
       next.splice(nextIndex, 0, item);
-      return next;
+      return { ...prev, assets: next, feedback: null };
     });
   };
 
@@ -242,6 +243,7 @@ export default function AddScreen() {
 
   return <AppScreen scrollable><View style={styles.header}><AppText weight='bold' style={styles.title}>نشر عنصر جديد</AppText><AppText muted>الخطوة {step + 1} من 6 — {steps[step]}</AppText></View>
     {error && <AppCard><AppText style={styles.error}>{error}</AppText></AppCard>}
+    {!!mediaState.feedback && <AppCard><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
     {step === 0 && <AppCard><View style={styles.gap}><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View>{assets.map((a, i) => <View key={a.uri} style={styles.mediaRow}><Image source={{ uri: a.uri }} style={styles.preview} /><View style={styles.mediaMeta}><AppText>الصورة {i + 1} {i === 0 ? '• الغلاف' : ''}</AppText><View style={styles.mediaActions}><AppButton label='أسبق' variant='neutral' onPress={() => moveAsset(i, -1)} disabled={i === 0 || submitting} /><AppButton label='التالي' variant='neutral' onPress={() => moveAsset(i, 1)} disabled={i === assets.length - 1 || submitting} /><AppButton label='حذف' variant='neutral' onPress={() => removeAssetAt(i)} disabled={submitting} /></View></View></View>)}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
     {step === 1 && <AppCard><View style={styles.gap}><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
