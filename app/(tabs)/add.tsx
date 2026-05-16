@@ -48,7 +48,7 @@ export default function AddScreen() {
   const [desireText, setDesireText] = useState('');
   const [wantedTags, setWantedTags] = useState('');
 
-  useEffect(() => { fetchActiveCategories().then(setCategories).catch(() => setCategories([])); }, []);
+  useEffect(() => { fetchActiveCategories().then(setCategories).catch((err) => { if (__DEV__) console.log('[add-item] categories load failed', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message }); setCategories([]); }); }, []);
 
   const pickImages = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 4, quality: 0.9 });
@@ -82,16 +82,24 @@ export default function AddScreen() {
     if (!user) { setError('يجب تسجيل الدخول قبل النشر.'); return; }
     const e = validateCurrentStep(); if (e) { setError(e); return; }
     setSubmitting(true); setError(null); setProgress('جارٍ رفع الصور...');
-    const result = await publishItem({
+    try {
+      const result = await publishItem({
       title: title.trim(), categoryId, city: city.trim() || null, area: area.trim() || null, condition,
       conditionNotes: conditionNotes.trim() || null, description: description.trim() || null,
       itemStory: itemStory.trim() || null, swapReason: swapReason.trim() || null, goodFor: goodFor.trim() || null,
       desireMode, desireText: desireText.trim() || null,
       wantedTags: wantedTags.split(',').map((x) => x.trim()).filter(Boolean),
     }, assets, user.id);
-    setSubmitting(false);
-    if (!result.ok) { setError(result.message); return; }
-    router.push(`/item/${result.itemId}`);
+      if (!result.ok) { setError(result.message); return; }
+      setProgress('تم نشر العنصر بنجاح.');
+      router.push(`/item/${result.itemId}`);
+    } catch (err) {
+      if (__DEV__) console.log('[add-item] submit failed', { userId: user.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
+      setError('تعذر نشر العنصر حالياً. حاول مرة أخرى.');
+    } finally {
+      setSubmitting(false);
+      setProgress('');
+    }
   };
 
   return <AppScreen scrollable><View style={styles.header}><AppText weight='bold' style={styles.title}>نشر عنصر جديد</AppText><AppText muted>الخطوة {step + 1} من 6 — {steps[step]}</AppText></View>

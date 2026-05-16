@@ -35,8 +35,9 @@ export default function CreateOfferScreen() {
     try {
       const result = await fetchOfferCreationContext(itemId, user.id);
       setContext(result);
-    } catch {
-      setError('تعذر تحميل بيانات العرض. حاول مرة أخرى.');
+    } catch (err) {
+      if (__DEV__) console.log('[offer-create] load context failed', { itemId, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
+      setError('تعذر تحميل بيانات العرض حالياً. حاول مرة أخرى.');
     } finally {
       setLoading(false);
     }
@@ -59,7 +60,8 @@ export default function CreateOfferScreen() {
         return;
       }
       router.replace(`/offer/${result.offerId}`);
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.log('[offer-create] submit failed', { itemId, offeredItemId: selectedOfferedItemId, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       setSubmitError('تعذر إرسال العرض حالياً. حاول مرة أخرى.');
     } finally {
       setSubmitting(false);

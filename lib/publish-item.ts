@@ -63,6 +63,7 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
       const { error: uploadError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).upload(path, body, { contentType, upsert: false });
       if (uploadError) {
+        if (__DEV__) console.log('[publishItem] image upload failed', { userId, itemId, path, code: (uploadError as { code?: string }).code, message: uploadError.message });
         await cleanupStorage(uploadedPaths);
         return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور. تأكد من الاتصال وحاول مرة أخرى.' };
       }
@@ -92,12 +93,14 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
     });
 
     if (itemError) {
+      if (__DEV__) console.log('[publishItem] item insert failed', { userId, itemId, code: itemError.code, message: itemError.message });
       await cleanupStorage(uploadedPaths);
       return { ok: false, reason: 'item_insert_failed', message: 'تعذر نشر العنصر. حاول مرة أخرى.' };
     }
 
     const { error: imagesError } = await supabase.from('item_images').insert(uploadedImages.map((img) => ({ ...img, item_id: itemId })));
     if (imagesError) {
+      if (__DEV__) console.log('[publishItem] image metadata insert failed', { userId, itemId, code: imagesError.code, message: imagesError.message });
       await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
       await cleanupStorage(uploadedPaths);
       return { ok: false, reason: 'images_insert_failed', message: 'تعذر تثبيت صور العنصر. حاول مرة أخرى.' };
@@ -111,7 +114,8 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
     }
 
     return { ok: true, itemId };
-  } catch {
+  } catch (error) {
+    if (__DEV__) console.log('[publishItem] unexpected failure', { userId, itemId, code: (error as { code?: string })?.code, message: (error as { message?: string })?.message });
     await cleanupStorage(uploadedPaths);
     return { ok: false, reason: 'upload_failed', message: 'حدث خطأ غير متوقع أثناء النشر.' };
   }

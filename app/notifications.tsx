@@ -37,11 +37,15 @@ export default function NotificationsScreen() {
   const handleOpenNotification = async (notification: AppNotification) => {
     const route = resolveNotificationRoute(notification);
     if (!notification.isRead && user) {
-      const readResult = await markNotificationRead(notification.id, user.id);
-      if (readResult.ok) {
-        setNotifs((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)));
-      } else if (__DEV__) {
-        console.log('[Notifications] mark read failed', readResult.error);
+      try {
+        const readResult = await markNotificationRead(notification.id, user.id);
+        if (readResult.ok) {
+          setNotifs((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)));
+        } else if (__DEV__) {
+          console.log('[Notifications] mark read failed', readResult.error);
+        }
+      } catch (err) {
+        if (__DEV__) console.log('[Notifications] mark read threw', { notificationId: notification.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       }
     }
 
@@ -51,14 +55,19 @@ export default function NotificationsScreen() {
   const handleMarkAllRead = async () => {
     if (!user) return;
     setMarkingAll(true);
-    const result = await markAllNotificationsRead(user.id);
-    if (result.ok) {
-      const now = new Date().toISOString();
-      setNotifs((prev) => prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: now })));
-    } else if (__DEV__) {
-      console.log('[Notifications] mark all read failed', result.error);
+    try {
+      const result = await markAllNotificationsRead(user.id);
+      if (result.ok) {
+        const now = new Date().toISOString();
+        setNotifs((prev) => prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: now })));
+      } else if (__DEV__) {
+        console.log('[Notifications] mark all read failed', result.error);
+      }
+    } catch (err) {
+      if (__DEV__) console.log('[Notifications] mark all read threw', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
+    } finally {
+      setMarkingAll(false);
     }
-    setMarkingAll(false);
   };
 
   if (!user) return <AppScreen><AppText>يجب تسجيل الدخول لعرض الإشعارات.</AppText></AppScreen>;
