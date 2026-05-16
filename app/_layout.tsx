@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
@@ -8,8 +10,58 @@ import { useRTLSetup } from '@/hooks/useRTLSetup';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { navigateFromNotificationResponse, syncPushDeviceRegistrationIfPermitted } from '@/lib/push-notifications';
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
+import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 
 void SplashScreen.preventAutoHideAsync();
+
+
+
+function ShareIntentCoordinator() {
+  const router = useRouter();
+  const { hasShareIntent, shareIntent, resetShareIntent, error } = useShareIntentContext();
+
+  useEffect(() => {
+    if (error && __DEV__) {
+      console.log('[share-intent] inbound share intent error', {
+        message: (error as { message?: string })?.message,
+      });
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (!hasShareIntent) return;
+
+    const sharedFiles = shareIntent?.files ?? [];
+    const sharedImageAssets: ImagePickerAsset[] = sharedFiles
+      .filter((file) => typeof file?.mimeType === 'string' && file.mimeType.startsWith('image/'))
+      .map((file, index) => {
+        const uri = file.path || '';
+        return {
+          assetId: null,
+          base64: null,
+          duration: null,
+          exif: null,
+          fileName: file.fileName ?? `shared-image-${Date.now()}-${index}`,
+          fileSize: file.size ?? undefined,
+          height: file.height ?? 0,
+          mimeType: file.mimeType ?? null,
+          type: 'image' as const,
+          uri,
+          width: file.width ?? 0,
+        };
+      })
+      .filter((asset) => !!asset.uri);
+
+    if (sharedImageAssets.length) {
+      setPendingInboundSharedMedia(sharedImageAssets);
+      router.push({ pathname: '/(tabs)/add', params: { sharedIntent: String(Date.now()) } });
+    }
+
+    void resetShareIntent();
+  }, [hasShareIntent, resetShareIntent, router, shareIntent]);
+
+  return null;
+}
 
 function RootNavigator() {
   const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile } = useAuth();
@@ -127,12 +179,15 @@ const styles = StyleSheet.create({
 export default function RootLayout() {
   useRTLSetup();
   return (
-    <GestureHandlerRootView style={styles.gestureRoot}>
-      <AuthProvider>
-        <UnreadBadgesProvider>
-          <RootNavigator />
-        </UnreadBadgesProvider>
-      </AuthProvider>
-    </GestureHandlerRootView>
+    <ShareIntentProvider>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <AuthProvider>
+          <UnreadBadgesProvider>
+            <ShareIntentCoordinator />
+            <RootNavigator />
+          </UnreadBadgesProvider>
+        </AuthProvider>
+      </GestureHandlerRootView>
+    </ShareIntentProvider>
   );
 }
