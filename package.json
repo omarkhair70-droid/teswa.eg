@@ -26,6 +26,7 @@
     "expo-linking": "~55.0.15",
     "expo-notifications": "~55.0.23",
     "expo-router": "~55.0.14",
+    "expo-share-intent": "^6.1.0",
     "expo-splash-screen": "~55.0.21",
     "expo-status-bar": "~55.0.6",
     "expo-updates": "~55.0.22",
@@ -40,8 +41,7 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
     "react-native-url-polyfill": "^2.0.0",
-    "react-native-web": "^0.21.0",
-    "expo-share-intent": "^6.1.0"
+    "react-native-web": "^0.21.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
