@@ -37,7 +37,8 @@ export default function Screen() {
         messageIdsRef.current = new Set(result.deal.messages.map((m: any) => m.id));
         void markDealThreadReadFromMobile(id);
       }
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.log('[deal-room] load failed', { dealId: id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       setError('تعذر تحميل بيانات الصفقة.');
     } finally {
       setLoading(false);
@@ -89,7 +90,8 @@ export default function Screen() {
         }
         void markDealThreadReadFromMobile(deal.id);
       }
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.log('[deal-room] send message failed', { dealId: deal.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       setError('تعذر إرسال الرسالة حالياً.');
     } finally {
       setSending(false);
@@ -107,7 +109,8 @@ export default function Screen() {
         return;
       }
       await load();
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.log('[deal-room] confirm completion failed', { dealId: deal.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       setError('تعذر تأكيد الإتمام حالياً.');
     } finally {
       setConfirming(false);

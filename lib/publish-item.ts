@@ -111,7 +111,8 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
     }
 
     return { ok: true, itemId };
-  } catch {
+  } catch (error) {
+    if (__DEV__) console.log('[publishItem] unexpected failure', { userId, itemId, code: (error as { code?: string })?.code, message: (error as { message?: string })?.message });
     await cleanupStorage(uploadedPaths);
     return { ok: false, reason: 'upload_failed', message: 'حدث خطأ غير متوقع أثناء النشر.' };
   }

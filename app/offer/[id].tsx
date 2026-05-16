@@ -51,6 +51,9 @@ export default function OfferDetailScreen() {
         if (!r.ok || !r.dealId) return setError(r.ok ? 'تعذر فتح الصفقة.' : r.message);
         router.replace(`/deal/${r.dealId}`);
       }
+    } catch (err) {
+      if (__DEV__) console.log('[offer-detail] action failed', { action, offerId: id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
+      setError('تعذر تنفيذ الإجراء حالياً. حاول مرة أخرى.');
     } finally { setActionLoading(null); }
   }, [actionLoading, id, loadOffer, note, offer, user?.id]);
 
