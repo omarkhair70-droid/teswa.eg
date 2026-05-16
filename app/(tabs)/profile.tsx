@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -7,8 +7,9 @@ import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { fetchUnreadNotificationCount } from '@/lib/notifications';
 import { AccountProfile, fetchMyAccountProfile } from '@/lib/profiles';
+import { getNotificationPermissionStatus, hasStoredPushToken, requestAndRegisterPushDevice } from '@/lib/push-notifications';
+import { useUnreadBadges } from '@/lib/unread-badges';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
 
@@ -19,19 +20,17 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { notificationsUnreadCount } = useUnreadBadges();
+  const [pushState, setPushState] = useState<'idle'|'enabled'|'denied'|'error'>('idle');
+  const [enablingPush, setEnablingPush] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
     try {
-      const [profileData, unreadResult] = await Promise.all([
-        fetchMyAccountProfile(user.id),
-        fetchUnreadNotificationCount(user.id),
-      ]);
+      const profileData = await fetchMyAccountProfile(user.id);
       setProfile(profileData);
-      setUnreadCount(unreadResult.ok ? unreadResult.count : 0);
     } catch (e) {
       if (__DEV__) console.log('[Profile] load failed', e);
       setError(PROFILE_ERROR_MESSAGE);
@@ -45,6 +44,51 @@ export default function ProfileScreen() {
       loadData();
     }, [loadData]),
   );
+
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+
+    const hydratePushState = async () => {
+      try {
+        const status = await getNotificationPermissionStatus();
+        if (!active) return;
+        if (status !== 'granted') {
+          setPushState('idle');
+          return;
+        }
+
+        const storedTokenExists = await hasStoredPushToken();
+        if (!active) return;
+        setPushState(storedTokenExists ? 'enabled' : 'idle');
+      } catch {
+        if (!active) return;
+        setPushState('idle');
+      }
+    };
+
+    void hydratePushState();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  const handleEnablePush = async () => {
+    if (!user?.id) return;
+    setEnablingPush(true);
+    try {
+      const result = await requestAndRegisterPushDevice(user.id);
+      if (result.ok) setPushState('enabled');
+      else if (result.reason === 'permission_denied') setPushState('denied');
+      else setPushState('error');
+    } catch {
+      setPushState('error');
+    } finally {
+      setEnablingPush(false);
+    }
+  };
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -83,11 +127,23 @@ export default function ProfileScreen() {
               </View>
             </AppCard>
 
+
+            <AppCard>
+              <View style={styles.group}>
+                <AppText weight="semibold">إشعارات الموبايل</AppText>
+                {pushState !== 'enabled' ? <AppText muted>فعّل إشعارات الموبايل علشان يوصلك تنبيه عند العروض والرسائل المهمة.</AppText> : null}
+                {pushState === 'enabled' ? <AppText muted>تم تفعيل إشعارات الموبايل لهذا الجهاز.</AppText> : null}
+                {pushState === 'denied' ? <AppText muted>لم يتم منح إذن الإشعارات. تقدر تفعّله لاحقًا من إعدادات الهاتف.</AppText> : null}
+                {pushState === 'error' ? <AppText muted>تعذر تفعيل الإشعارات حالياً. حاول مرة تانية.</AppText> : null}
+                {pushState !== 'enabled' ? <AppButton label={enablingPush ? 'جاري التفعيل...' : 'تفعيل إشعارات الموبايل'} disabled={enablingPush} onPress={handleEnablePush} variant="neutral" /> : null}
+              </View>
+            </AppCard>
+
             <Pressable onPress={() => router.push('/notifications')}>
               <AppCard>
                 <View style={styles.group}>
                   <AppText weight="semibold">الإشعارات</AppText>
-                  <AppText muted>{unreadCount > 0 ? `لديك ${unreadCount} إشعارات جديدة` : 'لا توجد إشعارات جديدة'}</AppText>
+                  <AppText muted>{notificationsUnreadCount > 0 ? `لديك ${notificationsUnreadCount} إشعارات جديدة` : 'لا توجد إشعارات جديدة'}</AppText>
                 </View>
               </AppCard>
             </Pressable>

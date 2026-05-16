@@ -1,9 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { navigateFromNotificationResponse, syncPushDeviceRegistrationIfPermitted } from '@/lib/push-notifications';
+import { UnreadBadgesProvider } from '@/lib/unread-badges';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -11,6 +14,26 @@ function RootNavigator() {
   const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+
+  const handledNotificationIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
+    void syncPushDeviceRegistrationIfPermitted(user.id);
+  }, [bootstrapReady, loadingProfile, profileCompleted, user]);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      navigateFromNotificationResponse(response, handledNotificationIdsRef.current);
+    });
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      navigateFromNotificationResponse(response, handledNotificationIdsRef.current);
+    }).catch(() => undefined);
+
+    return () => sub.remove();
+  }, []);
+
 
   useEffect(() => {
     if (!bootstrapReady || loadingProfile) return;
@@ -101,7 +124,9 @@ export default function RootLayout() {
   useRTLSetup();
   return (
     <AuthProvider>
-      <RootNavigator />
+      <UnreadBadgesProvider>
+        <RootNavigator />
+      </UnreadBadgesProvider>
     </AuthProvider>
   );
 }

@@ -66,3 +66,12 @@ npx expo start --web
   ```
 - Native dependency/config changes still require a new preview APK build.
 
+
+## M10A Native Engagement Foundation
+
+- Added native push foundation with `expo-notifications` + `expo-constants`, device-token registration, and push-tap routing setup.
+- Added push-device persistence contract in Supabase (`push_devices`, `register_push_device`, `disable_my_push_device`).
+- Added in-app unread badges for Messages and Profile notifications with lightweight refresh hooks.
+- M10A **does not** send server-triggered remote push yet; delivery fanout is planned for **M10B**.
+- Because `expo-notifications` uses native config/plugins, M10A requires a **new Preview APK / EAS build** after merge (first install is not OTA-only).
+- When M10B begins, Android push delivery tests require valid Expo/EAS notification credentials.

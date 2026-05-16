@@ -8,6 +8,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AppNotification, fetchMyNotifications, markAllNotificationsRead, markNotificationRead, notificationTypeLabel, resolveNotificationRoute } from '@/lib/notifications';
+import { useUnreadBadges } from '@/lib/unread-badges';
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function NotificationsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
   const [markingAll, setMarkingAll] = useState(false);
+  const { refreshBadges } = useUnreadBadges();
 
   const loadNotifications = useCallback(async () => {
     if (!user) return;
@@ -41,6 +43,7 @@ export default function NotificationsScreen() {
         const readResult = await markNotificationRead(notification.id, user.id);
         if (readResult.ok) {
           setNotifs((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)));
+          void refreshBadges();
         } else if (__DEV__) {
           console.log('[Notifications] mark read failed', readResult.error);
         }
@@ -59,6 +62,7 @@ export default function NotificationsScreen() {
       const result = await markAllNotificationsRead(user.id);
       if (result.ok) {
         const now = new Date().toISOString();
+        void refreshBadges();
         setNotifs((prev) => prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: now })));
       } else if (__DEV__) {
         console.log('[Notifications] mark all read failed', result.error);

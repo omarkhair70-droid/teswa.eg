@@ -3,6 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
+import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    await disableRegisteredPushDeviceIfPossible();
     const { error } = await supabase.auth.signOut();
     if (error) {
       if (__DEV__) console.log('[Auth] sign out failed', error);
