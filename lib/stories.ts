@@ -55,6 +55,15 @@ export type PublishStoryInput = {
   onProgress?: (progress: StoryPublishProgress) => void;
 };
 
+
+export type DeleteStoryResult =
+  | { ok: true; storageCleanupFailed?: boolean }
+  | {
+    ok: false;
+    reason: 'invalid_user' | 'invalid_story' | 'not_found' | 'delete_failed';
+    message: string;
+  };
+
 export type PublishStoryResult =
   | { ok: true; storyId: string }
   | {
@@ -251,6 +260,59 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
   }
 
   return { ok: true, storyId: data.id as string };
+}
+
+
+export async function deleteStoryFromMobile(input: {
+  userId: string;
+  storyId: string;
+}): Promise<DeleteStoryResult> {
+  const userId = input.userId?.trim();
+  if (!userId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً.' };
+
+  const storyId = input.storyId?.trim();
+  if (!storyId) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد القصة المطلوبة.' };
+
+  const { data: storyRow, error: fetchError } = await supabase
+    .from('stories')
+    .select('id,user_id,media_storage_path,media_thumbnail_storage_path')
+    .eq('id', storyId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchError) {
+    if (__DEV__) console.warn('[stories] deleteStoryFromMobile fetch failed', fetchError.message);
+    return { ok: false, reason: 'delete_failed', message: 'تعذر حذف القصة حالياً. حاول مرة أخرى.' };
+  }
+
+  if (!storyRow) {
+    return { ok: false, reason: 'not_found', message: 'لم يتم العثور على القصة أو لم تعد متاحة.' };
+  }
+
+  const { error: deleteError } = await supabase
+    .from('stories')
+    .delete()
+    .eq('id', storyId)
+    .eq('user_id', userId);
+
+  if (deleteError) {
+    if (__DEV__) console.warn('[stories] deleteStoryFromMobile delete failed', deleteError.message);
+    return { ok: false, reason: 'delete_failed', message: 'تعذر حذف القصة حالياً. حاول مرة أخرى.' };
+  }
+
+  const storagePaths = [storyRow.media_storage_path, storyRow.media_thumbnail_storage_path]
+    .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+    .map((path) => path.trim());
+
+  if (!storagePaths.length) return { ok: true };
+
+  const { error: storageError } = await supabase.storage.from('story-media').remove(storagePaths);
+  if (storageError) {
+    if (__DEV__) console.warn('[stories] deleteStoryFromMobile storage cleanup failed', storageError.message);
+    return { ok: true, storageCleanupFailed: true };
+  }
+
+  return { ok: true };
 }
 
 export async function fetchActiveStoriesByUserId(userId: string): Promise<StoryRecord[]> {
