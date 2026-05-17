@@ -22,6 +22,9 @@ export type DealParticipantSummary = {
   id: string;
   displayName: string | null;
   avatarUrl: string | null;
+  username: string | null;
+  successfulSwapsCount: number | null;
+  responseRate: number | null;
 };
 
 export const DEAL_STATUS_LABELS: Record<string, string> = {
@@ -71,9 +74,19 @@ async function notify(payload: Record<string, unknown>) {
 }
 
 async function getDealParticipantProfiles(participantIds: string[]) {
-  const { data, error } = await supabase.from('profiles').select('id,display_name,avatar_url').in('id', participantIds);
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,display_name,avatar_url,username,successful_swaps_count,response_rate')
+    .in('id', participantIds);
   if (error) throw error;
-  return new Map((data ?? []).map((p) => [p.id as string, { id: p.id as string, displayName: (p.display_name as string | null) ?? null, avatarUrl: (p.avatar_url as string | null) ?? null }]));
+  return new Map((data ?? []).map((p) => [p.id as string, {
+    id: p.id as string,
+    displayName: (p.display_name as string | null) ?? null,
+    avatarUrl: (p.avatar_url as string | null) ?? null,
+    username: (p.username as string | null) ?? null,
+    successfulSwapsCount: (p.successful_swaps_count as number | null) ?? null,
+    responseRate: (p.response_rate as number | null) ?? null,
+  }]));
 }
 
 function toMessageRow(row: any): DealRoomMessage {
@@ -124,8 +137,8 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
   const otherConfirmed = confirmerIds.has(otherParticipantId);
   const canCoordinate = ['coordinating', 'completed_pending_confirmation'].includes(deal.status as string);
 
-  const requester = profilesById.get(requesterId) ?? { id: requesterId, displayName: null, avatarUrl: null };
-  const offerer = profilesById.get(offererId) ?? { id: offererId, displayName: null, avatarUrl: null };
+  const requester = profilesById.get(requesterId) ?? { id: requesterId, displayName: null, avatarUrl: null, username: null, successfulSwapsCount: null, responseRate: null };
+  const offerer = profilesById.get(offererId) ?? { id: offererId, displayName: null, avatarUrl: null, username: null, successfulSwapsCount: null, responseRate: null };
 
   return {
     ok: true,
@@ -137,7 +150,7 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
       viewerRole,
       requester,
       offerer,
-      otherParticipant: profilesById.get(otherParticipantId) ?? { id: otherParticipantId, displayName: null, avatarUrl: null },
+      otherParticipant: profilesById.get(otherParticipantId) ?? { id: otherParticipantId, displayName: null, avatarUrl: null, username: null, successfulSwapsCount: null, responseRate: null },
       requestedItem,
       offeredItem,
       iConfirmed,
