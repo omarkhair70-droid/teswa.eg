@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { supabase } from '@/lib/supabase/client';
 
 export type StoryMediaType = 'image' | 'video';
@@ -30,6 +31,26 @@ export type ActiveStorySummary = {
   latestCreatedAt: string;
 };
 
+export type PublishStoryInput = {
+  userId: string;
+  asset: ImagePickerAsset;
+  caption?: string;
+};
+
+export type PublishStoryResult =
+  | { ok: true; storyId: string }
+  | {
+    ok: false;
+    reason:
+      | 'invalid_user'
+      | 'invalid_asset'
+      | 'invalid_caption'
+      | 'read_failed'
+      | 'upload_failed'
+      | 'insert_failed';
+    message: string;
+  };
+
 function toStoryRecord(row: Record<string, unknown>): StoryRecord {
   return {
     id: row.id as string,
@@ -44,6 +65,35 @@ function toStoryRecord(row: Record<string, unknown>): StoryRecord {
     createdAt: row.created_at as string,
     expiresAt: row.expires_at as string,
   };
+}
+
+function detectMediaType(asset: ImagePickerAsset): StoryMediaType | null {
+  if (asset.type === 'image' || asset.type === 'video') return asset.type;
+  if (asset.mimeType?.startsWith('image/')) return 'image';
+  if (asset.mimeType?.startsWith('video/')) return 'video';
+  return null;
+}
+
+function extensionFromAsset(asset: ImagePickerAsset, mediaType: StoryMediaType): string {
+  const fileName = asset.fileName?.trim();
+  if (fileName && fileName.includes('.')) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext) return ext;
+  }
+
+  const mimeExt = asset.mimeType?.split('/')[1]?.toLowerCase();
+  if (mimeExt) {
+    if (mimeExt.includes('jpeg')) return 'jpg';
+    if (mimeExt.includes('quicktime')) return 'mov';
+    return mimeExt;
+  }
+
+  return mediaType === 'video' ? 'mp4' : 'jpg';
+}
+
+function contentTypeFromAsset(asset: ImagePickerAsset, mediaType: StoryMediaType): string {
+  if (asset.mimeType?.trim()) return asset.mimeType;
+  return mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
 }
 
 async function fetchStoryAuthorsByUserIds(userIds: string[]): Promise<Map<string, StoryAuthorSummary>> {
@@ -65,6 +115,66 @@ async function fetchStoryAuthorsByUserIds(userIds: string[]): Promise<Map<string
       avatarUrl: (profile.avatar_url as string | null) ?? null,
     },
   ]));
+}
+
+export async function publishStoryFromMobile(input: PublishStoryInput): Promise<PublishStoryResult> {
+  const userId = input.userId?.trim();
+  if (!userId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً لنشر القصة.' };
+
+  const asset = input.asset;
+  if (!asset?.uri) return { ok: false, reason: 'invalid_asset', message: 'لم يتم العثور على ملف الوسائط.' };
+
+  const mediaType = detectMediaType(asset);
+  if (!mediaType) return { ok: false, reason: 'invalid_asset', message: 'نوع الوسائط غير مدعوم. اختر صورة أو فيديو فقط.' };
+
+  const normalizedCaption = input.caption?.trim() ?? '';
+  if (normalizedCaption.length > 220) {
+    return { ok: false, reason: 'invalid_caption', message: 'تعليق القصة يجب ألا يتجاوز 220 حرفاً.' };
+  }
+
+  const extension = extensionFromAsset(asset, mediaType);
+  const contentType = contentTypeFromAsset(asset, mediaType);
+  const storagePath = createStoryUploadPath(userId, mediaType, extension);
+
+  let fileBuffer: ArrayBuffer;
+  try {
+    const response = await fetch(asset.uri);
+    fileBuffer = await response.arrayBuffer();
+  } catch {
+    return { ok: false, reason: 'read_failed', message: 'تعذر قراءة ملف الوسائط. حاول مرة أخرى.' };
+  }
+
+  const { error: uploadError } = await supabase.storage
+    .from('story-media')
+    .upload(storagePath, fileBuffer, { contentType, upsert: false });
+
+  if (uploadError) {
+    return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الوسائط حالياً. حاول مرة أخرى.' };
+  }
+
+  const durationMs = mediaType === 'video' ? Math.max(0, Math.round(asset.duration ?? 0)) || null : null;
+
+  const { data, error: insertError } = await supabase
+    .from('stories')
+    .insert({
+      user_id: userId,
+      media_type: mediaType,
+      media_storage_path: storagePath,
+      media_thumbnail_storage_path: null,
+      caption: normalizedCaption ? normalizedCaption : null,
+      duration_ms: durationMs,
+      width: asset.width ?? null,
+      height: asset.height ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (insertError || !data?.id) {
+    await supabase.storage.from('story-media').remove([storagePath]);
+    return { ok: false, reason: 'insert_failed', message: 'تم رفع الوسائط لكن تعذر نشر القصة. حاول مرة أخرى.' };
+  }
+
+  return { ok: true, storyId: data.id as string };
 }
 
 export async function fetchActiveStoriesByUserId(userId: string): Promise<StoryRecord[]> {
@@ -89,7 +199,7 @@ export async function fetchActiveStoriesForHome(): Promise<ActiveStorySummary[]>
 
   if (error) throw error;
 
-  const rows = data ?? [];
+  const rows: Record<string, unknown>[] = (data ?? []) as Record<string, unknown>[];
   if (!rows.length) return [];
 
   const stories = rows.map(toStoryRecord);
