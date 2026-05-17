@@ -1,0 +1,64 @@
+name: Android Preview APK (Local EAS)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-preview-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify EAS CLI
+        run: npx eas-cli@latest --version
+
+      - name: Build Android preview APK with local EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+        run: npx eas-cli@latest build --platform android --profile preview --local --non-interactive
+
+      - name: Locate generated APK
+        id: locate_apk
+        run: |
+          APK_PATH="$(find . -type f -name '*.apk' ! -path '*/node_modules/*' | head -n 1)"
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK file found after build."
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: teswa-preview-android-apk
+          path: ${{ steps.locate_apk.outputs.apk_path }}
+          if-no-files-found: error
