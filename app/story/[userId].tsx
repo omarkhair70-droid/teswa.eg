@@ -12,18 +12,38 @@ import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrl, fetchStoryV
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
 
-function StoryVideo({ uri, active, onError }: { uri: string; active: boolean; onError: () => void }) {
+function StoryVideo({
+  uri,
+  active,
+  onError,
+  onReady,
+}: {
+  uri: string;
+  active: boolean;
+  onError: () => void;
+  onReady?: () => void;
+}) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
   });
+  const readyRef = useRef(false);
 
-  useEventListener(player, 'statusChange', ({ error }) => {
+  useEventListener(player, 'statusChange', ({ status, error }) => {
     if (error) onError();
+    if (status === 'readyToPlay' && !readyRef.current) {
+      readyRef.current = true;
+      onReady?.();
+      if (active) {
+        player.play();
+      }
+    }
   });
 
   useEffect(() => {
     if (active) {
-      player.play();
+      if (readyRef.current) {
+        player.play();
+      }
     } else {
       player.pause();
     }
@@ -51,6 +71,7 @@ export default function StoryViewerScreen() {
   const [urlsByStoryId, setUrlsByStoryId] = useState<Record<string, string | null>>({});
   const [mediaFailedIds, setMediaFailedIds] = useState<Record<string, boolean>>({});
   const [activeIndex, setActiveIndex] = useState(0);
+  const [readyVideoStoryIds, setReadyVideoStoryIds] = useState<Record<string, boolean>>({});
 
   const closeViewer = useCallback(() => {
     router.back();
@@ -120,10 +141,18 @@ export default function StoryViewerScreen() {
     return IMAGE_DURATION_MS;
   }, [currentStory]);
 
+  const currentStoryCanStart = useMemo(() => {
+    if (!currentStory) return false;
+    if (mediaFailedIds[currentStory.id]) return true;
+    if (currentStory.mediaType === 'image') return true;
+    return !!readyVideoStoryIds[currentStory.id];
+  }, [currentStory, mediaFailedIds, readyVideoStoryIds]);
+
   useEffect(() => {
     if (!context?.stories.length) return;
     progressAnim.stopAnimation();
     progressAnim.setValue(0);
+    if (!currentStoryCanStart) return;
 
     const animation = Animated.timing(progressAnim, {
       toValue: 1,
@@ -138,7 +167,7 @@ export default function StoryViewerScreen() {
     return () => {
       animation.stop();
     };
-  }, [activeIndex, context?.stories.length, goNext, progressAnim, storyDurationMs]);
+  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs]);
 
   const renderUnavailableState = () => (
     <View style={styles.centerState}>
@@ -188,6 +217,9 @@ export default function StoryViewerScreen() {
                   uri={signedUrl}
                   active={index === activeIndex}
                   onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
+                  onReady={() => setReadyVideoStoryIds((prev) => (
+                    prev[story.id] ? prev : { ...prev, [story.id]: true }
+                  ))}
                 />
               )}
             </View>
