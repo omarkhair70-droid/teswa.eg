@@ -190,30 +190,37 @@ export default function AddScreen() {
   const appendAssets = async (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending' | 'shareIntent') => {
     if (!incoming.length) return;
 
-    const acceptedIncoming = (() => {
-      const seenUris = new Set(assets.map((a) => a.uri));
-      const uniqueIncoming = incoming.filter((a) => {
-        if (!a.uri || seenUris.has(a.uri)) return false;
-        seenUris.add(a.uri);
+    const incomingUniqueByUri = (() => {
+      const seenUris = new Set<string>();
+      return incoming.filter((asset) => {
+        if (!asset.uri || seenUris.has(asset.uri)) return false;
+        seenUris.add(asset.uri);
         return true;
       });
-      const remaining = Math.max(MAX_ASSETS - assets.length, 0);
-      return {
-        toPersist: uniqueIncoming.slice(0, remaining),
-        wasTrimmed: uniqueIncoming.length > remaining,
-      };
     })();
 
-    if (!acceptedIncoming.toPersist.length) {
-      setMediaState((prev) => ({ ...prev, feedback: acceptedIncoming.wasTrimmed && source !== 'pending' ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.` : null }));
-      return;
-    }
+    if (!incomingUniqueByUri.length) return;
 
-    const persisted = await persistAddItemDraftMediaAssets(user?.id, acceptedIncoming.toPersist);
-    setMediaState((prev) => ({
-      assets: [...prev.assets, ...persisted],
-      feedback: acceptedIncoming.wasTrimmed && source !== 'pending' ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.` : null,
-    }));
+    const persisted = await persistAddItemDraftMediaAssets(user?.id, incomingUniqueByUri);
+    if (!persisted.length) return;
+
+    let rejectedPersisted: ImagePicker.ImagePickerAsset[] = [];
+    setMediaState((prev) => {
+      const { next, wasTrimmed } = mergeAssets(prev.assets, persisted);
+      const acceptedUris = new Set(next.slice(prev.assets.length).map((asset) => asset.uri));
+      rejectedPersisted = persisted.filter((asset) => !acceptedUris.has(asset.uri));
+
+      return {
+        assets: next,
+        feedback: (wasTrimmed || incomingUniqueByUri.length > persisted.length) && source !== 'pending'
+          ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`
+          : null,
+      };
+    });
+
+    if (rejectedPersisted.length) {
+      await Promise.allSettled(rejectedPersisted.map((asset) => deleteAddItemDraftMediaAsset(asset)));
+    }
   };
 
   useEffect(() => {
