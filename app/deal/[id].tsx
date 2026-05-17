@@ -163,13 +163,15 @@ export default function Screen() {
         return;
       }
 
-      let durationMs = preStopDuration;
-      if (!durationMs) {
+      let rawDurationMs = preStopDuration;
+      if (!rawDurationMs) {
         const status = await audioRecorder.getStatus();
-        durationMs = status.durationMillis ?? 0;
+        rawDurationMs = status.durationMillis ?? 0;
       }
 
-      if (durationMs < 500) {
+      const safeDurationMs = Math.min(rawDurationMs, MAX_VOICE_DURATION_MS);
+
+      if (safeDurationMs < 500) {
         setVoiceDraft(null);
         setError('التسجيل قصير جدًا. سجّل رسالة أوضح.');
         return;
@@ -186,7 +188,7 @@ export default function Screen() {
 
       setVoiceDraft({
         uri,
-        durationMs,
+        durationMs: safeDurationMs,
         fileName,
         sizeBytes,
         mimeType: 'audio/m4a',
