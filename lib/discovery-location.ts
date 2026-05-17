@@ -12,6 +12,16 @@ export type DiscoveryLocationResult =
       message: string;
     };
 
+type GeocodedAddressResult =
+  | {
+      ok: true;
+      address: Location.LocationGeocodedAddress;
+    }
+  | {
+      ok: false;
+      reason: 'permission_denied' | 'location_unavailable' | 'reverse_geocode_failed';
+    };
+
 function normalizeTerm(value: string | null | undefined): string | null {
   if (!value) return null;
   const term = value.trim();
@@ -37,67 +47,24 @@ function uniqueTerms(values: Array<string | null | undefined>): string[] {
 }
 
 export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocationResult> {
-  let permission: Location.LocationPermissionResponse;
-  try {
-    permission = await Location.requestForegroundPermissionsAsync();
-  } catch {
+  const geocoded = await resolveCurrentGeocodedAddress();
+  if (!geocoded.ok) {
+    if (geocoded.reason === 'permission_denied') {
+      return {
+        ok: false,
+        reason: 'permission_denied',
+        message: 'نحتاج إذن الموقع لعرض العناصر الأقرب لمدينتك.',
+      };
+    }
+
     return {
       ok: false,
-      reason: 'location_unavailable',
+      reason: geocoded.reason,
       message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
     };
   }
 
-  if (permission.status !== 'granted') {
-    return {
-      ok: false,
-      reason: 'permission_denied',
-      message: 'نحتاج إذن الموقع لعرض العناصر الأقرب لمدينتك.',
-    };
-  }
-
-  let currentPosition: Location.LocationObject | null = null;
-  try {
-    const lastKnown = await Location.getLastKnownPositionAsync();
-    currentPosition = lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
-  } catch {
-    return {
-      ok: false,
-      reason: 'location_unavailable',
-      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
-    };
-  }
-
-  if (!currentPosition) {
-    return {
-      ok: false,
-      reason: 'location_unavailable',
-      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
-    };
-  }
-
-  let addresses: Location.LocationGeocodedAddress[];
-  try {
-    addresses = await Location.reverseGeocodeAsync({
-      latitude: currentPosition.coords.latitude,
-      longitude: currentPosition.coords.longitude,
-    });
-  } catch {
-    return {
-      ok: false,
-      reason: 'reverse_geocode_failed',
-      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
-    };
-  }
-
-  const address = addresses[0];
-  if (!address) {
-    return {
-      ok: false,
-      reason: 'reverse_geocode_failed',
-      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
-    };
-  }
+  const { address } = geocoded;
 
   const label =
     normalizeTerm(address.city) ??
@@ -121,6 +88,95 @@ export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocati
     label,
     matchTerms,
   };
+}
+
+export async function resolveCurrentAddItemLocation(): Promise<
+  | {
+      ok: true;
+      city: string;
+      area: string | null;
+      label: string;
+    }
+  | {
+      ok: false;
+      reason: 'permission_denied' | 'location_unavailable' | 'reverse_geocode_failed';
+      message: string;
+    }
+> {
+  const geocoded = await resolveCurrentGeocodedAddress();
+  if (!geocoded.ok) {
+    return {
+      ok: false,
+      reason: geocoded.reason,
+      message: geocoded.reason === 'permission_denied'
+        ? 'نحتاج إذن الموقع لاقتراح المدينة والمنطقة.'
+        : 'تعذر تحديد مدينتك الآن. يمكنك كتابتها يدويًا.',
+    };
+  }
+
+  const { address } = geocoded;
+  const city = normalizeTerm(address.city) ?? normalizeTerm(address.subregion) ?? normalizeTerm(address.region);
+  if (!city) {
+    return {
+      ok: false,
+      reason: 'reverse_geocode_failed',
+      message: 'تعذر تحديد مدينتك الآن. يمكنك كتابتها يدويًا.',
+    };
+  }
+
+  const district = normalizeTerm(address.district);
+  const subregion = normalizeTerm(address.subregion);
+  const area = district ?? ((subregion && subregion.toLowerCase() !== city.toLowerCase()) ? subregion : null);
+  const label = uniqueTerms([city, area]).join('، ');
+
+  return {
+    ok: true,
+    city,
+    area,
+    label,
+  };
+}
+
+async function resolveCurrentGeocodedAddress(): Promise<GeocodedAddressResult> {
+  let permission: Location.LocationPermissionResponse;
+  try {
+    permission = await Location.requestForegroundPermissionsAsync();
+  } catch {
+    return { ok: false, reason: 'location_unavailable' };
+  }
+
+  if (permission.status !== 'granted') {
+    return { ok: false, reason: 'permission_denied' };
+  }
+
+  let currentPosition: Location.LocationObject | null = null;
+  try {
+    const lastKnown = await Location.getLastKnownPositionAsync();
+    currentPosition = lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+  } catch {
+    return { ok: false, reason: 'location_unavailable' };
+  }
+
+  if (!currentPosition) {
+    return { ok: false, reason: 'location_unavailable' };
+  }
+
+  let addresses: Location.LocationGeocodedAddress[];
+  try {
+    addresses = await Location.reverseGeocodeAsync({
+      latitude: currentPosition.coords.latitude,
+      longitude: currentPosition.coords.longitude,
+    });
+  } catch {
+    return { ok: false, reason: 'reverse_geocode_failed' };
+  }
+
+  const address = addresses[0];
+  if (!address) {
+    return { ok: false, reason: 'reverse_geocode_failed' };
+  }
+
+  return { ok: true, address };
 }
 
 export function matchesDiscoveryLocation(itemLocation: string | null, matchTerms: string[]): boolean {
