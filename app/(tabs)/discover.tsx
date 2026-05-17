@@ -61,6 +61,7 @@ export default function DiscoverScreen() {
       const page = await fetchMarketplaceItemsPage({ offset: 0 });
       setItems(page.items);
       setHasMore(page.hasMore);
+      setError(null);
     } catch {
       // Keep existing items visible on refresh failure.
     } finally {
@@ -69,7 +70,7 @@ export default function DiscoverScreen() {
   }, [refreshing]);
 
   const loadMoreItems = useCallback(async () => {
-    if (loading || refreshing || loadingMore || !hasMore) {
+    if (loading || refreshing || loadingMore || !hasMore || error) {
       return;
     }
 
@@ -89,7 +90,7 @@ export default function DiscoverScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, items.length, loading, loadingMore, refreshing]);
+  }, [error, hasMore, items.length, loading, loadingMore, refreshing]);
 
   const handleUseMyLocation = useCallback(async () => {
     setNearbyLoading(true);
