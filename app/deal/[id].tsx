@@ -3,14 +3,14 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { File } from 'expo-file-system';
-import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
-import { confirmDealCompletedFromMobile, fetchDealRoomById, getDealStatusLabel, getDealStatusNextStep, markDealThreadReadFromMobile, sendDealMessageFromMobile, sendDealVoiceMessageFromMobile } from '@/lib/deals';
+import { confirmDealCompletedFromMobile, createDealVoiceMessageSignedUrl, fetchDealRoomById, getDealStatusLabel, getDealStatusNextStep, markDealThreadReadFromMobile, sendDealMessageFromMobile, sendDealVoiceMessageFromMobile } from '@/lib/deals';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import { useUnreadBadges } from '@/lib/unread-badges';
@@ -47,12 +47,17 @@ export default function Screen() {
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceSending, setVoiceSending] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
+  const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
+  const [voicePlaybackLoadingId, setVoicePlaybackLoadingId] = useState<string | null>(null);
+  const [voicePlaybackError, setVoicePlaybackError] = useState<{ messageId: string; message: string } | null>(null);
   const messageIdsRef = useRef<Set<string>>(new Set());
   const autoStopTriggeredRef = useRef(false);
   const stopAndDiscardRef = useRef(false);
   const { refreshBadges } = useUnreadBadges();
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder, 250);
+  const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
+  const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
 
   const load = useCallback(async () => {
     if (!id || !user?.id) return;
@@ -121,6 +126,65 @@ export default function Screen() {
       void supabase.removeChannel(channel);
     };
   }, [id, refreshBadges, user?.id]);
+
+  const toggleVoicePlayback = useCallback(async (msg: any) => {
+    if (msg.messageType !== 'voice' || !msg.audioStoragePath) {
+      setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تشغيل الرسالة الصوتية.' });
+      return;
+    }
+
+    if (activeVoiceMessageId === msg.id) {
+      if (voicePlaybackError?.messageId === msg.id) setVoicePlaybackError(null);
+      if (voicePlayerStatus.playing) {
+        voicePlayer.pause();
+      } else {
+        const currentTime = voicePlayerStatus.currentTime ?? 0;
+        const duration = voicePlayerStatus.duration ?? 0;
+        if (duration > 0 && currentTime >= duration - 0.1) {
+          try {
+            await voicePlayer.seekTo(0);
+          } catch {}
+        }
+        voicePlayer.play();
+      }
+      return;
+    }
+
+    voicePlayer.pause();
+    try {
+      await voicePlayer.seekTo(0);
+    } catch {}
+
+    setVoicePlaybackLoadingId(msg.id);
+    setVoicePlaybackError(null);
+    try {
+      const signedUrl = await createDealVoiceMessageSignedUrl(msg.audioStoragePath);
+      if (!signedUrl) {
+        setActiveVoiceMessageId(null);
+        setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تجهيز الرسالة الصوتية للتشغيل.' });
+        setVoicePlaybackLoadingId(null);
+        return;
+      }
+
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+      });
+
+      setActiveVoiceMessageId(msg.id);
+      voicePlayer.replace(signedUrl);
+      try {
+        await voicePlayer.seekTo(0);
+      } catch {}
+      voicePlayer.play();
+      setVoicePlaybackLoadingId(null);
+    } catch (err) {
+      if (__DEV__) console.log('[deal-room] voice playback failed', { messageId: msg.id, message: (err as { message?: string })?.message });
+      setActiveVoiceMessageId(null);
+      setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تشغيل الرسالة الصوتية حالياً.' });
+      setVoicePlaybackLoadingId(null);
+    }
+  }, [activeVoiceMessageId, voicePlaybackError?.messageId, voicePlayer, voicePlayerStatus.currentTime, voicePlayerStatus.duration, voicePlayerStatus.playing]);
 
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
@@ -286,6 +350,20 @@ export default function Screen() {
     void stopVoiceRecording();
   }, [recorderState.durationMillis, recorderState.isRecording, stopVoiceRecording]);
 
+  useEffect(() => {
+    if (!activeVoiceMessageId || !voicePlayerStatus.didJustFinish) return;
+    voicePlayer.pause();
+    void voicePlayer.seekTo(0);
+    setActiveVoiceMessageId(null);
+  }, [activeVoiceMessageId, voicePlayer, voicePlayerStatus.didJustFinish]);
+
+  useEffect(() => {
+    if (!activeVoiceMessageId || !voicePlayerStatus.error) return;
+    voicePlayer.pause();
+    setVoicePlaybackError({ messageId: activeVoiceMessageId, message: 'تعذر تشغيل الرسالة الصوتية حالياً.' });
+    setActiveVoiceMessageId(null);
+  }, [activeVoiceMessageId, voicePlayer, voicePlayerStatus.error]);
+
   const confirmCompletion = useCallback(async () => {
     if (!deal || !user?.id) return;
     setConfirming(true);
@@ -325,7 +403,13 @@ export default function Screen() {
     <AppCard><View style={styles.group}><AppText weight="semibold">الرسائل</AppText><AppText muted>{realtimeLabel}</AppText>
       {deal.messages.length === 0 ? <EmptyState title="لسه مفيش رسائل" description="ابدأوا التنسيق من هنا." /> : deal.messages.map((msg: any) => {
         const mine = msg.senderId === user.id;
-        return <View key={msg.id} style={[styles.bubble, mine ? styles.myBubble : styles.otherBubble]}><AppText weight="semibold">{mine ? 'أنت' : deal.otherParticipant.displayName ?? 'الطرف التاني'}</AppText>{msg.messageType === 'voice' ? <><AppText>رسالة صوتية</AppText>{typeof msg.audioDurationMs === 'number' ? <AppText muted>المدة: {formatVoiceDuration(msg.audioDurationMs)}</AppText> : null}</> : <AppText>{msg.body}</AppText>}<AppText muted>{new Date(msg.createdAt).toLocaleString('ar-EG')}</AppText></View>;
+        const isActiveVoice = msg.messageType === 'voice' && activeVoiceMessageId === msg.id;
+        const elapsedMs = isActiveVoice ? Math.max(0, Math.round((voicePlayerStatus.currentTime ?? 0) * 1000)) : 0;
+        const statusDurationMs = isActiveVoice && (voicePlayerStatus.duration ?? 0) > 0 ? Math.round((voicePlayerStatus.duration ?? 0) * 1000) : 0;
+        const totalDurationMs = statusDurationMs > 0 ? statusDurationMs : (msg.audioDurationMs ?? 0);
+        const voiceProgress = isActiveVoice && totalDurationMs > 0 ? Math.min(1, Math.max(0, elapsedMs / totalDurationMs)) : 0;
+
+        return <View key={msg.id} style={[styles.bubble, mine ? styles.myBubble : styles.otherBubble]}><AppText weight="semibold">{mine ? 'أنت' : deal.otherParticipant.displayName ?? 'الطرف التاني'}</AppText>{msg.messageType === 'voice' ? <View style={styles.voiceBubble}><AppText>رسالة صوتية</AppText><AppButton label={voicePlaybackLoadingId === msg.id ? 'جارٍ التحميل...' : (isActiveVoice && voicePlayerStatus.playing ? 'إيقاف' : 'تشغيل')} onPress={() => { void toggleVoicePlayback(msg); }} disabled={voicePlaybackLoadingId === msg.id} variant="neutral" /><View style={styles.voiceProgressTrack}><View style={[styles.voiceProgressFill, { width: `${Math.round(voiceProgress * 100)}%` }]} /></View><AppText muted>{isActiveVoice ? `${formatVoiceDuration(elapsedMs)} / ${formatVoiceDuration(totalDurationMs)}` : `المدة: ${formatVoiceDuration(msg.audioDurationMs ?? 0)}`}</AppText>{voicePlaybackError?.messageId === msg.id ? <AppText muted>{voicePlaybackError?.message}</AppText> : null}</View> : <AppText>{msg.body}</AppText>}<AppText muted>{new Date(msg.createdAt).toLocaleString('ar-EG')}</AppText></View>;
       })}
       {deal.canSendMessage ? <>
         <TextInput multiline value={messageBody} onChangeText={setMessageBody} maxLength={800} style={styles.input} placeholder="اكتب رسالة للتنسيق" textAlign="right" />
@@ -348,4 +432,4 @@ export default function Screen() {
   </View></AppScreen>;
 }
 
-const styles = StyleSheet.create({ group: { gap: spacing.sm }, row: { flexDirection: 'row', gap: spacing.sm }, title: { fontSize: 24 }, bubble: { padding: spacing.sm, borderRadius: 12, gap: 4 }, myBubble: { backgroundColor: '#e7f7ee' }, otherBubble: { backgroundColor: '#f2f2f2' }, input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, minHeight: 90, padding: 12, textAlignVertical: 'top' }, voiceComposer: { gap: spacing.xs } });
+const styles = StyleSheet.create({ group: { gap: spacing.sm }, row: { flexDirection: 'row', gap: spacing.sm }, title: { fontSize: 24 }, bubble: { padding: spacing.sm, borderRadius: 12, gap: 4 }, myBubble: { backgroundColor: '#e7f7ee' }, otherBubble: { backgroundColor: '#f2f2f2' }, input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, minHeight: 90, padding: 12, textAlignVertical: 'top' }, voiceComposer: { gap: spacing.xs }, voiceBubble: { gap: spacing.xs }, voiceProgressTrack: { height: 6, borderRadius: 999, backgroundColor: '#d9d9d9', overflow: 'hidden' }, voiceProgressFill: { height: '100%', backgroundColor: '#18a058' } });
