@@ -3,7 +3,7 @@
     "name": "Teswa",
     "slug": "teswa-mobile",
     "scheme": "teswa",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -47,7 +47,31 @@
           ]
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "نحتاج إذن الميكروفون لتسجيل الرسائل الصوتية داخل تِسوى.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "نحتاج إذن الكاميرا لتصوير العناصر والقصص داخل تِسوى.",
+          "microphonePermission": "نحتاج إذن الميكروفون لتسجيل الفيديو بالصوت داخل تِسوى.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "نستخدم التحقق البيومتري لحماية حسابك داخل تِسوى."
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "appVersion"
