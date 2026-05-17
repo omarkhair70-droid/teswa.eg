@@ -5,15 +5,20 @@ import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
+import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { spacing } from '@/constants/spacing';
 import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
+import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 
 export default function DiscoverScreen() {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState<string | null>(null);
+  const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; matchTerms: string[] } | null>(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -27,19 +32,46 @@ export default function DiscoverScreen() {
     }
   }, []);
 
+  const handleUseMyLocation = useCallback(async () => {
+    setNearbyLoading(true);
+    setNearbyError(null);
+
+    try {
+      const result = await resolveCurrentDiscoveryLocation();
+      if (result.ok) {
+        setActiveNearbyLocation({ label: result.label, matchTerms: result.matchTerms });
+        return;
+      }
+
+      setActiveNearbyLocation(null);
+      setNearbyError(result.message);
+    } finally {
+      setNearbyLoading(false);
+    }
+  }, []);
+
+  const clearNearbyFilter = useCallback(() => {
+    setActiveNearbyLocation(null);
+    setNearbyError(null);
+  }, []);
+
   useEffect(() => {
     loadItems();
   }, [loadItems]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return items;
+    const queryFiltered = normalized
+      ? items.filter((item) => {
+          const haystack = [item.title, item.category, item.location].filter(Boolean).join(' ').toLowerCase();
+          return haystack.includes(normalized);
+        })
+      : items;
 
-    return items.filter((item) => {
-      const haystack = [item.title, item.category, item.location].filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(normalized);
-    });
-  }, [items, query]);
+    if (!activeNearbyLocation) return queryFiltered;
+
+    return queryFiltered.filter((item) => matchesDiscoveryLocation(item.location, activeNearbyLocation.matchTerms));
+  }, [activeNearbyLocation, items, query]);
 
   return (
     <AppScreen style={styles.screen}>
@@ -51,6 +83,22 @@ export default function DiscoverScreen() {
           <View style={styles.header}>
             <AppText weight="bold" style={styles.title}>اكتشف العناصر</AppText>
             <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
+            <AppCard>
+              <View style={styles.nearbyBox}>
+                {activeNearbyLocation ? (
+                  <>
+                    <AppText>نعرض العناصر الأقرب إلى: {activeNearbyLocation.label}</AppText>
+                    <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
+                  </>
+                ) : (
+                  <>
+                    <AppButton label={nearbyLoading ? 'جارٍ تحديد موقعك...' : 'اعرض الأقرب لمدينتي'} onPress={handleUseMyLocation} disabled={nearbyLoading} />
+                    <AppText muted>نستخدم موقعك مرة واحدة لتقريب نتائج التصفح.</AppText>
+                  </>
+                )}
+                {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
+              </View>
+            </AppCard>
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
@@ -61,6 +109,14 @@ export default function DiscoverScreen() {
             <View style={styles.stateBox}>
               <EmptyState title="تعذر تحميل التصفح" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
+            </View>
+          ) : activeNearbyLocation ? (
+            <View style={styles.stateBox}>
+              <EmptyState
+                title="لا توجد عناصر قريبة حالياً"
+                description="لم نجد عناصر مطابقة لمدينتك في النتائج الحالية. جرّب عرض كل العناصر أو ابحث بكلمة أخرى."
+              />
+              <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
             </View>
           ) : query.trim() ? (
             <EmptyState title="لا توجد نتائج" description="جرّب كلمة بحث أخرى للعثور على عناصر مناسبة." />
@@ -78,5 +134,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   header: { gap: spacing.sm, marginBottom: spacing.md },
   title: { fontSize: 24 },
+  nearbyBox: { gap: spacing.sm },
   stateBox: { gap: spacing.md },
 });
