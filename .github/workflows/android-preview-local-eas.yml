@@ -45,10 +45,12 @@ jobs:
 
       - name: Configure 8GB swapfile
         run: |
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          SWAPFILE="/mnt/teswa-actions-swapfile"
+          sudo rm -f "$SWAPFILE"
+          sudo fallocate -l 8G "$SWAPFILE"
+          sudo chmod 600 "$SWAPFILE"
+          sudo mkswap "$SWAPFILE"
+          sudo swapon "$SWAPFILE"
           swapon --show
           free -h
 
