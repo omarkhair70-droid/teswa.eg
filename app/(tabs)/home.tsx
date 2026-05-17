@@ -53,6 +53,8 @@ export default function HomeScreen() {
     loadStories();
   }, [loadItems, loadStories]);
 
+  const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
+
   return (
     <AppScreen style={styles.screen}>
       <FlatList
@@ -67,8 +69,8 @@ export default function HomeScreen() {
             <View style={styles.storiesSection}>
               <View style={styles.storiesHeaderRow}>
                 <AppText weight="bold">القصص</AppText>
-                {!storiesLoading && !storiesError && stories.length > 0 ? (
-                  <AppText muted style={styles.storyCount}>{stories.length} قصة</AppText>
+                {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
+                  <AppText muted style={styles.storyCount}>{totalActiveStories} قصة</AppText>
                 ) : null}
               </View>
 
