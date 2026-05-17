@@ -7,6 +7,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
+import { useAuth } from '@/lib/auth';
 import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrl, fetchStoryViewerContextByUserId } from '@/lib/stories';
 
 const IMAGE_DURATION_MS = 5000;
@@ -61,7 +62,10 @@ function StoryVideo({
 
 export default function StoryViewerScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { userId } = useLocalSearchParams<{ userId?: string }>();
+  const normalizedUserId = userId?.trim() ?? '';
+  const isViewingOwnStories = !!user?.id && normalizedUserId === user.id;
   const pagerRef = useRef<PagerView>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -95,7 +99,6 @@ export default function StoryViewerScreen() {
   }, [activeIndex, goToIndex]);
 
   useEffect(() => {
-    const normalizedUserId = userId?.trim();
     if (!normalizedUserId) {
       setError('invalid_user');
       setLoading(false);
@@ -171,13 +174,29 @@ export default function StoryViewerScreen() {
     };
   }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs]);
 
-  const renderUnavailableState = () => (
-    <View style={styles.centerState}>
-      <AppText weight="bold" style={styles.stateTitle}>القصة غير متاحة</AppText>
-      <AppText muted style={styles.stateDescription}>قد تكون انتهت أو تعذر تحميلها.</AppText>
-      <AppButton label="الرجوع" onPress={closeViewer} />
-    </View>
-  );
+  const renderUnavailableState = () => {
+    if (isViewingOwnStories) {
+      return (
+        <View style={styles.centerState}>
+          <AppText weight="bold" style={styles.stateTitle}>لا توجد قصص نشطة</AppText>
+          <AppText muted style={styles.stateDescription}>أضف قصة جديدة أو راجع قصصك من شاشة الإدارة.</AppText>
+          <View style={styles.stateActions}>
+            <AppButton label="إضافة قصة" onPress={() => router.push('/story/create')} />
+            <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.push('/story/manage')} />
+            <AppButton label="الرجوع" variant="neutral" onPress={closeViewer} />
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.centerState}>
+        <AppText weight="bold" style={styles.stateTitle}>القصة غير متاحة</AppText>
+        <AppText muted style={styles.stateDescription}>قد تكون انتهت أو تعذر تحميلها.</AppText>
+        <AppButton label="الرجوع" onPress={closeViewer} />
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -258,7 +277,14 @@ export default function StoryViewerScreen() {
               {context.author.username ? <AppText style={styles.authorUsername}>@{context.author.username}</AppText> : null}
             </View>
           </View>
-          <Pressable onPress={closeViewer}><AppText style={styles.closeText}>إغلاق</AppText></Pressable>
+          <View style={styles.headerActions}>
+            {isViewingOwnStories ? (
+              <Pressable onPress={() => router.push('/story/manage')}>
+                <AppText style={styles.manageText}>إدارة</AppText>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={closeViewer}><AppText style={styles.closeText}>إغلاق</AppText></Pressable>
+          </View>
         </View>
       </View>
 
@@ -290,6 +316,8 @@ const styles = StyleSheet.create({
   authorName: { color: '#fff' },
   authorUsername: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
   closeText: { color: '#fff', fontSize: 14 },
+  manageText: { color: '#fff', fontSize: 14 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   navLayer: {
     position: 'absolute',
     left: 0,
@@ -321,4 +349,5 @@ const styles = StyleSheet.create({
   loadingText: { color: '#fff' },
   mediaFallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   mediaFallbackText: { color: '#fff' },
+  stateActions: { width: '100%', gap: 10 },
 });

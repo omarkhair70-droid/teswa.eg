@@ -124,7 +124,21 @@ export default function StoryCreateScreen() {
   };
 
   if (!user) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك أولاً حتى تتمكن من إضافة قصة جديدة." /></AppScreen>;
-  if (published) return <AppScreen><AppCard><View style={styles.successBox}><AppText weight="bold" style={styles.successTitle}>تم نشر قصتك</AppText><AppText muted>ستظهر لمدة 24 ساعة.</AppText><AppButton label="العودة لحسابي" onPress={() => router.replace('/(tabs)/profile')} /></View></AppCard></AppScreen>;
+  if (published) {
+    return (
+      <AppScreen>
+        <AppCard>
+          <View style={styles.successBox}>
+            <AppText weight="bold" style={styles.successTitle}>تم نشر قصتك</AppText>
+            <AppText muted>ستظهر لمدة 24 ساعة.</AppText>
+            <AppButton label="عرض قصتي الآن" onPress={() => router.replace(`/story/${user.id}`)} />
+            <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.replace('/story/manage')} />
+            <AppButton label="العودة لحسابي" variant="neutral" onPress={() => router.replace('/(tabs)/profile')} />
+          </View>
+        </AppCard>
+      </AppScreen>
+    );
+  }
 
   return (
     <AppScreen scrollable>
