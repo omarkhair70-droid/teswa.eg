@@ -50,6 +50,7 @@ export default function Screen() {
   const [activeVoiceMessageId, setActiveVoiceMessageId] = useState<string | null>(null);
   const [voicePlaybackLoadingId, setVoicePlaybackLoadingId] = useState<string | null>(null);
   const [voicePlaybackError, setVoicePlaybackError] = useState<{ messageId: string; message: string } | null>(null);
+  const voicePlaybackRequestRef = useRef(0);
   const messageIdsRef = useRef<Set<string>>(new Set());
   const autoStopTriggeredRef = useRef(false);
   const stopAndDiscardRef = useRef(false);
@@ -163,14 +164,18 @@ export default function Screen() {
       await voicePlayer.seekTo(0);
     } catch {}
 
+    const requestId = ++voicePlaybackRequestRef.current;
     setVoicePlaybackLoadingId(msg.id);
     setVoicePlaybackError(null);
     try {
       const signedUrl = await createDealVoiceMessageSignedUrl(msg.audioStoragePath);
+      if (requestId !== voicePlaybackRequestRef.current || recorderState.isRecording || voiceBusy) return;
       if (!signedUrl) {
-        setActiveVoiceMessageId(null);
-        setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تجهيز الرسالة الصوتية للتشغيل.' });
-        setVoicePlaybackLoadingId(null);
+        if (requestId === voicePlaybackRequestRef.current) {
+          setActiveVoiceMessageId(null);
+          setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تجهيز الرسالة الصوتية للتشغيل.' });
+          setVoicePlaybackLoadingId(null);
+        }
         return;
       }
 
@@ -178,19 +183,24 @@ export default function Screen() {
         playsInSilentMode: true,
         allowsRecording: false,
       });
+      if (requestId !== voicePlaybackRequestRef.current || recorderState.isRecording || voiceBusy) return;
 
       setActiveVoiceMessageId(msg.id);
       voicePlayer.replace(signedUrl);
+      if (requestId !== voicePlaybackRequestRef.current || recorderState.isRecording || voiceBusy) return;
       try {
         await voicePlayer.seekTo(0);
       } catch {}
+      if (requestId !== voicePlaybackRequestRef.current || recorderState.isRecording || voiceBusy) return;
       voicePlayer.play();
-      setVoicePlaybackLoadingId(null);
+      if (requestId === voicePlaybackRequestRef.current) setVoicePlaybackLoadingId(null);
     } catch (err) {
       if (__DEV__) console.log('[deal-room] voice playback failed', { messageId: msg.id, message: (err as { message?: string })?.message });
-      setActiveVoiceMessageId(null);
-      setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تشغيل الرسالة الصوتية حالياً.' });
-      setVoicePlaybackLoadingId(null);
+      if (requestId === voicePlaybackRequestRef.current) {
+        setActiveVoiceMessageId(null);
+        setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تشغيل الرسالة الصوتية حالياً.' });
+        setVoicePlaybackLoadingId(null);
+      }
     }
   }, [activeVoiceMessageId, recorderState.isRecording, voiceBusy, voicePlaybackError?.messageId, voicePlayer, voicePlayerStatus.currentTime, voicePlayerStatus.duration, voicePlayerStatus.playing]);
 
@@ -289,6 +299,7 @@ export default function Screen() {
         return;
       }
 
+      voicePlaybackRequestRef.current += 1;
       voicePlayer.pause();
       try {
         await voicePlayer.seekTo(0);
