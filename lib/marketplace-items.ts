@@ -25,6 +25,11 @@ export type MarketplaceItem = {
   ownerDisplayName: string | null;
 };
 
+export type MarketplaceItemsPage = {
+  items: MarketplaceItem[];
+  hasMore: boolean;
+};
+
 function mapRowToMarketplaceItem(row: MarketplaceItemRow): MarketplaceItem {
   return {
     id: row.id,
@@ -50,18 +55,33 @@ const itemSelect = `
   created_at
 `;
 
-export async function fetchMarketplaceItems(): Promise<MarketplaceItem[]> {
+export async function fetchMarketplaceItemsPage(options?: { offset?: number; limit?: number }): Promise<MarketplaceItemsPage> {
+  const offset = options?.offset ?? 0;
+  const limit = options?.limit ?? MARKETPLACE_PAGE_SIZE;
+
   const { data, error } = await supabase
     .from('marketplace_items')
     .select(itemSelect)
     .order('created_at', { ascending: false })
-    .limit(MARKETPLACE_PAGE_SIZE);
+    .range(offset, offset + limit);
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []).map((row) => mapRowToMarketplaceItem(row as MarketplaceItemRow));
+  const rows = (data ?? []) as MarketplaceItemRow[];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  return {
+    items: pageRows.map((row) => mapRowToMarketplaceItem(row)),
+    hasMore,
+  };
+}
+
+export async function fetchMarketplaceItems(): Promise<MarketplaceItem[]> {
+  const page = await fetchMarketplaceItemsPage({ offset: 0, limit: MARKETPLACE_PAGE_SIZE });
+  return page.items;
 }
 
 export async function fetchMarketplaceItemById(id: string): Promise<MarketplaceItem | null> {
