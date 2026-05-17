@@ -8,6 +8,15 @@ const DESIRE_MODE_VALUES = ['specific', 'flexible', 'surprise'] as const;
 
 type DesireMode = (typeof DESIRE_MODE_VALUES)[number];
 
+export type AddItemDraftMediaAsset = {
+  uri: string;
+  fileName: string | null;
+  fileSize: number | null;
+  mimeType: string | null;
+  width: number;
+  height: number;
+};
+
 export type AddItemDraft = {
   version: typeof ADD_ITEM_DRAFT_VERSION;
   updatedAt: string;
@@ -25,6 +34,7 @@ export type AddItemDraft = {
   desireMode: DesireMode;
   desireText: string;
   wantedTags: string;
+  mediaAssets: AddItemDraftMediaAsset[];
 };
 
 const sanitizeString = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -36,6 +46,30 @@ const isValidDesireMode = (value: unknown): value is DesireMode => DESIRE_MODE_V
 const sanitizeStep = (value: unknown) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.floor(value));
+};
+
+
+const sanitizeMediaAsset = (value: unknown): AddItemDraftMediaAsset | null => {
+  if (!value || typeof value !== 'object') return null;
+  const input = value as Partial<AddItemDraftMediaAsset>;
+  const uri = sanitizeString(input.uri).trim();
+  if (!uri) return null;
+  const width = typeof input.width === 'number' && Number.isFinite(input.width) ? Math.max(0, Math.floor(input.width)) : 0;
+  const height = typeof input.height === 'number' && Number.isFinite(input.height) ? Math.max(0, Math.floor(input.height)) : 0;
+
+  return {
+    uri,
+    fileName: sanitizeNullableString(input.fileName),
+    fileSize: typeof input.fileSize === 'number' && Number.isFinite(input.fileSize) ? Math.max(0, input.fileSize) : null,
+    mimeType: sanitizeNullableString(input.mimeType),
+    width,
+    height,
+  };
+};
+
+const sanitizeMediaAssets = (value: unknown): AddItemDraftMediaAsset[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => sanitizeMediaAsset(entry)).filter((entry): entry is AddItemDraftMediaAsset => !!entry);
 };
 
 const sanitizeAddItemDraft = (value: unknown): AddItemDraft | null => {
@@ -63,6 +97,7 @@ const sanitizeAddItemDraft = (value: unknown): AddItemDraft | null => {
     desireMode,
     desireText: sanitizeString(input.desireText),
     wantedTags: sanitizeString(input.wantedTags),
+    mediaAssets: sanitizeMediaAssets((input as { mediaAssets?: unknown }).mediaAssets),
   };
 };
 
@@ -88,6 +123,7 @@ export const saveAddItemDraft = async (userId: string | null | undefined, draft:
     step: sanitizeStep(draft.step),
     condition: isValidCondition(draft.condition) ? draft.condition : 'good_used',
     desireMode: isValidDesireMode(draft.desireMode) ? draft.desireMode : 'flexible',
+    mediaAssets: sanitizeMediaAssets((draft as { mediaAssets?: unknown }).mediaAssets),
   };
 
   await AsyncStorage.setItem(getAddItemDraftStorageKey(userId), JSON.stringify(payload));
@@ -114,6 +150,7 @@ export const hasMeaningfulAddItemDraft = (draftInput: Partial<AddItemDraft> | nu
   ].some((value) => typeof value === 'string' && value.trim().length > 0);
 
   return hasText
+    || (Array.isArray(draftInput.mediaAssets) && draftInput.mediaAssets.length > 0)
     || !!draftInput.categoryId
     || draftInput.condition === 'almost_new'
     || draftInput.condition === 'minor_issues'

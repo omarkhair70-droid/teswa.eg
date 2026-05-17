@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
@@ -15,6 +15,7 @@ import { spacing } from '@/constants/spacing';
 import { fetchActiveCategories, ItemCondition, publishItem, type PublishProgress } from '@/lib/publish-item';
 import { consumePendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { clearAddItemDraft, hasMeaningfulAddItemDraft, loadAddItemDraft, saveAddItemDraft, type AddItemDraft } from '@/lib/add-item-draft';
+import { clearAddItemDraftMedia, deleteAddItemDraftMediaAsset, persistAddItemDraftMediaAssets, restoreAddItemDraftMediaAssets, toAddItemDraftMediaAssets } from '@/lib/add-item-draft-media';
 import { useOfflineStatus } from '@/hooks/useOfflineStatus';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
@@ -60,6 +61,8 @@ export default function AddScreen() {
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const assets = mediaState.assets;
   const { isDefinitelyOffline } = useOfflineStatus();
+  const rejectedPersistedCleanupQueueRef = useRef<ImagePicker.ImagePickerAsset[]>([]);
+
 
   useEffect(() => {
     fetchActiveCategories()
@@ -103,6 +106,7 @@ export default function AddScreen() {
     desireMode,
     desireText,
     wantedTags,
+    mediaAssets: toAddItemDraftMediaAssets(assets),
   };
 
   useEffect(() => {
@@ -125,8 +129,21 @@ export default function AddScreen() {
         setDesireMode(draft.desireMode);
         setDesireText(draft.desireText);
         setWantedTags(draft.wantedTags);
-        setStep(0);
-        setDraftNotice('استعدنا بيانات المسودة، أعد إضافة الصور لإكمال النشر.');
+
+        const restoredAssets = await restoreAddItemDraftMediaAssets(draft.mediaAssets);
+        setMediaState({ assets: restoredAssets, feedback: null });
+
+        if (draft.mediaAssets.length > 0 && restoredAssets.length === draft.mediaAssets.length) {
+          setStep(Math.max(0, Math.min(5, draft.step)));
+          setDraftNotice('استعدنا مسودة الإعلان وصورها، يمكنك المتابعة من حيث توقفت.');
+        } else if (draft.mediaAssets.length > 0 && restoredAssets.length > 0) {
+          setStep(0);
+          setDraftNotice('استعدنا المسودة وبعض الصور، راجع صور العنصر قبل المتابعة.');
+        } else {
+          setStep(0);
+          setDraftNotice('استعدنا بيانات المسودة، أعد إضافة الصور لإكمال النشر.');
+        }
+
         setHasSavedDraft(true);
       }
       setDraftHydrated(true);
@@ -145,6 +162,7 @@ export default function AddScreen() {
     const timer = setTimeout(() => {
       if (!hasMeaningfulAddItemDraft(currentDraft)) {
         void clearAddItemDraft(user?.id);
+        void clearAddItemDraftMedia(user?.id);
         setHasSavedDraft(false);
         setDraftNotice(null);
         return;
@@ -171,17 +189,48 @@ export default function AddScreen() {
     };
   };
 
-  const appendAssets = (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending' | 'shareIntent') => {
+  const appendAssets = async (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending' | 'shareIntent') => {
     if (!incoming.length) return;
 
+    const incomingUniqueByUri = (() => {
+      const seenUris = new Set<string>();
+      return incoming.filter((asset) => {
+        if (!asset.uri || seenUris.has(asset.uri)) return false;
+        seenUris.add(asset.uri);
+        return true;
+      });
+    })();
+
+    if (!incomingUniqueByUri.length) return;
+
+    const persisted = await persistAddItemDraftMediaAssets(user?.id, incomingUniqueByUri);
+    if (!persisted.length) return;
+
     setMediaState((prev) => {
-      const { next, wasTrimmed } = mergeAssets(prev.assets, incoming);
+      const { next, wasTrimmed } = mergeAssets(prev.assets, persisted);
+      const acceptedUris = new Set(next.slice(prev.assets.length).map((asset) => asset.uri));
+      const rejectedPersisted = persisted.filter((asset) => !acceptedUris.has(asset.uri));
+      if (rejectedPersisted.length) {
+        rejectedPersistedCleanupQueueRef.current.push(...rejectedPersisted);
+      }
+
       return {
         assets: next,
-        feedback: wasTrimmed && source !== 'pending' ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.` : null,
+        feedback: wasTrimmed && source !== 'pending'
+          ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`
+          : null,
       };
     });
   };
+
+  useEffect(() => {
+    if (!rejectedPersistedCleanupQueueRef.current.length) return;
+
+    const queued = [...rejectedPersistedCleanupQueueRef.current];
+    rejectedPersistedCleanupQueueRef.current = [];
+    void Promise.allSettled(queued.map((asset) => deleteAddItemDraftMediaAsset(asset)));
+  }, [mediaState.assets]);
+
 
   useEffect(() => {
     const inboundAssets = consumePendingInboundSharedMedia();
@@ -189,7 +238,7 @@ export default function AddScreen() {
 
     setStep((prev) => (prev === 0 ? prev : 0));
     setError(null);
-    appendAssets(inboundAssets, 'shareIntent');
+    void appendAssets(inboundAssets, 'shareIntent');
   }, [sharedIntent]);
 
   useEffect(() => {
@@ -199,7 +248,7 @@ export default function AddScreen() {
       try {
         const pending = await ImagePicker.getPendingResultAsync();
         if (!mounted || !pending || !('canceled' in pending) || pending.canceled || 'code' in pending) return;
-        appendAssets(pending.assets ?? [], 'pending');
+        void appendAssets(pending.assets ?? [], 'pending');
       } catch (err) {
         if (__DEV__) console.log('[add-item] pending picker recovery failed', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       }
@@ -229,7 +278,7 @@ export default function AddScreen() {
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 });
       if (result.canceled) return;
       setError(null);
-      appendAssets(result.assets ?? [], 'camera');
+      void appendAssets(result.assets ?? [], 'camera');
     } catch (err) {
       if (__DEV__) console.log('[add-item] camera picker failed', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       setError('تعذر فتح الكاميرا حالياً. حاول مرة أخرى.');
@@ -246,10 +295,12 @@ export default function AddScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: remaining, quality: 0.9 });
     if (result.canceled) return;
     setError(null);
-    appendAssets(result.assets ?? [], 'gallery');
+    void appendAssets(result.assets ?? [], 'gallery');
   };
 
   const removeAssetAt = (index: number) => {
+    const removedAsset = assets[index];
+    if (removedAsset?.uri) void deleteAddItemDraftMediaAsset(removedAsset);
     setMediaState((prev) => ({ ...prev, assets: prev.assets.filter((_, i) => i !== index), feedback: null }));
   };
 
@@ -354,6 +405,7 @@ export default function AddScreen() {
       }
       setPublishFailure(null);
       await clearAddItemDraft(user.id);
+      await clearAddItemDraftMedia(user.id);
       setHasSavedDraft(false);
       setDraftNotice(null);
       setProgress('تم نشر العنصر بنجاح.');
@@ -374,6 +426,7 @@ export default function AddScreen() {
 
   const discardDraftAndReset = async () => {
     await clearAddItemDraft(user?.id);
+    await clearAddItemDraftMedia(user?.id);
     resetDraftFields();
     setMediaState({ assets: [], feedback: null });
     setStep(0);
