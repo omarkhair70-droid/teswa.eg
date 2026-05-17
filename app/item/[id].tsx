@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -71,7 +72,7 @@ export default function ItemDetailsScreen() {
     <AppScreen scrollable>
       <Animated.View entering={FadeInDown.duration(220).delay(40)}>
         {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.hero} resizeMode="cover" />
+          <ExpoImage source={{ uri: item.imageUrl }} style={styles.hero} contentFit="cover" cachePolicy="memory-disk" transition={200} />
         ) : (
           <View style={[styles.hero, styles.placeholder]}>
             <AppText muted weight="semibold">لا توجد صورة لهذا العنصر</AppText>
