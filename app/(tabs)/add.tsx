@@ -17,6 +17,7 @@ import { consumePendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { clearAddItemDraft, hasMeaningfulAddItemDraft, loadAddItemDraft, saveAddItemDraft, type AddItemDraft } from '@/lib/add-item-draft';
 import { clearAddItemDraftMedia, deleteAddItemDraftMediaAsset, persistAddItemDraftMediaAssets, restoreAddItemDraftMediaAssets, toAddItemDraftMediaAssets } from '@/lib/add-item-draft-media';
 import { useOfflineStatus } from '@/hooks/useOfflineStatus';
+import { resolveCurrentAddItemLocation } from '@/lib/discovery-location';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -59,6 +60,9 @@ export default function AddScreen() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [locationFillLoading, setLocationFillLoading] = useState(false);
+  const [locationFillMessage, setLocationFillMessage] = useState<string | null>(null);
+  const [locationFillError, setLocationFillError] = useState<string | null>(null);
   const assets = mediaState.assets;
   const { isDefinitelyOffline } = useOfflineStatus();
   const rejectedPersistedCleanupQueueRef = useRef<ImagePicker.ImagePickerAsset[]>([]);
@@ -318,6 +322,24 @@ export default function AddScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   };
 
+  const handleFillLocationFromDevice = async () => {
+    setLocationFillLoading(true);
+    setLocationFillMessage(null);
+    setLocationFillError(null);
+    try {
+      const result = await resolveCurrentAddItemLocation();
+      if (result.ok) {
+        setCity(result.city);
+        setArea(result.area ?? '');
+        setLocationFillMessage(`اقترحنا موقعك: ${result.label}. يمكنك تعديله قبل النشر.`);
+        return;
+      }
+      setLocationFillError(result.message);
+    } finally {
+      setLocationFillLoading(false);
+    }
+  };
+
   const validateCurrentStep = () => {
     if (step === 0) {
       if (!assets.length) return 'اختر صورة واحدة على الأقل.';
@@ -443,7 +465,18 @@ export default function AddScreen() {
     {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
     {step === 1 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>تعريف الحاجة</AppText><AppText muted>أضف الأساسيات التي تساعد على الفهم السريع.</AppText></View><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
-      <AppInput value={city} onChangeText={setCity} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={setArea} placeholder='المنطقة (اختياري)' /></View></AppCard>}
+      <AppInput value={city} onChangeText={setCity} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={setArea} placeholder='المنطقة (اختياري)' />
+      <View style={styles.locationAssistBlock}>
+        <AppButton
+          label={locationFillLoading ? 'جارٍ تحديد موقعك...' : 'املأ المدينة من موقعي'}
+          variant='neutral'
+          onPress={() => { void handleFillLocationFromDevice(); }}
+          disabled={locationFillLoading || submitting}
+        />
+        <AppText muted>نستخدم موقعك مرة واحدة لاقتراح المدينة والمنطقة، ويمكنك تعديلهما.</AppText>
+        {locationFillMessage && <AppText muted>{locationFillMessage}</AppText>}
+        {locationFillError && <AppText style={styles.error}>{locationFillError}</AppText>}
+      </View></View></AppCard>}
     {step === 2 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>حالة العنصر</AppText><AppText muted>اختر الحالة بدقة لرفع الثقة.</AppText></View><View style={styles.rowWrap}>{conditionOptions.map((c) => <Pressable key={c.key} onPress={() => setCondition(c.key)} style={[styles.chip, condition === c.key && styles.chipSelected]}><AppText>{c.label}</AppText></Pressable>)}</View><AppInput value={conditionNotes} onChangeText={setConditionNotes} placeholder='ملاحظات الحالة' /><AppInput value={description} onChangeText={setDescription} placeholder='الوصف' multiline /></View></AppCard>}
     {step === 3 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>قصة العنصر</AppText><AppText muted>تفاصيل مختصرة تساعد الطرف الآخر على القرار.</AppText></View><AppInput value={itemStory} onChangeText={setItemStory} placeholder='قصة العنصر (حد 600)' multiline /><AppText muted>{itemStory.length}/600</AppText><AppInput value={swapReason} onChangeText={setSwapReason} placeholder='سبب المبادلة (حد 240)' /><AppText muted>{swapReason.length}/240</AppText><AppInput value={goodFor} onChangeText={setGoodFor} placeholder='مفيد لمن؟ (حد 240)' /><AppText muted>{goodFor.length}/240</AppText></View></AppCard>}
     {step === 4 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>المقابل المطلوب</AppText><AppText muted>حدّد تفضيلك بشكل واضح وبسيط.</AppText></View><View style={styles.rowWrap}>{desireOptions.map((d) => <Pressable key={d.key} onPress={() => setDesireMode(d.key)} style={[styles.chip, desireMode === d.key && styles.chipSelected]}><AppText>{d.label}</AppText></Pressable>)}</View><AppInput value={desireText} onChangeText={setDesireText} placeholder='ماذا تريد بالمقابل؟' /><AppInput value={wantedTags} onChangeText={setWantedTags} placeholder='وسوم مطلوبة مفصولة بفواصل' /></View></AppCard>}
@@ -492,4 +525,5 @@ const styles = StyleSheet.create({
   reviewCover: { position: 'relative' },
   reviewCoverImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.border },
   summaryBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.sm, gap: spacing.xs, backgroundColor: colors.background },
+  locationAssistBlock: { gap: spacing.xs },
 });
