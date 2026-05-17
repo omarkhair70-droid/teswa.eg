@@ -51,6 +51,7 @@ export default function Screen() {
   const [voicePlaybackLoadingId, setVoicePlaybackLoadingId] = useState<string | null>(null);
   const [voicePlaybackError, setVoicePlaybackError] = useState<{ messageId: string; message: string } | null>(null);
   const voicePlaybackRequestRef = useRef(0);
+  const audioModeQueueRef = useRef<Promise<void>>(Promise.resolve());
   const messageIdsRef = useRef<Set<string>>(new Set());
   const autoStopTriggeredRef = useRef(false);
   const stopAndDiscardRef = useRef(false);
@@ -59,6 +60,13 @@ export default function Screen() {
   const recorderState = useAudioRecorderState(audioRecorder, 250);
   const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
+  const queueAudioModeChange = useCallback((mode: { playsInSilentMode: boolean; allowsRecording: boolean }) => {
+    const next = audioModeQueueRef.current
+      .catch(() => undefined)
+      .then(() => setAudioModeAsync(mode));
+    audioModeQueueRef.current = next.catch(() => undefined);
+    return next;
+  }, []);
 
   const load = useCallback(async () => {
     if (!id || !user?.id) return;
@@ -179,7 +187,7 @@ export default function Screen() {
         return;
       }
 
-      await setAudioModeAsync({
+      await queueAudioModeChange({
         playsInSilentMode: true,
         allowsRecording: false,
       });
@@ -202,7 +210,7 @@ export default function Screen() {
         setVoicePlaybackLoadingId(null);
       }
     }
-  }, [activeVoiceMessageId, recorderState.isRecording, voiceBusy, voicePlaybackError?.messageId, voicePlayer, voicePlayerStatus.currentTime, voicePlayerStatus.duration, voicePlayerStatus.playing]);
+  }, [activeVoiceMessageId, queueAudioModeChange, recorderState.isRecording, voiceBusy, voicePlaybackError?.messageId, voicePlayer, voicePlayerStatus.currentTime, voicePlayerStatus.duration, voicePlayerStatus.playing]);
 
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
@@ -308,7 +316,7 @@ export default function Screen() {
       setVoicePlaybackLoadingId(null);
       setVoicePlaybackError((prev) => (prev?.messageId ? null : prev));
 
-      await setAudioModeAsync({
+      await queueAudioModeChange({
         playsInSilentMode: true,
         allowsRecording: true,
       });
@@ -321,7 +329,7 @@ export default function Screen() {
     } finally {
       setVoiceBusy(false);
     }
-  }, [audioRecorder, deal, recorderState.isRecording, user?.id, voiceBusy, voicePlayer, voiceSending]);
+  }, [audioRecorder, deal, queueAudioModeChange, recorderState.isRecording, user?.id, voiceBusy, voicePlayer, voiceSending]);
 
   const cancelVoiceDraft = useCallback(async () => {
     if (recorderState.isRecording) {
