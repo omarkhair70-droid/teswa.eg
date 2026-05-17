@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
@@ -180,14 +181,16 @@ export default function RootLayout() {
   useRTLSetup();
   return (
     <ShareIntentProvider>
-      <GestureHandlerRootView style={styles.gestureRoot}>
+      <KeyboardProvider preload={false}>
+        <GestureHandlerRootView style={styles.gestureRoot}>
         <AuthProvider>
           <UnreadBadgesProvider>
             <ShareIntentCoordinator />
             <RootNavigator />
           </UnreadBadgesProvider>
         </AuthProvider>
-      </GestureHandlerRootView>
+        </GestureHandlerRootView>
+      </KeyboardProvider>
     </ShareIntentProvider>
   );
 }
