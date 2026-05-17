@@ -9,7 +9,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
-import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
+import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
 import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 
 export default function DiscoverScreen() {
@@ -17,6 +17,10 @@ export default function DiscoverScreen() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; matchTerms: string[] } | null>(null);
@@ -34,14 +38,58 @@ export default function DiscoverScreen() {
   const loadItems = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setLoadMoreError(null);
     try {
-      setItems(await fetchMarketplaceItems());
+      const page = await fetchMarketplaceItemsPage({ offset: 0 });
+      setItems(page.items);
+      setHasMore(page.hasMore);
     } catch {
       setError('تعذر تحميل قائمة التصفح. حاول لاحقاً.');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const refreshItems = useCallback(async () => {
+    if (refreshing) {
+      return;
+    }
+
+    setRefreshing(true);
+    setLoadMoreError(null);
+    try {
+      const page = await fetchMarketplaceItemsPage({ offset: 0 });
+      setItems(page.items);
+      setHasMore(page.hasMore);
+    } catch {
+      // Keep existing items visible on refresh failure.
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing]);
+
+  const loadMoreItems = useCallback(async () => {
+    if (loading || refreshing || loadingMore || !hasMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    setLoadMoreError(null);
+
+    try {
+      const page = await fetchMarketplaceItemsPage({ offset: items.length });
+      setItems((currentItems) => {
+        const merged = [...currentItems, ...page.items];
+        const uniqueById = new Map(merged.map((item) => [item.id, item]));
+        return Array.from(uniqueById.values());
+      });
+      setHasMore(page.hasMore);
+    } catch {
+      setLoadMoreError('تعذر تحميل المزيد. حاول مرة أخرى.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, items.length, loading, loadingMore, refreshing]);
 
   const handleUseMyLocation = useCallback(async () => {
     setNearbyLoading(true);
@@ -118,12 +166,45 @@ export default function DiscoverScreen() {
       : categoryFiltered;
   }, [activeNearbyLocation, items, query, selectedCategory, selectedCondition]);
 
+  const renderListFooter = useCallback(() => {
+    if (loadingMore) {
+      return (
+        <View style={styles.footerBox}>
+          <AppText>جارٍ تحميل المزيد...</AppText>
+        </View>
+      );
+    }
+
+    if (loadMoreError) {
+      return (
+        <View style={styles.footerBox}>
+          <AppText>تعذر تحميل المزيد. حاول مرة أخرى.</AppText>
+          <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadMoreItems} />
+        </View>
+      );
+    }
+
+    if (!hasMore && items.length > 0) {
+      return (
+        <View style={styles.footerBox}>
+          <AppText>وصلت لنهاية النتائج.</AppText>
+        </View>
+      );
+    }
+
+    return null;
+  }, [hasMore, items.length, loadMoreError, loadMoreItems, loadingMore]);
+
   return (
     <AppScreen style={styles.screen}>
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
+        refreshing={refreshing}
+        onRefresh={refreshItems}
+        onEndReached={loadMoreItems}
+        onEndReachedThreshold={0.35}
         ListHeaderComponent={
           <View style={styles.header}>
             <AppText weight="bold" style={styles.title}>اكتشف العناصر</AppText>
@@ -179,14 +260,15 @@ export default function DiscoverScreen() {
             {!loading && !error ? (
               <AppCard>
                 <View style={styles.resultsRow}>
-                <AppText>{hasActiveFilters ? `نستعرض ${filtered.length} عنصرًا مطابقًا` : `نستعرض ${filtered.length} عنصرًا`}</AppText>
-                {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
+                  <AppText>{hasActiveFilters ? `نستعرض ${filtered.length} عنصرًا مطابقًا` : `نستعرض ${filtered.length} عنصرًا`}</AppText>
+                  {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
                 </View>
               </AppCard>
             ) : null}
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
+        ListFooterComponent={renderListFooter}
         ListEmptyComponent={
           loading ? (
             <EmptyState title="جاري التحميل" description="نجهز لك نتائج التصفح." />
@@ -194,6 +276,15 @@ export default function DiscoverScreen() {
             <View style={styles.stateBox}>
               <EmptyState title="تعذر تحميل التصفح" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
+            </View>
+          ) : hasActiveFilters && filtered.length === 0 && hasMore ? (
+            <View style={styles.stateBox}>
+              <EmptyState
+                title="لا توجد نتائج مطابقة في النتائج المحمّلة"
+                description="حمّل المزيد أو جرّب مسح بعض الفلاتر."
+              />
+              <AppButton label="تحميل المزيد" onPress={loadMoreItems} disabled={loadingMore} />
+              <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} />
             </View>
           ) : hasActiveFilters && filtered.length === 0 ? (
             <View style={styles.stateBox}>
@@ -231,4 +322,5 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.white },
   resultsRow: { gap: spacing.sm },
   stateBox: { gap: spacing.md },
+  footerBox: { gap: spacing.sm, marginTop: spacing.md },
 });
