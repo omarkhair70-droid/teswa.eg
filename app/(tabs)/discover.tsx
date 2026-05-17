@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -7,6 +7,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
+import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
 import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
@@ -19,6 +20,16 @@ export default function DiscoverScreen() {
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; matchTerms: string[] } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
+
+  const clearAllFilters = useCallback(() => {
+    setQuery('');
+    setActiveNearbyLocation(null);
+    setNearbyError(null);
+    setSelectedCategory(null);
+    setSelectedCondition(null);
+  }, []);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -59,6 +70,32 @@ export default function DiscoverScreen() {
     loadItems();
   }, [loadItems]);
 
+  const availableCategories = useMemo(() => {
+    const uniqueByLowercase = new Map<string, string>();
+    for (const item of items) {
+      const clean = item.category?.trim();
+      if (!clean) continue;
+      const key = clean.toLocaleLowerCase();
+      if (!uniqueByLowercase.has(key)) uniqueByLowercase.set(key, clean);
+    }
+
+    return Array.from(uniqueByLowercase.values()).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [items]);
+
+  const availableConditions = useMemo(() => {
+    const uniqueByLowercase = new Map<string, string>();
+    for (const item of items) {
+      const clean = item.condition?.trim();
+      if (!clean) continue;
+      const key = clean.toLocaleLowerCase();
+      if (!uniqueByLowercase.has(key)) uniqueByLowercase.set(key, clean);
+    }
+
+    return Array.from(uniqueByLowercase.values()).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [items]);
+
+  const hasActiveFilters = Boolean(query.trim() || activeNearbyLocation || selectedCategory || selectedCondition);
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const queryFiltered = normalized
@@ -68,10 +105,18 @@ export default function DiscoverScreen() {
         })
       : items;
 
-    if (!activeNearbyLocation) return queryFiltered;
+    const nearbyFiltered = activeNearbyLocation
+      ? queryFiltered.filter((item) => matchesDiscoveryLocation(item.location, activeNearbyLocation.matchTerms))
+      : queryFiltered;
 
-    return queryFiltered.filter((item) => matchesDiscoveryLocation(item.location, activeNearbyLocation.matchTerms));
-  }, [activeNearbyLocation, items, query]);
+    const categoryFiltered = selectedCategory
+      ? nearbyFiltered.filter((item) => item.category?.trim().toLocaleLowerCase() === selectedCategory.toLocaleLowerCase())
+      : nearbyFiltered;
+
+    return selectedCondition
+      ? categoryFiltered.filter((item) => item.condition?.trim().toLocaleLowerCase() === selectedCondition.toLocaleLowerCase())
+      : categoryFiltered;
+  }, [activeNearbyLocation, items, query, selectedCategory, selectedCondition]);
 
   return (
     <AppScreen style={styles.screen}>
@@ -99,6 +144,46 @@ export default function DiscoverScreen() {
                 {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
               </View>
             </AppCard>
+            <AppCard>
+              <View style={styles.filterBox}>
+                <AppText weight="bold">الفئة</AppText>
+                <View style={styles.chipsRow}>
+                  <Pressable onPress={() => setSelectedCategory(null)} style={[styles.chip, !selectedCategory && styles.chipActive]}>
+                    <AppText style={!selectedCategory ? styles.chipTextActive : undefined}>الكل</AppText>
+                  </Pressable>
+                  {availableCategories.map((category) => {
+                    const isActive = selectedCategory?.toLocaleLowerCase() === category.toLocaleLowerCase();
+                    return (
+                      <Pressable key={category} onPress={() => setSelectedCategory(category)} style={[styles.chip, isActive && styles.chipActive]}>
+                        <AppText style={isActive ? styles.chipTextActive : undefined}>{category}</AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <AppText weight="bold">الحالة</AppText>
+                <View style={styles.chipsRow}>
+                  <Pressable onPress={() => setSelectedCondition(null)} style={[styles.chip, !selectedCondition && styles.chipActive]}>
+                    <AppText style={!selectedCondition ? styles.chipTextActive : undefined}>الكل</AppText>
+                  </Pressable>
+                  {availableConditions.map((condition) => {
+                    const isActive = selectedCondition?.toLocaleLowerCase() === condition.toLocaleLowerCase();
+                    return (
+                      <Pressable key={condition} onPress={() => setSelectedCondition(condition)} style={[styles.chip, isActive && styles.chipActive]}>
+                        <AppText style={isActive ? styles.chipTextActive : undefined}>{condition}</AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </AppCard>
+            {!loading && !error ? (
+              <AppCard>
+                <View style={styles.resultsRow}>
+                <AppText>{hasActiveFilters ? `نستعرض ${filtered.length} عنصرًا مطابقًا` : `نستعرض ${filtered.length} عنصرًا`}</AppText>
+                {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
+                </View>
+              </AppCard>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
@@ -110,16 +195,14 @@ export default function DiscoverScreen() {
               <EmptyState title="تعذر تحميل التصفح" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
             </View>
-          ) : activeNearbyLocation ? (
+          ) : hasActiveFilters && filtered.length === 0 ? (
             <View style={styles.stateBox}>
               <EmptyState
-                title="لا توجد عناصر قريبة حالياً"
-                description="لم نجد عناصر مطابقة لمدينتك في النتائج الحالية. جرّب عرض كل العناصر أو ابحث بكلمة أخرى."
+                title="لا توجد نتائج مطابقة"
+                description="جرّب مسح بعض الفلاتر أو تغيير كلمة البحث."
               />
-              <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
+              <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} />
             </View>
-          ) : query.trim() ? (
-            <EmptyState title="لا توجد نتائج" description="جرّب كلمة بحث أخرى للعثور على عناصر مناسبة." />
           ) : (
             <EmptyState title="لا توجد عناصر حالياً" description="عند إضافة عناصر جديدة ستظهر هنا مباشرة." />
           )
@@ -135,5 +218,17 @@ const styles = StyleSheet.create({
   header: { gap: spacing.sm, marginBottom: spacing.md },
   title: { fontSize: 24 },
   nearbyBox: { gap: spacing.sm },
+  filterBox: { gap: spacing.sm },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipTextActive: { color: colors.white },
+  resultsRow: { gap: spacing.sm },
   stateBox: { gap: spacing.md },
 });
