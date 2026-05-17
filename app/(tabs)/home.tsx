@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -11,9 +11,11 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
+import { useAuth } from '@/lib/auth';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +55,14 @@ export default function HomeScreen() {
     loadStories();
   }, [loadItems, loadStories]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadStories();
+    }, [loadStories]),
+  );
+
+  const myStorySummary = useMemo(() => stories.find((summary) => summary.author.id === user?.id) ?? null, [stories, user?.id]);
+  const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== user?.id), [stories, user?.id]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
 
   return (
@@ -79,14 +89,30 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.storiesRail}
               >
-                <Pressable style={styles.storyTile} onPress={() => router.push('/story/create')}>
-                  <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
-                    <AppText weight="bold" style={styles.addStoryPlus}>+</AppText>
-                  </View>
-                  <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
-                </Pressable>
+                {myStorySummary && user?.id ? (
+                  <Pressable style={styles.storyTile} onPress={() => router.push(`/story/${user.id}`)}>
+                    <View style={[styles.storyAvatar, styles.myStoryActiveAvatar]}>
+                      {myStorySummary.author.avatarUrl ? (
+                        <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                      ) : (
+                        <AppText weight="bold" style={styles.fallbackInitial}>
+                          {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
+                        </AppText>
+                      )}
+                    </View>
+                    <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
+                    {myStorySummary.stories.length > 1 ? <AppText muted style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
+                  </Pressable>
+                ) : (
+                  <Pressable style={styles.storyTile} onPress={() => router.push('/story/create')}>
+                    <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
+                      <AppText weight="bold" style={styles.addStoryPlus}>+</AppText>
+                    </View>
+                    <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
+                  </Pressable>
+                )}
 
-                {stories.map((story) => {
+                {otherStorySummaries.map((story) => {
                   const label = story.author.displayName ?? (story.author.username ? `@${story.author.username}` : 'مستخدم');
                   const fallbackInitial = (story.author.displayName ?? story.author.username ?? 'م').trim().charAt(0).toUpperCase();
 
@@ -176,6 +202,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
   },
+  myStoryActiveAvatar: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
   addStoryPlus: {
     fontSize: 28,
     color: colors.primary,
@@ -192,6 +222,10 @@ const styles = StyleSheet.create({
   storyLabel: {
     fontSize: 12,
     textAlign: 'center',
+  },
+  myStoryCount: {
+    fontSize: 10,
+    marginTop: -4,
   },
   inlineStateRow: {
     gap: spacing.sm,

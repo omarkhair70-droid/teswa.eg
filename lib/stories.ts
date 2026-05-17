@@ -36,10 +36,23 @@ export type StoryViewerContext = {
   stories: StoryRecord[];
 };
 
+export type StoryPublishStage =
+  | 'preparing'
+  | 'uploading'
+  | 'saving'
+  | 'cleanup';
+
+export type StoryPublishProgress = {
+  stage: StoryPublishStage;
+  uploadPercent: number | null;
+  message: string;
+};
+
 export type PublishStoryInput = {
   userId: string;
   asset: ImagePickerAsset;
   caption?: string;
+  onProgress?: (progress: StoryPublishProgress) => void;
 };
 
 export type PublishStoryResult =
@@ -101,6 +114,54 @@ function contentTypeFromAsset(asset: ImagePickerAsset, mediaType: StoryMediaType
   return mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
 }
 
+
+async function uploadStoryMediaWithProgress(params: {
+  storagePath: string;
+  fileBuffer: ArrayBuffer;
+  contentType: string;
+  onProgress?: (progress: StoryPublishProgress) => void;
+}): Promise<{ error: Error | null }> {
+  const { storagePath, fileBuffer, contentType, onProgress } = params;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  if (!accessToken) return { error: new Error('Missing auth session') };
+
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return { error: new Error('Missing Supabase config') };
+
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/story-media/${encodeURIComponent(storagePath).replace(/%2F/g, '/')}`;
+
+  return await new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl);
+    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+    xhr.setRequestHeader('apikey', supabaseAnonKey);
+    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.setRequestHeader('Content-Type', contentType);
+
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress) return;
+      if (!event.lengthComputable) {
+        onProgress({ stage: 'uploading', uploadPercent: null, message: 'جارٍ رفع الوسائط...' });
+        return;
+      }
+      const percent = Math.min(100, Math.max(0, Math.round((event.loaded / event.total) * 100)));
+      onProgress({ stage: 'uploading', uploadPercent: percent, message: 'جارٍ رفع الوسائط...' });
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve({ error: null });
+      resolve({ error: new Error(`Upload failed with status ${xhr.status}`) });
+    };
+
+    xhr.onerror = () => resolve({ error: new Error('Network error during upload') });
+    xhr.onabort = () => resolve({ error: new Error('Upload aborted') });
+    xhr.send(fileBuffer);
+  });
+}
+
 async function fetchStoryAuthorsByUserIds(userIds: string[]): Promise<Map<string, StoryAuthorSummary>> {
   if (!userIds.length) return new Map();
 
@@ -123,6 +184,7 @@ async function fetchStoryAuthorsByUserIds(userIds: string[]): Promise<Map<string
 }
 
 export async function publishStoryFromMobile(input: PublishStoryInput): Promise<PublishStoryResult> {
+  const emitProgress = input.onProgress;
   const userId = input.userId?.trim();
   if (!userId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً لنشر القصة.' };
 
@@ -141,6 +203,8 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
   const contentType = contentTypeFromAsset(asset, mediaType);
   const storagePath = createStoryUploadPath(userId, mediaType, extension);
 
+  emitProgress?.({ stage: 'preparing', uploadPercent: null, message: 'نجهّز ملف القصة...' });
+
   let fileBuffer: ArrayBuffer;
   try {
     const response = await fetch(asset.uri);
@@ -149,13 +213,19 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
     return { ok: false, reason: 'read_failed', message: 'تعذر قراءة ملف الوسائط. حاول مرة أخرى.' };
   }
 
-  const { error: uploadError } = await supabase.storage
-    .from('story-media')
-    .upload(storagePath, fileBuffer, { contentType, upsert: false });
+  emitProgress?.({ stage: 'uploading', uploadPercent: 0, message: 'جارٍ رفع الوسائط...' });
+  const { error: uploadError } = await uploadStoryMediaWithProgress({
+    storagePath,
+    fileBuffer,
+    contentType,
+    onProgress: emitProgress,
+  });
 
   if (uploadError) {
     return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الوسائط حالياً. حاول مرة أخرى.' };
   }
+
+  emitProgress?.({ stage: 'saving', uploadPercent: 100, message: 'نثبت القصة...' });
 
   const durationMs = mediaType === 'video' ? Math.max(0, Math.round(asset.duration ?? 0)) || null : null;
 
@@ -175,6 +245,7 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
     .single();
 
   if (insertError || !data?.id) {
+    emitProgress?.({ stage: 'cleanup', uploadPercent: 100, message: 'نعالج فشل النشر...' });
     await supabase.storage.from('story-media').remove([storagePath]);
     return { ok: false, reason: 'insert_failed', message: 'تم رفع الوسائط لكن تعذر نشر القصة. حاول مرة أخرى.' };
   }
