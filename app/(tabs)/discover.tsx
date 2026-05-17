@@ -166,6 +166,7 @@ export default function DiscoverScreen() {
       ? categoryFiltered.filter((item) => item.condition?.trim().toLocaleLowerCase() === selectedCondition.toLocaleLowerCase())
       : categoryFiltered;
   }, [activeNearbyLocation, items, query, selectedCategory, selectedCondition]);
+  const isFilteredEmptyWithMore = hasActiveFilters && filtered.length === 0 && hasMore;
 
   const renderListFooter = useCallback(() => {
     if (loadingMore) {
@@ -204,7 +205,7 @@ export default function DiscoverScreen() {
         contentContainerStyle={styles.content}
         refreshing={refreshing}
         onRefresh={refreshItems}
-        onEndReached={loadMoreItems}
+        onEndReached={isFilteredEmptyWithMore ? undefined : loadMoreItems}
         onEndReachedThreshold={0.35}
         ListHeaderComponent={
           <View style={styles.header}>
@@ -278,7 +279,7 @@ export default function DiscoverScreen() {
               <EmptyState title="تعذر تحميل التصفح" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
             </View>
-          ) : hasActiveFilters && filtered.length === 0 && hasMore ? (
+          ) : isFilteredEmptyWithMore ? (
             <View style={styles.stateBox}>
               <EmptyState
                 title="لا توجد نتائج مطابقة في النتائج المحمّلة"
