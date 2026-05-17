@@ -431,7 +431,7 @@ export default function Screen() {
 
         <AppCard><View style={styles.group}><AppText weight="semibold">الأطراف</AppText><AppText>أنت: {(deal.viewerRole === 'requester' ? deal.requester : deal.offerer).displayName ?? 'مستخدم'}</AppText><AppText>الطرف التاني: {deal.otherParticipant.displayName ?? 'مستخدم'}</AppText></View></AppCard>
 
-        <AppCard style={styles.threadCard}><View style={styles.group}><View style={styles.threadHeader}><AppText weight="semibold">الرسائل</AppText><AppText muted style={styles.threadRealtime}>{realtimeLabel}</AppText></View>
+        <AppCard><View style={[styles.group, styles.threadCard]}><View style={styles.threadHeader}><AppText weight="semibold">الرسائل</AppText><AppText muted style={styles.threadRealtime}>{realtimeLabel}</AppText></View>
           {deal.messages.length === 0 ? <View style={styles.emptyThread}><EmptyState title="لسه مفيش رسائل" description="ابدأوا التنسيق من هنا." /></View> : deal.messages.map((msg: any) => {
             const mine = msg.senderId === user.id;
             const isActiveVoice = msg.messageType === 'voice' && activeVoiceMessageId === msg.id;
