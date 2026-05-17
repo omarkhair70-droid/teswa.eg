@@ -49,12 +49,21 @@ do update set
   name = excluded.name,
   public = excluded.public;
 
-create policy "story_media_select_authenticated"
+create policy "story_media_select_active_authenticated"
 on storage.objects
 for select
 to authenticated
 using (
   bucket_id = 'story-media'
+  and exists (
+    select 1
+    from public.stories s
+    where s.expires_at > now()
+      and (
+        s.media_storage_path = storage.objects.name
+        or s.media_thumbnail_storage_path = storage.objects.name
+      )
+  )
 );
 
 create policy "story_media_insert_own_prefix"
