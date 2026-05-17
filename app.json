@@ -3,7 +3,7 @@
     "name": "Teswa",
     "slug": "teswa-mobile",
     "scheme": "teswa",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -26,8 +26,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "نحتاج الوصول للصور لاختيار صور العنصر قبل نشره.",
-          "microphonePermission": false
+          "photosPermission": "نحتاج الوصول للصور لاختيار صور العنصر قبل نشره."
         }
       ],
       "expo-notifications",
