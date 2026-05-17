@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { File } from 'expo-file-system';
@@ -419,45 +420,41 @@ export default function Screen() {
   if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نحمّل بيانات الصفقة." /></AppScreen>;
   if (error && !deal) return <AppScreen><View style={styles.group}><EmptyState title="تعذر عرض الصفقة" description={error} /><AppButton label="إعادة المحاولة" onPress={load} /></View></AppScreen>;
 
-  return <AppScreen scrollable><View style={styles.group}>
-    {!!error ? <AppCard><AppText muted>{error}</AppText></AppCard> : null}
-    {!!voiceMessage ? <AppCard><AppText muted>{voiceMessage}</AppText></AppCard> : null}
-    <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>غرفة الصفقة</AppText><AppText muted>{getDealStatusLabel(deal.status)}</AppText><AppText muted>{getDealStatusNextStep(deal.status)}</AppText></View></AppCard>
+  return <AppScreen><View style={styles.screen}>
+    <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <View style={styles.group}>
+        {!!error ? <AppCard><AppText muted>{error}</AppText></AppCard> : null}
+        {!!voiceMessage ? <AppCard><AppText muted>{voiceMessage}</AppText></AppCard> : null}
+        <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>غرفة الصفقة</AppText><AppText muted>{getDealStatusLabel(deal.status)}</AppText><AppText muted>{getDealStatusNextStep(deal.status)}</AppText></View></AppCard>
 
-    <AppCard><View style={styles.group}><AppText weight="semibold">ملخص التبادل</AppText><AppText>المطلوب: {deal.requestedItem?.title ?? 'غير متاح'}</AppText><AppText>المعروض: {deal.offeredItem?.title ?? 'غير متاح'}</AppText></View></AppCard>
+        <AppCard><View style={styles.group}><AppText weight="semibold">ملخص التبادل</AppText><AppText>المطلوب: {deal.requestedItem?.title ?? 'غير متاح'}</AppText><AppText>المعروض: {deal.offeredItem?.title ?? 'غير متاح'}</AppText></View></AppCard>
 
-    <AppCard><View style={styles.group}><AppText weight="semibold">الأطراف</AppText><AppText>أنت: {(deal.viewerRole === 'requester' ? deal.requester : deal.offerer).displayName ?? 'مستخدم'}</AppText><AppText>الطرف التاني: {deal.otherParticipant.displayName ?? 'مستخدم'}</AppText></View></AppCard>
+        <AppCard><View style={styles.group}><AppText weight="semibold">الأطراف</AppText><AppText>أنت: {(deal.viewerRole === 'requester' ? deal.requester : deal.offerer).displayName ?? 'مستخدم'}</AppText><AppText>الطرف التاني: {deal.otherParticipant.displayName ?? 'مستخدم'}</AppText></View></AppCard>
 
-    <AppCard><View style={styles.group}><AppText weight="semibold">الرسائل</AppText><AppText muted>{realtimeLabel}</AppText>
-      {deal.messages.length === 0 ? <EmptyState title="لسه مفيش رسائل" description="ابدأوا التنسيق من هنا." /> : deal.messages.map((msg: any) => {
-        const mine = msg.senderId === user.id;
-        const isActiveVoice = msg.messageType === 'voice' && activeVoiceMessageId === msg.id;
-        const elapsedMs = isActiveVoice ? Math.max(0, Math.round((voicePlayerStatus.currentTime ?? 0) * 1000)) : 0;
-        const statusDurationMs = isActiveVoice && (voicePlayerStatus.duration ?? 0) > 0 ? Math.round((voicePlayerStatus.duration ?? 0) * 1000) : 0;
-        const totalDurationMs = statusDurationMs > 0 ? statusDurationMs : (msg.audioDurationMs ?? 0);
-        const voiceProgress = isActiveVoice && totalDurationMs > 0 ? Math.min(1, Math.max(0, elapsedMs / totalDurationMs)) : 0;
+        <AppCard><View style={styles.group}><AppText weight="semibold">الرسائل</AppText><AppText muted>{realtimeLabel}</AppText>
+          {deal.messages.length === 0 ? <EmptyState title="لسه مفيش رسائل" description="ابدأوا التنسيق من هنا." /> : deal.messages.map((msg: any) => {
+            const mine = msg.senderId === user.id;
+            const isActiveVoice = msg.messageType === 'voice' && activeVoiceMessageId === msg.id;
+            const elapsedMs = isActiveVoice ? Math.max(0, Math.round((voicePlayerStatus.currentTime ?? 0) * 1000)) : 0;
+            const statusDurationMs = isActiveVoice && (voicePlayerStatus.duration ?? 0) > 0 ? Math.round((voicePlayerStatus.duration ?? 0) * 1000) : 0;
+            const totalDurationMs = statusDurationMs > 0 ? statusDurationMs : (msg.audioDurationMs ?? 0);
+            const voiceProgress = isActiveVoice && totalDurationMs > 0 ? Math.min(1, Math.max(0, elapsedMs / totalDurationMs)) : 0;
 
-        return <View key={msg.id} style={[styles.bubble, mine ? styles.myBubble : styles.otherBubble]}><AppText weight="semibold">{mine ? 'أنت' : deal.otherParticipant.displayName ?? 'الطرف التاني'}</AppText>{msg.messageType === 'voice' ? <View style={styles.voiceBubble}><AppText>رسالة صوتية</AppText><AppButton label={voicePlaybackLoadingId === msg.id ? 'جارٍ التحميل...' : (isActiveVoice && voicePlayerStatus.playing ? 'إيقاف' : 'تشغيل')} onPress={() => { void toggleVoicePlayback(msg); }} disabled={voicePlaybackLoadingId === msg.id} variant="neutral" /><View style={styles.voiceProgressTrack}><View style={[styles.voiceProgressFill, { width: `${Math.round(voiceProgress * 100)}%` }]} /></View><AppText muted>{isActiveVoice ? `${formatVoiceDuration(elapsedMs)} / ${formatVoiceDuration(totalDurationMs)}` : `المدة: ${formatVoiceDuration(msg.audioDurationMs ?? 0)}`}</AppText>{voicePlaybackError?.messageId === msg.id ? <AppText muted>{voicePlaybackError?.message}</AppText> : null}</View> : <AppText>{msg.body}</AppText>}<AppText muted>{new Date(msg.createdAt).toLocaleString('ar-EG')}</AppText></View>;
-      })}
-      {deal.canSendMessage ? <>
-        <TextInput multiline value={messageBody} onChangeText={setMessageBody} maxLength={800} style={styles.input} placeholder="اكتب رسالة للتنسيق" textAlign="right" />
-        <AppText muted>{messageBody.length}/800</AppText>
-        <AppButton label={sending ? 'جاري الإرسال...' : 'إرسال'} onPress={sendMessage} disabled={sending || voiceSending} />
+            return <View key={msg.id} style={[styles.bubble, mine ? styles.myBubble : styles.otherBubble]}><AppText weight="semibold">{mine ? 'أنت' : deal.otherParticipant.displayName ?? 'الطرف التاني'}</AppText>{msg.messageType === 'voice' ? <View style={styles.voiceBubble}><AppText>رسالة صوتية</AppText><AppButton label={voicePlaybackLoadingId === msg.id ? 'جارٍ التحميل...' : (isActiveVoice && voicePlayerStatus.playing ? 'إيقاف' : 'تشغيل')} onPress={() => { void toggleVoicePlayback(msg); }} disabled={voicePlaybackLoadingId === msg.id} variant="neutral" /><View style={styles.voiceProgressTrack}><View style={[styles.voiceProgressFill, { width: `${Math.round(voiceProgress * 100)}%` }]} /></View><AppText muted>{isActiveVoice ? `${formatVoiceDuration(elapsedMs)} / ${formatVoiceDuration(totalDurationMs)}` : `المدة: ${formatVoiceDuration(msg.audioDurationMs ?? 0)}`}</AppText>{voicePlaybackError?.messageId === msg.id ? <AppText muted>{voicePlaybackError?.message}</AppText> : null}</View> : <AppText>{msg.body}</AppText>}<AppText muted>{new Date(msg.createdAt).toLocaleString('ar-EG')}</AppText></View>;
+          })}
+          {!deal.canSendMessage ? <AppText muted>المراسلة متوقفة لأن حالة الصفقة لا تسمح برسائل جديدة.</AppText> : null}
+        </View></AppCard>
 
-        {!recorderState.isRecording && !voiceDraft ? <View style={styles.voiceComposer}><AppButton label="تسجيل رسالة صوتية" onPress={startVoiceRecording} disabled={voiceBusy || voiceSending || sending} variant="neutral" /><AppText muted>يمكنك إرسال رسالة صوتية حتى دقيقتين.</AppText></View> : null}
+        {['coordinating', 'completed_pending_confirmation'].includes(deal.status) ? <AppCard><View style={styles.group}><AppText weight="semibold">تأكيد إتمام المقايضة</AppText><AppText>أنت: {deal.iConfirmed ? 'أكدت' : 'لسه'}</AppText><AppText>الطرف التاني: {deal.otherConfirmed ? 'أكد' : 'لسه'}</AppText><AppText muted>ما تضغطش تأكيد الإتمام غير بعد ما المقايضة تحصل فعلًا.</AppText>{deal.canConfirmCompletion ? <AppButton label={confirming ? 'جاري التأكيد...' : 'أكد إن المقايضة تمت'} onPress={confirmCompletion} disabled={confirming} /> : null}</View></AppCard> : null}
 
-        {recorderState.isRecording ? <AppCard><View style={styles.group}><AppText weight="semibold">جارٍ التسجيل...</AppText><AppText>الوقت: {formatVoiceDuration(recorderState.durationMillis ?? 0)}</AppText><View style={styles.row}><AppButton label="إيقاف التسجيل" onPress={stopVoiceRecording} disabled={voiceBusy} /><AppButton label="إلغاء" onPress={() => { void cancelVoiceDraft(); }} disabled={voiceBusy} variant="neutral" /></View></View></AppCard> : null}
+        {deal.status === 'completed' ? <AppCard><View style={styles.group}><AppText weight="semibold">المقايضة تمت بنجاح</AppText><AppText muted>تقدر تقيّم الطرف التاني بعد إتمام المقايضة.</AppText><AppButton label="قيّم التجربة" onPress={() => router.push(`/review/deal/${deal.id}`)} variant="neutral" /></View></AppCard> : null}
 
-        {!recorderState.isRecording && voiceDraft ? <AppCard><View style={styles.group}><AppText weight="semibold">تسجيل صوتي جاهز</AppText><AppText muted>المدة: {formatVoiceDuration(voiceDraft.durationMs)}</AppText>{typeof voiceDraft.sizeBytes === 'number' ? <AppText muted>الحجم: {Math.max(1, Math.round(voiceDraft.sizeBytes / 1024))} ك.ب</AppText> : null}<View style={styles.row}><AppButton label={voiceSending ? 'جاري إرسال التسجيل...' : 'إرسال التسجيل'} onPress={sendVoiceDraft} disabled={voiceSending || sending || voiceBusy} /><AppButton label="حذف التسجيل" onPress={() => { void cancelVoiceDraft(); }} disabled={voiceSending || voiceBusy} variant="neutral" /></View></View></AppCard> : null}
-      </> : <AppText muted>المراسلة متوقفة لأن حالة الصفقة لا تسمح برسائل جديدة.</AppText>}
-    </View></AppCard>
+        <AppCard><View style={styles.group}><AppText weight="semibold">في مشكلة؟</AppText><AppText muted>لو حصل شيء غير مناسب أثناء التنسيق، ابعت بلاغًا من هنا.</AppText><AppButton label="الإبلاغ عن مشكلة" onPress={() => router.push(`/report/deal/${deal.id}`)} variant="neutral" /></View></AppCard>
+      </View>
+    </KeyboardAwareScrollView>
 
-    {['coordinating', 'completed_pending_confirmation'].includes(deal.status) ? <AppCard><View style={styles.group}><AppText weight="semibold">تأكيد إتمام المقايضة</AppText><AppText>أنت: {deal.iConfirmed ? 'أكدت' : 'لسه'}</AppText><AppText>الطرف التاني: {deal.otherConfirmed ? 'أكد' : 'لسه'}</AppText><AppText muted>ما تضغطش تأكيد الإتمام غير بعد ما المقايضة تحصل فعلًا.</AppText>{deal.canConfirmCompletion ? <AppButton label={confirming ? 'جاري التأكيد...' : 'أكد إن المقايضة تمت'} onPress={confirmCompletion} disabled={confirming} /> : null}</View></AppCard> : null}
-
-    {deal.status === 'completed' ? <AppCard><View style={styles.group}><AppText weight="semibold">المقايضة تمت بنجاح</AppText><AppText muted>تقدر تقيّم الطرف التاني بعد إتمام المقايضة.</AppText><AppButton label="قيّم التجربة" onPress={() => router.push(`/review/deal/${deal.id}`)} variant="neutral" /></View></AppCard> : null}
-
-    <AppCard><View style={styles.group}><AppText weight="semibold">في مشكلة؟</AppText><AppText muted>لو حصل شيء غير مناسب أثناء التنسيق، ابعت بلاغًا من هنا.</AppText><AppButton label="الإبلاغ عن مشكلة" onPress={() => router.push(`/report/deal/${deal.id}`)} variant="neutral" /></View></AppCard>
+    {deal.canSendMessage ? <KeyboardStickyView offset={{ closed: 0, opened: 8 }} style={styles.composerSticky}><View style={styles.composerCard}><AppCard><View style={styles.group}><TextInput multiline value={messageBody} onChangeText={setMessageBody} maxLength={800} style={styles.input} placeholder="اكتب رسالة للتنسيق" textAlign="right" /><View style={styles.composerMeta}><AppText muted>{messageBody.length}/800</AppText><AppButton label={sending ? 'جاري الإرسال...' : 'إرسال'} onPress={sendMessage} disabled={sending || voiceSending} /></View>{!recorderState.isRecording && !voiceDraft ? <View style={styles.voiceComposer}><AppButton label="تسجيل رسالة صوتية" onPress={startVoiceRecording} disabled={voiceBusy || voiceSending || sending} variant="neutral" /><AppText muted>يمكنك إرسال رسالة صوتية حتى دقيقتين.</AppText></View> : null}{recorderState.isRecording ? <View style={styles.group}><AppText weight="semibold">جارٍ التسجيل...</AppText><AppText>الوقت: {formatVoiceDuration(recorderState.durationMillis ?? 0)}</AppText><View style={styles.row}><AppButton label="إيقاف التسجيل" onPress={stopVoiceRecording} disabled={voiceBusy} /><AppButton label="إلغاء" onPress={() => { void cancelVoiceDraft(); }} disabled={voiceBusy} variant="neutral" /></View></View> : null}{!recorderState.isRecording && voiceDraft ? <View style={styles.group}><AppText weight="semibold">تسجيل صوتي جاهز</AppText><AppText muted>المدة: {formatVoiceDuration(voiceDraft.durationMs)}</AppText>{typeof voiceDraft.sizeBytes === 'number' ? <AppText muted>الحجم: {Math.max(1, Math.round(voiceDraft.sizeBytes / 1024))} ك.ب</AppText> : null}<View style={styles.row}><AppButton label={voiceSending ? 'جاري إرسال التسجيل...' : 'إرسال التسجيل'} onPress={sendVoiceDraft} disabled={voiceSending || sending || voiceBusy} /><AppButton label="حذف التسجيل" onPress={() => { void cancelVoiceDraft(); }} disabled={voiceSending || voiceBusy} variant="neutral" /></View></View> : null}</View></AppCard></View></KeyboardStickyView> : null}
   </View></AppScreen>;
 }
 
-const styles = StyleSheet.create({ group: { gap: spacing.sm }, row: { flexDirection: 'row', gap: spacing.sm }, title: { fontSize: 24 }, bubble: { padding: spacing.sm, borderRadius: 12, gap: 4 }, myBubble: { backgroundColor: '#e7f7ee' }, otherBubble: { backgroundColor: '#f2f2f2' }, input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, minHeight: 90, padding: 12, textAlignVertical: 'top' }, voiceComposer: { gap: spacing.xs }, voiceBubble: { gap: spacing.xs }, voiceProgressTrack: { height: 6, borderRadius: 999, backgroundColor: '#d9d9d9', overflow: 'hidden' }, voiceProgressFill: { height: '100%', backgroundColor: '#18a058' } });
+const styles = StyleSheet.create({ screen: { flex: 1 }, scrollContent: { paddingBottom: spacing.lg }, group: { gap: spacing.sm }, row: { flexDirection: 'row', gap: spacing.sm }, title: { fontSize: 24 }, bubble: { padding: spacing.sm, borderRadius: 12, gap: 4 }, myBubble: { backgroundColor: '#e7f7ee' }, otherBubble: { backgroundColor: '#f2f2f2' }, input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, minHeight: 90, maxHeight: 160, padding: 12, textAlignVertical: 'top' }, composerSticky: { paddingTop: spacing.xs }, composerCard: { borderTopLeftRadius: 18, borderTopRightRadius: 18 }, composerMeta: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }, voiceComposer: { gap: spacing.xs }, voiceBubble: { gap: spacing.xs }, voiceProgressTrack: { height: 6, borderRadius: 999, backgroundColor: '#d9d9d9', overflow: 'hidden' }, voiceProgressFill: { height: '100%', backgroundColor: '#18a058' } });
