@@ -144,6 +144,7 @@ export default function ProfileScreen() {
               {user?.id ? (
                 <View style={styles.publicProfileAction}>
                   <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
+                  <AppButton label="إضافة قصة" variant="neutral" onPress={() => router.push('/story/create')} />
                 </View>
               ) : null}
             </AppCard>
