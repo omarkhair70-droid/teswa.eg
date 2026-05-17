@@ -128,6 +128,14 @@ export default function Screen() {
   }, [id, refreshBadges, user?.id]);
 
   const toggleVoicePlayback = useCallback(async (msg: any) => {
+    if (recorderState.isRecording || voiceBusy) {
+      setVoicePlaybackError({
+        messageId: msg.id,
+        message: 'أوقف التسجيل أولًا لتشغيل الرسالة الصوتية.',
+      });
+      return;
+    }
+
     if (msg.messageType !== 'voice' || !msg.audioStoragePath) {
       setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تشغيل الرسالة الصوتية.' });
       return;
@@ -184,7 +192,7 @@ export default function Screen() {
       setVoicePlaybackError({ messageId: msg.id, message: 'تعذر تشغيل الرسالة الصوتية حالياً.' });
       setVoicePlaybackLoadingId(null);
     }
-  }, [activeVoiceMessageId, voicePlaybackError?.messageId, voicePlayer, voicePlayerStatus.currentTime, voicePlayerStatus.duration, voicePlayerStatus.playing]);
+  }, [activeVoiceMessageId, recorderState.isRecording, voiceBusy, voicePlaybackError?.messageId, voicePlayer, voicePlayerStatus.currentTime, voicePlayerStatus.duration, voicePlayerStatus.playing]);
 
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
@@ -281,6 +289,14 @@ export default function Screen() {
         return;
       }
 
+      voicePlayer.pause();
+      try {
+        await voicePlayer.seekTo(0);
+      } catch {}
+      setActiveVoiceMessageId(null);
+      setVoicePlaybackLoadingId(null);
+      setVoicePlaybackError((prev) => (prev?.messageId ? null : prev));
+
       await setAudioModeAsync({
         playsInSilentMode: true,
         allowsRecording: true,
@@ -294,7 +310,7 @@ export default function Screen() {
     } finally {
       setVoiceBusy(false);
     }
-  }, [audioRecorder, deal, recorderState.isRecording, user?.id, voiceBusy, voiceSending]);
+  }, [audioRecorder, deal, recorderState.isRecording, user?.id, voiceBusy, voicePlayer, voiceSending]);
 
   const cancelVoiceDraft = useCallback(async () => {
     if (recorderState.isRecording) {
