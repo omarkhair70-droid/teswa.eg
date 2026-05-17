@@ -71,7 +71,10 @@
         {
           "faceIDPermission": "نستخدم التحقق البيومتري لحماية حسابك داخل تِسوى."
         }
-      ]
+      ],
+      "expo-video",
+      "expo-sqlite",
+      "expo-background-task"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
