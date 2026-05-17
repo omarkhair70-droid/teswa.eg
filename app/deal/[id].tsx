@@ -392,13 +392,6 @@ export default function Screen() {
     setActiveVoiceMessageId(null);
   }, [activeVoiceMessageId, voicePlayer, voicePlayerStatus.didJustFinish]);
 
-  useEffect(() => {
-    if (!activeVoiceMessageId || !voicePlayerStatus.error) return;
-    voicePlayer.pause();
-    setVoicePlaybackError({ messageId: activeVoiceMessageId, message: 'تعذر تشغيل الرسالة الصوتية حالياً.' });
-    setActiveVoiceMessageId(null);
-  }, [activeVoiceMessageId, voicePlayer, voicePlayerStatus.error]);
-
   const confirmCompletion = useCallback(async () => {
     if (!deal || !user?.id) return;
     setConfirming(true);
