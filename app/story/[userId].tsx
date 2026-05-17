@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEventListener } from 'expo';
 import { Image as ExpoImage } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { AppText } from '@/components/ui/AppText';
@@ -14,6 +15,10 @@ const VIDEO_FALLBACK_DURATION_MS = 8000;
 function StoryVideo({ uri, active, onError }: { uri: string; active: boolean; onError: () => void }) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
+  });
+
+  useEventListener(player, 'statusChange', ({ error }) => {
+    if (error) onError();
   });
 
   useEffect(() => {
@@ -29,9 +34,7 @@ function StoryVideo({ uri, active, onError }: { uri: string; active: boolean; on
       style={styles.media}
       player={player}
       nativeControls={false}
-      allowsFullscreen={false}
       allowsPictureInPicture={false}
-      onError={onError}
     />
   );
 }
@@ -242,7 +245,6 @@ const styles = StyleSheet.create({
   pager: { flex: 1 },
   page: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   media: { width: '100%', height: '100%' },
-  topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 56, paddingHorizontal: 12, gap: 12 },
   progressRow: { flexDirection: 'row', gap: 6 },
   progressTrack: { flex: 1, height: 3, backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#fff' },
@@ -254,10 +256,19 @@ const styles = StyleSheet.create({
   authorName: { color: '#fff' },
   authorUsername: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
   closeText: { color: '#fff', fontSize: 14 },
-  navLayer: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  navLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 112,
+    bottom: 110,
+    flexDirection: 'row',
+    zIndex: 1,
+  },
   leftZone: { flex: 1 },
   rightZone: { flex: 1 },
-  captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)' },
+  topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 56, paddingHorizontal: 12, gap: 12, zIndex: 3 },
+  captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
   captionText: { color: '#fff', textAlign: 'right' },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 10 },
   stateTitle: { color: '#fff', fontSize: 20 },
