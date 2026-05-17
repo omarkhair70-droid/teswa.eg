@@ -12,6 +12,7 @@ import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AccountProfile, fetchMyAccountProfile } from '@/lib/profiles';
 import { getNotificationPermissionStatus, hasStoredPushToken, requestAndRegisterPushDevice } from '@/lib/push-notifications';
+import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { useUnreadBadges } from '@/lib/unread-badges';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
@@ -26,6 +27,8 @@ export default function ProfileScreen() {
   const { notificationsUnreadCount } = useUnreadBadges();
   const [pushState, setPushState] = useState<'idle' | 'enabled' | 'denied' | 'error'>('idle');
   const [enablingPush, setEnablingPush] = useState(false);
+  const [myActiveStoriesCount, setMyActiveStoriesCount] = useState(0);
+  const [myStoriesLoading, setMyStoriesLoading] = useState(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -52,10 +55,29 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
+  const loadMyStoriesState = useCallback(async () => {
+    if (!user?.id) {
+      setMyActiveStoriesCount(0);
+      return;
+    }
+
+    setMyStoriesLoading(true);
+    try {
+      const activeStories = await fetchActiveStoriesByUserId(user.id);
+      setMyActiveStoriesCount(activeStories.length);
+    } catch (e) {
+      if (__DEV__) console.log('[Profile] my stories load failed', e);
+      setMyActiveStoriesCount(0);
+    } finally {
+      setMyStoriesLoading(false);
+    }
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData]),
+      loadMyStoriesState();
+    }, [loadData, loadMyStoriesState]),
   );
 
   useEffect(() => {
@@ -144,8 +166,12 @@ export default function ProfileScreen() {
               {user?.id ? (
                 <View style={styles.publicProfileAction}>
                   <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
+                  {myActiveStoriesCount > 0 ? (
+                    <AppButton label="عرض قصصي" variant="neutral" onPress={() => router.push(`/story/${user.id}`)} />
+                  ) : null}
                   <AppButton label="إضافة قصة" variant="neutral" onPress={() => router.push('/story/create')} />
                   <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.push('/story/manage')} />
+                  {!myStoriesLoading && myActiveStoriesCount > 0 ? <AppText muted>لديك {myActiveStoriesCount} قصة نشطة الآن</AppText> : null}
                 </View>
               ) : null}
             </AppCard>
