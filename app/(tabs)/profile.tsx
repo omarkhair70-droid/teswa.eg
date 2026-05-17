@@ -145,6 +145,7 @@ export default function ProfileScreen() {
                 <View style={styles.publicProfileAction}>
                   <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
                   <AppButton label="إضافة قصة" variant="neutral" onPress={() => router.push('/story/create')} />
+                  <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.push('/story/manage')} />
                 </View>
               ) : null}
             </AppCard>
@@ -221,6 +222,6 @@ const styles = StyleSheet.create({
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primarySoft },
   avatarFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1 },
   group: { gap: spacing.sm },
-  publicProfileAction: { marginTop: spacing.md },
+  publicProfileAction: { marginTop: spacing.md, gap: spacing.sm },
   errorText: { color: '#B00020' },
 });
