@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
 import { supabase } from '@/lib/supabase/client';
 
@@ -9,6 +10,11 @@ export type DealRoomMessage = {
   dealId: string;
   senderId: string;
   body: string;
+  messageType: 'text' | 'voice';
+  audioStoragePath: string | null;
+  audioDurationMs: number | null;
+  audioMimeType: string | null;
+  audioSizeBytes: number | null;
   createdAt: string;
 };
 
@@ -76,6 +82,11 @@ function toMessageRow(row: any): DealRoomMessage {
     dealId: row.deal_id as string,
     senderId: row.sender_id as string,
     body: row.body as string,
+    messageType: row.message_type === 'voice' ? 'voice' : 'text',
+    audioStoragePath: (row.audio_storage_path as string | null) ?? null,
+    audioDurationMs: (row.audio_duration_ms as number | null) ?? null,
+    audioMimeType: (row.audio_mime_type as string | null) ?? null,
+    audioSizeBytes: (row.audio_size_bytes as number | null) ?? null,
     createdAt: row.created_at as string,
   };
 }
@@ -101,7 +112,7 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
     fetchExchangeItemSummariesByIds([deal.requested_item_id as string]).then((r) => r[0] ?? null),
     fetchExchangeItemSummariesByIds([deal.offered_item_id as string]).then((r) => r[0] ?? null),
     supabase.from('deal_confirmations').select('user_id').eq('deal_id', dealId),
-    supabase.from('deal_messages').select('id,deal_id,sender_id,body,created_at').eq('deal_id', dealId).order('created_at', { ascending: true }).limit(100),
+    supabase.from('deal_messages').select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at').eq('deal_id', dealId).order('created_at', { ascending: true }).limit(100),
     getDealParticipantProfiles([requesterId, offererId]),
   ]);
 
@@ -182,7 +193,7 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
   const { data: inserted, error: insertError } = await supabase
     .from('deal_messages')
     .insert({ deal_id: input.dealId, sender_id: input.currentUserId, body })
-    .select('id,deal_id,sender_id,body,created_at')
+    .select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at')
     .single();
   if (insertError) throw insertError;
 
@@ -244,4 +255,131 @@ export async function confirmDealCompletedFromMobile(input: { dealId: string; cu
   }
 
   return { ok: true as const, completed: Boolean(completed) };
+}
+
+
+const DEAL_VOICE_MESSAGES_BUCKET = 'deal-voice-messages';
+const DEAL_VOICE_MESSAGE_MAX_SIZE_BYTES = 15 * 1024 * 1024;
+
+function sanitizeAudioFileName(name: string | null | undefined, fallback: string): string {
+  const raw = (name || fallback).toLowerCase();
+  return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
+}
+
+function getAudioExtension(name: string | null | undefined, mimeType: string): string {
+  const fromName = name?.split('.').pop()?.toLowerCase()?.trim();
+  if (fromName && /^[a-z0-9]+$/.test(fromName)) return fromName;
+
+  const fromMime = mimeType.split('/').pop()?.toLowerCase()?.trim();
+  if (fromMime && /^[a-z0-9]+$/.test(fromMime)) return fromMime;
+
+  return 'm4a';
+}
+
+async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  const response = await fetch(uri);
+  return response.arrayBuffer();
+}
+
+export async function createDealVoiceMessageSignedUrl(storagePath: string, expiresInSeconds = 60 * 60): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(DEAL_VOICE_MESSAGES_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
+  if (error) {
+    if (__DEV__) console.log('[deals] create signed url failed', { storagePath, message: error.message });
+    return null;
+  }
+
+  return data?.signedUrl ?? null;
+}
+
+export async function sendDealVoiceMessageFromMobile(input: {
+  dealId: string;
+  currentUserId: string;
+  localUri: string;
+  durationMs: number;
+  mimeType?: string | null;
+  fileName?: string | null;
+  sizeBytes?: number | null;
+}) {
+  const localUri = input.localUri.trim();
+  if (!localUri) return { ok: false as const, reason: 'invalid_audio' as const, message: 'تعذر قراءة التسجيل الصوتي.' };
+  if (input.durationMs < 500) return { ok: false as const, reason: 'invalid_duration' as const, message: 'التسجيل قصير جدًا. سجّل رسالة أوضح.' };
+  if (input.durationMs > 120000) return { ok: false as const, reason: 'invalid_duration' as const, message: 'مدة الرسالة الصوتية لا يمكن أن تتجاوز دقيقتين.' };
+  if ((input.sizeBytes ?? 0) > DEAL_VOICE_MESSAGE_MAX_SIZE_BYTES) return { ok: false as const, reason: 'file_too_large' as const, message: 'حجم الرسالة الصوتية كبير جدًا.' };
+
+  const { data: deal, error: dealError } = await supabase
+    .from('swap_deals')
+    .select('id,status,requester_id,offerer_id')
+    .eq('id', input.dealId)
+    .maybeSingle();
+
+  if (dealError) throw dealError;
+  if (!deal) return { ok: false as const, reason: 'not_found' as const, message: 'الصفقة غير موجودة.' };
+
+  const requesterId = deal.requester_id as string;
+  const offererId = deal.offerer_id as string;
+  if (input.currentUserId !== requesterId && input.currentUserId !== offererId) {
+    return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بالمراسلة في الصفقة دي.' };
+  }
+
+  if (!['coordinating', 'completed_pending_confirmation'].includes(deal.status as string)) {
+    return { ok: false as const, reason: 'invalid_status' as const, message: 'المراسلة متاحة فقط أثناء التنسيق أو انتظار التأكيد.' };
+  }
+
+  const since = new Date(Date.now() - 60_000).toISOString();
+  const { count, error: rateError } = await supabase
+    .from('deal_messages')
+    .select('id', { head: true, count: 'exact' })
+    .eq('deal_id', input.dealId)
+    .eq('sender_id', input.currentUserId)
+    .gte('created_at', since);
+  if (rateError) throw rateError;
+  if ((count ?? 0) >= 5) {
+    return { ok: false as const, reason: 'rate_limited' as const, message: 'استنى دقيقة قبل إرسال رسائل جديدة كتير.' };
+  }
+
+  const contentType = input.mimeType || 'audio/m4a';
+  const ext = getAudioExtension(input.fileName, contentType);
+  const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
+  const uploadPath = `deals/${input.dealId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
+
+  const body = await fileUriToArrayBuffer(localUri);
+  const { error: uploadError } = await supabase.storage.from(DEAL_VOICE_MESSAGES_BUCKET).upload(uploadPath, body, { contentType, upsert: false });
+  if (uploadError) {
+    if (__DEV__) console.log('[deals] voice upload failed', { uploadPath, message: uploadError.message });
+    return { ok: false as const, reason: 'upload_failed' as const, message: 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.' };
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('deal_messages')
+    .insert({
+      deal_id: input.dealId,
+      sender_id: input.currentUserId,
+      body: 'رسالة صوتية',
+      message_type: 'voice',
+      audio_storage_path: uploadPath,
+      audio_duration_ms: input.durationMs,
+      audio_mime_type: contentType,
+      audio_size_bytes: input.sizeBytes ?? null,
+    })
+    .select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at')
+    .single();
+
+  if (insertError) {
+    await supabase.storage.from(DEAL_VOICE_MESSAGES_BUCKET).remove([uploadPath]);
+    if (__DEV__) console.log('[deals] voice insert failed', { uploadPath, message: insertError.message });
+    return { ok: false as const, reason: 'insert_failed' as const, message: 'تعذر إرسال الرسالة الصوتية. حاول مرة أخرى.' };
+  }
+
+  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
+  void notify({
+    target_user_id: otherParticipantId,
+    notification_type: 'system',
+    notification_title: 'رسالة صوتية جديدة في الصفقة',
+    notification_body: 'الطرف التاني بعت رسالة صوتية في صفحة التنسيق.',
+    target_deal_id: input.dealId,
+    target_offer_id: null,
+    target_item_id: null,
+  });
+
+  return { ok: true as const, message: toMessageRow(inserted) };
 }
