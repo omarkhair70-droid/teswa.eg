@@ -91,7 +91,7 @@ export default function HomeScreen() {
                   const fallbackInitial = (story.author.displayName ?? story.author.username ?? 'م').trim().charAt(0).toUpperCase();
 
                   return (
-                    <View key={story.author.id} style={styles.storyTile}>
+                    <Pressable key={story.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${story.author.id}`)}>
                       <View style={styles.storyAvatar}>
                         {story.author.avatarUrl ? (
                           <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
@@ -100,7 +100,7 @@ export default function HomeScreen() {
                         )}
                       </View>
                       <AppText numberOfLines={1} style={styles.storyLabel}>{label}</AppText>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </ScrollView>

@@ -31,6 +31,11 @@ export type ActiveStorySummary = {
   latestCreatedAt: string;
 };
 
+export type StoryViewerContext = {
+  author: StoryAuthorSummary;
+  stories: StoryRecord[];
+};
+
 export type PublishStoryInput = {
   userId: string;
   asset: ImagePickerAsset;
@@ -237,4 +242,39 @@ export function createStoryUploadPath(userId: string, mediaType: StoryMediaType,
   const normalizedExt = extension.replace(/^\./, '').toLowerCase() || (mediaType === 'video' ? 'mp4' : 'jpg');
   const timestamp = Date.now();
   return `${userId}/${timestamp}-${Crypto.randomUUID()}.${normalizedExt}`;
+}
+
+
+export async function createStoryMediaSignedUrl(storagePath: string, expiresInSeconds = 3600): Promise<string | null> {
+  const normalizedPath = storagePath.trim();
+  if (!normalizedPath) return null;
+
+  const { data, error } = await supabase.storage
+    .from('story-media')
+    .createSignedUrl(normalizedPath, expiresInSeconds);
+
+  if (error || !data?.signedUrl) {
+    if (__DEV__) console.warn('[stories] createStoryMediaSignedUrl failed', error?.message ?? 'unknown');
+    return null;
+  }
+
+  return data.signedUrl;
+}
+
+export async function fetchStoryViewerContextByUserId(userId: string): Promise<StoryViewerContext | null> {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return null;
+
+  const stories = await fetchActiveStoriesByUserId(normalizedUserId);
+  if (!stories.length) return null;
+
+  const authors = await fetchStoryAuthorsByUserIds([normalizedUserId]);
+  const author = authors.get(normalizedUserId) ?? {
+    id: normalizedUserId,
+    displayName: null,
+    username: null,
+    avatarUrl: null,
+  };
+
+  return { author, stories };
 }
