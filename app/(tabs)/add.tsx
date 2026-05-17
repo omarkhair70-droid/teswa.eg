@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
@@ -61,6 +61,8 @@ export default function AddScreen() {
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const assets = mediaState.assets;
   const { isDefinitelyOffline } = useOfflineStatus();
+  const rejectedPersistedCleanupQueueRef = useRef<ImagePicker.ImagePickerAsset[]>([]);
+
 
   useEffect(() => {
     fetchActiveCategories()
@@ -204,24 +206,31 @@ export default function AddScreen() {
     const persisted = await persistAddItemDraftMediaAssets(user?.id, incomingUniqueByUri);
     if (!persisted.length) return;
 
-    let rejectedPersisted: ImagePicker.ImagePickerAsset[] = [];
     setMediaState((prev) => {
       const { next, wasTrimmed } = mergeAssets(prev.assets, persisted);
       const acceptedUris = new Set(next.slice(prev.assets.length).map((asset) => asset.uri));
-      rejectedPersisted = persisted.filter((asset) => !acceptedUris.has(asset.uri));
+      const rejectedPersisted = persisted.filter((asset) => !acceptedUris.has(asset.uri));
+      if (rejectedPersisted.length) {
+        rejectedPersistedCleanupQueueRef.current.push(...rejectedPersisted);
+      }
 
       return {
         assets: next,
-        feedback: (wasTrimmed || incomingUniqueByUri.length > persisted.length) && source !== 'pending'
+        feedback: wasTrimmed && source !== 'pending'
           ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`
           : null,
       };
     });
-
-    if (rejectedPersisted.length) {
-      await Promise.allSettled(rejectedPersisted.map((asset) => deleteAddItemDraftMediaAsset(asset)));
-    }
   };
+
+  useEffect(() => {
+    if (!rejectedPersistedCleanupQueueRef.current.length) return;
+
+    const queued = [...rejectedPersistedCleanupQueueRef.current];
+    rejectedPersistedCleanupQueueRef.current = [];
+    void Promise.allSettled(queued.map((asset) => deleteAddItemDraftMediaAsset(asset)));
+  }, [mediaState.assets]);
+
 
   useEffect(() => {
     const inboundAssets = consumePendingInboundSharedMedia();
