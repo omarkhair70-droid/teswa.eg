@@ -133,6 +133,7 @@ export default function StoryViewerScreen() {
   }, [userId]);
 
   const currentStory = context?.stories[activeIndex] ?? null;
+  const currentStorySignedUrl = currentStory ? urlsByStoryId[currentStory.id] : null;
   const storyDurationMs = useMemo(() => {
     if (!currentStory) return IMAGE_DURATION_MS;
     if (currentStory.mediaType === 'video') {
@@ -143,10 +144,11 @@ export default function StoryViewerScreen() {
 
   const currentStoryCanStart = useMemo(() => {
     if (!currentStory) return false;
+    if (!currentStorySignedUrl) return true;
     if (mediaFailedIds[currentStory.id]) return true;
     if (currentStory.mediaType === 'image') return true;
     return !!readyVideoStoryIds[currentStory.id];
-  }, [currentStory, mediaFailedIds, readyVideoStoryIds]);
+  }, [currentStory, currentStorySignedUrl, mediaFailedIds, readyVideoStoryIds]);
 
   useEffect(() => {
     if (!context?.stories.length) return;
