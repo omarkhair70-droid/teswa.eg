@@ -7,6 +7,8 @@ type ParticipantSummary = {
   displayName: string | null;
   username: string | null;
   avatarUrl: string | null;
+  successfulSwapsCount: number | null;
+  responseRate: number | null;
 };
 
 export type ExistingDealReview = {
@@ -63,7 +65,7 @@ export async function fetchDealReviewContext(
     const revieweeId = deal.requester_id === currentUserId ? deal.offerer_id : deal.requester_id;
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id,display_name,username,avatar_url')
+      .select('id,display_name,username,avatar_url,successful_swaps_count,response_rate')
       .eq('id', revieweeId)
       .maybeSingle();
 
@@ -90,6 +92,8 @@ export async function fetchDealReviewContext(
           displayName: (profile.display_name as string | null) ?? null,
           username: (profile.username as string | null) ?? null,
           avatarUrl: (profile.avatar_url as string | null) ?? null,
+          successfulSwapsCount: (profile.successful_swaps_count as number | null) ?? null,
+          responseRate: (profile.response_rate as number | null) ?? null,
         },
         existingReview: existingReview
           ? {

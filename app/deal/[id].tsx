@@ -33,6 +33,11 @@ function formatVoiceDuration(durationMs: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function formatResponseRate(responseRate: number | null): string {
+  if (responseRate == null || Number.isNaN(responseRate)) return 'غير متاح بعد';
+  return `${Math.round(Math.max(0, Math.min(100, responseRate)))}%`;
+}
+
 export default function Screen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -429,7 +434,7 @@ export default function Screen() {
 
         <AppCard><View style={styles.group}><AppText weight="semibold">ملخص التبادل</AppText><AppText>المطلوب: {deal.requestedItem?.title ?? 'غير متاح'}</AppText><AppText>المعروض: {deal.offeredItem?.title ?? 'غير متاح'}</AppText></View></AppCard>
 
-        <AppCard><View style={styles.group}><AppText weight="semibold">الأطراف</AppText><AppText>أنت: {(deal.viewerRole === 'requester' ? deal.requester : deal.offerer).displayName ?? 'مستخدم'}</AppText><AppText>الطرف التاني: {deal.otherParticipant.displayName ?? 'مستخدم'}</AppText></View></AppCard>
+        <AppCard><View style={styles.group}><AppText weight="semibold">الأطراف</AppText><AppText>أنت: {(deal.viewerRole === 'requester' ? deal.requester : deal.offerer).displayName ?? 'مستخدم'}</AppText><AppText>الطرف التاني: {deal.otherParticipant.displayName ?? 'مستخدم'}</AppText><AppText muted>عمليات ناجحة: {deal.otherParticipant.successfulSwapsCount ?? 0}</AppText><AppText muted>معدل الرد: {formatResponseRate(deal.otherParticipant.responseRate)}</AppText><AppButton label="عرض الملف العام" onPress={() => router.push(`/profile/${deal.otherParticipant.id}`)} variant="neutral" /></View></AppCard>
 
         <AppCard><View style={[styles.group, styles.threadCard]}><View style={styles.threadHeader}><AppText weight="semibold">الرسائل</AppText><AppText muted style={styles.threadRealtime}>{realtimeLabel}</AppText></View>
           {deal.messages.length === 0 ? <View style={styles.emptyThread}><EmptyState title="لسه مفيش رسائل" description="ابدأوا التنسيق من هنا." /></View> : deal.messages.map((msg: any) => {
