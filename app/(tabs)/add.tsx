@@ -451,6 +451,9 @@ export default function AddScreen() {
     await clearAddItemDraftMedia(user?.id);
     resetDraftFields();
     setMediaState({ assets: [], feedback: null });
+    setLocationFillLoading(false);
+    setLocationFillMessage(null);
+    setLocationFillError(null);
     setStep(0);
     setError(null);
     setDraftNotice(null);
