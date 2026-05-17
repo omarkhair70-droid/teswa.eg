@@ -128,7 +128,7 @@ async function uploadStoryMediaWithProgress(params: {
   if (!accessToken) return { error: new Error('Missing auth session') };
 
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!supabaseUrl || !supabaseAnonKey) return { error: new Error('Missing Supabase config') };
 
   const uploadUrl = `${supabaseUrl}/storage/v1/object/story-media/${encodeURIComponent(storagePath).replace(/%2F/g, '/')}`;
