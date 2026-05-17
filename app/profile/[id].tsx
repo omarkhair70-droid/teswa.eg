@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   stateBox: { gap: spacing.md },
   headerCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
   headerInfo: { flex: 1, gap: spacing.xs },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surfaceAlt },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primarySoft },
   avatarFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1 },
   name: { fontSize: 22 },
   group: { gap: spacing.sm },
