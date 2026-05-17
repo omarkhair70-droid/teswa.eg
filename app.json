@@ -3,7 +3,7 @@
     "name": "Teswa",
     "slug": "teswa-mobile",
     "scheme": "teswa",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -12,7 +12,10 @@
     "android": {
       "edgeToEdgeEnabled": true,
       "package": "com.teswa.mobile",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
