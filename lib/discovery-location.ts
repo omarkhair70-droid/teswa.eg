@@ -37,7 +37,17 @@ function uniqueTerms(values: Array<string | null | undefined>): string[] {
 }
 
 export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocationResult> {
-  const permission = await Location.requestForegroundPermissionsAsync();
+  let permission: Location.LocationPermissionResponse;
+  try {
+    permission = await Location.requestForegroundPermissionsAsync();
+  } catch {
+    return {
+      ok: false,
+      reason: 'location_unavailable',
+      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
+    };
+  }
+
   if (permission.status !== 'granted') {
     return {
       ok: false,
@@ -46,8 +56,17 @@ export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocati
     };
   }
 
-  const lastKnown = await Location.getLastKnownPositionAsync();
-  const currentPosition = lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+  let currentPosition: Location.LocationObject | null = null;
+  try {
+    const lastKnown = await Location.getLastKnownPositionAsync();
+    currentPosition = lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+  } catch {
+    return {
+      ok: false,
+      reason: 'location_unavailable',
+      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
+    };
+  }
 
   if (!currentPosition) {
     return {
@@ -57,10 +76,19 @@ export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocati
     };
   }
 
-  const addresses = await Location.reverseGeocodeAsync({
-    latitude: currentPosition.coords.latitude,
-    longitude: currentPosition.coords.longitude,
-  });
+  let addresses: Location.LocationGeocodedAddress[];
+  try {
+    addresses = await Location.reverseGeocodeAsync({
+      latitude: currentPosition.coords.latitude,
+      longitude: currentPosition.coords.longitude,
+    });
+  } catch {
+    return {
+      ok: false,
+      reason: 'reverse_geocode_failed',
+      message: 'تعذر تحديد مدينتك الآن. حاول مرة أخرى.',
+    };
+  }
 
   const address = addresses[0];
   if (!address) {
