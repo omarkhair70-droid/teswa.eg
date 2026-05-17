@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { supabase } from '@/lib/supabase/client';
 
 export type StoryMediaType = 'image' | 'video';
@@ -125,5 +126,5 @@ export async function fetchActiveStoriesForHome(): Promise<ActiveStorySummary[]>
 export function createStoryUploadPath(userId: string, mediaType: StoryMediaType, extension: string): string {
   const normalizedExt = extension.replace(/^\./, '').toLowerCase() || (mediaType === 'video' ? 'mp4' : 'jpg');
   const timestamp = Date.now();
-  return `${userId}/${timestamp}-${crypto.randomUUID()}.${normalizedExt}`;
+  return `${userId}/${timestamp}-${Crypto.randomUUID()}.${normalizedExt}`;
 }
