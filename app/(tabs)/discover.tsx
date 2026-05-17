@@ -7,6 +7,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
+import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
 import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
@@ -175,12 +176,14 @@ export default function DiscoverScreen() {
                 </View>
               </View>
             </AppCard>
-            <AppCard>
-              <View style={styles.resultsRow}>
+            {!loading && !error ? (
+              <AppCard>
+                <View style={styles.resultsRow}>
                 <AppText>{hasActiveFilters ? `نستعرض ${filtered.length} عنصرًا مطابقًا` : `نستعرض ${filtered.length} عنصرًا`}</AppText>
                 {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
-              </View>
-            </AppCard>
+                </View>
+              </AppCard>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
@@ -219,13 +222,13 @@ const styles = StyleSheet.create({
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: colors.border,
     borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  chipActive: { backgroundColor: '#111827', borderColor: '#111827' },
-  chipTextActive: { color: '#ffffff' },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipTextActive: { color: colors.white },
   resultsRow: { gap: spacing.sm },
   stateBox: { gap: spacing.md },
 });
