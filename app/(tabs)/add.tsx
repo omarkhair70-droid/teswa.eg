@@ -15,6 +15,7 @@ import { spacing } from '@/constants/spacing';
 import { fetchActiveCategories, ItemCondition, publishItem, type PublishProgress } from '@/lib/publish-item';
 import { consumePendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { clearAddItemDraft, hasMeaningfulAddItemDraft, loadAddItemDraft, saveAddItemDraft, type AddItemDraft } from '@/lib/add-item-draft';
+import { useOfflineStatus } from '@/hooks/useOfflineStatus';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -58,6 +59,7 @@ export default function AddScreen() {
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const assets = mediaState.assets;
+  const { isDefinitelyOffline } = useOfflineStatus();
 
   useEffect(() => {
     fetchActiveCategories()
@@ -304,9 +306,17 @@ export default function AddScreen() {
       setError(e);
       return;
     }
-    setSubmitting(true);
     setError(null);
     setPublishFailure(null);
+
+    if (isDefinitelyOffline) {
+      const offlineMessage = 'لا يوجد اتصال بالإنترنت. بيانات الإعلان محفوظة، حاول النشر بعد عودة الاتصال.';
+      setError(offlineMessage);
+      setPublishFailure(offlineMessage);
+      return;
+    }
+
+    setSubmitting(true);
     setProgress('جارٍ تحسين الصور...');
     try {
       const totalAssets = assets.length;
@@ -374,6 +384,7 @@ export default function AddScreen() {
 
   return <AppScreen scrollable><View style={styles.headerCard}><View style={styles.header}><AppText weight='bold' style={styles.title}>نشر عنصر جديد</AppText><AppText muted>الخطوة {step + 1} من 6 — {steps[step]}</AppText></View><View style={styles.progressTrack}>{steps.map((_, i) => <View key={`step-dot-${i}`} style={[styles.progressDot, i < step && styles.progressDotCompleted, i === step && styles.progressDotCurrent]} />)}</View></View>
     {showDraftCard && <AppCard><View style={styles.gap}><AppText muted>{draftNotice ?? 'لديك مسودة محفوظة لهذا الإعلان.'}</AppText><View style={styles.actions}><AppButton label='ابدأ من جديد' variant='neutral' onPress={() => { void discardDraftAndReset(); }} disabled={submitting} /></View></View></AppCard>}
+    {isDefinitelyOffline && <AppCard><View style={styles.gap}><AppText weight='bold'>أنت غير متصل بالإنترنت</AppText><AppText muted>يمكنك تجهيز الإعلان الآن، لكن النشر سيحتاج اتصالًا بالإنترنت. بيانات المسودة محفوظة.</AppText></View></AppCard>}
     {error && <AppCard><AppText style={styles.error}>{error}</AppText></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
     {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
