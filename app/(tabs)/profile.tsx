@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { Image as ExpoImage } from 'expo-image';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
+import { colors } from '@/constants/colors';
+import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AccountProfile, fetchMyAccountProfile } from '@/lib/profiles';
@@ -21,8 +24,18 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const { notificationsUnreadCount } = useUnreadBadges();
-  const [pushState, setPushState] = useState<'idle'|'enabled'|'denied'|'error'>('idle');
+  const [pushState, setPushState] = useState<'idle' | 'enabled' | 'denied' | 'error'>('idle');
   const [enablingPush, setEnablingPush] = useState(false);
+
+  const memberSince = useMemo(() => {
+    if (!profile?.created_at) return null;
+    const date = new Date(profile.created_at);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(date);
+  }, [profile?.created_at]);
+
+  const displayName = profile?.display_name?.trim() || 'مستخدم تِسوى';
+  const location = [profile?.city, profile?.area].filter(Boolean).join(' - ');
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -44,7 +57,6 @@ export default function ProfileScreen() {
       loadData();
     }, [loadData]),
   );
-
 
   useEffect(() => {
     if (!user?.id) return;
@@ -108,14 +120,38 @@ export default function ProfileScreen() {
 
         {!loading && !error ? (
           <>
+            {profile?.cover_url ? (
+              <ExpoImage source={{ uri: profile.cover_url }} style={styles.cover} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+            ) : (
+              <View style={[styles.cover, styles.coverFallback]}><AppText muted>لا توجد صورة غلاف</AppText></View>
+            )}
+
+            <AppCard>
+              <View style={styles.headerCard}>
+                {profile?.avatar_url ? (
+                  <ExpoImage source={{ uri: profile.avatar_url }} style={styles.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback]}><AppText weight="bold">{displayName[0]}</AppText></View>
+                )}
+                <View style={styles.headerInfo}>
+                  <AppText weight="bold" style={styles.name}>{displayName}</AppText>
+                  {profile?.username ? <AppText muted>@{profile.username}</AppText> : null}
+                  {profile?.profile_tagline ? <AppText muted>{profile.profile_tagline}</AppText> : null}
+                  {location ? <AppText muted>{location}</AppText> : null}
+                  {memberSince ? <AppText muted>عضو منذ {memberSince}</AppText> : null}
+                </View>
+              </View>
+              {user?.id ? (
+                <View style={styles.publicProfileAction}>
+                  <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
+                </View>
+              ) : null}
+            </AppCard>
+
             <AppCard>
               <View style={styles.group}>
-                <AppText weight="semibold">{profile?.display_name?.trim() || 'مستخدم تِسوى'}</AppText>
-                {profile?.username ? <AppText muted>@{profile.username}</AppText> : null}
-                <AppText>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText>
-                {profile?.profile_tagline ? <AppText muted>{profile.profile_tagline}</AppText> : null}
-                {(profile?.city || profile?.area) ? <AppText muted>{[profile.city, profile.area].filter(Boolean).join(' - ')}</AppText> : null}
-                {profile?.bio ? <AppText>{profile.bio}</AppText> : null}
+                <AppText weight="semibold">نبذة</AppText>
+                {profile?.bio?.trim() ? <AppText>{profile.bio}</AppText> : <AppText muted>لم تضف نبذة بعد.</AppText>}
               </View>
             </AppCard>
 
@@ -127,6 +163,12 @@ export default function ProfileScreen() {
               </View>
             </AppCard>
 
+            <AppCard>
+              <View style={styles.group}>
+                <AppText weight="semibold">بيانات الحساب</AppText>
+                <AppText>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText>
+              </View>
+            </AppCard>
 
             <AppCard>
               <View style={styles.group}>
@@ -150,14 +192,18 @@ export default function ProfileScreen() {
           </>
         ) : null}
 
-        <AppText muted>تقدر تسجل خروجك وتدخل بحساب مختلف وقت ما تحب.</AppText>
-        {signOutError ? <AppText style={styles.errorText}>{signOutError}</AppText> : null}
-        <AppButton
-          label={isSigningOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
-          disabled={isSigningOut}
-          onPress={handleSignOut}
-          variant="neutral"
-        />
+        <AppCard>
+          <View style={styles.group}>
+            <AppText muted>تقدر تسجل خروجك وتدخل بحساب مختلف وقت ما تحب.</AppText>
+            {signOutError ? <AppText style={styles.errorText}>{signOutError}</AppText> : null}
+            <AppButton
+              label={isSigningOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
+              disabled={isSigningOut}
+              onPress={handleSignOut}
+              variant="neutral"
+            />
+          </View>
+        </AppCard>
       </View>
     </AppScreen>
   );
@@ -166,6 +212,14 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   content: { gap: spacing.md, paddingBottom: spacing.xxl },
   title: { fontSize: 24 },
-  group: { gap: spacing.xs },
+  cover: { width: '100%', height: 180, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
+  coverFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1, borderStyle: 'dashed' },
+  headerCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
+  headerInfo: { flex: 1, gap: spacing.xs },
+  name: { fontSize: 22 },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primarySoft },
+  avatarFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1 },
+  group: { gap: spacing.sm },
+  publicProfileAction: { marginTop: spacing.md },
   errorText: { color: '#B00020' },
 });
