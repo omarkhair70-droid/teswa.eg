@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -100,7 +101,7 @@ export default function CreateOfferScreen() {
           const selected = selectedOfferedItemId === item.id;
           return (
             <Pressable key={item.id} style={[styles.selectable, selected && styles.selected]} onPress={() => setSelectedOfferedItemId(item.id)}>
-              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.thumb} /> : <View style={[styles.thumb, styles.thumbPlaceholder]} />}
+              {item.imageUrl ? <ExpoImage source={{ uri: item.imageUrl }} style={styles.thumb} contentFit="cover" cachePolicy="memory-disk" transition={120} recyclingKey={item.id} /> : <View style={[styles.thumb, styles.thumbPlaceholder]} />}
               <View style={styles.selectableContent}>
                 <AppText weight="semibold">{item.title}</AppText>
                 <AppText muted numberOfLines={1}>{[item.category, item.condition, item.location].filter(Boolean).join(' • ') || 'بدون تفاصيل إضافية'}</AppText>

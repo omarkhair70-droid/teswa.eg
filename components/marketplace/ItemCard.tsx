@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, View, Image } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { AppCard } from '@/components/ui/AppCard';
@@ -31,7 +32,7 @@ export function ItemCard({ item }: { item: MarketplaceItem }) {
       <AppCard>
         <View style={styles.wrapper}>
           {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="cover" />
+            <ExpoImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={160} recyclingKey={item.id} />
           ) : (
             <View style={[styles.image, styles.placeholder]}>
               <AppText muted weight="semibold">بدون صورة</AppText>
