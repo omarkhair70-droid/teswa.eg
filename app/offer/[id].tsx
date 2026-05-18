@@ -73,7 +73,8 @@ export default function OfferDetailScreen() {
     <ItemSummary title="العنصر المطلوب" item={offer.requestedItem} />
     <ItemSummary title="العنصر المعروض" item={offer.offeredItem} />
     {offer.message ? <AppCard><View style={styles.group}><AppText weight="semibold">الرسالة</AppText><AppText>{offer.message}</AppText></View></AppCard> : null}
-    {offer.viewerRole === 'sender' && offer.status === 'accepted' && offer.dealId ? <AppButton label="افتح صفحة الصفقة" onPress={() => router.push(`/deal/${offer.dealId}`)} /> : null}
+    {offer.status === 'accepted' && offer.dealId ? <AppCard><View style={styles.group}><AppText weight="semibold">العرض اتقبل</AppText><AppText muted>اتفتحت دردشة الصفقة علشان تكملوا تنسيق التبديل.</AppText><AppButton label="افتح دردشة الصفقة" onPress={() => router.push(`/deal/${offer.dealId}`)} /></View></AppCard> : null}
+    {offer.status === 'accepted' && !offer.dealId ? <AppText muted>العرض مقبول، لكن تعذر تحديد دردشة الصفقة حالياً.</AppText> : null}
     {receiverCanRespond ? <AppCard><View style={styles.group}><AppText weight="semibold">الرد على العرض</AppText><TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="ملاحظة اختيارية" textAlign="right" /><AppButton label={actionLoading === 'thinking' ? 'جارٍ التنفيذ...' : 'محتاج أفكر'} disabled={Boolean(actionLoading)} onPress={() => doAction('thinking')} /><AppButton label={actionLoading === 'reject' ? 'جارٍ التنفيذ...' : 'رفض بلطف'} disabled={Boolean(actionLoading)} onPress={() => doAction('reject')} /><AppButton label={actionLoading === 'accept' ? 'جارٍ التنفيذ...' : 'قبول العرض'} disabled={Boolean(actionLoading)} onPress={() => doAction('accept')} /></View></AppCard> : null}
     {error ? <AppText style={styles.error}>{error}</AppText> : null}
   </AppScreen>;

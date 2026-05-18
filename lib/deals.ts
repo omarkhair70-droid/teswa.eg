@@ -214,8 +214,8 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
   void notify({
     target_user_id: otherParticipantId,
     notification_type: 'system',
-    notification_title: 'رسالة جديدة في الصفقة',
-    notification_body: 'الطرف التاني بعت رسالة في صفحة التنسيق.',
+    notification_title: 'رسالة جديدة في دردشة الصفقة',
+    notification_body: 'الطرف التاني بعت رسالة في دردشة الصفقة.',
     target_deal_id: input.dealId,
     target_offer_id: null,
     target_item_id: null,
@@ -387,8 +387,8 @@ export async function sendDealVoiceMessageFromMobile(input: {
   void notify({
     target_user_id: otherParticipantId,
     notification_type: 'system',
-    notification_title: 'رسالة صوتية جديدة في الصفقة',
-    notification_body: 'الطرف التاني بعت رسالة صوتية في صفحة التنسيق.',
+    notification_title: 'رسالة صوتية جديدة في دردشة الصفقة',
+    notification_body: 'الطرف التاني بعت رسالة صوتية في دردشة الصفقة.',
     target_deal_id: input.dealId,
     target_offer_id: null,
     target_item_id: null,
