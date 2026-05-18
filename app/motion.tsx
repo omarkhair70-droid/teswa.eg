@@ -511,7 +511,7 @@ export default function MotionScreen() {
   };
 
   return (
-    <AppScreen style={styles.screen}>
+    <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlashList
         data={motionFeedEntries}
         keyExtractor={(entry) => entry.key}
