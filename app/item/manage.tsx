@@ -158,7 +158,15 @@ export default function ManageMyListingsScreen() {
                 {listing.openIncomingOffersCount > 0 ? <AppText muted>لديه {listing.openIncomingOffersCount} عرض مفتوح</AppText> : null}
 
                 {listing.status === 'active' ? (
-                  <AppButton label="عرض العنصر" variant="neutral" onPress={() => router.push(`/item/${listing.id}`)} />
+                  <View style={styles.actions}>
+                    <AppButton label="عرض العنصر" variant="neutral" onPress={() => router.push(`/item/${listing.id}`)} />
+                    <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
+                  </View>
+                ) : listing.status === 'archived' ? (
+                  <View style={styles.actions}>
+                    <AppText muted>{statusNote[listing.status]}</AppText>
+                    <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
+                  </View>
                 ) : (
                   <AppText muted>{statusNote[listing.status]}</AppText>
                 )}
@@ -202,4 +210,5 @@ const styles = StyleSheet.create({
   itemTitle: { flex: 1, fontSize: 18 },
   badge: { borderRadius: radii.round, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   badgeText: { color: colors.primary },
+  actions: { gap: spacing.xs },
 });
