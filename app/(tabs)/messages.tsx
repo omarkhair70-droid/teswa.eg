@@ -18,6 +18,15 @@ import { ContextualConversationSummary, fetchContextualConversationSummariesForU
 
 type MessagesSection = 'chats' | 'replies' | 'offers';
 
+
+function formatVoiceDuration(durationMs: number | null): string | null {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) return null;
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function OfferRow({ offer, label }: { offer: OfferRowSummary; label: 'عرض وارد' | 'عرض مرسل' }) {
   const hasDealChat = offer.status === 'accepted' && !!offer.dealId;
 
@@ -83,8 +92,11 @@ function DealRow({ convo }: { convo: DealConversation }) {
 function ReplyThreadRow({ thread }: { thread: ContextualConversationSummary }) {
   const otherName = thread.otherParticipant.displayName?.trim() || 'رد على قصة';
   const fallbackLetter = otherName[0] || '؟';
+  const latestVoiceDuration = thread.latestMessage?.kind === 'voice' ? formatVoiceDuration(thread.latestMessage.durationMs) : null;
   const latestPreview = thread.latestMessage
-    ? `${thread.latestMessage.senderId === thread.otherParticipant.id ? `${otherName}: ` : 'أنت: '}${thread.latestMessage.body}`
+    ? `${thread.latestMessage.senderId === thread.otherParticipant.id ? `${otherName}: ` : 'أنت: '}${thread.latestMessage.kind === 'voice'
+      ? `رسالة صوتية${latestVoiceDuration ? ` • ${latestVoiceDuration}` : ''}`
+      : thread.latestMessage.body}`
     : 'لسه مفيش رسائل.';
 
   return (

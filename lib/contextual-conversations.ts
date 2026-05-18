@@ -54,6 +54,8 @@ export type ContextualConversationSummary = {
     body: string;
     senderId: string;
     createdAt: string;
+    kind: 'text' | 'voice';
+    durationMs: number | null;
   } | null;
   unreadCount: number;
   lastActivityAt: string;
@@ -244,7 +246,14 @@ export async function fetchContextualConversationSummariesForUser(userId: string
         contextEntityId: conversation.context_entity_id,
         otherParticipant: toParticipant(otherId),
         latestMessage: latest
-          ? { id: latest.id, body: latest.body ?? (latest.message_kind === 'voice' ? 'رسالة صوتية' : ''), senderId: latest.sender_id, createdAt: latest.created_at }
+          ? {
+              id: latest.id,
+              body: latest.body ?? (latest.message_kind === 'voice' ? 'رسالة صوتية' : ''),
+              senderId: latest.sender_id,
+              createdAt: latest.created_at,
+              kind: latest.message_kind === 'voice' ? 'voice' : 'text',
+              durationMs: latest.media_duration_ms ?? null,
+            }
           : null,
         unreadCount,
         lastActivityAt:
