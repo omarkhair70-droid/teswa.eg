@@ -183,19 +183,18 @@ export default function ManageMyListingsScreen() {
                     <AppButton label="عرض العنصر" variant="neutral" onPress={() => router.push(`/item/${listing.id}`)} />
                     <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
                     <AppButton label="تعديل الصور" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}/images`)} />
-                    <AppButton label="أرشفة العنصر" variant="danger" disabled={Boolean(busyAction)} loading={busyAction === 'archive'} onPress={() => void runLifecycleAction(listing.id, 'archive')} />
+                    <AppButton label={busyAction === 'archive' ? 'جارٍ الأرشفة...' : 'أرشفة العنصر'} variant="neutral" disabled={Boolean(busyAction)} onPress={() => void runLifecycleAction(listing.id, 'archive')} />
                   </View>
                 ) : listing.status === 'archived' ? (
                   <View style={styles.actions}>
                     <AppText muted>{statusNote[listing.status]}</AppText>
                     <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
                     <AppButton label="تعديل الصور" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}/images`)} />
-                    <AppButton label="إعادة التفعيل" variant="neutral" disabled={Boolean(busyAction)} loading={busyAction === 'reactivate'} onPress={() => void runLifecycleAction(listing.id, 'reactivate')} />
+                    <AppButton label={busyAction === 'reactivate' ? 'جارٍ إعادة التفعيل...' : 'إعادة التفعيل'} variant="neutral" disabled={Boolean(busyAction)} onPress={() => void runLifecycleAction(listing.id, 'reactivate')} />
                     <AppButton
-                      label="حذف العنصر نهائيًا"
-                      variant="danger"
+                      label={busyAction === 'delete' ? 'جارٍ الحذف...' : 'حذف العنصر نهائيًا'}
+                      variant="neutral"
                       disabled={Boolean(busyAction)}
-                      loading={busyAction === 'delete'}
                       onPress={() => {
                         Alert.alert(
                           'حذف العنصر',
