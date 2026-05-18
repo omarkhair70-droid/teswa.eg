@@ -16,6 +16,8 @@ import { spacing } from '@/constants/spacing';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discovery';
 import { fetchMovingItems, MovingItemInterest } from '@/lib/motion-interest';
+import { MotionPulseCanvas } from '@/components/motion/MotionPulseCanvas';
+import { MotionEmptyAnimation } from '@/components/motion/MotionEmptyAnimation';
 
 type MotionFeedEntry =
   | {
@@ -276,10 +278,12 @@ export default function MotionScreen() {
         ListHeaderComponent={(
           <View style={styles.headerWrap}>
             <LinearGradient colors={[colors.primary, colors.accent, colors.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-              <AppText weight="bold" style={styles.heroTitle}>حركة تِسوى</AppText>
-              <AppText style={styles.heroBody}>هنا الحاجات ما بتفضلش ساكتة. قصص بتتقال، وأبواب تبادل بدأت تتحرك.</AppText>
-              <AppText style={styles.heroMuted}>تابع النبض الحي من الناس والعناصر اللي دخلت مرحلة جديدة.</AppText>
-              <View style={styles.metricsRow}>
+              <MotionPulseCanvas storiesCount={stories.length} movingCount={movingItems.length} storyItemsCount={items.length} />
+              <View style={styles.heroContent}>
+                <AppText weight="bold" style={styles.heroTitle}>حركة تِسوى</AppText>
+                <AppText style={styles.heroBody}>هنا الحاجات ما بتفضلش ساكتة. قصص بتتقال، وأبواب تبادل بدأت تتحرك.</AppText>
+                <AppText style={styles.heroMuted}>تابع النبض الحي من الناس والعناصر اللي دخلت مرحلة جديدة.</AppText>
+                <View style={styles.metricsRow}>
                 {[
                   { label: 'قصص نشطة', value: stories.length },
                   { label: 'أبواب تتحرك', value: movingItems.length },
@@ -290,6 +294,7 @@ export default function MotionScreen() {
                     <AppText style={styles.metricLabel}>{metric.label}</AppText>
                   </BlurView>
                 ))}
+                </View>
               </View>
             </LinearGradient>
 
@@ -319,6 +324,7 @@ export default function MotionScreen() {
         )}
         ListEmptyComponent={motionEmpty ? (
           <View style={styles.emptyWrap}>
+            <MotionEmptyAnimation />
             <EmptyState title="النبض لسه هادي" description="أول ما تبدأ الحكايات والعروض تتحرك، هتشوفها هنا." />
             <AppButton label="استكشف العناصر" variant="neutral" onPress={() => router.push('/(tabs)/discover')} />
           </View>
@@ -333,7 +339,8 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: colors.background },
   listContent: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl },
   headerWrap: { gap: spacing.md },
-  hero: { borderRadius: radii.xl, padding: spacing.lg, gap: spacing.sm, overflow: 'hidden' },
+  hero: { borderRadius: radii.xl, padding: spacing.lg, gap: spacing.sm, overflow: 'hidden', position: 'relative' },
+  heroContent: { gap: spacing.sm, zIndex: 2 },
   heroTitle: { fontSize: 28, color: colors.white },
   heroBody: { color: colors.white },
   heroMuted: { color: 'rgba(255,255,255,0.86)' },
