@@ -18,6 +18,8 @@ import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discov
 import { fetchMovingItems, MovingItemInterest } from '@/lib/motion-interest';
 import { MotionPulseCanvas } from '@/components/motion/MotionPulseCanvas';
 import { MotionEmptyAnimation } from '@/components/motion/MotionEmptyAnimation';
+import { MotionShareSheet } from '@/components/motion/MotionShareSheet';
+import type { MotionShareMoment } from '@/lib/motion-share';
 
 type MotionFeedEntry =
   | {
@@ -57,6 +59,8 @@ export default function MotionScreen() {
   const [movingItems, setMovingItems] = useState<MovingItemInterest[]>([]);
   const [movingLoading, setMovingLoading] = useState(true);
   const [movingError, setMovingError] = useState<string | null>(null);
+  const [shareMoment, setShareMoment] = useState<MotionShareMoment | null>(null);
+  const [shareSheetVisible, setShareSheetVisible] = useState(false);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -217,53 +221,98 @@ export default function MotionScreen() {
       const moving = item.item;
       const metadata = [moving.category, moving.condition, moving.location].filter(Boolean).join(' / ');
       const badge = moving.openInterestCount === 1 ? 'وصلها اقتراح' : `وصلها ${moving.openInterestCount} اقتراحات مفتوحة`;
+      const shareData: MotionShareMoment = {
+        kind: 'moving_item',
+        itemId: moving.id,
+        title: moving.title,
+        badge,
+        metadata: metadata || null,
+        ownerDisplayName: moving.ownerDisplayName || null,
+        imageUrl: moving.imageUrl || null,
+      };
 
       return (
         <Animated.View entering={FadeInUp.duration(280).delay(index * 35)}>
-          <Pressable onPress={() => router.push(`/item/${moving.id}`)} style={styles.feedCard}>
-            <View style={styles.feedImageFrame}>
-              {moving.imageUrl ? (
-                <ExpoImage source={{ uri: moving.imageUrl }} style={styles.feedImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
-              ) : (
-                <View style={styles.imagePlaceholder}><AppText muted>بدون صورة</AppText></View>
-              )}
-              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.68)']} style={styles.imageOverlay}>
-                <BlurView intensity={18} tint="dark" style={styles.overlayBadge}>
-                  <AppText style={styles.overlayBadgeText}>{badge}</AppText>
-                </BlurView>
-              </LinearGradient>
+          <View style={styles.feedCard}>
+            <Pressable onPress={() => router.push(`/item/${moving.id}`)}>
+              <View style={styles.feedImageFrame}>
+                {moving.imageUrl ? (
+                  <ExpoImage source={{ uri: moving.imageUrl }} style={styles.feedImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
+                ) : (
+                  <View style={styles.imagePlaceholder}><AppText muted>بدون صورة</AppText></View>
+                )}
+                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.68)']} style={styles.imageOverlay}>
+                  <BlurView intensity={18} tint="dark" style={styles.overlayBadge}>
+                    <AppText style={styles.overlayBadgeText}>{badge}</AppText>
+                  </BlurView>
+                </LinearGradient>
+              </View>
+              <View style={styles.feedContent}>
+                <AppText style={styles.microLabel}>باب بيتحرك</AppText>
+                <AppText weight="semibold" numberOfLines={1}>{moving.title}</AppText>
+                {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
+                {moving.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {moving.ownerDisplayName}</AppText> : null}
+              </View>
+            </Pressable>
+            <View style={styles.shareActionRow}>
+              <Pressable
+                style={styles.shareActionButton}
+                onPress={() => {
+                  setShareMoment(shareData);
+                  setShareSheetVisible(true);
+                }}
+              >
+                <AppText style={styles.shareActionLabel}>شارك النبض</AppText>
+              </Pressable>
             </View>
-            <View style={styles.feedContent}>
-              <AppText style={styles.microLabel}>باب بيتحرك</AppText>
-              <AppText weight="semibold" numberOfLines={1}>{moving.title}</AppText>
-              {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
-              {moving.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {moving.ownerDisplayName}</AppText> : null}
-            </View>
-          </Pressable>
+          </View>
         </Animated.View>
       );
     }
 
     const story = item.item;
     const metadata = [story.category, story.city, story.area].filter(Boolean).join(' / ');
+    const shareData: MotionShareMoment = {
+      kind: 'story_item',
+      itemId: story.id,
+      title: story.title,
+      storyLabel: story.storyLabel,
+      storySnippet: story.storySnippet,
+      metadata: metadata || null,
+      ownerDisplayName: story.ownerDisplayName || null,
+      imageUrl: story.imageUrl || null,
+    };
 
     return (
       <Animated.View entering={FadeInUp.duration(280).delay(index * 35)}>
-        <Pressable onPress={() => router.push(`/item/${story.id}`)} style={styles.feedCard}>
-          {story.imageUrl ? (
-            <ExpoImage source={{ uri: story.imageUrl }} style={styles.feedImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
-          ) : (
-            <View style={styles.imagePlaceholder}><AppText muted>بدون صورة</AppText></View>
-          )}
-          <View style={styles.feedContent}>
-            <AppText style={styles.microLabel}>حكاية ظاهرة</AppText>
-            <View style={styles.storyLabelPill}><AppText style={styles.storyLabelText}>{story.storyLabel}</AppText></View>
-            <AppText weight="semibold" numberOfLines={1}>{story.title}</AppText>
-            <AppText numberOfLines={3}>{story.storySnippet}</AppText>
-            {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
-            {story.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {story.ownerDisplayName}</AppText> : null}
+        <View style={styles.feedCard}>
+          <Pressable onPress={() => router.push(`/item/${story.id}`)}>
+            {story.imageUrl ? (
+              <ExpoImage source={{ uri: story.imageUrl }} style={styles.feedImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
+            ) : (
+              <View style={styles.imagePlaceholder}><AppText muted>بدون صورة</AppText></View>
+            )}
+            <View style={styles.feedContent}>
+              <AppText style={styles.microLabel}>حكاية ظاهرة</AppText>
+              <View style={styles.storyLabelPill}><AppText style={styles.storyLabelText}>{story.storyLabel}</AppText></View>
+              <AppText weight="semibold" numberOfLines={1}>{story.title}</AppText>
+              <AppText numberOfLines={3}>{story.storySnippet}</AppText>
+              {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
+              {story.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {story.ownerDisplayName}</AppText> : null}
+            </View>
+          </Pressable>
+          <View style={styles.shareActionRow}>
+            <Pressable
+              style={styles.shareActionButton}
+              onPress={() => {
+                setShareMoment(shareData);
+                setShareSheetVisible(true);
+              }}
+            >
+              <AppText style={styles.shareActionLabel}>شارك النبض</AppText>
+            </Pressable>
           </View>
-        </Pressable>
+        </View>
       </Animated.View>
     );
   };
@@ -330,6 +379,14 @@ export default function MotionScreen() {
           </View>
         ) : null}
         renderItem={renderFeedItem}
+      />
+      <MotionShareSheet
+        visible={shareSheetVisible}
+        moment={shareMoment}
+        onClose={() => {
+          setShareSheetVisible(false);
+          setShareMoment(null);
+        }}
       />
     </AppScreen>
   );
@@ -401,6 +458,22 @@ const styles = StyleSheet.create({
   overlayBadgeText: { color: colors.white, fontSize: 12 },
   imagePlaceholder: { height: 140, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   feedContent: { padding: spacing.md, gap: spacing.xs },
+  shareActionRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  shareActionButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.white,
+  },
+  shareActionLabel: { color: colors.textMuted, fontSize: 13 },
   microLabel: { color: colors.primary, fontSize: 12 },
   storyLabelPill: {
     alignSelf: 'flex-start',
