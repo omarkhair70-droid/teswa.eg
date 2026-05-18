@@ -39,11 +39,19 @@ export function buildCityPulseHeroState(
   const hasStories = snapshot.activeStoryAuthors.length > 0 || snapshot.storyItems.length > 0;
   const hasPeople = snapshot.people.length > 0;
 
-  if (hasMoving && hasStories) {
+  if (hasMoving && hasStories && hasPeople) {
     return {
       tone: 'movement',
       headline: 'الحركة ظاهرة حوالك',
       body: 'أبواب، قصص، وناس قريبين بيشكلوا مشهدًا محليًا حيًا.',
+    };
+  }
+
+  if (hasMoving && hasStories) {
+    return {
+      tone: 'movement',
+      headline: 'الحركة ظاهرة حوالك',
+      body: 'أبواب وقصص قريبة ترسم مشهدًا محليًا حيًا حولك.',
     };
   }
 

@@ -77,7 +77,7 @@ export function CityPulseSection({ location, snapshot, loadingLocation, loadingP
       <LinearGradient colors={getHeroGradient(heroState.tone)} start={{ x: 0.06, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={styles.heroPanelOrbOne} />
       <View style={styles.heroPanelOrbTwo} />
-      <View style={styles.heroCopy}><AppText style={styles.heroEyebrow}>Local Pulse Observatory</AppText><AppText style={styles.heroHeadline} weight="bold">{heroState.headline}</AppText><AppText style={styles.heroBody}>{heroState.body}</AppText></View>
+      <View style={styles.heroCopy}><AppText style={styles.heroEyebrow}>المشهد حولك الآن</AppText><AppText style={styles.heroHeadline} weight="bold">{heroState.headline}</AppText><AppText style={styles.heroBody}>{heroState.body}</AppText></View>
       <PulseOrb tone={heroState.tone} />
     </View>
 
