@@ -30,7 +30,7 @@ export function StoryStudioPreview({ asset }: StoryStudioPreviewProps) {
   if (asset.type === 'video') {
     return (
       <View style={styles.videoWrap}>
-        <VideoView style={styles.video} player={player} allowsFullscreen={false} />
+        <VideoView style={styles.video} player={player} nativeControls={false} fullscreenOptions={{ enable: false }} />
         <View style={styles.videoControls}>
           <Pressable style={styles.controlButton} onPress={() => player.play()}><AppText weight="semibold">تشغيل</AppText></Pressable>
           <Pressable style={styles.controlButton} onPress={() => player.pause()}><AppText weight="semibold">إيقاف</AppText></Pressable>
