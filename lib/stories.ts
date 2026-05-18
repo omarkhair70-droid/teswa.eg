@@ -378,6 +378,15 @@ export function createStoryUploadPath(userId: string, mediaType: StoryMediaType,
 }
 
 
+
+type StorySignedUrlCacheEntry = {
+  signedUrl: string;
+  expiresAtMs: number;
+};
+
+const STORY_SIGNED_URL_EXPIRY_SAFETY_BUFFER_MS = 60_000;
+const storySignedUrlCache = new Map<string, StorySignedUrlCacheEntry>();
+
 export async function createStoryMediaSignedUrl(storagePath: string, expiresInSeconds = 3600): Promise<string | null> {
   const normalizedPath = storagePath.trim();
   if (!normalizedPath) return null;
@@ -392,6 +401,31 @@ export async function createStoryMediaSignedUrl(storagePath: string, expiresInSe
   }
 
   return data.signedUrl;
+}
+
+
+
+export async function createStoryMediaSignedUrlCached(
+  storagePath: string,
+  expiresInSeconds = 3600,
+): Promise<string | null> {
+  const normalizedPath = storagePath.trim();
+  if (!normalizedPath) return null;
+
+  const cached = storySignedUrlCache.get(normalizedPath);
+  if (cached && Date.now() < (cached.expiresAtMs - STORY_SIGNED_URL_EXPIRY_SAFETY_BUFFER_MS)) {
+    return cached.signedUrl;
+  }
+
+  const signedUrl = await createStoryMediaSignedUrl(normalizedPath, expiresInSeconds);
+  if (!signedUrl) return null;
+
+  storySignedUrlCache.set(normalizedPath, {
+    signedUrl,
+    expiresAtMs: Date.now() + (expiresInSeconds * 1000),
+  });
+
+  return signedUrl;
 }
 
 export async function fetchStoryViewerContextByUserId(userId: string): Promise<StoryViewerContext | null> {

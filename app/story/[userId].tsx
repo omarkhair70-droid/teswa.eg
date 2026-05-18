@@ -8,7 +8,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAuth } from '@/lib/auth';
-import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrl, fetchStoryViewerContextByUserId } from '@/lib/stories';
+import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetchStoryViewerContextByUserId } from '@/lib/stories';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -58,6 +58,22 @@ function StoryVideo({
       allowsPictureInPicture={false}
     />
   );
+}
+
+function formatStoryAgeLabel(createdAt: string): string {
+  const createdAtMs = Date.parse(createdAt);
+  if (!Number.isFinite(createdAtMs)) return 'منذ وقت قصير';
+
+  const diffMs = Math.max(0, Date.now() - createdAtMs);
+  const diffMinutes = Math.floor(diffMs / 60_000);
+
+  if (diffMinutes < 1) return 'الآن';
+  if (diffMinutes < 60) return diffMinutes === 1 ? 'منذ دقيقة' : `منذ ${diffMinutes} دقيقة`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return diffHours === 1 ? 'منذ ساعة' : `منذ ${diffHours} ساعة`;
+
+  return 'اليوم';
 }
 
 export default function StoryViewerScreen() {
@@ -117,7 +133,7 @@ export default function StoryViewerScreen() {
         }
 
         const pairs = await Promise.all(viewerContext.stories.map(async (story) => {
-          const signedUrl = await createStoryMediaSignedUrl(story.mediaStoragePath);
+          const signedUrl = await createStoryMediaSignedUrlCached(story.mediaStoragePath);
           return [story.id, signedUrl] as const;
         }));
 
@@ -136,6 +152,7 @@ export default function StoryViewerScreen() {
   }, [userId]);
 
   const currentStory = context?.stories[activeIndex] ?? null;
+  const currentStoryAgeLabel = currentStory ? formatStoryAgeLabel(currentStory.createdAt) : null;
   const currentStorySignedUrl = currentStory ? urlsByStoryId[currentStory.id] : null;
   const storyDurationMs = useMemo(() => {
     if (!currentStory) return IMAGE_DURATION_MS;
@@ -231,6 +248,8 @@ export default function StoryViewerScreen() {
                   source={{ uri: signedUrl }}
                   style={styles.media}
                   contentFit="contain"
+                  cachePolicy="memory-disk"
+                  transition={120}
                   onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
                 />
               ) : (
@@ -274,7 +293,11 @@ export default function StoryViewerScreen() {
             </View>
             <View>
               <AppText style={styles.authorName}>{context.author.displayName ?? context.author.username ?? 'مستخدم'}</AppText>
-              {context.author.username ? <AppText style={styles.authorUsername}>@{context.author.username}</AppText> : null}
+              {currentStoryAgeLabel ? (
+                <AppText style={styles.authorUsername}>
+                  {context.author.username ? `@${context.author.username} • ${currentStoryAgeLabel}` : currentStoryAgeLabel}
+                </AppText>
+              ) : null}
             </View>
           </View>
           <View style={styles.headerActions}>
