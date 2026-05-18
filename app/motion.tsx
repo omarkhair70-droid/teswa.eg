@@ -26,6 +26,7 @@ import { CityPulseSection } from '@/components/motion/CityPulseSection';
 import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/lib/city-pulse';
 import { fetchMotionVideoDrops, MotionVideoDrop } from '@/lib/motion-video-drops';
 import { MotionVideoDropsSection } from '@/components/motion/MotionVideoDropsSection';
+import { buildMotionVideoPresence } from '@/lib/motion-video-presence';
 import {
   deleteCityPulseLocationCache,
   deleteCityPulseSnapshotCache,
@@ -90,6 +91,10 @@ export default function MotionScreen() {
   const [videoDropsLoading, setVideoDropsLoading] = useState(true);
   const [videoDropsError, setVideoDropsError] = useState<string | null>(null);
 
+  const videoPresence = useMemo(
+    () => buildMotionVideoPresence(videoDrops),
+    [videoDrops],
+  );
 
   useEffect(() => {
     cityPulseSnapshotRef.current = cityPulseSnapshot;
@@ -548,11 +553,17 @@ export default function MotionScreen() {
         ListHeaderComponent={(
           <View style={styles.headerWrap}>
             <LinearGradient colors={[colors.primary, colors.accent, colors.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-              <MotionPulseCanvas storiesCount={stories.length} movingCount={movingItems.length} storyItemsCount={items.length} />
+              <MotionPulseCanvas storiesCount={stories.length} movingCount={movingItems.length} storyItemsCount={items.length} videoDropsCount={videoDrops.length} />
               <View style={styles.heroContent}>
                 <AppText weight="bold" style={styles.heroTitle}>حركة تِسوى</AppText>
                 <AppText style={styles.heroBody}>هنا الحاجات ما بتفضلش ساكتة. قصص بتتقال، وأبواب تبادل بدأت تتحرك.</AppText>
                 <AppText style={styles.heroMuted}>تابع النبض الحي من الناس والعناصر اللي دخلت مرحلة جديدة.</AppText>
+                {videoPresence.hasDrops && videoPresence.heroSummary ? (
+                  <View style={styles.heroVideoPresence}>
+                    <AppText style={styles.heroVideoPresenceTitle}>الفيديو حاضر في النبض</AppText>
+                    <AppText style={styles.heroVideoPresenceBody}>{videoPresence.heroSummary}</AppText>
+                  </View>
+                ) : null}
                 <View style={styles.metricsRow}>
                 {[
                   { label: 'قصص نشطة', value: stories.length },
@@ -602,6 +613,9 @@ export default function MotionScreen() {
             <View style={styles.pulseIntro}>
               <AppText weight="bold">النبض الآن</AppText>
               <AppText muted>حاجات عليها اهتمام، وحاجات أصحابها فتحوا لها باب حكاية.</AppText>
+              {videoPresence.hasDrops && videoPresence.pulseSummary ? (
+                <AppText muted>{videoPresence.pulseSummary}</AppText>
+              ) : null}
             </View>
 
             {motionCacheNotice ? (
@@ -653,6 +667,18 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 28, color: colors.white },
   heroBody: { color: colors.white },
   heroMuted: { color: 'rgba(255,255,255,0.86)' },
+  heroVideoPresence: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+  },
+  heroVideoPresenceTitle: { color: colors.white, fontSize: 12 },
+  heroVideoPresenceBody: { color: 'rgba(255,255,255,0.92)', fontSize: 13 },
   metricsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   metricChip: {
     flex: 1,
