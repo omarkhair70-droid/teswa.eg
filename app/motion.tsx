@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
@@ -81,7 +81,13 @@ export default function MotionScreen() {
   const [cityPulseLoading, setCityPulseLoading] = useState(false);
   const [cityPulseError, setCityPulseError] = useState<string | null>(null);
   const [cityPulseCacheNotice, setCityPulseCacheNotice] = useState<string | null>(null);
+  const cityPulseSnapshotRef = useRef<CityPulseSnapshot | null>(null);
   const [cityPulseBootstrapped, setCityPulseBootstrapped] = useState(false);
+
+
+  useEffect(() => {
+    cityPulseSnapshotRef.current = cityPulseSnapshot;
+  }, [cityPulseSnapshot]);
 
   const areCityPulseLocationsMatching = useCallback((left: CityPulseLocation, right: CityPulseLocation) => {
     const normalizeTerms = (terms: string[]) => terms.map((term) => term.trim().toLowerCase()).join('|');
@@ -106,7 +112,7 @@ export default function MotionScreen() {
       setCityPulseCacheNotice(null);
       void writeCityPulseSnapshotCache(snapshot);
     } catch {
-      if (cityPulseSnapshot && options?.preserveExistingSnapshotOnFailure !== false) {
+      if (cityPulseSnapshotRef.current && options?.preserveExistingSnapshotOnFailure !== false) {
         setCityPulseError(null);
         setCityPulseCacheNotice('تعذر تحديث نبض مدينتك الآن، نعرض آخر نسخة محفوظة.');
       } else {
@@ -126,7 +132,7 @@ export default function MotionScreen() {
     } finally {
       setCityPulseLoading(false);
     }
-  }, [areCityPulseLocationsMatching, cityPulseSnapshot]);
+  }, [areCityPulseLocationsMatching]);
 
   const activateCityPulse = useCallback(async () => {
     setCityPulseLocationLoading(true);
