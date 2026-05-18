@@ -24,6 +24,15 @@ import type { MotionShareMoment } from '@/lib/motion-share';
 import { resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 import { CityPulseSection } from '@/components/motion/CityPulseSection';
 import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/lib/city-pulse';
+import {
+  deleteCityPulseLocationCache,
+  deleteCityPulseSnapshotCache,
+  readAnyCityPulseSnapshotCache,
+  readCityPulseLocationCache,
+  readFreshCityPulseSnapshotCache,
+  writeCityPulseLocationCache,
+  writeCityPulseSnapshotCache,
+} from '@/lib/offline-city-pulse-cache';
 
 type MotionFeedEntry =
   | {
@@ -71,19 +80,53 @@ export default function MotionScreen() {
   const [cityPulseLocationLoading, setCityPulseLocationLoading] = useState(false);
   const [cityPulseLoading, setCityPulseLoading] = useState(false);
   const [cityPulseError, setCityPulseError] = useState<string | null>(null);
+  const [cityPulseCacheNotice, setCityPulseCacheNotice] = useState<string | null>(null);
+  const [cityPulseBootstrapped, setCityPulseBootstrapped] = useState(false);
 
-  const loadCityPulseForLocation = useCallback(async (location: CityPulseLocation) => {
+  const areCityPulseLocationsMatching = useCallback((left: CityPulseLocation, right: CityPulseLocation) => {
+    const normalizeTerms = (terms: string[]) => terms.map((term) => term.trim().toLowerCase()).join('|');
+    return left.label === right.label && normalizeTerms(left.matchTerms) === normalizeTerms(right.matchTerms);
+  }, []);
+
+  type LoadCityPulseOptions = {
+    fromBootstrap?: boolean;
+    preserveExistingSnapshotOnFailure?: boolean;
+  };
+
+  const loadCityPulseForLocation = useCallback(async (location: CityPulseLocation, options?: LoadCityPulseOptions) => {
     setCityPulseLoading(true);
     setCityPulseError(null);
+    if (!options?.fromBootstrap) {
+      setCityPulseCacheNotice(null);
+    }
+
     try {
       const snapshot = await fetchCityPulseSnapshot({ location });
       setCityPulseSnapshot(snapshot);
+      setCityPulseCacheNotice(null);
+      void writeCityPulseSnapshotCache(snapshot);
     } catch {
-      setCityPulseError('تعذر تحميل نبض مدينتك الآن. حاول مرة أخرى.');
+      if (cityPulseSnapshot && options?.preserveExistingSnapshotOnFailure !== false) {
+        setCityPulseError(null);
+        setCityPulseCacheNotice('تعذر تحديث نبض مدينتك الآن، نعرض آخر نسخة محفوظة.');
+      } else {
+        const stale = await readAnyCityPulseSnapshotCache();
+        const staleMatchesLocation = stale
+          ? areCityPulseLocationsMatching(stale.snapshot.location, location)
+          : false;
+
+        if (stale && staleMatchesLocation) {
+          setCityPulseSnapshot(stale.snapshot);
+          setCityPulseError(null);
+          setCityPulseCacheNotice('أنت ترى نبضًا محفوظًا لمدينتك. سنحدّثه عندما يتحسن الاتصال.');
+        } else {
+          setCityPulseError('تعذر تحميل نبض مدينتك الآن. حاول مرة أخرى.');
+        }
+      }
     } finally {
       setCityPulseLoading(false);
     }
-  }, []);
+  }, [areCityPulseLocationsMatching, cityPulseSnapshot]);
 
   const activateCityPulse = useCallback(async () => {
     setCityPulseLocationLoading(true);
@@ -98,6 +141,7 @@ export default function MotionScreen() {
       }
       const location = { label: result.label, matchTerms: result.matchTerms };
       setCityPulseLocation(location);
+      void writeCityPulseLocationCache(location);
       setCityPulseLocationLoading(false);
       await loadCityPulseForLocation(location);
     } finally {
@@ -124,7 +168,49 @@ export default function MotionScreen() {
     setCityPulseError(null);
     setCityPulseLocationLoading(false);
     setCityPulseLoading(false);
+    setCityPulseCacheNotice(null);
+    void deleteCityPulseLocationCache();
+    void deleteCityPulseSnapshotCache();
   }, []);
+
+
+  useEffect(() => {
+    let alive = true;
+
+    const bootstrapCityPulse = async () => {
+      try {
+        const cachedLocation = await readCityPulseLocationCache();
+        if (!cachedLocation) {
+          return;
+        }
+
+        if (!alive) return;
+        setCityPulseLocation(cachedLocation.location);
+
+        const freshSnapshot = await readFreshCityPulseSnapshotCache();
+        const hasMatchingFreshSnapshot = freshSnapshot
+          ? areCityPulseLocationsMatching(freshSnapshot.snapshot.location, cachedLocation.location)
+          : false;
+
+        if (alive && freshSnapshot && hasMatchingFreshSnapshot) {
+          setCityPulseSnapshot(freshSnapshot.snapshot);
+          setCityPulseCacheNotice('نستعرض آخر نبض محفوظ لمدينتك بينما نتحقق من الجديد.');
+        }
+
+        await loadCityPulseForLocation(cachedLocation.location, { fromBootstrap: true });
+      } finally {
+        if (alive) {
+          setCityPulseBootstrapped(true);
+        }
+      }
+    };
+
+    void bootstrapCityPulse();
+
+    return () => {
+      alive = false;
+    };
+  }, [areCityPulseLocationsMatching, loadCityPulseForLocation]);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -455,6 +541,8 @@ export default function MotionScreen() {
                 loadingLocation={cityPulseLocationLoading}
                 loadingPulse={cityPulseLoading}
                 error={cityPulseError}
+                bootstrapping={!cityPulseBootstrapped}
+                cacheNotice={cityPulseCacheNotice}
                 onActivate={activateCityPulse}
                 onRefresh={refreshCityPulse}
                 onHide={hideCityPulse}
