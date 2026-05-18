@@ -79,6 +79,44 @@ function DealRow({ convo }: { convo: DealConversation }) {
   );
 }
 
+
+function ReplyThreadRow({ thread }: { thread: ContextualConversationSummary }) {
+  const otherName = thread.otherParticipant.displayName?.trim() || 'رد على قصة';
+  const fallbackLetter = otherName[0] || '؟';
+  const latestPreview = thread.latestMessage
+    ? `${thread.latestMessage.senderId === thread.otherParticipant.id ? `${otherName}: ` : 'أنت: '}${thread.latestMessage.body}`
+    : 'لسه مفيش رسائل.';
+
+  return (
+    <Pressable onPress={() => router.push(`/contextual/${thread.conversationId}`)}>
+      <AppCard>
+        <View style={styles.chatRow}>
+          <View style={styles.avatarWrap}>
+            {thread.otherParticipant.avatarUrl ? (
+              <Image source={{ uri: thread.otherParticipant.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarFallback}><AppText weight="semibold">{fallbackLetter}</AppText></View>
+            )}
+          </View>
+
+          <View style={styles.chatMain}>
+            <AppText weight="semibold" numberOfLines={1}>{otherName}</AppText>
+            <AppText muted numberOfLines={1}>{latestPreview}</AppText>
+            <View style={styles.swapChip}><AppText muted>رد على قصة</AppText></View>
+          </View>
+
+          <View style={styles.chatMeta}>
+            <AppText muted>{new Date(thread.lastActivityAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
+            {thread.unreadCount > 0 ? (
+              <View style={styles.unreadBadge}><AppText weight="semibold" style={styles.unreadText}>{thread.unreadCount}</AppText></View>
+            ) : null}
+          </View>
+        </View>
+      </AppCard>
+    </Pressable>
+  );
+}
+
 export default function Screen() {
   const { user } = useAuth();
   const [selectedSection, setSelectedSection] = useState<MessagesSection>('chats');
@@ -159,7 +197,7 @@ export default function Screen() {
         {selectedSection === 'chats' ? (
           conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} />) : <EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة الصفقة هنا." />
         ) : selectedSection === 'replies' ? (
-          replyThreads.length ? replyThreads.map((thread) => <Pressable key={thread.conversationId} onPress={() => router.push(`/contextual/${thread.conversationId}`)}><AppCard><View style={styles.chatRow}><View style={styles.chatMain}><AppText weight="semibold">{thread.otherParticipant.displayName ?? 'رد على قصة'}</AppText><AppText muted numberOfLines={1}>{thread.latestMessage ? `${thread.latestMessage.senderId === thread.otherParticipant.id ? `${thread.otherParticipant.displayName ?? 'مستخدم'}: ` : 'أنت: '}${thread.latestMessage.body}` : 'لسه مفيش رسائل.'}</AppText><View style={styles.swapChip}><AppText muted>رد على قصة</AppText></View></View><View style={styles.chatMeta}><AppText muted>{new Date(thread.lastActivityAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>{thread.unreadCount > 0 ? <View style={styles.unreadBadge}><AppText weight="semibold" style={styles.unreadText}>{thread.unreadCount}</AppText></View> : null}</View></View></AppCard></Pressable>) : <EmptyState title="لا توجد ردود قصص بعد" description="لما حد يرد على قصة أو ترد أنت على قصة، هتظهر المحادثات هنا." />
+          replyThreads.length ? replyThreads.map((thread) => <ReplyThreadRow key={thread.conversationId} thread={thread} />) : <EmptyState title="لا توجد ردود قصص بعد" description="لما حد يرد على قصة أو ترد أنت على قصة، هتظهر المحادثات هنا." />
         ) : (
           <View style={styles.group}>
             <View style={styles.sectionGroup}>
