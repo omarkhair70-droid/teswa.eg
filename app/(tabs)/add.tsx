@@ -34,12 +34,14 @@ const desireOptions = [
   { key: 'surprise', label: 'مفاجأة' },
 ] as const;
 const MAX_ASSETS = 4;
+const MAX_VIDEO_DURATION_MS = 15_000;
 
 export default function AddScreen() {
   const { user } = useAuth();
   const { sharedIntent } = useLocalSearchParams<{ sharedIntent?: string }>();
   const [step, setStep] = useState(0);
   const [mediaState, setMediaState] = useState<{ assets: ImagePicker.ImagePickerAsset[]; feedback: string | null }>({ assets: [], feedback: null });
+  const [videoTeaser, setVideoTeaser] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [categories, setCategories] = useState<{ id: string; name_ar: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +71,11 @@ export default function AddScreen() {
   const [locationFillMessage, setLocationFillMessage] = useState<string | null>(null);
   const [locationFillError, setLocationFillError] = useState<string | null>(null);
   const assets = mediaState.assets;
+  const videoTeaserDurationLabel = useMemo(() => {
+    if (videoTeaser?.duration == null) return null;
+    const seconds = Math.max(0, Math.round(videoTeaser.duration / 1000));
+    return `${seconds} ثانية`;
+  }, [videoTeaser]);
   const { isDefinitelyOffline } = useOfflineStatus();
   const rejectedPersistedCleanupQueueRef = useRef<ImagePicker.ImagePickerAsset[]>([]);
 
@@ -300,6 +307,33 @@ export default function AddScreen() {
     void appendAssets(result.assets ?? [], 'gallery');
   };
 
+
+  const pickVideoTeaser = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsMultipleSelection: false, quality: 1 });
+    if (result.canceled) return;
+
+    const selected = result.assets?.[0];
+    if (!selected?.uri) return;
+
+    if (selected.type !== 'video' && !selected.mimeType?.startsWith('video/')) {
+      setError('اختر ملف فيديو فقط للمحة الحاجة.');
+      return;
+    }
+
+    if (selected.duration != null && selected.duration > MAX_VIDEO_DURATION_MS) {
+      setError('فيديو اللمحة يجب ألا يتجاوز 15 ثانية. اختر فيديو أقصر.');
+      return;
+    }
+
+    setVideoTeaser(selected);
+    setError(null);
+  };
+
+  const removeVideoTeaser = () => {
+    setVideoTeaser(null);
+    setError(null);
+  };
+
   const removeAssetAt = (index: number) => {
     const removedAsset = assets[index];
     if (removedAsset?.uri) void deleteAddItemDraftMediaAsset(removedAsset);
@@ -344,6 +378,10 @@ export default function AddScreen() {
       if (assets.length > 4) return 'الحد الأقصى 4 صور.';
       for (const a of assets) {
         if (a.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(a.mimeType)) return 'نوع الصورة غير مدعوم.';
+      }
+      if (videoTeaser) {
+        if (videoTeaser.type !== 'video' && !videoTeaser.mimeType?.startsWith('video/')) return 'فيديو اللمحة يجب أن يكون ملف فيديو.';
+        if (videoTeaser.duration != null && videoTeaser.duration > MAX_VIDEO_DURATION_MS) return 'فيديو اللمحة يجب ألا يتجاوز 15 ثانية.';
       }
     }
     if (step === 1) {
@@ -415,8 +453,13 @@ export default function AddScreen() {
             setProgress(`جارٍ تحسين الصورة ${progressState.current} من ${total}...`);
             return;
           }
+          if (progressState.phase === 'video_uploading') {
+            setProgress('جارٍ رفع فيديو اللمحة...');
+            return;
+          }
           setProgress(`جارٍ رفع الصورة ${progressState.current} من ${total}...`);
         },
+        videoTeaser,
       );
       if (!result.ok) {
         setError(result.message);
@@ -426,6 +469,7 @@ export default function AddScreen() {
       setPublishFailure(null);
       await clearAddItemDraft(user.id);
       await clearAddItemDraftMedia(user.id);
+      setVideoTeaser(null);
       setHasSavedDraft(false);
       setDraftNotice(null);
       setProgress('تم نشر العنصر بنجاح.');
@@ -449,6 +493,7 @@ export default function AddScreen() {
     await clearAddItemDraftMedia(user?.id);
     resetDraftFields();
     setMediaState({ assets: [], feedback: null });
+    setVideoTeaser(null);
     setLocationFillLoading(false);
     setLocationFillMessage(null);
     setLocationFillError(null);
@@ -464,6 +509,7 @@ export default function AddScreen() {
     {error && <AppCard><AppText style={styles.error}>{error}</AppText></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
     {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => openItemPhotoComposer(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>تهيئة</AppText></Pressable><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><View style={styles.mediaActionRow}><Pressable onPress={() => openItemPhotoComposer(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>تهيئة</AppText></Pressable><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
+    {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>فيديو قصير للحاجة</AppText><AppText muted>اختياري — لمحة سريعة تساعد الناس يشوفوا العنصر بشكل أصدق.</AppText></View>{videoTeaser ? <View style={styles.videoTeaserCard}><View style={styles.videoIcon}><AppText weight='bold' style={styles.videoIconText}>▶</AppText></View><View style={styles.videoTeaserMeta}><AppText weight='semibold'>تم اختيار فيديو اللمحة</AppText><AppText muted>{videoTeaserDurationLabel ? `المدة: ${videoTeaserDurationLabel}` : 'الفيديو جاهز، ولم تصلنا مدة الملف.'}</AppText>{videoTeaser.fileName ? <AppText muted numberOfLines={1}>{videoTeaser.fileName}</AppText> : null}</View><View style={styles.videoActions}><Pressable onPress={pickVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>تغيير</AppText></Pressable><Pressable onPress={removeVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></View> : <View style={styles.emptyMedia}><AppText weight='bold'>أضف لمحة فيديو اختيارية</AppText><AppText muted>فيديو واحد حتى 15 ثانية. الصور تظل مطلوبة كمعرض أساسي.</AppText><View style={styles.actions}><AppButton label='اختر فيديو' variant='neutral' onPress={pickVideoTeaser} disabled={submitting} /></View></View>}<AppText muted>لا نحفظ فيديو اللمحة ضمن المسودات حالياً؛ أضفه عند النشر النهائي.</AppText></View></AppCard>}
     {step === 1 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>تعريف الحاجة</AppText><AppText muted>أضف الأساسيات التي تساعد على الفهم السريع.</AppText></View><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
       <AppInput value={city} onChangeText={setCity} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={setArea} placeholder='المنطقة (اختياري)' />
@@ -482,7 +528,7 @@ export default function AddScreen() {
     {step === 3 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>قصة العنصر</AppText><AppText muted>تفاصيل مختصرة تساعد الطرف الآخر على القرار.</AppText></View><AppInput value={itemStory} onChangeText={setItemStory} placeholder='قصة العنصر (حد 600)' multiline /><AppText muted>{itemStory.length}/600</AppText><AppInput value={swapReason} onChangeText={setSwapReason} placeholder='سبب المبادلة (حد 240)' /><AppText muted>{swapReason.length}/240</AppText><AppInput value={goodFor} onChangeText={setGoodFor} placeholder='مفيد لمن؟ (حد 240)' /><AppText muted>{goodFor.length}/240</AppText></View></AppCard>}
     {step === 4 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>المقابل المطلوب</AppText><AppText muted>حدّد تفضيلك بشكل واضح وبسيط.</AppText></View><View style={styles.rowWrap}>{desireOptions.map((d) => <Pressable key={d.key} onPress={() => setDesireMode(d.key)} style={[styles.chip, desireMode === d.key && styles.chipSelected]}><AppText>{d.label}</AppText></Pressable>)}</View><AppInput value={desireText} onChangeText={setDesireText} placeholder='ماذا تريد بالمقابل؟' /><AppInput value={wantedTags} onChangeText={setWantedTags} placeholder='وسوم مطلوبة مفصولة بفواصل' /></View></AppCard>}
     {step === 5 && publishFailure && <AppCard><View style={styles.gap}><AppText weight='bold'>لم يكتمل النشر</AppText><AppText>{publishFailure}</AppText><AppText muted>بيانات الإعلان محفوظة، يمكنك المحاولة مرة أخرى.</AppText><AppButton label='حاول النشر مرة أخرى' onPress={submit} disabled={submitting} /></View></AppCard>}
-    {step === 5 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>مراجعة قبل النشر</AppText><AppText muted>تأكد من التفاصيل والصور قبل الإرسال.</AppText></View><View style={styles.reviewCover}><Image source={{ uri: reviewImages[0]?.uri }} style={styles.reviewCoverImage} />{reviewImages[0] && <View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>صورة الغلاف</AppText></View>}</View>{reviewImages.length > 1 && <View style={styles.row}>{reviewImages.slice(1).map((a) => <Image key={a.uri} source={{ uri: a.uri }} style={styles.preview} />)}</View>}<View style={styles.summaryBox}><AppText>العنوان: {title || '-'}</AppText><AppText>المدينة/المنطقة: {city || '-'} / {area || '-'}</AppText><AppText>الحالة: {conditionOptions.find((c) => c.key === condition)?.label || '-'}</AppText><AppText>المقابل: {desireOptions.find((d) => d.key === desireMode)?.label || '-'} {desireText ? `- ${desireText}` : ''}</AppText><AppText>الوسوم: {wantedTags || '-'}</AppText></View>{!!progress && <AppText muted>{progress}</AppText>}</View></AppCard>}
+    {step === 5 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>مراجعة قبل النشر</AppText><AppText muted>تأكد من التفاصيل والصور قبل الإرسال.</AppText></View><View style={styles.reviewCover}><Image source={{ uri: reviewImages[0]?.uri }} style={styles.reviewCoverImage} />{reviewImages[0] && <View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>صورة الغلاف</AppText></View>}</View>{reviewImages.length > 1 && <View style={styles.row}>{reviewImages.slice(1).map((a) => <Image key={a.uri} source={{ uri: a.uri }} style={styles.preview} />)}</View>}<View style={styles.summaryBox}><AppText>العنوان: {title || '-'}</AppText><AppText>المدينة/المنطقة: {city || '-'} / {area || '-'}</AppText><AppText>الحالة: {conditionOptions.find((c) => c.key === condition)?.label || '-'}</AppText><AppText>المقابل: {desireOptions.find((d) => d.key === desireMode)?.label || '-'} {desireText ? `- ${desireText}` : ''}</AppText><AppText>الوسوم: {wantedTags || '-'}</AppText><AppText>فيديو اللمحة: {videoTeaser ? 'مضاف' : 'غير مضاف'}</AppText></View>{!!progress && <AppText muted>{progress}</AppText>}</View></AppCard>}
     <View style={styles.actions}><AppButton label='السابق' variant='neutral' onPress={back} disabled={step === 0 || submitting} />{step < 5 ? <AppButton label='التالي' onPress={next} disabled={submitting} /> : <AppButton label='انشر العنصر' onPress={submit} disabled={submitting} />}</View>
     <ItemPhotoStudio
       visible={itemPhotoStudioVisible}
@@ -576,4 +622,9 @@ const styles = StyleSheet.create({
   reviewCoverImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.border },
   summaryBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.sm, gap: spacing.xs, backgroundColor: colors.background },
   locationAssistBlock: { gap: spacing.xs },
+  videoTeaserCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: spacing.sm, backgroundColor: colors.primarySoft },
+  videoIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  videoIconText: { color: colors.surface },
+  videoTeaserMeta: { flex: 1, gap: 2 },
+  videoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 });

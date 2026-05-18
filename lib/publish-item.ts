@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { supabase } from '@/lib/supabase/client';
 import { compressItemImage } from '@/lib/media/compress-item-image';
+import { ITEM_VIDEOS_BUCKET, uploadItemVideoTeaser } from '@/lib/item-videos';
 
 const ITEM_IMAGES_BUCKET = 'item-images';
 
@@ -27,7 +28,7 @@ export type PublishItemPayload = {
 
 export type PublishItemResult =
   | { ok: true; itemId: string }
-  | { ok: false; reason: 'upload_failed' | 'item_insert_failed' | 'images_insert_failed' | 'invalid_input'; message: string };
+  | { ok: false; reason: 'upload_failed' | 'item_insert_failed' | 'images_insert_failed' | 'video_insert_failed' | 'invalid_input'; message: string };
 
 export async function fetchActiveCategories(): Promise<ActiveCategory[]> {
   const { data, error } = await supabase.from('categories').select('id,name_ar').eq('is_active', true).order('sort_order', { ascending: true });
@@ -47,13 +48,19 @@ async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
 
 export type PublishProgress =
   | { phase: 'optimizing'; current: number; total: number }
-  | { phase: 'uploading'; current: number; total: number };
+  | { phase: 'uploading'; current: number; total: number }
+  | { phase: 'video_uploading'; current: number; total: number };
 
-export async function publishItem(payload: PublishItemPayload, assets: ImagePickerAsset[], userId: string, onProgress?: (progress: PublishProgress) => void): Promise<PublishItemResult> {
+export async function publishItem(payload: PublishItemPayload, assets: ImagePickerAsset[], userId: string, onProgress?: (progress: PublishProgress) => void, videoTeaserAsset?: ImagePickerAsset | null): Promise<PublishItemResult> {
   if (!assets.length) return { ok: false, reason: 'invalid_input', message: 'الصور مطلوبة قبل النشر.' };
+
+  if (videoTeaserAsset && videoTeaserAsset.type !== 'video' && !videoTeaserAsset.mimeType?.startsWith('video/')) {
+    return { ok: false, reason: 'invalid_input', message: 'فيديو اللمحة يجب أن يكون ملف فيديو.' };
+  }
 
   const itemId = Crypto.randomUUID();
   const uploadedPaths: string[] = [];
+  let uploadedVideoPath: string | null = null;
 
   try {
     const uploadedImages: { image_url: string; is_primary: boolean; sort_order: number }[] = [];
@@ -120,6 +127,35 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
       return { ok: false, reason: 'images_insert_failed', message: 'تعذر تثبيت صور العنصر. حاول مرة أخرى.' };
     }
 
+    if (videoTeaserAsset) {
+      onProgress?.({ phase: 'video_uploading', current: 1, total: 1 });
+      const videoUpload = await uploadItemVideoTeaser({ asset: videoTeaserAsset, itemId, userId });
+
+      if (!videoUpload.ok) {
+        await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
+        await cleanupStorage(uploadedPaths);
+        return { ok: false, reason: 'upload_failed', message: videoUpload.message || 'تعذر رفع فيديو العنصر. حاول مرة أخرى.' };
+      }
+
+      uploadedVideoPath = videoUpload.storagePath;
+
+      const { error: videoInsertError } = await supabase.from('item_videos').insert({
+        item_id: itemId,
+        video_storage_path: videoUpload.storagePath,
+        duration_ms: videoUpload.durationMs,
+        width: videoUpload.width,
+        height: videoUpload.height,
+      });
+
+      if (videoInsertError) {
+        if (__DEV__) console.log('[publishItem] video metadata insert failed', { userId, itemId, code: videoInsertError.code, message: videoInsertError.message });
+        await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
+        await cleanupStorage(uploadedPaths);
+        await cleanupItemVideoStorage(uploadedVideoPath);
+        return { ok: false, reason: 'video_insert_failed', message: 'تعذر تثبيت فيديو العنصر. حاول مرة أخرى.' };
+      }
+    }
+
     if (payload.wantedTags.length) {
       const { error: tagsError } = await supabase.from('item_wanted_tags').insert(payload.wantedTags.map((tag) => ({ item_id: itemId, tag })));
       if (tagsError && __DEV__) {
@@ -131,6 +167,7 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
   } catch (error) {
     if (__DEV__) console.log('[publishItem] unexpected failure', { userId, itemId, code: (error as { code?: string })?.code, message: (error as { message?: string })?.message });
     await cleanupStorage(uploadedPaths);
+    await cleanupItemVideoStorage(uploadedVideoPath);
     return { ok: false, reason: 'upload_failed', message: 'حدث خطأ غير متوقع أثناء النشر.' };
   }
 }
@@ -138,4 +175,9 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 async function cleanupStorage(paths: string[]) {
   if (!paths.length) return;
   await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(paths);
+}
+
+async function cleanupItemVideoStorage(path: string | null) {
+  if (!path) return;
+  await supabase.storage.from(ITEM_VIDEOS_BUCKET).remove([path]);
 }

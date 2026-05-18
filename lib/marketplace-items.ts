@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { fetchItemVideoTeaserByItemId, type ItemVideoTeaser } from '@/lib/item-videos';
 
 const MARKETPLACE_PAGE_SIZE = 20;
 
@@ -46,6 +47,7 @@ export type MarketplaceItemDetail = MarketplaceItem & {
   desireText: string | null;
   wantedTags: string[];
   images: MarketplaceItemDetailImage[];
+  videoTeaser: ItemVideoTeaser | null;
 };
 
 function mapRowToMarketplaceItem(row: MarketplaceItemRow): MarketplaceItem {
@@ -179,11 +181,12 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
 
   const item = itemData as ItemDetailRow;
 
-  const [imagesResult, categoryResult, ownerResult, wantedTagsResult] = await Promise.all([
+  const [imagesResult, categoryResult, ownerResult, wantedTagsResult, videoTeaser] = await Promise.all([
     supabase.from('item_images').select('image_url, is_primary, sort_order').eq('item_id', id),
     item.category_id ? supabase.from('categories').select('name_ar').eq('id', item.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     item.owner_id ? supabase.from('profiles').select('display_name, is_banned').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     supabase.from('item_wanted_tags').select('tag').eq('item_id', id),
+    fetchItemVideoTeaserByItemId(id),
   ]);
 
   if (imagesResult.error) throw imagesResult.error;
@@ -234,5 +237,6 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     desireText: normalizeNullableText(item.desire_text),
     wantedTags,
     images,
+    videoTeaser,
   };
 }
