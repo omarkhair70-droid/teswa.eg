@@ -12,6 +12,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { createStoryMediaSignedUrl, deleteStoryFromMobile, fetchActiveStoriesByUserId, StoryRecord } from '@/lib/stories';
+import { fetchStoryViewCountsForOwner } from '@/lib/story-views';
 
 function formatRemainingTime(expiresAt: string): string {
   const expiresAtDate = new Date(expiresAt);
@@ -38,12 +39,16 @@ export default function StoryManageScreen() {
   const [error, setError] = useState<string | null>(null);
   const [deletingStoryIds, setDeletingStoryIds] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [viewCountsByStoryId, setViewCountsByStoryId] = useState<Record<string, number>>({});
+  const [viewCountsError, setViewCountsError] = useState<string | null>(null);
 
   const loadStories = useCallback(async () => {
     if (!user?.id) {
       setLoading(false);
       setStories([]);
       setError(null);
+      setViewCountsByStoryId({});
+      setViewCountsError(null);
       return;
     }
 
@@ -64,11 +69,26 @@ export default function StoryManageScreen() {
       );
 
       setImageSignedUrls(Object.fromEntries(signedUrlEntries));
+
+      try {
+        const viewCounts = await fetchStoryViewCountsForOwner({
+          ownerId: user.id,
+          storyIds: activeStories.map((story) => story.id),
+        });
+        setViewCountsByStoryId(viewCounts);
+        setViewCountsError(null);
+      } catch (countsError) {
+        if (__DEV__) console.log('[story-manage] view counts failed', countsError);
+        setViewCountsByStoryId({});
+        setViewCountsError('تعذر تحميل عدد المشاهدات حالياً.');
+      }
     } catch (loadError) {
       if (__DEV__) console.log('[story-manage] load failed', loadError);
       setError('تعذر تحميل القصص النشطة حالياً. حاول مرة أخرى.');
       setStories([]);
       setImageSignedUrls({});
+      setViewCountsByStoryId({});
+      setViewCountsError(null);
     } finally {
       setLoading(false);
     }
@@ -172,6 +192,7 @@ export default function StoryManageScreen() {
         </AppCard>
 
         {feedback ? <AppCard><AppText muted>{feedback}</AppText></AppCard> : null}
+        {viewCountsError ? <AppCard><AppText muted>{viewCountsError}</AppText></AppCard> : null}
 
         {stories.map((story) => {
           const imagePreviewUrl = story.mediaType === 'image' ? imageSignedUrls[story.id] : null;
@@ -183,6 +204,13 @@ export default function StoryManageScreen() {
           const expiresLabel = Number.isNaN(expiresAtLabel.getTime())
             ? 'غير متاح'
             : new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }).format(expiresAtLabel);
+
+          const viewCount = viewCountsByStoryId[story.id] ?? 0;
+          const viewCountLabel = viewCount === 0
+            ? 'لم يشاهدها أحد بعد.'
+            : viewCount === 1
+              ? 'شاهدها شخص واحد.'
+              : `شاهدها ${viewCount} أشخاص.`;
 
           return (
             <AppCard key={story.id}>
@@ -203,6 +231,14 @@ export default function StoryManageScreen() {
                 <AppText muted>أضيفت: {createdLabel}</AppText>
                 <AppText muted>تنتهي: {expiresLabel}</AppText>
                 <AppText muted>{formatRemainingTime(story.expiresAt)}</AppText>
+                {!viewCountsError ? <AppText muted>{viewCountLabel}</AppText> : null}
+                {viewCount > 0 ? (
+                  <AppButton
+                    label="عرض المشاهدين"
+                    variant="neutral"
+                    onPress={() => router.push(`/story/viewers/${story.id}`)}
+                  />
+                ) : null}
                 <AppButton
                   label={deletingStoryIds[story.id] ? 'جارٍ الحذف...' : 'حذف القصة'}
                   variant="neutral"
