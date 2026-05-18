@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
@@ -37,6 +37,7 @@ export default function PublicProfileScreen() {
   const [presenceError, setPresenceError] = useState<string | null>(null);
   const [profileCacheNotice, setProfileCacheNotice] = useState<string | null>(null);
   const [listingsCacheNotice, setListingsCacheNotice] = useState<string | null>(null);
+  const profileConfirmedMissingRef = useRef(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -50,6 +51,7 @@ export default function PublicProfileScreen() {
     setLoading(true);
     setError(null);
     setProfileCacheNotice(null);
+    profileConfirmedMissingRef.current = false;
 
     let hasFreshCachedProfile = false;
 
@@ -69,6 +71,7 @@ export default function PublicProfileScreen() {
       const profileData = await fetchPublicProfileById(id);
 
       if (profileData) {
+        profileConfirmedMissingRef.current = false;
         setProfile(profileData);
         setError(null);
         setProfileCacheNotice(null);
@@ -76,6 +79,7 @@ export default function PublicProfileScreen() {
         return;
       }
 
+      profileConfirmedMissingRef.current = true;
       setProfile(null);
       setProfileCacheNotice(null);
       void deletePublicProfileCache(id);
@@ -137,7 +141,9 @@ export default function PublicProfileScreen() {
       setListings(activeListings);
       setPresenceError(null);
       setListingsCacheNotice(null);
-      void writePublicProfileListingsCache(id, activeListings);
+      if (!profileConfirmedMissingRef.current) {
+        void writePublicProfileListingsCache(id, activeListings);
+      }
     } catch {
       setActiveStoriesCount(0);
 
