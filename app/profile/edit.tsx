@@ -121,12 +121,17 @@ export default function EditProfileScreen() {
   if (!user?.id) {
     return (
       <AppScreen>
-        <EmptyState
-          title="يجب تسجيل الدخول"
-          description="سجّل دخولك أولاً لتعديل ملفك."
-          actionLabel="العودة لحسابي"
-          onAction={() => router.replace('/(tabs)/profile')}
-        />
+        <View style={styles.group}>
+          <EmptyState
+            title="يجب تسجيل الدخول"
+            description="سجّل دخولك أولاً لتعديل ملفك."
+          />
+          <AppButton
+            label="العودة لحسابي"
+            variant="neutral"
+            onPress={() => router.replace('/(tabs)/profile')}
+          />
+        </View>
       </AppScreen>
     );
   }
@@ -146,12 +151,17 @@ export default function EditProfileScreen() {
         ) : null}
 
         {!loading && !loadError && missingProfile ? (
-          <EmptyState
-            title="الملف غير موجود"
-            description="تعذر العثور على بيانات حسابك حالياً."
-            actionLabel="العودة لحسابي"
-            onAction={() => router.replace('/(tabs)/profile')}
-          />
+          <View style={styles.group}>
+            <EmptyState
+              title="الملف غير موجود"
+              description="تعذر العثور على بيانات حسابك حالياً."
+            />
+            <AppButton
+              label="العودة لحسابي"
+              variant="neutral"
+              onPress={() => router.replace('/(tabs)/profile')}
+            />
+          </View>
         ) : null}
 
         {!loading && !loadError && !missingProfile ? (
@@ -181,9 +191,8 @@ export default function EditProfileScreen() {
 
             <AppCard>
               <View style={styles.group}>
-                <AppInput label="" placeholder="الاسم الظاهر" value={displayName} onChangeText={setDisplayName} />
+                <AppInput placeholder="الاسم الظاهر" value={displayName} onChangeText={setDisplayName} />
                 <AppInput
-                  label=""
                   placeholder="اسم المستخدم"
                   value={username}
                   onChangeText={setUsername}
@@ -191,12 +200,11 @@ export default function EditProfileScreen() {
                   autoCorrect={false}
                 />
                 <AppText muted>من 3 إلى 20 حرفًا أو رقمًا أو _.</AppText>
-                <AppInput label="" placeholder="جملة تعريفية قصيرة" value={profileTagline} onChangeText={setProfileTagline} />
+                <AppInput placeholder="جملة تعريفية قصيرة" value={profileTagline} onChangeText={setProfileTagline} />
                 <AppText muted>{`${taglineCount}/120`}</AppText>
-                <AppInput label="" placeholder="المدينة" value={city} onChangeText={setCity} />
-                <AppInput label="" placeholder="المنطقة" value={area} onChangeText={setArea} />
+                <AppInput placeholder="المدينة" value={city} onChangeText={setCity} />
+                <AppInput placeholder="المنطقة" value={area} onChangeText={setArea} />
                 <AppInput
-                  label=""
                   placeholder="اكتب نبذة قصيرة عنك"
                   value={bio}
                   onChangeText={setBio}
