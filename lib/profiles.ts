@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 
 const PROFILE_FETCH_TIMEOUT_MS = 12_000;
 export const PROFILE_FETCH_TIMEOUT_CODE = 'PROFILE_FETCH_TIMEOUT';
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 export type AppProfile = {
   id: string;
@@ -35,7 +36,6 @@ export async function fetchMyProfile(userId: string): Promise<AppProfile | null>
   if (error) throw error;
   return data;
 }
-
 
 export type AccountProfile = {
   id: string;
@@ -76,6 +76,114 @@ export type PublicProfileListing = {
   area: string | null;
   createdAt: string | null;
 };
+
+export type UpdateMyProfileInput = {
+  userId: string;
+  displayName: string;
+  username: string;
+  profileTagline?: string | null;
+  city?: string | null;
+  area?: string | null;
+  bio?: string | null;
+};
+
+export type UpdateMyProfileResult =
+  | {
+      ok: true;
+      message: string;
+    }
+  | {
+      ok: false;
+      reason:
+        | 'invalid_user'
+        | 'invalid_display_name'
+        | 'invalid_username'
+        | 'invalid_profile_tagline'
+        | 'username_taken'
+        | 'not_found_or_unauthorized'
+        | 'save_failed';
+      message: string;
+    };
+
+const normalizeOptional = (value?: string | null): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+export async function updateMyProfileFromMobile(
+  input: UpdateMyProfileInput,
+): Promise<UpdateMyProfileResult> {
+  const userId = input.userId.trim();
+  const normalizedDisplayName = input.displayName.trim();
+  const normalizedUsername = input.username.trim();
+  const normalizedUsernameLowercase = normalizedUsername.toLowerCase();
+  const normalizedTagline = normalizeOptional(input.profileTagline);
+  const normalizedCity = normalizeOptional(input.city);
+  const normalizedArea = normalizeOptional(input.area);
+  const normalizedBio = normalizeOptional(input.bio);
+
+  if (!userId) {
+    return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً لتعديل الملف.' };
+  }
+
+  if (!normalizedDisplayName) {
+    return { ok: false, reason: 'invalid_display_name', message: 'الاسم الظاهر مطلوب.' };
+  }
+
+  if (!normalizedUsername || !USERNAME_REGEX.test(normalizedUsername)) {
+    return {
+      ok: false,
+      reason: 'invalid_username',
+      message: 'اسم المستخدم لازم يكون من 3 إلى 20 حرف أو رقم أو _.',
+    };
+  }
+
+  if (normalizedTagline && normalizedTagline.length > 120) {
+    return {
+      ok: false,
+      reason: 'invalid_profile_tagline',
+      message: 'الجملة التعريفية يجب ألا تتجاوز 120 حرفًا.',
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({
+      display_name: normalizedDisplayName,
+      username: normalizedUsernameLowercase,
+      profile_tagline: normalizedTagline,
+      city: normalizedCity,
+      area: normalizedArea,
+      bio: normalizedBio,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+    .select('id')
+    .maybeSingle();
+
+  if (error?.code === '23505') {
+    return { ok: false, reason: 'username_taken', message: 'اسم المستخدم ده مستخدم قبل كده.' };
+  }
+
+  if (error) {
+    return {
+      ok: false,
+      reason: 'save_failed',
+      message: 'تعذر حفظ تعديلات الملف حالياً. حاول مرة أخرى.',
+    };
+  }
+
+  if (!data?.id) {
+    return {
+      ok: false,
+      reason: 'not_found_or_unauthorized',
+      message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.',
+    };
+  }
+
+  return { ok: true, message: 'تم حفظ تعديلات ملفك بنجاح.' };
+}
 
 export async function fetchMyAccountProfile(userId: string): Promise<AccountProfile | null> {
   const { data, error } = await supabase

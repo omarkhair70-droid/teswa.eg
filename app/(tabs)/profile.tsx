@@ -165,6 +165,7 @@ export default function ProfileScreen() {
               </View>
               {user?.id ? (
                 <View style={styles.publicProfileAction}>
+                  <AppButton label="تعديل ملفي" variant="neutral" onPress={() => router.push('/profile/edit')} />
                   <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
                   {myActiveStoriesCount > 0 ? (
                     <AppButton label="عرض قصصي" variant="neutral" onPress={() => router.push(`/story/${user.id}`)} />
