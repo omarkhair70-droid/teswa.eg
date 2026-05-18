@@ -57,3 +57,75 @@ with check (
       and auth.uid()::text in (c.starter_id::text, c.recipient_id::text)
   )
 );
+
+
+create or replace function public.ensure_story_reply_conversation(
+  p_story_id uuid
+)
+returns table (
+  conversation_id uuid
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_recipient_id uuid;
+  v_conversation_id uuid;
+begin
+  if v_user_id is null or p_story_id is null then
+    return;
+  end if;
+
+  select s.user_id
+  into v_recipient_id
+  from public.stories s
+  where s.id = p_story_id
+    and s.expires_at > now()
+  limit 1;
+
+  if v_recipient_id is null or v_recipient_id = v_user_id then
+    return;
+  end if;
+
+  insert into public.contextual_conversations (
+    context_type,
+    context_entity_id,
+    starter_id,
+    recipient_id
+  ) values (
+    'story_reply',
+    p_story_id,
+    v_user_id,
+    v_recipient_id
+  )
+  on conflict (context_type, context_entity_id, starter_id)
+  do update set updated_at = now()
+  returning id into v_conversation_id;
+
+  update public.contextual_conversations
+  set updated_at = now()
+  where id = v_conversation_id;
+
+  conversation_id := v_conversation_id;
+  return next;
+end;
+$$;
+
+revoke all on function public.ensure_story_reply_conversation(uuid) from public;
+grant execute on function public.ensure_story_reply_conversation(uuid) to authenticated;
+
+create policy "contextual_voice_messages_delete_participant_sender"
+on storage.objects
+for delete to authenticated
+using (
+  bucket_id = 'contextual-voice-messages'
+  and split_part(storage.objects.name, '/', 1) = 'contextual'
+  and split_part(storage.objects.name, '/', 3) = auth.uid()::text
+  and exists (
+    select 1 from public.contextual_conversations c
+    where c.id::text = split_part(storage.objects.name, '/', 2)
+      and auth.uid()::text in (c.starter_id::text, c.recipient_id::text)
+  )
+);

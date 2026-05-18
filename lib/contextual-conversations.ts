@@ -341,7 +341,7 @@ export async function sendContextualMessageFromMobile(input: {
 
   const { data, error } = await supabase
     .from('contextual_messages')
-    .insert({ conversation_id: conversationId, sender_id: currentUserId, body })
+    .insert({ conversation_id: conversationId, sender_id: currentUserId, body, message_kind: 'text' })
     .select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at')
     .single();
 
@@ -435,4 +435,47 @@ export async function sendContextualVoiceMessageFromMobile(input: {
 
   void notifyContextualMessageFromMobile({ conversationId, messageId: data.id, kind: 'thread_message' });
   return { ok: true, message: { id: data.id, conversationId: data.conversation_id, senderId: data.sender_id, body: data.body, messageKind: 'voice', mediaStoragePath: data.media_storage_path ?? null, mediaDurationMs: data.media_duration_ms ?? null, createdAt: data.created_at } };
+}
+
+
+export async function sendStoryVoiceReplyFromMobile(input: {
+  storyId: string;
+  currentUserId: string;
+  localUri: string;
+  durationMs: number;
+  mimeType?: string | null;
+  fileName?: string | null;
+  sizeBytes?: number | null;
+}): Promise<{ ok: true; conversationId: string; message: ContextualConversationMessage } | { ok: false; reason: 'invalid_user' | 'invalid_story' | 'invalid_audio' | 'invalid_duration' | 'send_failed'; message: string }> {
+  const currentUserId = input.currentUserId.trim();
+  const storyId = input.storyId.trim();
+  const localUri = input.localUri.trim();
+  if (!currentUserId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً للرد على القصة.' };
+  if (!storyId) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد القصة المطلوبة.' };
+  if (!localUri) return { ok: false, reason: 'invalid_audio', message: 'تعذر قراءة التسجيل الصوتي.' };
+  if (input.durationMs <= 0 || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS) return { ok: false, reason: 'invalid_duration', message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.' };
+  if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) return { ok: false, reason: 'invalid_audio', message: 'حجم الرسالة الصوتية كبير جدًا.' };
+
+  const { data: convData, error: convErr } = await supabase.rpc('ensure_story_reply_conversation', { p_story_id: storyId });
+  const row = Array.isArray(convData) ? convData[0] : null;
+  const conversationId = (row?.conversation_id as string | undefined)?.trim() ?? '';
+  if (convErr || !conversationId) return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد حالياً. قد تكون القصة انتهت.' };
+
+  const contentType = input.mimeType || 'audio/m4a';
+  const ext = getAudioExtension(input.fileName, contentType);
+  const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
+  const uploadPath = `contextual/${conversationId}/${currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
+
+  const bodyBuf = await fileUriToArrayBuffer(localUri);
+  const { error: uploadError } = await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).upload(uploadPath, bodyBuf, { contentType, upsert: false });
+  if (uploadError) return { ok: false, reason: 'send_failed', message: 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
+
+  const { data, error } = await supabase.from('contextual_messages').insert({ conversation_id: conversationId, sender_id: currentUserId, body: 'رسالة صوتية', message_kind: 'voice', media_storage_path: uploadPath, media_duration_ms: Math.min(input.durationMs, CONTEXTUAL_VOICE_MAX_DURATION_MS) }).select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at').single();
+  if (error || !data) {
+    await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).remove([uploadPath]);
+    return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد الصوتي.' };
+  }
+
+  void notifyContextualMessageFromMobile({ conversationId, messageId: data.id, kind: 'story_reply_initial' });
+  return { ok: true, conversationId, message: { id: data.id, conversationId: data.conversation_id, senderId: data.sender_id, body: data.body, messageKind: 'voice', mediaStoragePath: data.media_storage_path ?? null, mediaDurationMs: data.media_duration_ms ?? null, createdAt: data.created_at } };
 }

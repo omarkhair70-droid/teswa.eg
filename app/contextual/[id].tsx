@@ -57,6 +57,12 @@ export default function Screen() {
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
   const [activeVoiceId, setActiveVoiceId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!voicePlayerStatus.didJustFinish) return;
+    voicePlayer.pause();
+    void voicePlayer.seekTo(0).catch(() => undefined);
+    setActiveVoiceId(null);
+  }, [voicePlayer, voicePlayerStatus.didJustFinish]);
 
   const load = useCallback(async () => {
     if (!user?.id || !conversationId) return;

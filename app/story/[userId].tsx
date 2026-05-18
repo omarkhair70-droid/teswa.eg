@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetchStoryViewerContextByUserId } from '@/lib/stories';
 import { markStoryViewedFromMobile } from '@/lib/story-views';
 import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/story-likes';
-import { sendStoryReplyFromMobile, sendContextualVoiceMessageFromMobile } from '@/lib/contextual-conversations';
+import { sendStoryReplyFromMobile, sendStoryVoiceReplyFromMobile } from '@/lib/contextual-conversations';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -340,11 +340,7 @@ export default function StoryViewerScreen() {
     } finally { setVoiceBusy(false); }
   }, [audioRecorder, currentStory, user?.id]);
 
-  useEffect(() => {
-    if (recorderState.isRecording && recorderState.durationMillis >= MAX_STORY_VOICE_MS) {
-      void audioRecorder.stop();
-    }
-  }, [audioRecorder, recorderState.durationMillis, recorderState.isRecording]);
+  const autoStopHandledRef = useRef(false);
 
   const stopVoice = useCallback(async () => {
     setVoiceBusy(true);
@@ -355,13 +351,19 @@ export default function StoryViewerScreen() {
     } finally { setVoiceBusy(false); }
   }, [audioRecorder, recorderState.durationMillis]);
 
+  useEffect(() => {
+    if (!recorderState.isRecording) { autoStopHandledRef.current = false; return; }
+    if (recorderState.durationMillis >= MAX_STORY_VOICE_MS && !autoStopHandledRef.current) {
+      autoStopHandledRef.current = true;
+      void stopVoice();
+    }
+  }, [recorderState.isRecording, recorderState.durationMillis, stopVoice]);
+
   const sendVoiceReply = useCallback(async () => {
     if (!voiceDraft || !user?.id || !currentStory) return;
     setVoiceSending(true); setStoryReplyError(null);
     try {
-      const t = await sendStoryReplyFromMobile({ storyId: currentStory.id, currentUserId: user.id, body: '🎤' });
-      if (!t.ok) { setStoryReplyError(t.message); return; }
-      const r = await sendContextualVoiceMessageFromMobile({ conversationId: t.conversationId, currentUserId: user.id, localUri: voiceDraft.uri, durationMs: Math.min(voiceDraft.durationMs, MAX_STORY_VOICE_MS), mimeType: voiceDraft.mimeType });
+      const r = await sendStoryVoiceReplyFromMobile({ storyId: currentStory.id, currentUserId: user.id, localUri: voiceDraft.uri, durationMs: Math.min(voiceDraft.durationMs, MAX_STORY_VOICE_MS), mimeType: voiceDraft.mimeType });
       if (!r.ok) { setStoryReplyError(r.message); return; }
       setVoiceDraft(null); setVoiceOpen(false); setStoryReplyFeedback('تم إرسال الرد الصوتي.');
     } finally { setVoiceSending(false); }
