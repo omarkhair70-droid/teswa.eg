@@ -12,7 +12,7 @@ export const OFFER_STATUS_LABELS: Record<string, string> = {
 
 type ItemValidationRow = { id: string; title: string | null; owner_id: string; status: string };
 
-export type OfferRowSummary = { id: string; status: OfferStatus; senderId: string; receiverId: string; createdAt: string | null; requestedItem: OfferItemSummary | null; offeredItem: OfferItemSummary | null; roleContext: 'incoming' | 'sent' };
+export type OfferRowSummary = { id: string; status: OfferStatus; senderId: string; receiverId: string; createdAt: string | null; requestedItem: OfferItemSummary | null; offeredItem: OfferItemSummary | null; roleContext: 'incoming' | 'sent'; dealId: string | null };
 export type OffersInboxResult = { incomingActionableOffers: OfferRowSummary[]; sentOffers: OfferRowSummary[] };
 export type OfferDetailResult = { ok: true; offer: OfferDetail } | { ok: false; reason: 'not_found' | 'unauthorized' };
 export type OfferDetail = OfferRowSummary & { message: string | null; requestedItemId: string; offeredItemId: string; viewerRole: OfferViewerRole; dealId: string | null };
@@ -27,8 +27,8 @@ export { getStatusLabel as getOfferStatusLabel };
 
 async function fetchItemValidation(itemId: string): Promise<ItemValidationRow | null> { const { data, error } = await supabase.from('items').select('id,title,owner_id,status').eq('id', itemId).maybeSingle(); if (error) throw error; return (data as ItemValidationRow | null) ?? null; }
 
-function mapOfferRows(rows: any[], roleContext: 'incoming' | 'sent', itemsById: Map<string, OfferItemSummary>): OfferRowSummary[] {
-  return rows.map((row) => ({ id: row.id as string, status: row.status as OfferStatus, senderId: row.sender_id as string, receiverId: row.receiver_id as string, createdAt: (row.created_at as string | null) ?? null, requestedItem: itemsById.get(row.requested_item_id as string) ?? null, offeredItem: itemsById.get(row.offered_item_id as string) ?? null, roleContext }));
+function mapOfferRows(rows: any[], roleContext: 'incoming' | 'sent', itemsById: Map<string, OfferItemSummary>, dealIdByOfferId: Map<string, string>): OfferRowSummary[] {
+  return rows.map((row) => ({ id: row.id as string, status: row.status as OfferStatus, senderId: row.sender_id as string, receiverId: row.receiver_id as string, createdAt: (row.created_at as string | null) ?? null, requestedItem: itemsById.get(row.requested_item_id as string) ?? null, offeredItem: itemsById.get(row.offered_item_id as string) ?? null, roleContext, dealId: dealIdByOfferId.get(row.id as string) ?? null }));
 }
 
 async function notify(payload: Record<string, unknown>) {
@@ -52,10 +52,27 @@ export async function fetchOffersInbox(currentUserId: string): Promise<OffersInb
 
   const allRows = [...(incomingRes.data ?? []), ...(sentRes.data ?? [])];
   const itemIds = [...new Set(allRows.flatMap((row) => [row.requested_item_id as string, row.offered_item_id as string]))];
-  const summaries = await fetchExchangeItemSummariesByIds(itemIds);
-  const byId = new Map(summaries.map((s) => [s.id, s]));
+  const offerIds = [...new Set(allRows.map((row) => row.id as string))];
 
-  return { incomingActionableOffers: mapOfferRows(incomingRes.data ?? [], 'incoming', byId), sentOffers: mapOfferRows(sentRes.data ?? [], 'sent', byId) };
+  const [summaries, dealsRes] = await Promise.all([
+    fetchExchangeItemSummariesByIds(itemIds),
+    offerIds.length
+      ? supabase.from('swap_deals').select('id,offer_id,created_at').in('offer_id', offerIds).order('created_at', { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (dealsRes.error) throw dealsRes.error;
+
+  const byId = new Map(summaries.map((s) => [s.id, s]));
+  const dealIdByOfferId = new Map<string, string>();
+  for (const row of dealsRes.data ?? []) {
+    const offerId = row.offer_id as string | null;
+    const dealId = row.id as string | null;
+    if (!offerId || !dealId || dealIdByOfferId.has(offerId)) continue;
+    dealIdByOfferId.set(offerId, dealId);
+  }
+
+  return { incomingActionableOffers: mapOfferRows(incomingRes.data ?? [], 'incoming', byId, dealIdByOfferId), sentOffers: mapOfferRows(sentRes.data ?? [], 'sent', byId, dealIdByOfferId) };
 }
 
 export async function fetchOfferById(offerId: string, currentUserId: string): Promise<OfferDetailResult> {
@@ -104,8 +121,8 @@ export async function acceptOfferFromMobile(input: { offerId: string; currentUse
   if (error || !dealId) return { ok: false, reason: 'unknown', message: 'تعذر قبول العرض حالياً.' };
   void Promise.all([
     notify({ target_user_id: offer.sender_id, notification_type: 'offer_accepted', notification_title: 'العرض اتقبل', notification_body: 'صاحب الحاجة قبل العرض.', target_offer_id: input.offerId, target_deal_id: dealId, target_item_id: null }),
-    notify({ target_user_id: offer.sender_id, notification_type: 'deal_created', notification_title: 'اتفتحت صفحة التنسيق', notification_body: 'العرض اتقبل، وكده تقدروا تتابعوا الصفقة من صفحة التنسيق.', target_offer_id: input.offerId, target_deal_id: dealId, target_item_id: null }),
-    notify({ target_user_id: offer.receiver_id, notification_type: 'deal_created', notification_title: 'اتفتحت صفحة التنسيق', notification_body: 'العرض اتقبل، وكده تقدروا تتابعوا الصفقة من صفحة التنسيق.', target_offer_id: input.offerId, target_deal_id: dealId, target_item_id: null }),
+    notify({ target_user_id: offer.sender_id, notification_type: 'deal_created', notification_title: 'اتفتحت دردشة الصفقة', notification_body: 'العرض اتقبل، وكده تقدروا تكملوا التنسيق من دردشة الصفقة.', target_offer_id: input.offerId, target_deal_id: dealId, target_item_id: null }),
+    notify({ target_user_id: offer.receiver_id, notification_type: 'deal_created', notification_title: 'اتفتحت دردشة الصفقة', notification_body: 'العرض اتقبل، وكده تقدروا تكملوا التنسيق من دردشة الصفقة.', target_offer_id: input.offerId, target_deal_id: dealId, target_item_id: null }),
   ]);
   return { ok: true, dealId: dealId as string };
 }

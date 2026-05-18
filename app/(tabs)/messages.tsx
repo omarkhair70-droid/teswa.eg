@@ -18,20 +18,25 @@ import { useUnreadBadges } from '@/lib/unread-badges';
 type MessagesSection = 'chats' | 'offers';
 
 function OfferRow({ offer, label }: { offer: OfferRowSummary; label: 'عرض وارد' | 'عرض مرسل' }) {
+  const hasDealChat = offer.status === 'accepted' && !!offer.dealId;
+
   return (
-    <Pressable onPress={() => router.push(`/offer/${offer.id}`)}>
-      <AppCard>
-        <View style={styles.offerRow}>
-          <View style={styles.offerHeader}>
-            <AppText weight="semibold">{label}</AppText>
-            <AppText muted>{getOfferStatusLabel(offer.status)}</AppText>
+    <AppCard>
+      <View style={styles.offerRow}>
+        <Pressable onPress={() => router.push(`/offer/${offer.id}`)}>
+          <View style={styles.offerRowSummary}>
+            <View style={styles.offerHeader}>
+              <AppText weight="semibold">{label}</AppText>
+              <AppText muted>{getOfferStatusLabel(offer.status)}</AppText>
+            </View>
+            <AppText weight="semibold" numberOfLines={1}>{offer.requestedItem?.title ?? 'عنصر مطلوب غير متاح'}</AppText>
+            <AppText muted numberOfLines={1}>مقابل: {offer.offeredItem?.title ?? 'عنصر معروض غير متاح'}</AppText>
+            {offer.createdAt ? <AppText muted>{new Date(offer.createdAt).toLocaleString('ar-EG')}</AppText> : null}
           </View>
-          <AppText weight="semibold" numberOfLines={1}>{offer.requestedItem?.title ?? 'عنصر مطلوب غير متاح'}</AppText>
-          <AppText muted numberOfLines={1}>مقابل: {offer.offeredItem?.title ?? 'عنصر معروض غير متاح'}</AppText>
-          {offer.createdAt ? <AppText muted>{new Date(offer.createdAt).toLocaleString('ar-EG')}</AppText> : null}
-        </View>
-      </AppCard>
-    </Pressable>
+        </Pressable>
+        {hasDealChat ? <View style={styles.offerDealCta}><AppText muted>تم قبول العرض وتحول إلى دردشة صفقة.</AppText><AppButton label="افتح الدردشة" variant="secondary" onPress={() => router.push(`/deal/${offer.dealId}`)} /></View> : null}
+      </View>
+    </AppCard>
   );
 }
 
@@ -142,7 +147,7 @@ export default function Screen() {
         </View>
 
         {selectedSection === 'chats' ? (
-          conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} />) : <EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة التنسيق هنا." />
+          conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} />) : <EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة الصفقة هنا." />
         ) : (
           <View style={styles.group}>
             <View style={styles.sectionGroup}>
@@ -198,6 +203,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#B42318',
   },
   offerRow: { gap: spacing.xs },
+  offerRowSummary: { gap: spacing.xs },
+  offerDealCta: { gap: spacing.xs },
   offerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
