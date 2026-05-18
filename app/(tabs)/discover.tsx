@@ -220,6 +220,13 @@ export default function DiscoverScreen() {
               </View>
             </AppCard>
             <AppCard>
+              <View style={styles.motionEntryBox}>
+                <AppText weight="bold">حركة تِسوى</AppText>
+                <AppText muted>قصص شغالة، وحاجات أصحابها حكوا عنها قبل ما تتبدل.</AppText>
+                <AppButton label="ادخل حركة تِسوى" variant="neutral" onPress={() => router.push('/motion')} />
+              </View>
+            </AppCard>
+            <AppCard>
               <View style={styles.nearbyBox}>
                 {activeNearbyLocation ? (
                   <>
@@ -319,6 +326,7 @@ const styles = StyleSheet.create({
   header: { gap: spacing.sm, marginBottom: spacing.md },
   title: { fontSize: 24 },
   peopleEntryBox: { gap: spacing.sm },
+  motionEntryBox: { gap: spacing.sm },
   nearbyBox: { gap: spacing.sm },
   filterBox: { gap: spacing.sm },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
