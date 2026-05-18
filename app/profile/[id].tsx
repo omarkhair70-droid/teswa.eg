@@ -12,6 +12,16 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
+import {
+  deletePublicProfileCache,
+  deletePublicProfileListingsCache,
+  readAnyPublicProfileCache,
+  readAnyPublicProfileListingsCache,
+  readFreshPublicProfileCache,
+  readFreshPublicProfileListingsCache,
+  writePublicProfileCache,
+  writePublicProfileListingsCache,
+} from '@/lib/offline-public-profile-cache';
 
 const FETCH_ERROR = 'تعذر تحميل الملف العام حالياً. حاول مرة أخرى.';
 const PRESENCE_ERROR = 'تعذر تحميل القصص والعناصر لهذا الملف حالياً.';
@@ -25,6 +35,8 @@ export default function PublicProfileScreen() {
   const [listings, setListings] = useState<PublicProfileListing[]>([]);
   const [presenceLoading, setPresenceLoading] = useState(false);
   const [presenceError, setPresenceError] = useState<string | null>(null);
+  const [profileCacheNotice, setProfileCacheNotice] = useState<string | null>(null);
+  const [listingsCacheNotice, setListingsCacheNotice] = useState<string | null>(null);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -37,10 +49,56 @@ export default function PublicProfileScreen() {
     if (!id) return;
     setLoading(true);
     setError(null);
+    setProfileCacheNotice(null);
+
+    let hasFreshCachedProfile = false;
+
+    try {
+      const cached = await readFreshPublicProfileCache(id);
+      if (cached) {
+        hasFreshCachedProfile = true;
+        setProfile(cached.profile);
+        setLoading(false);
+        setProfileCacheNotice('نستعرض ملفًا محفوظًا بينما نتحقق من الأحدث.');
+      }
+    } catch {
+      // Ignore cache failures and continue with network source of truth.
+    }
+
     try {
       const profileData = await fetchPublicProfileById(id);
-      setProfile(profileData);
+
+      if (profileData) {
+        setProfile(profileData);
+        setError(null);
+        setProfileCacheNotice(null);
+        void writePublicProfileCache(id, profileData);
+        return;
+      }
+
+      setProfile(null);
+      setProfileCacheNotice(null);
+      void deletePublicProfileCache(id);
+      void deletePublicProfileListingsCache(id);
     } catch {
+      if (hasFreshCachedProfile) {
+        setError(null);
+        setProfileCacheNotice('تعذر تحديث الملف الآن، نعرض آخر نسخة محفوظة.');
+        return;
+      }
+
+      try {
+        const stale = await readAnyPublicProfileCache(id);
+        if (stale) {
+          setProfile(stale.profile);
+          setError(null);
+          setProfileCacheNotice('أنت ترى نسخة محفوظة من الملف العام. سنحدّثها عندما يتحسن الاتصال.');
+          return;
+        }
+      } catch {
+        // Ignore cache failures and preserve hard error fallback.
+      }
+
       setError(FETCH_ERROR);
     } finally {
       setLoading(false);
@@ -55,6 +113,21 @@ export default function PublicProfileScreen() {
     if (!id) return;
     setPresenceLoading(true);
     setPresenceError(null);
+    setListingsCacheNotice(null);
+
+    let hasFreshCachedListings = false;
+
+    try {
+      const cachedListings = await readFreshPublicProfileListingsCache(id);
+      if (cachedListings) {
+        hasFreshCachedListings = true;
+        setListings(cachedListings.listings);
+        setListingsCacheNotice('نستعرض عناصر محفوظة بينما نتحقق من القائمة الحالية.');
+      }
+    } catch {
+      // Ignore cache failures and continue with live presence fetch.
+    }
+
     try {
       const [stories, activeListings] = await Promise.all([
         fetchActiveStoriesByUserId(id),
@@ -62,10 +135,31 @@ export default function PublicProfileScreen() {
       ]);
       setActiveStoriesCount(stories.length);
       setListings(activeListings);
+      setPresenceError(null);
+      setListingsCacheNotice(null);
+      void writePublicProfileListingsCache(id, activeListings);
     } catch {
-      setPresenceError(PRESENCE_ERROR);
-      setListings([]);
       setActiveStoriesCount(0);
+
+      if (hasFreshCachedListings) {
+        setPresenceError(null);
+        setListingsCacheNotice('تعذر تحديث العناصر الآن، نعرض آخر نسخة محفوظة.');
+      } else {
+        try {
+          const stale = await readAnyPublicProfileListingsCache(id);
+          if (stale) {
+            setListings(stale.listings);
+            setPresenceError(null);
+            setListingsCacheNotice('أنت ترى عناصر محفوظة لهذا الملف. سنحدّثها عندما يتحسن الاتصال.');
+            return;
+          }
+        } catch {
+          // Ignore cache failures and preserve hard error fallback.
+        }
+
+        setPresenceError(PRESENCE_ERROR);
+        setListings([]);
+      }
     } finally {
       setPresenceLoading(false);
     }
@@ -92,6 +186,12 @@ export default function PublicProfileScreen() {
       ) : (
         <View style={[styles.cover, styles.coverFallback]}><AppText muted>لا توجد صورة غلاف</AppText></View>
       )}
+
+      {profileCacheNotice ? (
+        <AppCard>
+          <AppText muted>{profileCacheNotice}</AppText>
+        </AppCard>
+      ) : null}
 
       <AppCard>
         <View style={styles.headerCard}>
@@ -137,6 +237,7 @@ export default function PublicProfileScreen() {
           <AppText weight="semibold">عناصره المعروضة</AppText>
           <AppText muted>آخر العناصر النشطة التي يعرضها للتبديل.</AppText>
           {presenceLoading ? <AppText muted>جاري تحميل العناصر والقصص...</AppText> : null}
+          {listingsCacheNotice ? <AppText muted>{listingsCacheNotice}</AppText> : null}
           {!presenceLoading && presenceError ? (
             <AppText style={styles.presenceErrorText}>{PRESENCE_ERROR}</AppText>
           ) : null}

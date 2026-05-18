@@ -13,6 +13,12 @@ import { spacing } from '@/constants/spacing';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { fetchMarketplaceItemDetailById, MarketplaceItemDetail } from '@/lib/marketplace-items';
 import { shareMarketplaceItem } from '@/lib/share-item';
+import {
+  deleteItemDetailCache,
+  readAnyItemDetailCache,
+  readFreshItemDetailCache,
+  writeItemDetailCache,
+} from '@/lib/offline-item-detail-cache';
 
 export default function ItemDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,17 +27,65 @@ export default function ItemDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
 
   const loadItem = useCallback(async () => {
     if (!id) return;
 
     setLoading(true);
     setError(null);
+    setItemCacheNotice(null);
+
+    let hasFreshCachedItem = false;
+
+    try {
+      const cached = await readFreshItemDetailCache(id);
+      if (cached) {
+        hasFreshCachedItem = true;
+        setItem(cached.item);
+        setActiveImageIndex(0);
+        setLoading(false);
+        setItemCacheNotice('نستعرض تفاصيل محفوظة بينما نتحقق من الأحدث.');
+      }
+    } catch {
+      // Ignore cache failures and continue with network source of truth.
+    }
+
     try {
       const result = await fetchMarketplaceItemDetailById(id);
-      setItem(result);
-      setActiveImageIndex(0);
+
+      if (result) {
+        setItem(result);
+        setActiveImageIndex(0);
+        setError(null);
+        setItemCacheNotice(null);
+        void writeItemDetailCache(id, result);
+        return;
+      }
+
+      setItem(null);
+      setItemCacheNotice(null);
+      void deleteItemDetailCache(id);
     } catch {
+      if (hasFreshCachedItem) {
+        setError(null);
+        setItemCacheNotice('تعذر تحديث التفاصيل الآن، نعرض آخر نسخة محفوظة.');
+        return;
+      }
+
+      try {
+        const stale = await readAnyItemDetailCache(id);
+        if (stale) {
+          setItem(stale.item);
+          setActiveImageIndex(0);
+          setError(null);
+          setItemCacheNotice('أنت ترى نسخة محفوظة من تفاصيل العنصر. سنحدّثها عندما يتحسن الاتصال.');
+          return;
+        }
+      } catch {
+        // Ignore cache failures and preserve hard error fallback.
+      }
+
       setError('تعذر تحميل تفاصيل العنصر. حاول مرة أخرى.');
     } finally {
       setLoading(false);
@@ -113,6 +167,14 @@ export default function ItemDetailsScreen() {
           </ScrollView>
         ) : null}
       </Animated.View>
+
+      {itemCacheNotice ? (
+        <Animated.View entering={FadeInDown.duration(220).delay(80)}>
+          <AppCard>
+            <AppText muted>{itemCacheNotice}</AppText>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
       <Animated.View entering={FadeInDown.duration(220).delay(90)}>
         <AppCard>
