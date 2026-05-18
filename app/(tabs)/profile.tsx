@@ -171,6 +171,7 @@ export default function ProfileScreen() {
                   ) : null}
                   <AppButton label="إضافة قصة" variant="neutral" onPress={() => router.push('/story/create')} />
                   <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.push('/story/manage')} />
+                  <AppButton label="إدارة عناصري" variant="neutral" onPress={() => router.push('/item/manage')} />
                   {!myStoriesLoading && myActiveStoriesCount > 0 ? <AppText muted>لديك {myActiveStoriesCount} قصة نشطة الآن</AppText> : null}
                 </View>
               ) : null}
