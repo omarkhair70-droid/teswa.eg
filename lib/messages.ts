@@ -7,7 +7,7 @@ export type DealConversation = {
   requestedItemTitle: string;
   offeredItemTitle: string;
   otherParticipant: { id: string; displayName: string | null; avatarUrl: string | null };
-  latestMessage: { body: string; createdAt: string; senderId: string } | null;
+  latestMessage: { body: string; createdAt: string; senderId: string; messageType: 'text' | 'voice' } | null;
   unreadCount: number;
   lastActivityAt: string;
 };
@@ -29,7 +29,11 @@ export async function fetchDealConversationsForUser(userId: string): Promise<Dea
   const [summaries, profilesRes, messagesRes, readsRes] = await Promise.all([
     fetchExchangeItemSummariesByIds(itemIds),
     supabase.from('profiles').select('id,display_name,avatar_url').in('id', participantIds),
-    supabase.from('deal_messages').select('id,deal_id,sender_id,body,created_at').in('deal_id', dealIds).order('created_at', { ascending: false }),
+    supabase
+      .from('deal_messages')
+      .select('id,deal_id,sender_id,body,created_at,message_type')
+      .in('deal_id', dealIds)
+      .order('created_at', { ascending: false }),
     supabase.from('deal_message_reads').select('deal_id,last_read_at').eq('user_id', userId).in('deal_id', dealIds),
   ]);
   if (profilesRes.error) throw profilesRes.error;
@@ -72,6 +76,7 @@ export async function fetchDealConversationsForUser(userId: string): Promise<Dea
             body: latest.body as string,
             createdAt: latest.created_at as string,
             senderId: latest.sender_id as string,
+            messageType: latest.message_type === 'voice' ? 'voice' : 'text',
           }
         : null,
       unreadCount,
