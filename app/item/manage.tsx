@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, View, Pressable } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -11,6 +11,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
+import { archiveListingFromMobile, deleteArchivedListingFromMobile, reactivateListingFromMobile } from '@/lib/listing-lifecycle';
 import { fetchMyListings, MyListingStatus, MyListingSummary } from '@/lib/my-listings';
 
 const statusLabel: Record<MyListingStatus, string> = {
@@ -40,6 +41,8 @@ export default function ManageMyListingsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterKey>('all');
+  const [lifecycleBusyById, setLifecycleBusyById] = useState<Record<string, 'archive' | 'reactivate' | 'delete' | undefined>>({});
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const loadListings = useCallback(async () => {
     if (!user?.id) {
@@ -90,13 +93,24 @@ export default function ManageMyListingsScreen() {
     [listings, selectedFilter],
   );
 
-  if (!user) {
-    return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك أولاً لإدارة عناصرك." /></AppScreen>;
-  }
+  const runLifecycleAction = useCallback(async (itemId: string, action: 'archive' | 'reactivate' | 'delete') => {
+    setLifecycleBusyById((prev) => ({ ...prev, [itemId]: action }));
+    try {
+      const result = action === 'archive'
+        ? await archiveListingFromMobile({ itemId })
+        : action === 'reactivate'
+          ? await reactivateListingFromMobile({ itemId })
+          : await deleteArchivedListingFromMobile({ itemId });
 
-  if (loading) {
-    return <AppScreen><AppText muted>جاري تحميل عناصرك...</AppText></AppScreen>;
-  }
+      setFeedback(result.message);
+      if (result.ok) await loadListings();
+    } finally {
+      setLifecycleBusyById((prev) => ({ ...prev, [itemId]: undefined }));
+    }
+  }, [loadListings]);
+
+  if (!user) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك أولاً لإدارة عناصرك." /></AppScreen>;
+  if (loading) return <AppScreen><AppText muted>جاري تحميل عناصرك...</AppText></AppScreen>;
 
   if (error) {
     return <AppScreen><AppCard><View style={styles.group}><AppText>{error}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => void loadListings()} /></View></AppCard></AppScreen>;
@@ -124,6 +138,12 @@ export default function ManageMyListingsScreen() {
           </View>
         </AppCard>
 
+        {feedback ? (
+          <AppCard>
+            <AppText muted>{feedback}</AppText>
+          </AppCard>
+        ) : null}
+
         <View style={styles.filtersWrap}>
           {filters.map((filter) => {
             const active = selectedFilter === filter.key;
@@ -139,6 +159,7 @@ export default function ManageMyListingsScreen() {
 
         {visibleListings.map((listing) => {
           const metaLine = buildMetaLine(listing);
+          const busyAction = lifecycleBusyById[listing.id];
 
           return (
             <AppCard key={listing.id}>
@@ -162,12 +183,30 @@ export default function ManageMyListingsScreen() {
                     <AppButton label="عرض العنصر" variant="neutral" onPress={() => router.push(`/item/${listing.id}`)} />
                     <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
                     <AppButton label="تعديل الصور" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}/images`)} />
+                    <AppButton label="أرشفة العنصر" variant="danger" disabled={Boolean(busyAction)} loading={busyAction === 'archive'} onPress={() => void runLifecycleAction(listing.id, 'archive')} />
                   </View>
                 ) : listing.status === 'archived' ? (
                   <View style={styles.actions}>
                     <AppText muted>{statusNote[listing.status]}</AppText>
                     <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
                     <AppButton label="تعديل الصور" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}/images`)} />
+                    <AppButton label="إعادة التفعيل" variant="neutral" disabled={Boolean(busyAction)} loading={busyAction === 'reactivate'} onPress={() => void runLifecycleAction(listing.id, 'reactivate')} />
+                    <AppButton
+                      label="حذف العنصر نهائيًا"
+                      variant="danger"
+                      disabled={Boolean(busyAction)}
+                      loading={busyAction === 'delete'}
+                      onPress={() => {
+                        Alert.alert(
+                          'حذف العنصر',
+                          'سيتم حذف هذا العنصر نهائيًا من حسابك إذا لم يكن مرتبطًا بعروض مفتوحة أو تاريخ صفقات. هل تريد المتابعة؟',
+                          [
+                            { text: 'إلغاء', style: 'cancel' },
+                            { text: 'حذف', style: 'destructive', onPress: () => { void runLifecycleAction(listing.id, 'delete'); } },
+                          ],
+                        );
+                      }}
+                    />
                   </View>
                 ) : (
                   <AppText muted>{statusNote[listing.status]}</AppText>
