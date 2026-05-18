@@ -6,12 +6,15 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
+import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { colors } from '@/constants/colors';
+import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
+import { useAuth } from '@/lib/auth';
+import { fetchHomeDashboardSummary, HomeDashboardSummary } from '@/lib/home-dashboard';
 import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
-import { useAuth } from '@/lib/auth';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -23,6 +26,10 @@ export default function HomeScreen() {
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
   const [storiesError, setStoriesError] = useState<string | null>(null);
+
+  const [dashboard, setDashboard] = useState<HomeDashboardSummary | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -50,20 +57,104 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const loadDashboard = useCallback(async () => {
+    if (!user?.id) {
+      setDashboard(null);
+      setDashboardLoading(false);
+      setDashboardError(null);
+      return;
+    }
+
+    setDashboardLoading(true);
+    setDashboardError(null);
+    try {
+      const result = await fetchHomeDashboardSummary(user.id);
+      setDashboard(result);
+    } catch {
+      setDashboardError('تعذر تحميل لمحة حسابك حالياً.');
+      setDashboard(null);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     loadItems();
     loadStories();
-  }, [loadItems, loadStories]);
+    if (user?.id) {
+      void loadDashboard();
+    }
+  }, [loadDashboard, loadItems, loadStories, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
       void loadStories();
-    }, [loadStories]),
+      if (user?.id) {
+        void loadDashboard();
+      }
+    }, [loadDashboard, loadStories, user?.id]),
   );
 
   const myStorySummary = useMemo(() => stories.find((summary) => summary.author.id === user?.id) ?? null, [stories, user?.id]);
   const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== user?.id), [stories, user?.id]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
+
+  const profileCompleted = user?.profileCompleted !== false;
+  const nextAction = useMemo(() => {
+    if (!dashboard) {
+      return null;
+    }
+
+    if (!profileCompleted) {
+      return {
+        title: 'كمّل ملفك',
+        description: 'ملفك هو أول انطباع عنك في تِسوى. خلّيه أوضح.',
+        buttonLabel: 'تعديل ملفي',
+        route: '/profile/edit' as const,
+        variant: 'primary' as const,
+      };
+    }
+
+    if (dashboard.incomingActionableOffersCount > 0) {
+      const count = dashboard.incomingActionableOffersCount;
+      return {
+        title: 'عندك عروض محتاجة رد',
+        description: count === 1 ? 'فيه عرض وارد ينتظر قرارك.' : `فيه ${count} عروض واردة تنتظر قرارك.`,
+        buttonLabel: 'افتح الرسائل والعروض',
+        route: '/(tabs)/messages' as const,
+        variant: 'primary' as const,
+      };
+    }
+
+    if (dashboard.unreadDealMessagesCount > 0) {
+      const count = dashboard.unreadDealMessagesCount;
+      return {
+        title: 'فيه رسائل جديدة في دردشات الصفقات',
+        description: count === 1 ? 'رسالة واحدة لم تقرأها بعد.' : `${count} رسائل لم تقرأها بعد.`,
+        buttonLabel: 'افتح الدردشات',
+        route: '/(tabs)/messages' as const,
+        variant: 'primary' as const,
+      };
+    }
+
+    if (dashboard.activeListingsCount === 0) {
+      return {
+        title: 'اعرض أول حاجة',
+        description: 'وجود عنصر نشط يفتح باب التبادل ويخلي ملفك يتحرك.',
+        buttonLabel: 'اعرض حاجة',
+        route: '/(tabs)/add' as const,
+        variant: 'primary' as const,
+      };
+    }
+
+    return {
+      title: 'كل شيء هادئ الآن',
+      description: 'عندك حضور نشط في تِسوى. شوف الحركة الجديدة حوالينك.',
+      buttonLabel: 'ادخل حركة تِسوى',
+      route: '/motion' as const,
+      variant: 'neutral' as const,
+    };
+  }, [dashboard, profileCompleted]);
 
   return (
     <AppScreen style={styles.screen}>
@@ -73,74 +164,135 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
-            <AppText muted>استكشف أحدث العناصر الجاهزة للتبديل اليوم.</AppText>
-
-            <View style={styles.storiesSection}>
-              <View style={styles.storiesHeaderRow}>
-                <AppText weight="bold">القصص</AppText>
-                {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
-                  <AppText muted style={styles.storyCount}>{totalActiveStories} قصة</AppText>
-                ) : null}
+            <AppCard>
+              <View style={styles.heroCard}>
+                <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
+                <AppText>هنا تبدأ الحكايات، وتتحرك الحاجات، وتفتح المقايضات أبوابها.</AppText>
+                <AppText muted>تابع ما يهمك الآن، أو خذ جولة في الجديد.</AppText>
               </View>
+            </AppCard>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.storiesRail}
-              >
-                {myStorySummary && user?.id ? (
-                  <Pressable style={styles.storyTile} onPress={() => router.push(`/story/${user.id}`)}>
-                    <View style={[styles.storyAvatar, styles.myStoryActiveAvatar]}>
-                      {myStorySummary.author.avatarUrl ? (
-                        <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-                      ) : (
-                        <AppText weight="bold" style={styles.fallbackInitial}>
-                          {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
-                        </AppText>
-                      )}
+            {user ? (
+              <AppCard>
+                <View style={styles.dashboardSection}>
+                  <View style={styles.sectionHeader}>
+                    <AppText weight="bold">يهمك الآن</AppText>
+                    <AppText muted>لمحة سريعة عمّا يحتاج انتباهك داخل تِسوى.</AppText>
+                  </View>
+
+                  {dashboardLoading ? <AppText muted>نجهّز لمحتك الآن...</AppText> : null}
+
+                  {!dashboardLoading && dashboardError ? (
+                    <View style={styles.inlineStateRow}>
+                      <AppText style={styles.dashboardErrorText}>{dashboardError}</AppText>
+                      <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadDashboard} />
                     </View>
-                    <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
-                    {myStorySummary.stories.length > 1 ? <AppText muted style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
-                  </Pressable>
-                ) : (
-                  <Pressable style={styles.storyTile} onPress={() => router.push('/story/create')}>
-                    <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
-                      <AppText weight="bold" style={styles.addStoryPlus}>+</AppText>
+                  ) : null}
+
+                  {!dashboardLoading && !dashboardError && nextAction ? (
+                    <View style={styles.nextActionBlock}>
+                      <AppText weight="bold">{nextAction.title}</AppText>
+                      <AppText muted>{nextAction.description}</AppText>
+                      <AppButton
+                        label={nextAction.buttonLabel}
+                        variant={nextAction.variant}
+                        onPress={() => router.push(nextAction.route)}
+                      />
                     </View>
-                    <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
-                  </Pressable>
-                )}
+                  ) : null}
 
-                {otherStorySummaries.map((story) => {
-                  const label = story.author.displayName ?? (story.author.username ? `@${story.author.username}` : 'مستخدم');
-                  const fallbackInitial = (story.author.displayName ?? story.author.username ?? 'م').trim().charAt(0).toUpperCase();
+                  {dashboard ? (
+                    <View style={styles.metricsRow}>
+                      <View style={styles.metricChip}>
+                        <AppText muted style={styles.metricLabel}>العروض الواردة</AppText>
+                        <AppText weight="bold" style={styles.metricValue}>{dashboard.incomingActionableOffersCount}</AppText>
+                      </View>
+                      <View style={styles.metricChip}>
+                        <AppText muted style={styles.metricLabel}>رسائل غير مقروءة</AppText>
+                        <AppText weight="bold" style={styles.metricValue}>{dashboard.unreadDealMessagesCount}</AppText>
+                      </View>
+                      <View style={styles.metricChip}>
+                        <AppText muted style={styles.metricLabel}>عناصر نشطة</AppText>
+                        <AppText weight="bold" style={styles.metricValue}>{dashboard.activeListingsCount}</AppText>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </AppCard>
+            ) : null}
 
-                  return (
-                    <Pressable key={story.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${story.author.id}`)}>
-                      <View style={styles.storyAvatar}>
-                        {story.author.avatarUrl ? (
-                          <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+            <AppCard>
+              <View style={styles.storiesSection}>
+                <View style={styles.sectionHeader}>
+                  <AppText weight="bold">القصص</AppText>
+                  <AppText muted>لقطات قصيرة من عالم تِسوى الآن.</AppText>
+                </View>
+
+                <View style={styles.storiesHeaderRow}>
+                  {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
+                    <AppText muted style={styles.storyCount}>{totalActiveStories} قصة</AppText>
+                  ) : <View />}
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRail}>
+                  {myStorySummary && user?.id ? (
+                    <Pressable style={styles.storyTile} onPress={() => router.push(`/story/${user.id}`)}>
+                      <View style={[styles.storyAvatar, styles.myStoryActiveAvatar]}>
+                        {myStorySummary.author.avatarUrl ? (
+                          <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
                         ) : (
-                          <AppText weight="bold" style={styles.fallbackInitial}>{fallbackInitial}</AppText>
+                          <AppText weight="bold" style={styles.fallbackInitial}>
+                            {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
+                          </AppText>
                         )}
                       </View>
-                      <AppText numberOfLines={1} style={styles.storyLabel}>{label}</AppText>
+                      <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
+                      {myStorySummary.stories.length > 1 ? <AppText muted style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
                     </Pressable>
-                  );
-                })}
-              </ScrollView>
+                  ) : (
+                    <Pressable style={styles.storyTile} onPress={() => router.push('/story/create')}>
+                      <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
+                        <AppText weight="bold" style={styles.addStoryPlus}>+</AppText>
+                      </View>
+                      <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
+                    </Pressable>
+                  )}
 
-              {storiesLoading ? <AppText muted>جارٍ تحميل القصص...</AppText> : null}
-              {!storiesLoading && storiesError ? (
-                <View style={styles.inlineStateRow}>
-                  <AppText muted>{storiesError}</AppText>
-                  <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadStories} />
-                </View>
-              ) : null}
-              {!storiesLoading && !storiesError && stories.length === 0 ? (
-                <AppText muted>لا توجد قصص نشطة بعد.</AppText>
-              ) : null}
+                  {otherStorySummaries.map((story) => {
+                    const label = story.author.displayName ?? (story.author.username ? `@${story.author.username}` : 'مستخدم');
+                    const fallbackInitial = (story.author.displayName ?? story.author.username ?? 'م').trim().charAt(0).toUpperCase();
+
+                    return (
+                      <Pressable key={story.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${story.author.id}`)}>
+                        <View style={styles.storyAvatar}>
+                          {story.author.avatarUrl ? (
+                            <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                          ) : (
+                            <AppText weight="bold" style={styles.fallbackInitial}>{fallbackInitial}</AppText>
+                          )}
+                        </View>
+                        <AppText numberOfLines={1} style={styles.storyLabel}>{label}</AppText>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {storiesLoading ? <AppText muted>جارٍ تحميل القصص...</AppText> : null}
+                {!storiesLoading && storiesError ? (
+                  <View style={styles.inlineStateRow}>
+                    <AppText muted>{storiesError}</AppText>
+                    <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadStories} />
+                  </View>
+                ) : null}
+                {!storiesLoading && !storiesError && stories.length === 0 ? (
+                  <AppText muted>لا توجد قصص نشطة بعد.</AppText>
+                ) : null}
+              </View>
+            </AppCard>
+
+            <View style={styles.itemsHeader}>
+              <AppText weight="bold">أحدث العناصر</AppText>
+              <AppText muted>حاجات جديدة جاهزة لتبدأ رحلة تبادل.</AppText>
             </View>
           </View>
         }
@@ -165,12 +317,39 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  header: { gap: spacing.xs, marginBottom: spacing.md },
+  header: { gap: spacing.md, marginBottom: spacing.md },
+  heroCard: { gap: spacing.sm },
   title: { fontSize: 24 },
+  sectionHeader: { gap: spacing.xs },
+  dashboardSection: { gap: spacing.sm },
+  dashboardErrorText: { color: '#B42318' },
+  nextActionBlock: {
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+  },
+  metricsRow: {
+    flexDirection: 'row-reverse',
+    gap: spacing.xs,
+  },
+  metricChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  metricLabel: { fontSize: 11, textAlign: 'center' },
+  metricValue: { fontSize: 18 },
   storiesSection: {
     gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
   },
   storiesHeaderRow: {
     flexDirection: 'row-reverse',
@@ -190,7 +369,7 @@ const styles = StyleSheet.create({
   storyAvatar: {
     width: 64,
     height: 64,
-    borderRadius: 999,
+    borderRadius: radii.round,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -229,6 +408,11 @@ const styles = StyleSheet.create({
   },
   inlineStateRow: {
     gap: spacing.sm,
+  },
+  itemsHeader: {
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   stateBox: { gap: spacing.md },
 });
