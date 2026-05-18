@@ -161,11 +161,13 @@ export default function ManageMyListingsScreen() {
                   <View style={styles.actions}>
                     <AppButton label="عرض العنصر" variant="neutral" onPress={() => router.push(`/item/${listing.id}`)} />
                     <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
+                    <AppButton label="تعديل الصور" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}/images`)} />
                   </View>
                 ) : listing.status === 'archived' ? (
                   <View style={styles.actions}>
                     <AppText muted>{statusNote[listing.status]}</AppText>
                     <AppButton label="تعديل البيانات" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}`)} />
+                    <AppButton label="تعديل الصور" variant="neutral" onPress={() => router.push(`/item/edit/${listing.id}/images`)} />
                   </View>
                 ) : (
                   <AppText muted>{statusNote[listing.status]}</AppText>
