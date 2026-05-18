@@ -119,7 +119,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
         setStudioError('تعذر حفظ الفيديو المسجل.');
         return;
       }
-      onCaptured({ uri: result.uri, type: 'video', mimeType: 'video/mp4', fileName: `story-video-${Date.now()}.mp4` });
+      onCaptured({ uri: result.uri, type: 'video', width: 0, height: 0, mimeType: 'video/mp4', fileName: `story-video-${Date.now()}.mp4` });
       onClose();
     } catch {
       if (!recordingCancelledRef.current) setStudioError('تعذر حفظ الفيديو المسجل.');
