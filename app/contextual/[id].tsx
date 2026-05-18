@@ -282,30 +282,34 @@ export default function Screen() {
     if (!thread || !user?.id || !voiceDraft || voiceSending) return;
     setVoiceSending(true);
     setError(null);
-    const result = await sendContextualVoiceMessageFromMobile({
-      conversationId: thread.id,
-      currentUserId: user.id,
-      localUri: voiceDraft.uri,
-      durationMs: voiceDraft.durationMs,
-      mimeType: voiceDraft.mimeType,
-      fileName: voiceDraft.fileName,
-      sizeBytes: voiceDraft.sizeBytes,
-    });
-    if (!result.ok) {
-      setError(result.message);
+    try {
+      const result = await sendContextualVoiceMessageFromMobile({
+        conversationId: thread.id,
+        currentUserId: user.id,
+        localUri: voiceDraft.uri,
+        durationMs: voiceDraft.durationMs,
+        mimeType: voiceDraft.mimeType,
+        fileName: voiceDraft.fileName,
+        sizeBytes: voiceDraft.sizeBytes,
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      if (!messageIdsRef.current.has(result.message.id)) {
+        messageIdsRef.current.add(result.message.id);
+        setThread((prev: any) => (prev ? { ...prev, messages: [...prev.messages, result.message] } : prev));
+      }
+      setVoiceDraft(null);
+      setVoiceOpen(false);
+      void markContextualThreadReadFromMobile(thread.id).finally(() => {
+        void refreshBadges();
+      });
+    } catch {
+      setError('تعذر إرسال الرسالة الصوتية الآن. حاول مرة أخرى.');
+    } finally {
       setVoiceSending(false);
-      return;
     }
-    if (!messageIdsRef.current.has(result.message.id)) {
-      messageIdsRef.current.add(result.message.id);
-      setThread((prev: any) => (prev ? { ...prev, messages: [...prev.messages, result.message] } : prev));
-    }
-    setVoiceDraft(null);
-    setVoiceOpen(false);
-    void markContextualThreadReadFromMobile(thread.id).finally(() => {
-      void refreshBadges();
-    });
-    setVoiceSending(false);
   }, [refreshBadges, thread, user?.id, voiceDraft, voiceSending]);
 
   const recordingLabel = useMemo(() => `جاري التسجيل ${formatMs(recorderState.durationMillis ?? 0)}`,[recorderState.durationMillis]);
@@ -365,6 +369,9 @@ export default function Screen() {
               ) : voiceDraft ? (
                 <>
                   <Pressable style={styles.previewPlay} onPress={async () => {
+                    voicePlayer.pause();
+                    await voicePlayer.seekTo(0).catch(() => undefined);
+                    setActiveVoiceId(null);
                     await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
                     if (previewPlayerStatus.playing) previewPlayer.pause();
                     else previewPlayer.play();
