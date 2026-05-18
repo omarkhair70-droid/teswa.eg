@@ -68,7 +68,7 @@ export async function fetchEditableListingById(itemId: string, ownerId: string):
   if (error) throw error;
   if (!item) return null;
 
-  const { data: tags, error: tagsError } = await supabase.from('item_wanted_tags').select('tag').eq('item_id', itemId).order('id', { ascending: true });
+  const { data: tags, error: tagsError } = await supabase.from('item_wanted_tags').select('tag').eq('item_id', itemId);
   if (tagsError) throw tagsError;
 
   const wantedTags = (tags ?? [])

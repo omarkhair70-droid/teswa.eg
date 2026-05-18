@@ -166,6 +166,6 @@ const styles = StyleSheet.create({
   chip: { borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   chipTextActive: { color: colors.primary },
-  errorText: { color: colors.danger },
+  errorText: { color: '#B42318' },
   footerActions: { gap: spacing.sm },
 });
