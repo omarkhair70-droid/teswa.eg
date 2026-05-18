@@ -67,6 +67,16 @@ export type PublicProfile = {
   created_at: string;
 };
 
+export type PublicProfileListing = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  category: string | null;
+  city: string | null;
+  area: string | null;
+  createdAt: string | null;
+};
+
 export async function fetchMyAccountProfile(userId: string): Promise<AccountProfile | null> {
   const { data, error } = await supabase
     .from('profiles')
@@ -87,4 +97,78 @@ export async function fetchPublicProfileById(profileId: string): Promise<PublicP
 
   if (error) throw error;
   return data;
+}
+
+export async function fetchPublicProfileActiveListings(
+  profileId: string,
+  limit = 6,
+): Promise<PublicProfileListing[]> {
+  if (!profileId.trim()) return [];
+
+  const { data: items, error: itemsError } = await supabase
+    .from('items')
+    .select('id, title, category_id, city, area, created_at')
+    .eq('owner_id', profileId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (itemsError) throw itemsError;
+  if (!items || items.length === 0) return [];
+
+  const itemIds = items.map((item) => item.id);
+  const categoryIds = Array.from(new Set(items.map((item) => item.category_id).filter(Boolean)));
+
+  const [imagesResult, categoriesResult] = await Promise.all([
+    supabase
+      .from('item_images')
+      .select('item_id, image_url, is_primary, sort_order')
+      .in('item_id', itemIds),
+    categoryIds.length > 0
+      ? supabase.from('categories').select('id, name_ar').in('id', categoryIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (imagesResult.error) throw imagesResult.error;
+  if (categoriesResult.error) throw categoriesResult.error;
+
+  const imagesByItem = new Map<string, Array<{ image_url: string | null; is_primary: boolean | null; sort_order: number | null }>>();
+  for (const image of imagesResult.data ?? []) {
+    const list = imagesByItem.get(image.item_id) ?? [];
+    list.push({
+      image_url: image.image_url ?? null,
+      is_primary: image.is_primary ?? null,
+      sort_order: image.sort_order ?? null,
+    });
+    imagesByItem.set(image.item_id, list);
+  }
+
+  const categoriesById = new Map((categoriesResult.data ?? []).map((category) => [category.id, category.name_ar ?? null]));
+
+  const pickCover = (itemId: string): string | null => {
+    const images = imagesByItem.get(itemId);
+    if (!images || images.length === 0) return null;
+
+    const sorted = [...images].sort((a, b) => {
+      const aPrimary = a.is_primary ? 0 : 1;
+      const bPrimary = b.is_primary ? 0 : 1;
+      if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+      const aSort = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+      const bSort = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+      if (aSort !== bSort) return aSort - bSort;
+      return (a.image_url ?? '').localeCompare(b.image_url ?? '');
+    });
+
+    return sorted[0]?.image_url ?? null;
+  };
+
+  return items.map((item) => ({
+    id: item.id,
+    title: item.title?.trim() || 'عنصر بدون عنوان',
+    imageUrl: pickCover(item.id),
+    category: item.category_id ? categoriesById.get(item.category_id) ?? null : null,
+    city: item.city?.trim() || null,
+    area: item.area?.trim() || null,
+    createdAt: item.created_at ?? null,
+  }));
 }

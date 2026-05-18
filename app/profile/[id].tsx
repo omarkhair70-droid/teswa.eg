@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
@@ -10,15 +10,21 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
-import { fetchPublicProfileById, PublicProfile } from '@/lib/profiles';
+import { fetchActiveStoriesByUserId } from '@/lib/stories';
+import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
 
 const FETCH_ERROR = 'تعذر تحميل الملف العام حالياً. حاول مرة أخرى.';
+const PRESENCE_ERROR = 'تعذر تحميل القصص والعناصر لهذا الملف حالياً.';
 
 export default function PublicProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeStoriesCount, setActiveStoriesCount] = useState(0);
+  const [listings, setListings] = useState<PublicProfileListing[]>([]);
+  const [presenceLoading, setPresenceLoading] = useState(false);
+  const [presenceError, setPresenceError] = useState<string | null>(null);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -44,6 +50,30 @@ export default function PublicProfileScreen() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const loadPresence = useCallback(async () => {
+    if (!id) return;
+    setPresenceLoading(true);
+    setPresenceError(null);
+    try {
+      const [stories, activeListings] = await Promise.all([
+        fetchActiveStoriesByUserId(id),
+        fetchPublicProfileActiveListings(id, 6),
+      ]);
+      setActiveStoriesCount(stories.length);
+      setListings(activeListings);
+    } catch {
+      setPresenceError(PRESENCE_ERROR);
+      setListings([]);
+      setActiveStoriesCount(0);
+    } finally {
+      setPresenceLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadPresence();
+  }, [loadPresence]);
 
   if (!id) return <AppScreen><EmptyState title="معرّف غير صالح" description="تعذر تحديد الملف المطلوب." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نقوم بتحضير الملف العام." /></AppScreen>;
@@ -78,6 +108,13 @@ export default function PublicProfileScreen() {
             {memberSince ? <AppText muted>عضو منذ {memberSince}</AppText> : null}
           </View>
         </View>
+        {activeStoriesCount > 0 ? (
+          <AppButton
+            label={activeStoriesCount === 1 ? 'عرض القصة النشطة' : `عرض القصص النشطة (${activeStoriesCount})`}
+            variant="neutral"
+            onPress={() => router.push(`/story/${profile.id}`)}
+          />
+        ) : null}
       </AppCard>
 
       <AppCard>
@@ -94,6 +131,47 @@ export default function PublicProfileScreen() {
           <AppText>معدل الرد: {profile.response_rate != null ? `${profile.response_rate}%` : 'غير متاح بعد'}</AppText>
         </View>
       </AppCard>
+
+      <AppCard>
+        <View style={styles.group}>
+          <AppText weight="semibold">عناصره المعروضة</AppText>
+          <AppText muted>آخر العناصر النشطة التي يعرضها للتبديل.</AppText>
+          {presenceLoading ? <AppText muted>جاري تحميل العناصر والقصص...</AppText> : null}
+          {!presenceLoading && presenceError ? (
+            <AppText style={styles.presenceErrorText}>{PRESENCE_ERROR}</AppText>
+          ) : null}
+          {!presenceLoading && !presenceError && listings.length === 0 ? (
+            <AppText muted>لا توجد عناصر نشطة معروضة حاليًا.</AppText>
+          ) : null}
+          {!presenceLoading && !presenceError && listings.length > 0 ? (
+            <View style={styles.listingsList}>
+              {listings.map((listing) => {
+                const metaParts = [listing.category, listing.city, listing.area].filter(Boolean);
+                const meta = metaParts.length > 0 ? metaParts.join(' • ') : null;
+                return (
+                  <Pressable
+                    key={listing.id}
+                    style={styles.listingRow}
+                    onPress={() => router.push(`/item/${listing.id}`)}
+                  >
+                    {listing.imageUrl ? (
+                      <ExpoImage source={{ uri: listing.imageUrl }} style={styles.listingImage} contentFit="cover" transition={150} />
+                    ) : (
+                      <View style={[styles.listingImage, styles.listingImageFallback]}>
+                        <AppText muted>بدون صورة</AppText>
+                      </View>
+                    )}
+                    <View style={styles.listingContent}>
+                      <AppText numberOfLines={1} weight="semibold">{listing.title}</AppText>
+                      {meta ? <AppText muted numberOfLines={1}>{meta}</AppText> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+      </AppCard>
     </AppScreen>
   );
 }
@@ -108,4 +186,19 @@ const styles = StyleSheet.create({
   avatarFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1 },
   name: { fontSize: 22 },
   group: { gap: spacing.sm },
+  presenceErrorText: { color: '#B42318' },
+  listingsList: { gap: spacing.sm },
+  listingRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.sm,
+  },
+  listingImage: { width: 56, height: 56, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
+  listingImageFallback: { justifyContent: 'center', alignItems: 'center' },
+  listingContent: { flex: 1, gap: spacing.xs },
 });
