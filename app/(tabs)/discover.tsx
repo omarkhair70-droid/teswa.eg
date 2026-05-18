@@ -10,6 +10,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import { radii } from '@/constants/radii';
 import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
 import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 
@@ -210,22 +211,43 @@ export default function DiscoverScreen() {
         onEndReachedThreshold={0.35}
         ListHeaderComponent={
           <View style={styles.header}>
-            <AppText weight="bold" style={styles.title}>اكتشف العناصر</AppText>
+            <AppCard>
+              <View style={styles.heroBox}>
+                <AppText weight="bold" style={styles.heroTitle}>اكتشف تِسوى</AppText>
+                <AppText>ناس، حكايات، وحاجات بتدور على رحلة جديدة. اختار الباب اللي عايز تبدأ منه.</AppText>
+                <AppText muted>ولو بتدور على عنصر محدد، كمّل تحت وفلتر النتائج براحتك.</AppText>
+              </View>
+            </AppCard>
+            <AppCard>
+              <View style={styles.worldPathsBox}>
+                <AppText weight="bold">أبواب الاكتشاف</AppText>
+                <AppText muted>تِسوى مش قائمة عناصر فقط. ادخل من الناس، من الحركة، أو انزل للتصفح المباشر.</AppText>
+                <View style={styles.pathBlock}>
+                  <AppText weight="bold">ناس تِسوى</AppText>
+                  <AppText muted>شوف مين بيعرض، مين عنده حكايات، وافتح ملفه.</AppText>
+                  <AppButton label="اكتشف الناس" variant="neutral" onPress={() => router.push('/people')} />
+                </View>
+                <View style={styles.pathSeparator} />
+                <View style={styles.pathBlock}>
+                  <AppText weight="bold">حركة تِسوى</AppText>
+                  <AppText muted>قصص نشطة، حاجات ليها حكاية، وأبواب بدأت تتحرك.</AppText>
+                  <AppButton label="ادخل الحركة" variant="neutral" onPress={() => router.push('/motion')} />
+                </View>
+                <View style={styles.pathSeparator} />
+                <View style={styles.pathBlock}>
+                  <AppText weight="bold">العناصر</AppText>
+                  <AppText muted>ابحث وفلتر العناصر الجاهزة للتبديل.</AppText>
+                  <View style={styles.itemsHint}>
+                    <AppText muted>كمّل للتصفح</AppText>
+                  </View>
+                </View>
+              </View>
+            </AppCard>
+            <View style={styles.browseIntro}>
+              <AppText weight="bold" style={styles.browseTitle}>تصفح العناصر</AppText>
+              <AppText muted>ابحث بالاسم أو الفئة أو المدينة، وقرّب النتائج لموقعك.</AppText>
+            </View>
             <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
-            <AppCard>
-              <View style={styles.peopleEntryBox}>
-                <AppText weight="bold">اكتشف الناس كمان</AppText>
-                <AppText muted>تِسوى مش عناصر بس. شوف مين بيعرض، مين عنده حكايات، وادخل ملفه.</AppText>
-                <AppButton label="ناس تِسوى" variant="neutral" onPress={() => router.push('/people')} />
-              </View>
-            </AppCard>
-            <AppCard>
-              <View style={styles.motionEntryBox}>
-                <AppText weight="bold">حركة تِسوى</AppText>
-                <AppText muted>قصص شغالة، وحاجات أصحابها حكوا عنها قبل ما تتبدل.</AppText>
-                <AppButton label="ادخل حركة تِسوى" variant="neutral" onPress={() => router.push('/motion')} />
-              </View>
-            </AppCard>
             <AppCard>
               <View style={styles.nearbyBox}>
                 {activeNearbyLocation ? (
@@ -324,9 +346,14 @@ const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   header: { gap: spacing.sm, marginBottom: spacing.md },
-  title: { fontSize: 24 },
-  peopleEntryBox: { gap: spacing.sm },
-  motionEntryBox: { gap: spacing.sm },
+  heroBox: { gap: spacing.sm },
+  heroTitle: { fontSize: 26 },
+  worldPathsBox: { gap: spacing.sm },
+  pathBlock: { gap: spacing.xs },
+  pathSeparator: { height: 1, backgroundColor: colors.border },
+  itemsHint: { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: colors.primarySoft, borderRadius: radii.round },
+  browseIntro: { gap: spacing.xs, marginTop: spacing.sm },
+  browseTitle: { fontSize: 24 },
   nearbyBox: { gap: spacing.sm },
   filterBox: { gap: spacing.sm },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
