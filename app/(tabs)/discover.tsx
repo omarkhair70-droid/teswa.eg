@@ -13,6 +13,11 @@ import { spacing } from '@/constants/spacing';
 import { radii } from '@/constants/radii';
 import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
 import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
+import {
+  readAnyMarketplaceFirstPageCache,
+  readFreshMarketplaceFirstPageCache,
+  writeMarketplaceFirstPageCache,
+} from '@/lib/offline-marketplace-cache';
 
 export default function DiscoverScreen() {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
@@ -23,6 +28,7 @@ export default function DiscoverScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [itemsCacheNotice, setItemsCacheNotice] = useState<string | null>(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; matchTerms: string[] } | null>(null);
@@ -41,12 +47,40 @@ export default function DiscoverScreen() {
     setLoading(true);
     setError(null);
     setLoadMoreError(null);
+    setItemsCacheNotice(null);
+
+    let hasFreshCacheVisible = false;
+
+    const cached = await readFreshMarketplaceFirstPageCache();
+    if (cached) {
+      hasFreshCacheVisible = true;
+      setItems(cached.page.items);
+      setHasMore(cached.page.hasMore);
+      setLoading(false);
+      setItemsCacheNotice('نستعرض نتائج محفوظة بينما نتحقق من الجديد.');
+    }
+
     try {
       const page = await fetchMarketplaceItemsPage({ offset: 0 });
       setItems(page.items);
       setHasMore(page.hasMore);
+      setError(null);
+      setItemsCacheNotice(null);
+      void writeMarketplaceFirstPageCache(page);
     } catch {
-      setError('تعذر تحميل قائمة التصفح. حاول لاحقاً.');
+      if (hasFreshCacheVisible) {
+        setItemsCacheNotice('تعذر تحديث التصفح الآن، نعرض آخر نسخة محفوظة.');
+      } else {
+        const stale = await readAnyMarketplaceFirstPageCache();
+        if (stale) {
+          setItems(stale.page.items);
+          setHasMore(stale.page.hasMore);
+          setError(null);
+          setItemsCacheNotice('أنت ترى نسخة محفوظة من التصفح. سنحدّثها عندما يتحسن الاتصال.');
+        } else {
+          setError('تعذر تحميل قائمة التصفح. حاول لاحقاً.');
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -64,6 +98,7 @@ export default function DiscoverScreen() {
       setItems(page.items);
       setHasMore(page.hasMore);
       setError(null);
+      void writeMarketplaceFirstPageCache(page);
     } catch {
       // Keep existing items visible on refresh failure.
     } finally {
@@ -248,6 +283,11 @@ export default function DiscoverScreen() {
               <AppText muted>ابحث بالاسم أو الفئة أو المدينة، وقرّب النتائج لموقعك.</AppText>
             </View>
             <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
+            {itemsCacheNotice ? (
+              <AppCard>
+                <AppText muted>{itemsCacheNotice}</AppText>
+              </AppCard>
+            ) : null}
             <AppCard>
               <View style={styles.nearbyBox}>
                 {activeNearbyLocation ? (

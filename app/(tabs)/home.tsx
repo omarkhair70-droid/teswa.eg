@@ -13,7 +13,12 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { fetchHomeDashboardSummary, HomeDashboardSummary } from '@/lib/home-dashboard';
-import { fetchMarketplaceItems, MarketplaceItem } from '@/lib/marketplace-items';
+import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
+import {
+  readAnyMarketplaceFirstPageCache,
+  readFreshMarketplaceFirstPageCache,
+  writeMarketplaceFirstPageCache,
+} from '@/lib/offline-marketplace-cache';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 
 export default function HomeScreen() {
@@ -22,6 +27,7 @@ export default function HomeScreen() {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemsCacheNotice, setItemsCacheNotice] = useState<string | null>(null);
 
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
@@ -34,11 +40,37 @@ export default function HomeScreen() {
   const loadItems = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setItemsCacheNotice(null);
+
+    let hasFreshCacheVisible = false;
+
+    const cached = await readFreshMarketplaceFirstPageCache();
+    if (cached) {
+      hasFreshCacheVisible = true;
+      setItems(cached.page.items);
+      setLoading(false);
+      setItemsCacheNotice('نستعرض آخر عناصر محفوظة بينما نتحقق من الجديد.');
+    }
+
     try {
-      const result = await fetchMarketplaceItems();
-      setItems(result);
+      const page = await fetchMarketplaceItemsPage({ offset: 0 });
+      setItems(page.items);
+      setError(null);
+      setItemsCacheNotice(null);
+      void writeMarketplaceFirstPageCache(page);
     } catch {
-      setError('تعذر تحميل العناصر حالياً. حاول مرة أخرى.');
+      if (hasFreshCacheVisible) {
+        setItemsCacheNotice('تعذر التحديث الآن، نعرض آخر نسخة محفوظة.');
+      } else {
+        const stale = await readAnyMarketplaceFirstPageCache();
+        if (stale) {
+          setItems(stale.page.items);
+          setError(null);
+          setItemsCacheNotice('أنت ترى نسخة محفوظة من أحدث العناصر. سنحدّثها عندما يتحسن الاتصال.');
+        } else {
+          setError('تعذر تحميل العناصر حالياً. حاول مرة أخرى.');
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -314,6 +346,12 @@ export default function HomeScreen() {
                 ) : null}
               </View>
             </AppCard>
+
+            {itemsCacheNotice ? (
+              <AppCard>
+                <AppText muted>{itemsCacheNotice}</AppText>
+              </AppCard>
+            ) : null}
 
             <View style={styles.itemsHeader}>
               <AppText weight="bold">أحدث العناصر</AppText>
