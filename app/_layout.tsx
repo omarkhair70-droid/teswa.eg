@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '@/lib/auth';
 import { navigateFromNotificationResponse, syncPushDeviceRegistrationIfPermitted } from '@/lib/push-notifications';
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
+import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -60,6 +61,15 @@ function ShareIntentCoordinator() {
 
     void resetShareIntent();
   }, [hasShareIntent, resetShareIntent, router, shareIntent]);
+
+  return null;
+}
+
+
+function BackgroundMemoryRefreshCoordinator() {
+  useEffect(() => {
+    void ensureTeswaBackgroundMemoryRefreshRegistered();
+  }, []);
 
   return null;
 }
@@ -186,6 +196,7 @@ export default function RootLayout() {
         <AuthProvider>
           <UnreadBadgesProvider>
             <ShareIntentCoordinator />
+            <BackgroundMemoryRefreshCoordinator />
             <RootNavigator />
           </UnreadBadgesProvider>
         </AuthProvider>
