@@ -125,8 +125,34 @@ export default function HomeScreen() {
       };
     }
 
-    if (dashboard.unreadDealMessagesCount > 0) {
-      const count = dashboard.unreadDealMessagesCount;
+    const unreadDeals = dashboard.unreadDealMessagesCount;
+    const unreadReplies = dashboard.unreadContextualMessagesCount;
+
+    if (unreadDeals > 0 && unreadReplies > 0) {
+      return {
+        title: 'عندك رسائل وردود جديدة',
+        description: `فيه ${unreadReplies} ردود قصص و ${unreadDeals} رسائل صفقات لم تقرأها بعد.`,
+        buttonLabel: 'افتح الرسائل',
+        route: '/(tabs)/messages' as const,
+        variant: 'primary' as const,
+      };
+    }
+
+    if (unreadReplies > 0) {
+      return {
+        title: 'عندك ردود قصص جديدة',
+        description:
+          unreadReplies === 1
+            ? 'فيه رد جديد على القصص لم تقرأه بعد.'
+            : `فيه ${unreadReplies} ردود قصص لم تقرأها بعد.`,
+        buttonLabel: 'افتح الردود',
+        route: '/(tabs)/messages' as const,
+        variant: 'primary' as const,
+      };
+    }
+
+    if (unreadDeals > 0) {
+      const count = unreadDeals;
       return {
         title: 'فيه رسائل جديدة في دردشات الصفقات',
         description: count === 1 ? 'رسالة واحدة لم تقرأها بعد.' : `${count} رسائل لم تقرأها بعد.`,
@@ -207,8 +233,8 @@ export default function HomeScreen() {
                         <AppText weight="bold" style={styles.metricValue}>{dashboard.incomingActionableOffersCount}</AppText>
                       </View>
                       <View style={styles.metricChip}>
-                        <AppText muted style={styles.metricLabel}>رسائل غير مقروءة</AppText>
-                        <AppText weight="bold" style={styles.metricValue}>{dashboard.unreadDealMessagesCount}</AppText>
+                        <AppText muted style={styles.metricLabel}>رسائل وردود غير مقروءة</AppText>
+                        <AppText weight="bold" style={styles.metricValue}>{dashboard.unreadDealMessagesCount + dashboard.unreadContextualMessagesCount}</AppText>
                       </View>
                       <View style={styles.metricChip}>
                         <AppText muted style={styles.metricLabel}>عناصر نشطة</AppText>

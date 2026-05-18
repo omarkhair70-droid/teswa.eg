@@ -21,6 +21,7 @@ export type AppNotification = {
   itemId: string | null;
   offerId: string | null;
   dealId: string | null;
+  contextualConversationId: string | null;
   readAt: string | null;
   createdAt: string;
   isRead: boolean;
@@ -41,6 +42,7 @@ function mapNotificationRow(row: {
   item_id: string | null;
   offer_id: string | null;
   deal_id: string | null;
+  contextual_conversation_id: string | null;
   read_at: string | null;
   created_at: string;
 }): AppNotification {
@@ -52,6 +54,7 @@ function mapNotificationRow(row: {
     itemId: row.item_id,
     offerId: row.offer_id,
     dealId: row.deal_id,
+    contextualConversationId: row.contextual_conversation_id,
     readAt: row.read_at,
     createdAt: row.created_at,
     isRead: Boolean(row.read_at),
@@ -61,7 +64,7 @@ function mapNotificationRow(row: {
 export async function fetchMyNotifications(userId: string): Promise<{ ok: true; data: AppNotification[] } | { ok: false; message: string; error?: PostgrestError | null }> {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, type, title, body, item_id, offer_id, deal_id, read_at, created_at')
+    .select('id, type, title, body, item_id, offer_id, deal_id, contextual_conversation_id, read_at, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -106,7 +109,8 @@ export async function markAllNotificationsRead(userId: string): Promise<Notifica
   return { ok: true };
 }
 
-export function resolveNotificationRoute(notification: Pick<AppNotification, 'dealId' | 'offerId' | 'itemId'>): string | null {
+export function resolveNotificationRoute(notification: Pick<AppNotification, 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId'>): string | null {
+  if (notification.contextualConversationId) return `/contextual/${notification.contextualConversationId}`;
   if (notification.dealId) return `/deal/${notification.dealId}`;
   if (notification.offerId) return `/offer/${notification.offerId}`;
   if (notification.itemId) return `/item/${notification.itemId}`;

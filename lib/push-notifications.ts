@@ -114,15 +114,17 @@ export async function disableRegisteredPushDeviceIfPossible() {
   }
 }
 
-const SAFE_PREFIXES = ['/deal/', '/offer/', '/item/'] as const;
+const SAFE_PREFIXES = ['/deal/', '/offer/', '/item/', '/contextual/'] as const;
 export function resolvePushNotificationRoute(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const payload = data as Record<string, unknown>;
   const route = typeof payload.route === 'string' ? payload.route.trim() : '';
   if (route === '/notifications' || SAFE_PREFIXES.some((p) => route.startsWith(p))) return route;
+  const contextualConversationId = typeof payload.contextualConversationId === 'string' ? payload.contextualConversationId : null;
   const dealId = typeof payload.dealId === 'string' ? payload.dealId : null;
   const offerId = typeof payload.offerId === 'string' ? payload.offerId : null;
   const itemId = typeof payload.itemId === 'string' ? payload.itemId : null;
+  if (contextualConversationId) return `/contextual/${contextualConversationId}`;
   if (dealId) return `/deal/${dealId}`;
   if (offerId) return `/offer/${offerId}`;
   if (itemId) return `/item/${itemId}`;

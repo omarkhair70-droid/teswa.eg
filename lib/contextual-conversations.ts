@@ -71,6 +71,27 @@ export type SendContextualMessageResult =
   | { ok: true; message: ContextualConversationMessage }
   | { ok: false; reason: 'invalid_body' | 'send_failed'; message: string };
 
+
+async function notifyContextualMessageFromMobile(input: {
+  conversationId: string;
+  messageId: string;
+  kind: 'story_reply_initial' | 'thread_message';
+}): Promise<void> {
+  const conversationId = input.conversationId.trim();
+  const messageId = input.messageId.trim();
+
+  if (!conversationId || !messageId) return;
+
+  const { error } = await supabase.rpc('create_contextual_message_notification', {
+    p_conversation_id: conversationId,
+    p_message_id: messageId,
+    p_kind: input.kind,
+  });
+
+  if (error && __DEV__) {
+    console.warn('[contextual-conversations] create contextual notification failed', error);
+  }
+}
 export async function markContextualThreadReadFromMobile(conversationId: string): Promise<void> {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) return;
@@ -123,6 +144,12 @@ export async function sendStoryReplyFromMobile(input: {
     }
     return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد حالياً. قد تكون القصة انتهت.' };
   }
+
+  void notifyContextualMessageFromMobile({
+    conversationId: row.conversation_id,
+    messageId: row.message_id,
+    kind: 'story_reply_initial',
+  });
 
   return { ok: true, conversationId: row.conversation_id, messageId: row.message_id };
 }
@@ -310,6 +337,12 @@ export async function sendContextualMessageFromMobile(input: {
     }
     return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرسالة حالياً.' };
   }
+
+  void notifyContextualMessageFromMobile({
+    conversationId,
+    messageId: data.id,
+    kind: 'thread_message',
+  });
 
   return {
     ok: true,
