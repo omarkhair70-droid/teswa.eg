@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24 },
   segmentedWrap: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radii.lg,
     padding: spacing.xs,
     gap: spacing.xs,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 999,
-    backgroundColor: colors.error,
+    backgroundColor: '#B42318',
   },
   offerRow: { gap: spacing.xs },
   offerHeader: {
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 999,
-    backgroundColor: colors.card,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -230,8 +230,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   swapChip: {
-    backgroundColor: colors.card,
-    borderRadius: radii.pill,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.round,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     alignSelf: 'flex-end',
