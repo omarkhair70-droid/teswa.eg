@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEventListener } from 'expo';
@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetchStoryViewerContextByUserId } from '@/lib/stories';
 import { markStoryViewedFromMobile } from '@/lib/story-views';
 import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/story-likes';
+import { sendStoryReplyFromMobile } from '@/lib/contextual-conversations';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -98,6 +99,10 @@ export default function StoryViewerScreen() {
   const [likedStoryIds, setLikedStoryIds] = useState<Record<string, boolean>>({});
   const [likeBusyStoryIds, setLikeBusyStoryIds] = useState<Record<string, boolean>>({});
   const [likeActionError, setLikeActionError] = useState<string | null>(null);
+  const [storyReplyBody, setStoryReplyBody] = useState('');
+  const [storyReplySending, setStoryReplySending] = useState(false);
+  const [storyReplyFeedback, setStoryReplyFeedback] = useState<string | null>(null);
+  const [storyReplyError, setStoryReplyError] = useState<string | null>(null);
 
   const closeViewer = useCallback(() => {
     router.back();
@@ -282,6 +287,32 @@ export default function StoryViewerScreen() {
     }
   }, [currentStory, currentStoryLiked, isViewingOwnStories, likeBusyStoryIds, user?.id]);
 
+
+  const replyComposerVisible = !!user?.id && !!currentStory && !isViewingOwnStories;
+
+  const handleSendStoryReply = useCallback(async () => {
+    if (!replyComposerVisible || !user?.id || !currentStory) return;
+    setStoryReplyError(null);
+    setStoryReplyFeedback(null);
+    setStoryReplySending(true);
+    try {
+      const result = await sendStoryReplyFromMobile({ storyId: currentStory.id, currentUserId: user.id, body: storyReplyBody });
+      if (!result.ok) {
+        setStoryReplyError(result.message);
+        return;
+      }
+      setStoryReplyBody('');
+      setStoryReplyFeedback('تم إرسال ردك.');
+    } finally {
+      setStoryReplySending(false);
+    }
+  }, [currentStory, replyComposerVisible, storyReplyBody, user?.id]);
+
+  useEffect(() => {
+    setStoryReplyError(null);
+    setStoryReplyFeedback(null);
+  }, [currentStory?.id]);
+
   const renderUnavailableState = () => {
     if (isViewingOwnStories) {
       return (
@@ -418,8 +449,22 @@ export default function StoryViewerScreen() {
         <Pressable style={styles.rightZone} onPress={goNext} />
       </View>
 
+
+      {replyComposerVisible ? (
+        <View style={styles.replyComposerOverlay}>
+          {storyReplyError ? <AppText style={styles.replyErrorText}>{storyReplyError}</AppText> : null}
+          {!storyReplyError && storyReplyFeedback ? <AppText style={styles.replyFeedbackText}>{storyReplyFeedback}</AppText> : null}
+          <View style={styles.replyComposerRow}>
+            <Pressable style={[styles.replySendButton, (storyReplySending || !storyReplyBody.trim()) && styles.replySendButtonDisabled]} onPress={() => void handleSendStoryReply()} disabled={storyReplySending || !storyReplyBody.trim()}>
+              <AppText style={styles.replySendButtonText}>{storyReplySending ? '...' : 'إرسال'}</AppText>
+            </Pressable>
+            <TextInput value={storyReplyBody} onChangeText={setStoryReplyBody} placeholder="رد على القصة..." placeholderTextColor="rgba(255,255,255,0.6)" style={styles.replyInput} editable={!storyReplySending} textAlign="right" />
+          </View>
+        </View>
+      ) : null}
+
       {currentStory?.caption ? (
-        <View style={styles.captionBox}><AppText style={styles.captionText}>{currentStory.caption}</AppText></View>
+        <View style={[styles.captionBox, replyComposerVisible && styles.captionBoxWithReplyComposer]}><AppText style={styles.captionText}>{currentStory.caption}</AppText></View>
       ) : null}
     </View>
   );
@@ -472,6 +517,15 @@ const styles = StyleSheet.create({
   likeErrorBox: { position: 'absolute', top: 118, left: 12, right: 12, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
   likeErrorText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, textAlign: 'right' },
   captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
+  captionBoxWithReplyComposer: { bottom: 76 },
+  replyComposerOverlay: { position: 'absolute', left: 12, right: 12, bottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 12, padding: 8, gap: 6, zIndex: 4 },
+  replyComposerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  replyInput: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 10, color: '#fff', backgroundColor: 'rgba(255,255,255,0.08)' },
+  replySendButton: { minWidth: 64, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)' },
+  replySendButtonDisabled: { opacity: 0.5 },
+  replySendButtonText: { color: '#fff' },
+  replyErrorText: { color: 'rgba(255,200,200,0.95)', fontSize: 12, textAlign: 'right' },
+  replyFeedbackText: { color: 'rgba(230,255,230,0.95)', fontSize: 12, textAlign: 'right' },
   captionText: { color: '#fff', textAlign: 'right' },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 10 },
   stateTitle: { color: '#fff', fontSize: 20 },

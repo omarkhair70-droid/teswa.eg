@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { fetchUnreadNotificationCount } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase/client';
+import { fetchUnreadContextualMessagesCount } from '@/lib/contextual-conversations';
 
 type Ctx = { notificationsUnreadCount: number; messagesUnreadCount: number; refreshBadges: () => Promise<void> };
 const UnreadBadgesContext = createContext<Ctx | null>(null);
@@ -14,12 +15,14 @@ export function UnreadBadgesProvider({ children }: PropsWithChildren) {
 
   const refreshBadges = useCallback(async () => {
     if (!user?.id) return;
-    const [notif, messages] = await Promise.all([
+    const [notif, messages, contextualUnread] = await Promise.all([
       fetchUnreadNotificationCount(user.id),
       supabase.rpc('get_unread_deal_messages_count'),
+      fetchUnreadContextualMessagesCount(),
     ]);
     setNotificationsUnreadCount(notif.ok ? notif.count : 0);
-    setMessagesUnreadCount(typeof messages.data === 'number' ? messages.data : 0);
+    const dealUnread = typeof messages.data === 'number' ? Math.max(0, messages.data) : 0;
+    setMessagesUnreadCount(dealUnread + contextualUnread);
   }, [user?.id]);
 
   useEffect(() => {

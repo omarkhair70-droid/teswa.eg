@@ -14,8 +14,9 @@ import { fetchOffersInbox, getOfferStatusLabel, OfferRowSummary } from '@/lib/of
 import { DealConversation, fetchDealConversationsForUser } from '@/lib/messages';
 import { getDealStatusLabel } from '@/lib/deals';
 import { useUnreadBadges } from '@/lib/unread-badges';
+import { ContextualConversationSummary, fetchContextualConversationSummariesForUser } from '@/lib/contextual-conversations';
 
-type MessagesSection = 'chats' | 'offers';
+type MessagesSection = 'chats' | 'replies' | 'offers';
 
 function OfferRow({ offer, label }: { offer: OfferRowSummary; label: 'عرض وارد' | 'عرض مرسل' }) {
   const hasDealChat = offer.status === 'accepted' && !!offer.dealId;
@@ -78,6 +79,44 @@ function DealRow({ convo }: { convo: DealConversation }) {
   );
 }
 
+
+function ReplyThreadRow({ thread }: { thread: ContextualConversationSummary }) {
+  const otherName = thread.otherParticipant.displayName?.trim() || 'رد على قصة';
+  const fallbackLetter = otherName[0] || '؟';
+  const latestPreview = thread.latestMessage
+    ? `${thread.latestMessage.senderId === thread.otherParticipant.id ? `${otherName}: ` : 'أنت: '}${thread.latestMessage.body}`
+    : 'لسه مفيش رسائل.';
+
+  return (
+    <Pressable onPress={() => router.push(`/contextual/${thread.conversationId}`)}>
+      <AppCard>
+        <View style={styles.chatRow}>
+          <View style={styles.avatarWrap}>
+            {thread.otherParticipant.avatarUrl ? (
+              <Image source={{ uri: thread.otherParticipant.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarFallback}><AppText weight="semibold">{fallbackLetter}</AppText></View>
+            )}
+          </View>
+
+          <View style={styles.chatMain}>
+            <AppText weight="semibold" numberOfLines={1}>{otherName}</AppText>
+            <AppText muted numberOfLines={1}>{latestPreview}</AppText>
+            <View style={styles.swapChip}><AppText muted>رد على قصة</AppText></View>
+          </View>
+
+          <View style={styles.chatMeta}>
+            <AppText muted>{new Date(thread.lastActivityAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
+            {thread.unreadCount > 0 ? (
+              <View style={styles.unreadBadge}><AppText weight="semibold" style={styles.unreadText}>{thread.unreadCount}</AppText></View>
+            ) : null}
+          </View>
+        </View>
+      </AppCard>
+    </Pressable>
+  );
+}
+
 export default function Screen() {
   const { user } = useAuth();
   const [selectedSection, setSelectedSection] = useState<MessagesSection>('chats');
@@ -86,6 +125,7 @@ export default function Screen() {
   const [incoming, setIncoming] = useState<OfferRowSummary[]>([]);
   const [sent, setSent] = useState<OfferRowSummary[]>([]);
   const [conversations, setConversations] = useState<DealConversation[]>([]);
+  const [replyThreads, setReplyThreads] = useState<ContextualConversationSummary[]>([]);
   const { refreshBadges } = useUnreadBadges();
 
   const offersCount = incoming.length + sent.length;
@@ -95,13 +135,15 @@ export default function Screen() {
     setLoading(true);
     setError(null);
     try {
-      const [offersData, convosData] = await Promise.all([
+      const [offersData, convosData, repliesData] = await Promise.all([
         fetchOffersInbox(user.id),
         fetchDealConversationsForUser(user.id),
+        fetchContextualConversationSummariesForUser(user.id),
       ]);
       setIncoming(offersData.incomingActionableOffers);
       setSent(offersData.sentOffers);
       setConversations(convosData);
+      setReplyThreads(repliesData);
       void refreshBadges();
     } catch {
       setError('تعذر تحميل الرسائل والعروض حالياً.');
@@ -126,7 +168,7 @@ export default function Screen() {
     <AppScreen scrollable>
       <View style={styles.group}>
         <AppText weight="bold" style={styles.title}>الرسائل</AppText>
-        <AppText muted>تابع دردشات الصفقات والعروض من مكان واحد.</AppText>
+        <AppText muted>تابع دردشات الصفقات، ردود القصص، والعروض من مكان واحد.</AppText>
 
         <View style={styles.segmentedWrap}>
           <Pressable
@@ -134,6 +176,12 @@ export default function Screen() {
             onPress={() => setSelectedSection('chats')}
           >
             <AppText weight="semibold" style={selectedSection === 'chats' ? styles.segmentTextActive : undefined}>الدردشات ({conversations.length})</AppText>
+          </Pressable>
+          <Pressable
+            style={[styles.segmentButton, selectedSection === 'replies' && styles.segmentButtonActive]}
+            onPress={() => setSelectedSection('replies')}
+          >
+            <AppText weight="semibold" style={selectedSection === 'replies' ? styles.segmentTextActive : undefined}>الردود ({replyThreads.length})</AppText>
           </Pressable>
           <Pressable
             style={[styles.segmentButton, selectedSection === 'offers' && styles.segmentButtonActive]}
@@ -148,6 +196,8 @@ export default function Screen() {
 
         {selectedSection === 'chats' ? (
           conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} />) : <EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة الصفقة هنا." />
+        ) : selectedSection === 'replies' ? (
+          replyThreads.length ? replyThreads.map((thread) => <ReplyThreadRow key={thread.conversationId} thread={thread} />) : <EmptyState title="لا توجد ردود قصص بعد" description="لما حد يرد على قصة أو ترد أنت على قصة، هتظهر المحادثات هنا." />
         ) : (
           <View style={styles.group}>
             <View style={styles.sectionGroup}>
