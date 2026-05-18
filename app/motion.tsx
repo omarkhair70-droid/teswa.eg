@@ -16,6 +16,7 @@ import { spacing } from '@/constants/spacing';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discovery';
 import { fetchMovingItems, MovingItemInterest } from '@/lib/motion-interest';
+import { readAnyMotionPublicFeedCache, readFreshMotionPublicFeedCache, writeMotionPublicFeedCache } from '@/lib/offline-motion-cache';
 import { MotionPulseCanvas } from '@/components/motion/MotionPulseCanvas';
 import { MotionEmptyAnimation } from '@/components/motion/MotionEmptyAnimation';
 import { MotionShareSheet } from '@/components/motion/MotionShareSheet';
@@ -59,6 +60,7 @@ export default function MotionScreen() {
   const [movingItems, setMovingItems] = useState<MovingItemInterest[]>([]);
   const [movingLoading, setMovingLoading] = useState(true);
   const [movingError, setMovingError] = useState<string | null>(null);
+  const [motionCacheNotice, setMotionCacheNotice] = useState<string | null>(null);
   const [shareMoment, setShareMoment] = useState<MotionShareMoment | null>(null);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
 
@@ -75,37 +77,74 @@ export default function MotionScreen() {
     }
   }, []);
 
-  const loadItems = useCallback(async () => {
-    setItemsLoading(true);
-    setItemsError(null);
-    try {
-      const data = await fetchStoryDiscoveryItems({ limit: 12 });
-      setItems(data);
-    } catch {
-      setItemsError('تعذر تحميل العناصر ذات الحكاية حالياً.');
-    } finally {
-      setItemsLoading(false);
-    }
-  }, []);
-
-  const loadMovingItems = useCallback(async () => {
+  const loadMotionPublicFeed = useCallback(async () => {
     setMovingLoading(true);
+    setItemsLoading(true);
     setMovingError(null);
-    try {
-      const data = await fetchMovingItems({ limit: 12 });
-      setMovingItems(data);
-    } catch {
-      setMovingError('تعذر تحميل أبواب الحركة حالياً.');
-    } finally {
+    setItemsError(null);
+    setMotionCacheNotice(null);
+
+    const cached = await readFreshMotionPublicFeedCache();
+    const hadFreshCache = Boolean(cached);
+
+    if (cached) {
+      setMovingItems(cached.payload.movingItems);
+      setItems(cached.payload.storyItems);
       setMovingLoading(false);
+      setItemsLoading(false);
+      setMotionCacheNotice('نستعرض نبضًا محفوظًا بينما نتحقق من الحركة الجديدة.');
     }
+
+    const [movingResult, storyItemsResult] = await Promise.allSettled([
+      fetchMovingItems({ limit: 12 }),
+      fetchStoryDiscoveryItems({ limit: 12 }),
+    ]);
+
+    if (movingResult.status === 'fulfilled') {
+      setMovingItems(movingResult.value);
+      setMovingError(null);
+    } else {
+      setMovingError('تعذر تحميل أبواب الحركة حالياً.');
+    }
+
+    if (storyItemsResult.status === 'fulfilled') {
+      setItems(storyItemsResult.value);
+      setItemsError(null);
+    } else {
+      setItemsError('تعذر تحميل العناصر ذات الحكاية حالياً.');
+    }
+
+    const bothSucceeded = movingResult.status === 'fulfilled' && storyItemsResult.status === 'fulfilled';
+
+    if (bothSucceeded) {
+      setMotionCacheNotice(null);
+      await writeMotionPublicFeedCache({
+        movingItems: movingResult.value,
+        storyItems: storyItemsResult.value,
+      });
+    } else if (hadFreshCache) {
+      setMotionCacheNotice('تعذر تحديث جزء من النبض الآن، نعرض آخر نسخة محفوظة.');
+    } else {
+      const stale = await readAnyMotionPublicFeedCache();
+      if (stale) {
+        if (movingResult.status === 'rejected') {
+          setMovingItems(stale.payload.movingItems);
+        }
+        if (storyItemsResult.status === 'rejected') {
+          setItems(stale.payload.storyItems);
+        }
+        setMotionCacheNotice('أنت ترى جزءًا محفوظًا من حركة تِسوى. سنحدّثه عندما يتحسن الاتصال.');
+      }
+    }
+
+    setMovingLoading(false);
+    setItemsLoading(false);
   }, []);
 
   useEffect(() => {
     loadStories();
-    loadMovingItems();
-    loadItems();
-  }, [loadItems, loadMovingItems, loadStories]);
+    loadMotionPublicFeed();
+  }, [loadMotionPublicFeed, loadStories]);
 
   const motionFeedEntries = useMemo<MotionFeedEntry[]>(() => {
     const movingEntries: RankedMotionFeedEntry[] = movingItems.map((item, index) => ({
@@ -358,12 +397,18 @@ export default function MotionScreen() {
               <AppText muted>حاجات عليها اهتمام، وحاجات أصحابها فتحوا لها باب حكاية.</AppText>
             </View>
 
+            {motionCacheNotice ? (
+              <View style={styles.cacheNotice}>
+                <AppText muted>{motionCacheNotice}</AppText>
+              </View>
+            ) : null}
+
             {partialFailure ? (
               <View style={styles.partialWarning}>
                 <AppText style={styles.errorText}>تعذر تحميل جزء من الحركة حالياً.</AppText>
                 <View style={styles.partialActions}>
-                  {movingError ? <AppButton label="إعادة تحميل الأبواب" variant="neutral" onPress={loadMovingItems} /> : null}
-                  {itemsError ? <AppButton label="إعادة تحميل الحكايات" variant="neutral" onPress={loadItems} /> : null}
+                  {movingError ? <AppButton label="إعادة تحميل الأبواب" variant="neutral" onPress={loadMotionPublicFeed} /> : null}
+                  {itemsError ? <AppButton label="إعادة تحميل الحكايات" variant="neutral" onPress={loadMotionPublicFeed} /> : null}
                 </View>
               </View>
             ) : null}
@@ -433,6 +478,13 @@ const styles = StyleSheet.create({
   stateBox: { gap: spacing.sm },
   storyEmptyState: { gap: spacing.sm, paddingVertical: spacing.sm },
   pulseIntro: { gap: spacing.xs, paddingTop: spacing.xs },
+  cacheNotice: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+  },
   partialWarning: {
     borderRadius: radii.lg,
     borderWidth: 1,
