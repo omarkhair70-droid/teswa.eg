@@ -243,8 +243,8 @@ export default function MotionScreen() {
       <FlashList
         data={motionFeedEntries}
         keyExtractor={(entry) => entry.key}
-        estimatedItemSize={320}
         contentContainerStyle={styles.listContent}
+        getItemType={(entry) => entry.kind}
         ListHeaderComponent={(
           <View style={styles.headerWrap}>
             <LinearGradient colors={[colors.primary, colors.accent, colors.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
@@ -303,7 +303,7 @@ export default function MotionScreen() {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.background },
-  listContent: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  listContent: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl },
   headerWrap: { gap: spacing.md },
   hero: { borderRadius: radii.xl, padding: spacing.lg, gap: spacing.sm, overflow: 'hidden' },
   heroTitle: { fontSize: 28, color: colors.white },
