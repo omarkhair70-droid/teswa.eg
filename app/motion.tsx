@@ -82,6 +82,7 @@ export default function MotionScreen() {
   const [cityPulseError, setCityPulseError] = useState<string | null>(null);
   const [cityPulseCacheNotice, setCityPulseCacheNotice] = useState<string | null>(null);
   const cityPulseSnapshotRef = useRef<CityPulseSnapshot | null>(null);
+  const cityPulseLoadGenerationRef = useRef(0);
   const [cityPulseBootstrapped, setCityPulseBootstrapped] = useState(false);
 
 
@@ -100,6 +101,7 @@ export default function MotionScreen() {
   };
 
   const loadCityPulseForLocation = useCallback(async (location: CityPulseLocation, options?: LoadCityPulseOptions) => {
+    const loadGeneration = ++cityPulseLoadGenerationRef.current;
     setCityPulseLoading(true);
     setCityPulseError(null);
     if (!options?.fromBootstrap) {
@@ -108,10 +110,16 @@ export default function MotionScreen() {
 
     try {
       const snapshot = await fetchCityPulseSnapshot({ location });
+      if (loadGeneration !== cityPulseLoadGenerationRef.current) {
+        return;
+      }
       setCityPulseSnapshot(snapshot);
       setCityPulseCacheNotice(null);
       void writeCityPulseSnapshotCache(snapshot);
     } catch {
+      if (loadGeneration !== cityPulseLoadGenerationRef.current) {
+        return;
+      }
       if (cityPulseSnapshotRef.current && options?.preserveExistingSnapshotOnFailure !== false) {
         setCityPulseError(null);
         setCityPulseCacheNotice('تعذر تحديث نبض مدينتك الآن، نعرض آخر نسخة محفوظة.');
@@ -169,6 +177,7 @@ export default function MotionScreen() {
   }, [activateCityPulse, cityPulseLocation, loadCityPulseForLocation]);
 
   const hideCityPulse = useCallback(() => {
+    cityPulseLoadGenerationRef.current += 1;
     setCityPulseLocation(null);
     setCityPulseSnapshot(null);
     setCityPulseError(null);
