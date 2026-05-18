@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Fill, Group, LinearGradient, vec } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
@@ -13,10 +13,9 @@ export type MotionPulseCanvasProps = {
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }: MotionPulseCanvasProps) {
-  const width = useSharedValue(0);
-  const height = useSharedValue(0);
+  const canvasSize = useSharedValue({ width: 0, height: 0 });
   const ambientProgress = useSharedValue(0);
-  const tapProgress = useSharedValue(1);
+  const tapProgress = useSharedValue(0);
   const tapX = useSharedValue(0);
   const tapY = useSharedValue(0);
 
@@ -36,9 +35,10 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
     };
   }, [movingCount, storiesCount, storyItemsCount]);
 
-  const centerX = useDerivedValue(() => width.value * 0.52);
-  const centerY = useDerivedValue(() => height.value * 0.45);
-  const baseRadius = useDerivedValue(() => Math.min(width.value, height.value) * 0.26);
+  const centerX = useDerivedValue(() => canvasSize.value.width * 0.52);
+  const centerY = useDerivedValue(() => canvasSize.value.height * 0.45);
+  const baseRadius = useDerivedValue(() => Math.min(canvasSize.value.width, canvasSize.value.height) * 0.26);
+  const gradientEnd = useDerivedValue(() => vec(canvasSize.value.width, canvasSize.value.height));
   const drift = useDerivedValue(() => ambientProgress.value * Math.PI * 2);
 
   const outerRingRadius = useDerivedValue(() => baseRadius.value + ambientProgress.value * 26 + dataIntensity.aggregate * 12);
@@ -53,6 +53,10 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
   const nodeTwoY = useDerivedValue(() => centerY.value + Math.cos(drift.value * 1.2) * (baseRadius.value * 0.3 + dataIntensity.storiesBoost * 5));
 
   const burstRadius = useDerivedValue(() => tapProgress.value * 180);
+  const burstOpacity = useDerivedValue(() => {
+    if (tapProgress.value <= 0) return 0;
+    return (1 - tapProgress.value) * 0.28;
+  });
 
   const tapGesture = Gesture.Tap().onStart((event) => {
     tapX.value = event.x;
@@ -61,17 +65,13 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
     tapProgress.value = withTiming(1, { duration: 850 });
   });
 
-  const onLayout = (event: LayoutChangeEvent) => {
-    width.value = event.nativeEvent.layout.width;
-    height.value = event.nativeEvent.layout.height;
-  };
 
   return (
     <GestureDetector gesture={tapGesture}>
-      <View pointerEvents="box-only" style={styles.fill} onLayout={onLayout}>
-        <Canvas style={styles.fill}>
+      <View pointerEvents="box-only" style={styles.fill}>
+        <Canvas style={styles.fill} onSize={canvasSize}>
           <Fill>
-            <LinearGradient start={vec(0, 0)} end={vec(width, height)} colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)', 'rgba(255,255,255,0.05)']} />
+            <LinearGradient start={vec(0, 0)} end={gradientEnd} colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)', 'rgba(255,255,255,0.05)']} />
           </Fill>
           <Group>
             <Circle cx={centerX} cy={centerY} r={outerRingRadius} color="rgba(255,255,255,0.16)" />
@@ -79,7 +79,9 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
             <Circle cx={centerX} cy={centerY} r={innerGlowRadius} color="rgba(255,255,255,0.14)" />
             <Circle cx={nodeOneX} cy={nodeOneY} r={nodeOneR} color="rgba(255,255,255,0.30)" />
             <Circle cx={nodeTwoX} cy={nodeTwoY} r={3 + dataIntensity.movingBoost * 2.2} color="rgba(255,255,255,0.24)" />
-            <Circle cx={tapX} cy={tapY} r={burstRadius} color="rgba(255,255,255,0.24)" />
+            <Group opacity={burstOpacity}>
+              <Circle cx={tapX} cy={tapY} r={burstRadius} color="rgba(255,255,255,0.24)" />
+            </Group>
           </Group>
         </Canvas>
       </View>
