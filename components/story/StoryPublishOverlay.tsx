@@ -28,7 +28,7 @@ export function StoryPublishOverlay({ visible, progress, asset }: StoryPublishOv
   const percent = typeof progress?.uploadPercent === 'number' ? Math.max(0, Math.min(100, Math.round(progress.uploadPercent))) : null;
 
   return (
-    <Modal transparent visible animationType="fade" statusBarTranslucent>
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={() => {}}>
       <View style={styles.backdrop}>
         <View style={styles.panel}>
           <LottieView source={require('@/assets/lottie/story-publishing-pulse.json')} autoPlay loop style={styles.lottie} />
