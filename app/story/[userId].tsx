@@ -9,6 +9,7 @@ import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAuth } from '@/lib/auth';
 import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetchStoryViewerContextByUserId } from '@/lib/stories';
+import { markStoryViewedFromMobile } from '@/lib/story-views';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -84,6 +85,7 @@ export default function StoryViewerScreen() {
   const isViewingOwnStories = !!user?.id && normalizedUserId === user.id;
   const pagerRef = useRef<PagerView>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const markedViewedStoryIdsRef = useRef<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [context, setContext] = useState<StoryViewerContext | null>(null);
@@ -169,6 +171,21 @@ export default function StoryViewerScreen() {
     if (currentStory.mediaType === 'image') return true;
     return !!readyVideoStoryIds[currentStory.id];
   }, [currentStory, currentStorySignedUrl, mediaFailedIds, readyVideoStoryIds]);
+
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!currentStory) return;
+    if (!currentStorySignedUrl) return;
+    if (isViewingOwnStories) return;
+
+    const storyId = currentStory.id.trim();
+    if (!storyId) return;
+    if (markedViewedStoryIdsRef.current.has(storyId)) return;
+
+    markedViewedStoryIdsRef.current.add(storyId);
+    void markStoryViewedFromMobile({ storyId, viewerId: user.id });
+  }, [currentStory, currentStorySignedUrl, isViewingOwnStories, user?.id]);
 
   useEffect(() => {
     if (!context?.stories.length) return;
