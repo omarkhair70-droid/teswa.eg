@@ -12,6 +12,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discovery';
+import { fetchMovingItems, MovingItemInterest } from '@/lib/motion-interest';
 
 export default function MotionScreen() {
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
@@ -21,6 +22,10 @@ export default function MotionScreen() {
   const [items, setItems] = useState<StoryDiscoveryItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
   const [itemsError, setItemsError] = useState<string | null>(null);
+
+  const [movingItems, setMovingItems] = useState<MovingItemInterest[]>([]);
+  const [movingLoading, setMovingLoading] = useState(true);
+  const [movingError, setMovingError] = useState<string | null>(null);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -48,10 +53,24 @@ export default function MotionScreen() {
     }
   }, []);
 
+  const loadMovingItems = useCallback(async () => {
+    setMovingLoading(true);
+    setMovingError(null);
+    try {
+      const data = await fetchMovingItems({ limit: 12 });
+      setMovingItems(data);
+    } catch {
+      setMovingError('تعذر تحميل أبواب الحركة حالياً.');
+    } finally {
+      setMovingLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStories();
+    loadMovingItems();
     loadItems();
-  }, [loadItems, loadStories]);
+  }, [loadItems, loadMovingItems, loadStories]);
 
   const storyTiles = useMemo(() => stories.map((summary) => {
     const displayName = summary.author.displayName?.trim() || (summary.author.username ? `@${summary.author.username}` : 'مستخدم');
@@ -100,6 +119,54 @@ export default function MotionScreen() {
           </View>
         ) : null}
         {!storiesLoading && !storiesError && stories.length > 0 ? <View style={styles.storyRail}>{storyTiles}</View> : null}
+      </AppCard>
+
+
+
+      <AppCard>
+        <View style={styles.sectionHeader}>
+          <AppText weight="bold">أبواب بدأت تتحرك</AppText>
+          <AppText muted>حاجات وصلها اهتمام حقيقي. تفاصيل العروض تفضل بين أصحابها، لكن الحركة نفسها باينة.</AppText>
+        </View>
+        {movingLoading ? <AppText>جارٍ تحميل أبواب الحركة...</AppText> : null}
+        {!movingLoading && movingError ? (
+          <View style={styles.stateBox}>
+            <AppText style={styles.errorText}>تعذر تحميل أبواب الحركة حالياً.</AppText>
+            <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadMovingItems} />
+          </View>
+        ) : null}
+        {!movingLoading && !movingError && movingItems.length === 0 ? (
+          <View style={styles.stateBox}>
+            <EmptyState title="لسه الأبواب الهادية أكثر" description="أول ما تبدأ عناصر تستقبل اقتراحات مفتوحة، هتظهر هنا." />
+            <AppButton label="استكشف العناصر" variant="neutral" onPress={() => router.push('/(tabs)/discover')} />
+          </View>
+        ) : null}
+        {!movingLoading && !movingError && movingItems.length > 0 ? (
+          <View style={styles.itemsList}>
+            {movingItems.map((item) => {
+              const metadata = [item.category, item.condition, item.location].filter(Boolean).join(' / ');
+              const badge = item.openInterestCount === 1
+                ? 'وصلها اقتراح'
+                : `وصلها ${item.openInterestCount} اقتراحات مفتوحة`;
+
+              return (
+                <Pressable key={item.id} onPress={() => router.push(`/item/${item.id}`)} style={styles.itemCard}>
+                  {item.imageUrl ? (
+                    <ExpoImage source={{ uri: item.imageUrl }} style={styles.itemImage} contentFit="cover" />
+                  ) : (
+                    <View style={styles.itemPlaceholder}><AppText muted>بدون صورة</AppText></View>
+                  )}
+                  <View style={styles.itemContent}>
+                    <AppText weight="semibold" numberOfLines={1}>{item.title}</AppText>
+                    <View style={styles.labelPill}><AppText style={styles.labelText}>{badge}</AppText></View>
+                    {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
+                    {item.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {item.ownerDisplayName}</AppText> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
       </AppCard>
 
       <AppCard>
