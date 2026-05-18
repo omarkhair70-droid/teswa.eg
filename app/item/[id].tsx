@@ -165,7 +165,7 @@ export default function ItemDetailsScreen() {
 
 const styles = StyleSheet.create({
   hero: { width: '100%', height: 240, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
-  imageCounter: { position: 'absolute', bottom: spacing.sm, left: spacing.sm, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: radii.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  imageCounter: { position: 'absolute', bottom: spacing.sm, left: spacing.sm, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   imageCounterText: { color: colors.white, fontSize: 12 },
   thumbsRow: { gap: spacing.sm, paddingTop: spacing.sm },
   thumbPressable: { borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, padding: 2 },
@@ -178,6 +178,6 @@ const styles = StyleSheet.create({
   stateBox: { gap: spacing.md },
   shareErrorText: { color: colors.primary },
   tagsWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
-  tagPill: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, borderRadius: radii.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  tagPill: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   tagText: { fontSize: 12 },
 });

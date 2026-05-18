@@ -181,8 +181,8 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
 
   const [imagesResult, categoryResult, ownerResult, wantedTagsResult] = await Promise.all([
     supabase.from('item_images').select('image_url, is_primary, sort_order').eq('item_id', id),
-    item.category_id ? supabase.from('categories').select('name').eq('id', item.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    item.owner_id ? supabase.from('profiles').select('display_name').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    item.category_id ? supabase.from('categories').select('name_ar').eq('id', item.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    item.owner_id ? supabase.from('profiles').select('display_name, is_banned').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     supabase.from('item_wanted_tags').select('tag').eq('item_id', id),
   ]);
 
@@ -208,6 +208,10 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
       sortOrder: row.sort_order,
     }));
 
+
+  const ownerProfile = ownerResult.data as { display_name: string | null; is_banned: boolean | null } | null;
+  if (ownerProfile?.is_banned === true) return null;
+
   const wantedTags = ((wantedTagsResult.data ?? []) as { tag: string | null }[])
     .map((row: { tag: string | null }) => normalizeNullableText(row.tag))
     .filter((tag: string | null): tag is string => Boolean(tag));
@@ -217,10 +221,10 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     title: item.title?.trim() || 'عنصر بدون عنوان',
     description: normalizeNullableText(item.description),
     imageUrl: images[0]?.imageUrl ?? null,
-    category: normalizeNullableText((categoryResult.data as { name: string | null } | null)?.name ?? null),
+    category: normalizeNullableText((categoryResult.data as { name_ar: string | null } | null)?.name_ar ?? null),
     condition: normalizeNullableText(item.condition),
     location: normalizeNullableText(item.city),
-    ownerDisplayName: normalizeNullableText((ownerResult.data as { display_name: string | null } | null)?.display_name ?? null),
+    ownerDisplayName: normalizeNullableText(ownerProfile?.display_name ?? null),
     area: normalizeNullableText(item.area),
     conditionNotes: normalizeNullableText(item.condition_notes),
     itemStory: normalizeNullableText(item.item_story),
