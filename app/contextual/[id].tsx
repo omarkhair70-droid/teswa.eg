@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import {
   KeyboardAwareScrollView,
   KeyboardStickyView,
@@ -19,6 +20,7 @@ import {
   fetchContextualThreadById,
   markContextualThreadReadFromMobile,
   sendContextualMessageFromMobile,
+  createContextualVoiceMessageSignedUrl,
 } from '@/lib/contextual-conversations';
 
 type RealtimeStatus = 'connecting' | 'live' | 'unavailable';
@@ -27,7 +29,10 @@ type UiMessage = {
   id: string;
   conversationId: string;
   senderId: string;
-  body: string;
+  body: string | null;
+  messageKind?: 'text' | 'voice';
+  mediaStoragePath?: string | null;
+  mediaDurationMs?: number | null;
   createdAt: string;
 };
 
@@ -47,6 +52,17 @@ export default function Screen() {
   const [sending, setSending] = useState(false);
   const [realtimeStatus, setRealtimeStatus] =
     useState<RealtimeStatus>('connecting');
+
+  const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
+  const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
+  const [activeVoiceId, setActiveVoiceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!voicePlayerStatus.didJustFinish) return;
+    voicePlayer.pause();
+    void voicePlayer.seekTo(0).catch(() => undefined);
+    setActiveVoiceId(null);
+  }, [voicePlayer, voicePlayerStatus.didJustFinish]);
 
   const load = useCallback(async () => {
     if (!user?.id || !conversationId) return;
@@ -108,6 +124,9 @@ export default function Screen() {
             conversationId: row.conversation_id,
             senderId: row.sender_id,
             body: row.body,
+            messageKind: row.message_kind === 'voice' ? 'voice' : 'text',
+            mediaStoragePath: row.media_storage_path ?? null,
+            mediaDurationMs: row.media_duration_ms ?? null,
             createdAt: row.created_at,
           };
 
@@ -258,7 +277,7 @@ export default function Screen() {
               style={[styles.row, message.senderId === user.id ? styles.mine : styles.other]}
             >
               <View style={styles.bubble}>
-                <AppText>{message.body}</AppText>
+                {message.messageKind === 'voice' ? (<Pressable onPress={async () => { if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; } const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? ''); if (!signed) return; await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.replace({ uri: signed }); voicePlayer.play(); setActiveVoiceId(message.id); }}><AppText>{activeVoiceId === message.id && voicePlayerStatus.playing ? 'إيقاف الصوت' : 'تشغيل الرسالة الصوتية'}</AppText></Pressable>) : (<AppText>{message.body}</AppText>)}
                 <AppText muted>
                   {new Date(message.createdAt).toLocaleTimeString('ar-EG', {
                     hour: '2-digit',

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import PagerView from 'react-native-pager-view';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEventListener } from 'expo';
@@ -11,10 +12,14 @@ import { useAuth } from '@/lib/auth';
 import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetchStoryViewerContextByUserId } from '@/lib/stories';
 import { markStoryViewedFromMobile } from '@/lib/story-views';
 import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/story-likes';
-import { sendStoryReplyFromMobile } from '@/lib/contextual-conversations';
+import { sendStoryReplyFromMobile, sendStoryVoiceReplyFromMobile } from '@/lib/contextual-conversations';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
+
+const MAX_STORY_VOICE_MS = 45_000;
+const formatMs = (durationMs: number) => `${String(Math.floor(Math.max(0, Math.floor(durationMs / 1000)) / 60)).padStart(2, '0')}:${String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}`;
+
 
 function StoryVideo({
   uri,
@@ -103,6 +108,22 @@ export default function StoryViewerScreen() {
   const [storyReplySending, setStoryReplySending] = useState(false);
   const [storyReplyFeedback, setStoryReplyFeedback] = useState<string | null>(null);
   const [storyReplyError, setStoryReplyError] = useState<string | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState<{ uri: string; durationMs: number; mimeType: string } | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceSending, setVoiceSending] = useState(false);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder, 250);
+  const voicePlayer = useAudioPlayer(voiceDraft?.uri ?? null, { updateInterval: 250 });
+  const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
+
+
+  const voiceReplyInteractionActive =
+    voiceOpen ||
+    recorderState.isRecording ||
+    !!voiceDraft ||
+    voiceSending ||
+    voiceBusy;
 
   const closeViewer = useCallback(() => {
     router.back();
@@ -231,6 +252,7 @@ export default function StoryViewerScreen() {
     progressAnim.stopAnimation();
     progressAnim.setValue(0);
     if (!currentStoryCanStart) return;
+    if (voiceReplyInteractionActive) return;
 
     const animation = Animated.timing(progressAnim, {
       toValue: 1,
@@ -245,7 +267,7 @@ export default function StoryViewerScreen() {
     return () => {
       animation.stop();
     };
-  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs]);
+  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs, voiceReplyInteractionActive]);
 
 
   const handleToggleStoryLike = useCallback(async () => {
@@ -313,7 +335,94 @@ export default function StoryViewerScreen() {
     setStoryReplyFeedback(null);
   }, [currentStory?.id]);
 
-  const renderUnavailableState = () => {
+  
+  const handleStartVoiceReply = useCallback(async () => {
+    if (!user?.id || !currentStory) return;
+    setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceBusy(true);
+    try {
+      voicePlayer.pause();
+      try {
+        await voicePlayer.seekTo(0);
+      } catch {}
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) { setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.'); return; }
+      setVoiceDraft(null);
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setVoiceOpen(true);
+    } catch {
+      setVoiceOpen(false);
+      setVoiceDraft(null);
+      setStoryReplyError('تعذر بدء الرد الصوتي. حاول مرة أخرى.');
+    } finally { setVoiceBusy(false); }
+  }, [audioRecorder, currentStory, user?.id, voicePlayer]);
+
+  const autoStopHandledRef = useRef(false);
+
+  const stopVoice = useCallback(async () => {
+    setVoiceBusy(true);
+    try {
+      const preStopDuration = recorderState.durationMillis ?? 0;
+      await audioRecorder.stop();
+      let rawDurationMs = preStopDuration;
+      if (!rawDurationMs) {
+        const status = await audioRecorder.getStatus();
+        rawDurationMs = status.durationMillis ?? 0;
+      }
+      const safeDurationMs = Math.min(rawDurationMs, MAX_STORY_VOICE_MS);
+      const uri = audioRecorder.uri;
+      if (!uri) {
+        setVoiceOpen(false);
+        setVoiceDraft(null);
+        setStoryReplyError('تعذر حفظ التسجيل الصوتي. حاول مرة أخرى.');
+        return;
+      }
+      setVoiceDraft({ uri, durationMs: safeDurationMs, mimeType: 'audio/m4a' });
+    } catch {
+      setStoryReplyError('تعذر حفظ التسجيل الصوتي. حاول مرة أخرى.');
+    } finally { setVoiceBusy(false); }
+  }, [audioRecorder, recorderState.durationMillis]);
+
+  useEffect(() => {
+    if (!recorderState.isRecording) { autoStopHandledRef.current = false; return; }
+    if (recorderState.durationMillis >= MAX_STORY_VOICE_MS && !autoStopHandledRef.current) {
+      autoStopHandledRef.current = true;
+      void stopVoice();
+    }
+  }, [recorderState.isRecording, recorderState.durationMillis, stopVoice]);
+
+  const sendVoiceReply = useCallback(async () => {
+    if (!voiceDraft || !user?.id || !currentStory) return;
+    setVoiceSending(true); setStoryReplyError(null);
+    try {
+      const r = await sendStoryVoiceReplyFromMobile({ storyId: currentStory.id, currentUserId: user.id, localUri: voiceDraft.uri, durationMs: Math.min(voiceDraft.durationMs, MAX_STORY_VOICE_MS), mimeType: voiceDraft.mimeType });
+      if (!r.ok) { setStoryReplyError(r.message); return; }
+      setVoiceDraft(null); setVoiceOpen(false); setStoryReplyFeedback('تم إرسال الرد الصوتي.');
+    } catch {
+      setStoryReplyError('تعذر إرسال الرد الصوتي الآن. حاول مرة أخرى.');
+    } finally { setVoiceSending(false); }
+  }, [voiceDraft, user?.id, currentStory]);
+
+
+  const cancelVoiceComposer = useCallback(async () => {
+    try {
+      if (recorderState.isRecording) {
+        await audioRecorder.stop();
+      }
+    } catch {
+      setStoryReplyError('تعذر إلغاء التسجيل الصوتي. حاول مرة أخرى.');
+    } finally {
+      setVoiceOpen(false);
+      setVoiceDraft(null);
+      voicePlayer.pause();
+      try {
+        await voicePlayer.seekTo(0);
+      } catch {}
+    }
+  }, [audioRecorder, recorderState.isRecording, voicePlayer]);
+
+const renderUnavailableState = () => {
     if (isViewingOwnStories) {
       return (
         <View style={styles.centerState}>
@@ -355,6 +464,7 @@ export default function StoryViewerScreen() {
         ref={pagerRef}
         style={styles.pager}
         initialPage={0}
+        scrollEnabled={!voiceReplyInteractionActive}
         onPageSelected={(event) => setActiveIndex(event.nativeEvent.position)}
       >
         {context.stories.map((story: StoryRecord, index) => {
@@ -444,7 +554,7 @@ export default function StoryViewerScreen() {
         </View>
       ) : null}
 
-      <View style={styles.navLayer} pointerEvents="box-none">
+      <View style={styles.navLayer} pointerEvents={voiceReplyInteractionActive ? 'none' : 'box-none'}>
         <Pressable style={styles.leftZone} onPress={goPrevious} />
         <Pressable style={styles.rightZone} onPress={goNext} />
       </View>
@@ -460,6 +570,12 @@ export default function StoryViewerScreen() {
             </Pressable>
             <TextInput value={storyReplyBody} onChangeText={setStoryReplyBody} placeholder="رد على القصة..." placeholderTextColor="rgba(255,255,255,0.6)" style={styles.replyInput} editable={!storyReplySending} textAlign="right" />
           </View>
+          <Pressable onPress={() => void handleStartVoiceReply()} disabled={voiceBusy || recorderState.isRecording || voiceSending} style={styles.replyVoiceButton}><AppText style={styles.replySendButtonText}>رد بصوتك</AppText></Pressable>
+          {voiceOpen ? (<View style={styles.voiceBox}>
+            {recorderState.isRecording ? (<View style={styles.replyComposerRow}><AppText style={styles.replyFeedbackText}>جاري التسجيل {formatMs(recorderState.durationMillis)}</AppText><Pressable onPress={() => void stopVoice()}><AppText style={styles.replySendButtonText}>إيقاف</AppText></Pressable><Pressable onPress={() => void cancelVoiceComposer()}><AppText style={styles.replySendButtonText}>إلغاء</AppText></Pressable></View>) : null}
+            {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={async () => { if (voicePlayerStatus.playing) { voicePlayer.pause(); return; } await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => { setVoiceDraft(null); void handleStartVoiceReply(); }}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
+          </View>) : null}
+
         </View>
       ) : null}
 
@@ -524,6 +640,8 @@ const styles = StyleSheet.create({
   replySendButton: { minWidth: 64, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)' },
   replySendButtonDisabled: { opacity: 0.5 },
   replySendButtonText: { color: '#fff' },
+  replyVoiceButton: { alignItems: 'center', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  voiceBox: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.15)', paddingTop: 8 },
   replyErrorText: { color: 'rgba(255,200,200,0.95)', fontSize: 12, textAlign: 'right' },
   replyFeedbackText: { color: 'rgba(230,255,230,0.95)', fontSize: 12, textAlign: 'right' },
   captionText: { color: '#fff', textAlign: 'right' },
