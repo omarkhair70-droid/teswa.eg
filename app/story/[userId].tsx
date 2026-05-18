@@ -342,10 +342,15 @@ export default function StoryViewerScreen() {
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) { setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.'); return; }
-      setVoiceOpen(true); setVoiceDraft(null);
+      setVoiceDraft(null);
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
+      setVoiceOpen(true);
+    } catch {
+      setVoiceOpen(false);
+      setVoiceDraft(null);
+      setStoryReplyError('تعذر بدء الرد الصوتي. حاول مرة أخرى.');
     } finally { setVoiceBusy(false); }
   }, [audioRecorder, currentStory, user?.id]);
 
@@ -364,6 +369,8 @@ export default function StoryViewerScreen() {
       const safeDurationMs = Math.min(rawDurationMs, MAX_STORY_VOICE_MS);
       const uri = audioRecorder.uri;
       if (uri) setVoiceDraft({ uri, durationMs: safeDurationMs, mimeType: 'audio/m4a' });
+    } catch {
+      setStoryReplyError('تعذر حفظ التسجيل الصوتي. حاول مرة أخرى.');
     } finally { setVoiceBusy(false); }
   }, [audioRecorder, recorderState.durationMillis]);
 
@@ -382,6 +389,8 @@ export default function StoryViewerScreen() {
       const r = await sendStoryVoiceReplyFromMobile({ storyId: currentStory.id, currentUserId: user.id, localUri: voiceDraft.uri, durationMs: Math.min(voiceDraft.durationMs, MAX_STORY_VOICE_MS), mimeType: voiceDraft.mimeType });
       if (!r.ok) { setStoryReplyError(r.message); return; }
       setVoiceDraft(null); setVoiceOpen(false); setStoryReplyFeedback('تم إرسال الرد الصوتي.');
+    } catch {
+      setStoryReplyError('تعذر إرسال الرد الصوتي الآن. حاول مرة أخرى.');
     } finally { setVoiceSending(false); }
   }, [voiceDraft, user?.id, currentStory]);
 
