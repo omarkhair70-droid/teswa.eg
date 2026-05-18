@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import Animated, { Easing, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Image as ExpoImage } from 'expo-image';
@@ -62,6 +62,66 @@ const toTimestamp = (dateValue: string | null) => {
   const ts = Date.parse(dateValue);
   return Number.isNaN(ts) ? null : ts;
 };
+
+function MotionStoryPulseTile({ summary, onPress }: { summary: ActiveStorySummary; onPress: () => void }) {
+  const pulse = useSharedValue(0);
+  const displayName = summary.author.displayName?.trim() || (summary.author.username ? `@${summary.author.username}` : 'مستخدم');
+  const initial = displayName.charAt(0).toUpperCase();
+  const count = summary.stories.length;
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [pulse]);
+
+  const pulseRingStyle = useAnimatedStyle(() => ({
+    opacity: 0.36 + pulse.value * 0.2,
+    transform: [{ scale: 1 + pulse.value * 0.035 }],
+  }));
+
+  return (
+    <Pressable style={styles.storyTile} onPress={onPress}>
+      <LinearGradient
+        colors={['rgba(255,253,248,0.96)', 'rgba(238,216,203,0.58)', 'rgba(255,253,248,0.9)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.storyTileSurface}
+      >
+        <View style={styles.storyAvatarStage}>
+          <Animated.View style={[styles.storyPulseHalo, pulseRingStyle]} />
+          <LinearGradient
+            colors={[colors.primary, '#D99563', colors.accent]}
+            start={{ x: 0.08, y: 0.06 }}
+            end={{ x: 0.95, y: 0.98 }}
+            style={styles.storyRing}
+          >
+            <View style={styles.storyAvatarInnerFrame}>
+              {summary.author.avatarUrl ? (
+                <ExpoImage source={{ uri: summary.author.avatarUrl }} style={styles.storyAvatar} contentFit="cover" cachePolicy="memory-disk" transition={120} />
+              ) : (
+                <View style={styles.storyAvatarFallback}><AppText weight="bold" style={styles.storyInitial}>{initial}</AppText></View>
+              )}
+            </View>
+          </LinearGradient>
+          <View style={styles.storyLiveDot} />
+          {count > 1 ? (
+            <View style={styles.storyCountBadge}>
+              <AppText weight="bold" style={styles.storyCountText}>{count}</AppText>
+            </View>
+          ) : null}
+        </View>
+        <AppText numberOfLines={1} weight="semibold" style={styles.storyName}>{displayName}</AppText>
+        <View style={styles.storyPresencePill}>
+          <View style={styles.storyPresenceSpark} />
+          <AppText style={styles.storyPresenceText}>نشطة</AppText>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
 
 export default function MotionScreen() {
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
@@ -429,23 +489,13 @@ export default function MotionScreen() {
 
     return (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storyRailContent}>
-        {stories.map((summary) => {
-          const displayName = summary.author.displayName?.trim() || (summary.author.username ? `@${summary.author.username}` : 'مستخدم');
-          const initial = displayName.charAt(0).toUpperCase();
-          const count = summary.stories.length;
-
-          return (
-            <Pressable key={summary.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${summary.author.id}`)}>
-              {summary.author.avatarUrl ? (
-                <ExpoImage source={{ uri: summary.author.avatarUrl }} style={styles.storyAvatar} contentFit="cover" cachePolicy="memory-disk" transition={120} />
-              ) : (
-                <View style={styles.storyAvatarFallback}><AppText weight="bold">{initial}</AppText></View>
-              )}
-              <AppText numberOfLines={1} style={styles.storyName}>{displayName}</AppText>
-              {count > 1 ? <AppText muted style={styles.storyCount}>{count} قصص</AppText> : null}
-            </Pressable>
-          );
-        })}
+        {stories.map((summary) => (
+          <MotionStoryPulseTile
+            key={summary.author.id}
+            summary={summary}
+            onPress={() => router.push(`/story/${summary.author.id}`)}
+          />
+        ))}
       </ScrollView>
     );
   };
@@ -653,21 +703,100 @@ const styles = StyleSheet.create({
   metricValue: { color: colors.white, fontSize: 16 },
   metricLabel: { color: colors.white, fontSize: 12 },
   storiesBand: { gap: spacing.xs },
-  storyRailContent: { gap: spacing.sm, paddingVertical: spacing.xs, paddingRight: spacing.md },
-  storyTile: { width: 88, gap: spacing.xs, alignItems: 'center' },
-  storyAvatar: { width: 64, height: 64, borderRadius: radii.round, borderWidth: 1, borderColor: colors.border },
+  storyRailContent: { gap: spacing.md, paddingVertical: spacing.sm, paddingRight: spacing.md },
+  storyTile: { width: 118 },
+  storyTileSurface: {
+    minHeight: 150,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    gap: spacing.xs,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
+  },
+  storyAvatarStage: { width: 82, height: 82, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
+  storyPulseHalo: {
+    position: 'absolute',
+    width: 78,
+    height: 78,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(217,149,99,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.24)',
+  },
+  storyRing: {
+    width: 72,
+    height: 72,
+    borderRadius: radii.round,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.68)',
+  },
+  storyAvatarInnerFrame: {
+    flex: 1,
+    borderRadius: radii.round,
+    padding: 2,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  storyAvatar: { width: '100%', height: '100%', borderRadius: radii.round, backgroundColor: colors.primarySoft },
   storyAvatarFallback: {
-    width: 64,
-    height: 64,
+    width: '100%',
+    height: '100%',
     borderRadius: radii.round,
     backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  storyName: { textAlign: 'center' },
-  storyCount: { fontSize: 12 },
+  storyInitial: { color: colors.primary, fontSize: 22 },
+  storyLiveDot: {
+    position: 'absolute',
+    right: 10,
+    bottom: 11,
+    width: 14,
+    height: 14,
+    borderRadius: radii.round,
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  storyCountBadge: {
+    position: 'absolute',
+    left: 2,
+    top: 8,
+    minWidth: 26,
+    height: 24,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+  storyCountText: { color: colors.white, fontSize: 12 },
+  storyName: { textAlign: 'center', width: '100%', color: colors.text },
+  storyPresencePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(62,124,115,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(62,124,115,0.18)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    marginTop: spacing.xs,
+  },
+  storyPresenceSpark: { width: 5, height: 5, borderRadius: radii.round, backgroundColor: colors.accent },
+  storyPresenceText: { color: colors.accent, fontSize: 11 },
   stateBox: { gap: spacing.sm },
   storyEmptyState: { gap: spacing.sm, paddingVertical: spacing.sm },
   pulseIntro: { gap: spacing.xs, paddingTop: spacing.xs },
