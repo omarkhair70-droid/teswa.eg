@@ -6,11 +6,14 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
+import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
+import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
+import { buildProfilePresence } from '@/lib/profile-presence';
 import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
 import {
   deletePublicProfileCache,
@@ -184,14 +187,28 @@ export default function PublicProfileScreen() {
 
   const displayName = profile.display_name?.trim() || 'مستخدم تِسوى';
   const location = [profile.city, profile.area].filter(Boolean).join(' - ');
+  const profilePresence = buildProfilePresence({
+    activeStoriesCount,
+    listingsCount: listings.length,
+    successfulSwapsCount: profile.successful_swaps_count ?? 0,
+    responseRate: profile.response_rate ?? null,
+    variant: 'public',
+  });
 
   return (
     <AppScreen scrollable>
-      {profile.cover_url ? (
-        <ExpoImage source={{ uri: profile.cover_url }} style={styles.cover} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-      ) : (
-        <View style={[styles.cover, styles.coverFallback]}><AppText muted>لا توجد صورة غلاف</AppText></View>
-      )}
+      <ProfileLivingHero
+        coverUrl={profile.cover_url}
+        avatarUrl={profile.avatar_url}
+        displayName={displayName}
+        username={profile.username}
+        tagline={profile.profile_tagline}
+        location={location || null}
+        memberSince={memberSince}
+        activeStoriesCount={activeStoriesCount}
+        onOpenStories={activeStoriesCount > 0 ? () => router.push(`/story/${profile.id}`) : null}
+        variant="public"
+      />
 
       {profileCacheNotice ? (
         <AppCard>
@@ -199,29 +216,7 @@ export default function PublicProfileScreen() {
         </AppCard>
       ) : null}
 
-      <AppCard>
-        <View style={styles.headerCard}>
-          {profile.avatar_url ? (
-            <ExpoImage source={{ uri: profile.avatar_url }} style={styles.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}><AppText weight="bold">{displayName[0]}</AppText></View>
-          )}
-          <View style={styles.headerInfo}>
-            <AppText weight="bold" style={styles.name}>{displayName}</AppText>
-            {profile.username ? <AppText muted>@{profile.username}</AppText> : null}
-            {profile.profile_tagline ? <AppText muted>{profile.profile_tagline}</AppText> : null}
-            {location ? <AppText muted>{location}</AppText> : null}
-            {memberSince ? <AppText muted>عضو منذ {memberSince}</AppText> : null}
-          </View>
-        </View>
-        {activeStoriesCount > 0 ? (
-          <AppButton
-            label={activeStoriesCount === 1 ? 'عرض القصة النشطة' : `عرض القصص النشطة (${activeStoriesCount})`}
-            variant="neutral"
-            onPress={() => router.push(`/story/${profile.id}`)}
-          />
-        ) : null}
-      </AppCard>
+      <ProfilePresenceSignals presence={profilePresence} />
 
       <AppCard>
         <View style={styles.group}>
@@ -284,14 +279,7 @@ export default function PublicProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  cover: { width: '100%', height: 180, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
-  coverFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1, borderStyle: 'dashed' },
   stateBox: { gap: spacing.md },
-  headerCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
-  headerInfo: { flex: 1, gap: spacing.xs },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primarySoft },
-  avatarFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1 },
-  name: { fontSize: 22 },
   group: { gap: spacing.sm },
   presenceErrorText: { color: '#B42318' },
   listingsList: { gap: spacing.sm },
