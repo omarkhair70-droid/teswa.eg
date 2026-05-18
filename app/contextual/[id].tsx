@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import {
   KeyboardAwareScrollView,
   KeyboardStickyView,
@@ -277,7 +277,7 @@ export default function Screen() {
               style={[styles.row, message.senderId === user.id ? styles.mine : styles.other]}
             >
               <View style={styles.bubble}>
-                {message.messageKind === 'voice' ? (<Pressable onPress={async () => { if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; } const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? ''); if (!signed) return; voicePlayer.replace({ uri: signed }); voicePlayer.play(); setActiveVoiceId(message.id); }}><AppText>{activeVoiceId === message.id && voicePlayerStatus.playing ? 'إيقاف الصوت' : 'تشغيل الرسالة الصوتية'}</AppText></Pressable>) : (<AppText>{message.body}</AppText>)}
+                {message.messageKind === 'voice' ? (<Pressable onPress={async () => { if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; } const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? ''); if (!signed) return; await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.replace({ uri: signed }); voicePlayer.play(); setActiveVoiceId(message.id); }}><AppText>{activeVoiceId === message.id && voicePlayerStatus.playing ? 'إيقاف الصوت' : 'تشغيل الرسالة الصوتية'}</AppText></Pressable>) : (<AppText>{message.body}</AppText>)}
                 <AppText muted>
                   {new Date(message.createdAt).toLocaleTimeString('ar-EG', {
                     hour: '2-digit',

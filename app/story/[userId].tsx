@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import PagerView from 'react-native-pager-view';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEventListener } from 'expo';
@@ -117,6 +117,13 @@ export default function StoryViewerScreen() {
   const voicePlayer = useAudioPlayer(voiceDraft?.uri ?? null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
 
+
+  const voiceReplyInteractionActive =
+    voiceOpen ||
+    recorderState.isRecording ||
+    !!voiceDraft ||
+    voiceSending ||
+    voiceBusy;
 
   const closeViewer = useCallback(() => {
     router.back();
@@ -245,6 +252,7 @@ export default function StoryViewerScreen() {
     progressAnim.stopAnimation();
     progressAnim.setValue(0);
     if (!currentStoryCanStart) return;
+    if (voiceReplyInteractionActive) return;
 
     const animation = Animated.timing(progressAnim, {
       toValue: 1,
@@ -259,7 +267,7 @@ export default function StoryViewerScreen() {
     return () => {
       animation.stop();
     };
-  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs]);
+  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs, voiceReplyInteractionActive]);
 
 
   const handleToggleStoryLike = useCallback(async () => {
@@ -335,6 +343,7 @@ export default function StoryViewerScreen() {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) { setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.'); return; }
       setVoiceOpen(true); setVoiceDraft(null);
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
     } finally { setVoiceBusy(false); }
@@ -345,9 +354,16 @@ export default function StoryViewerScreen() {
   const stopVoice = useCallback(async () => {
     setVoiceBusy(true);
     try {
+      const preStopDuration = recorderState.durationMillis ?? 0;
       await audioRecorder.stop();
+      let rawDurationMs = preStopDuration;
+      if (!rawDurationMs) {
+        const status = await audioRecorder.getStatus();
+        rawDurationMs = status.durationMillis ?? 0;
+      }
+      const safeDurationMs = Math.min(rawDurationMs, MAX_STORY_VOICE_MS);
       const uri = audioRecorder.uri;
-      if (uri) setVoiceDraft({ uri, durationMs: Math.min(recorderState.durationMillis || MAX_STORY_VOICE_MS, MAX_STORY_VOICE_MS), mimeType: 'audio/m4a' });
+      if (uri) setVoiceDraft({ uri, durationMs: safeDurationMs, mimeType: 'audio/m4a' });
     } finally { setVoiceBusy(false); }
   }, [audioRecorder, recorderState.durationMillis]);
 
@@ -500,7 +516,7 @@ const renderUnavailableState = () => {
         </View>
       ) : null}
 
-      <View style={styles.navLayer} pointerEvents="box-none">
+      <View style={styles.navLayer} pointerEvents={voiceReplyInteractionActive ? 'none' : 'box-none'}>
         <Pressable style={styles.leftZone} onPress={goPrevious} />
         <Pressable style={styles.rightZone} onPress={goNext} />
       </View>
@@ -519,7 +535,7 @@ const renderUnavailableState = () => {
           <Pressable onPress={() => void handleStartVoiceReply()} disabled={voiceBusy || recorderState.isRecording || voiceSending} style={styles.replyVoiceButton}><AppText style={styles.replySendButtonText}>رد بصوتك</AppText></Pressable>
           {voiceOpen ? (<View style={styles.voiceBox}>
             {recorderState.isRecording ? (<View style={styles.replyComposerRow}><AppText style={styles.replyFeedbackText}>جاري التسجيل {formatMs(recorderState.durationMillis)}</AppText><Pressable onPress={() => void stopVoice()}><AppText style={styles.replySendButtonText}>إيقاف</AppText></Pressable><Pressable onPress={() => { audioRecorder.stop(); setVoiceOpen(false); setVoiceDraft(null); }}><AppText style={styles.replySendButtonText}>إلغاء</AppText></Pressable></View>) : null}
-            {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={() => { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => setVoiceDraft(null)}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
+            {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={async () => { if (voicePlayerStatus.playing) { voicePlayer.pause(); return; } await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => setVoiceDraft(null)}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
           </View>) : null}
 
         </View>
