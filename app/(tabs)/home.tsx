@@ -18,7 +18,7 @@ import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profileCompleted } = useAuth();
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +99,6 @@ export default function HomeScreen() {
   const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== user?.id), [stories, user?.id]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
 
-  const profileCompleted = user?.profileCompleted !== false;
   const nextAction = useMemo(() => {
     if (!dashboard) {
       return null;
