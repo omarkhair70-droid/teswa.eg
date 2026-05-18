@@ -13,6 +13,7 @@ import { navigateFromNotificationResponse, syncPushDeviceRegistrationIfPermitted
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
+import { createForegroundMemoryRefreshSubscription } from '@/lib/foreground-memory-refresh';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -69,6 +70,16 @@ function ShareIntentCoordinator() {
 function BackgroundMemoryRefreshCoordinator() {
   useEffect(() => {
     void ensureTeswaBackgroundMemoryRefreshRegistered();
+  }, []);
+
+  return null;
+}
+
+
+function ForegroundMemoryRefreshCoordinator() {
+  useEffect(() => {
+    const subscription = createForegroundMemoryRefreshSubscription();
+    return () => subscription.remove();
   }, []);
 
   return null;
@@ -197,6 +208,7 @@ export default function RootLayout() {
           <UnreadBadgesProvider>
             <ShareIntentCoordinator />
             <BackgroundMemoryRefreshCoordinator />
+            <ForegroundMemoryRefreshCoordinator />
             <RootNavigator />
           </UnreadBadgesProvider>
         </AuthProvider>
