@@ -12,6 +12,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchPeopleDirectory, PeopleDirectoryEntry } from '@/lib/people';
+import { readAnyPeopleDefaultDirectoryCache, readFreshPeopleDefaultDirectoryCache, writePeopleDefaultDirectoryCache } from '@/lib/offline-people-cache';
 
 export default function PeopleScreen() {
   const [people, setPeople] = useState<PeopleDirectoryEntry[]>([]);
@@ -19,16 +20,60 @@ export default function PeopleScreen() {
   const [appliedQuery, setAppliedQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [peopleCacheNotice, setPeopleCacheNotice] = useState<string | null>(null);
 
   const loadPeople = useCallback(async (nextQuery: string) => {
+    const normalizedQuery = nextQuery.trim();
+
+    if (normalizedQuery !== '') {
+      setLoading(true);
+      setError(false);
+      setPeopleCacheNotice(null);
+
+      try {
+        const entries = await fetchPeopleDirectory({ query: normalizedQuery });
+        setPeople(entries);
+      } catch {
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
     setError(false);
+    setPeopleCacheNotice(null);
+
+    const cached = await readFreshPeopleDefaultDirectoryCache();
+    const hadFreshCache = Boolean(cached);
+
+    if (cached) {
+      setPeople(cached.entries);
+      setLoading(false);
+      setPeopleCacheNotice('نستعرض ناسًا محفوظين بينما نتحقق من الأحدث.');
+    }
 
     try {
-      const entries = await fetchPeopleDirectory({ query: nextQuery });
+      const entries = await fetchPeopleDirectory({ query: '' });
       setPeople(entries);
+      setError(false);
+      setPeopleCacheNotice(null);
+      await writePeopleDefaultDirectoryCache(entries);
     } catch {
-      setError(true);
+      if (hadFreshCache) {
+        setPeopleCacheNotice('تعذر تحديث ناس تِسوى الآن، نعرض آخر نسخة محفوظة.');
+        setError(false);
+      } else {
+        const stale = await readAnyPeopleDefaultDirectoryCache();
+        if (stale) {
+          setPeople(stale.entries);
+          setError(false);
+          setPeopleCacheNotice('أنت ترى نسخة محفوظة من ناس تِسوى. سنحدّثها عندما يتحسن الاتصال.');
+        } else {
+          setError(true);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -62,9 +107,14 @@ export default function PeopleScreen() {
           <AppButton label="بحث" onPress={handleSearch} disabled={loading} />
           {hasActiveSearch ? <AppButton label="مسح البحث" variant="neutral" onPress={handleClearSearch} disabled={loading} /> : null}
         </View>
+        {peopleCacheNotice ? (
+          <AppCard>
+            <AppText muted>{peopleCacheNotice}</AppText>
+          </AppCard>
+        ) : null}
       </View>
     ),
-    [handleClearSearch, handleSearch, hasActiveSearch, loading, query],
+    [handleClearSearch, handleSearch, hasActiveSearch, loading, peopleCacheNotice, query],
   );
 
   const renderPerson = useCallback(({ item }: { item: PeopleDirectoryEntry }) => {
