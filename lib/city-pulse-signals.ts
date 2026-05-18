@@ -13,6 +13,12 @@ export type CityPulseSignal = {
   body: string;
 };
 
+export type CityPulseHeroState = {
+  tone: CityPulseSignalTone;
+  headline: string;
+  body: string;
+};
+
 function formatArabicRelativeAge(timestamp: string): string {
   const diffMs = Date.now() - Date.parse(timestamp);
   if (!Number.isFinite(diffMs) || diffMs < 0) return 'الآن';
@@ -24,6 +30,52 @@ function formatArabicRelativeAge(timestamp: string): string {
   if (diffMs < hourMs) return `منذ ${Math.floor(diffMs / minuteMs)} دقيقة`;
   if (diffMs < 24 * hourMs) return `منذ ${Math.floor(diffMs / hourMs)} ساعة`;
   return 'اليوم';
+}
+
+export function buildCityPulseHeroState(
+  snapshot: CityPulseSnapshot,
+): CityPulseHeroState {
+  const hasMoving = snapshot.movingItems.length > 0;
+  const hasStories = snapshot.activeStoryAuthors.length > 0 || snapshot.storyItems.length > 0;
+  const hasPeople = snapshot.people.length > 0;
+
+  if (hasMoving && hasStories) {
+    return {
+      tone: 'movement',
+      headline: 'الحركة ظاهرة حوالك',
+      body: 'أبواب، قصص، وناس قريبين بيشكلوا مشهدًا محليًا حيًا.',
+    };
+  }
+
+  if (hasMoving) {
+    return {
+      tone: 'movement',
+      headline: 'أبواب التبادل بدأت تتحرك',
+      body: 'اقتراحات قريبة تظهر الآن وتفتح مسارات تبادل جديدة في محيطك.',
+    };
+  }
+
+  if (hasStories) {
+    return {
+      tone: 'stories',
+      headline: 'القصص شغالة في مدينتك',
+      body: 'أصوات وحكايات قريبة تضيف طبقة إنسانية لمشهد تِسوى المحلي.',
+    };
+  }
+
+  if (hasPeople) {
+    return {
+      tone: 'people',
+      headline: 'في ناس قريبة من عالم تِسوى',
+      body: 'أشخاص من نفس النبض المحلي يظهرون حولك لتكتشف حضورهم ومعروضاتهم.',
+    };
+  }
+
+  return {
+    tone: 'quiet',
+    headline: 'المشهد هادي الآن',
+    body: 'أول حركة محلية جديدة ستظهر هنا فورًا.',
+  };
 }
 
 export function buildCityPulseSignals(
