@@ -31,6 +31,12 @@ type MotionFeedEntry =
       item: StoryDiscoveryItem;
     };
 
+type RankedMotionFeedEntry = MotionFeedEntry & {
+  sourceIndex: number;
+  sourceRank: 0 | 1;
+  overallIndex: number;
+};
+
 const toTimestamp = (dateValue: string | null) => {
   if (!dateValue) return null;
   const ts = Date.parse(dateValue);
@@ -96,40 +102,62 @@ export default function MotionScreen() {
   }, [loadItems, loadMovingItems, loadStories]);
 
   const motionFeedEntries = useMemo<MotionFeedEntry[]>(() => {
-    const movingEntries = movingItems.map((item, index) => ({
+    const movingEntries: RankedMotionFeedEntry[] = movingItems.map((item, index) => ({
       key: `moving-${item.id}-${index}`,
-      kind: 'moving_item' as const,
+      kind: 'moving_item',
       activityAt: item.latestInterestAt,
       item,
       sourceIndex: index,
       sourceRank: 0,
+      overallIndex: 0,
     }));
 
-    const storyEntries = items.map((item, index) => ({
+    const storyEntries: RankedMotionFeedEntry[] = items.map((item, index) => ({
       key: `story-${item.id}-${index}`,
-      kind: 'story_item' as const,
+      kind: 'story_item',
       activityAt: item.createdAt,
       item,
       sourceIndex: index,
       sourceRank: 1,
+      overallIndex: 0,
     }));
 
-    return [...movingEntries, ...storyEntries]
-      .map((entry, overallIndex) => ({ ...entry, overallIndex }))
-      .sort((a, b) => {
-        const aTs = toTimestamp(a.activityAt);
-        const bTs = toTimestamp(b.activityAt);
+    const rankedEntries: RankedMotionFeedEntry[] = [...movingEntries, ...storyEntries].map((entry, overallIndex) => ({
+      ...entry,
+      overallIndex,
+    }));
 
-        if (aTs !== null && bTs !== null && aTs !== bTs) {
-          return bTs - aTs;
-        }
-        if (aTs !== null && bTs === null) return -1;
-        if (aTs === null && bTs !== null) return 1;
-        if (a.sourceIndex !== b.sourceIndex) return a.sourceIndex - b.sourceIndex;
-        if (a.sourceRank !== b.sourceRank) return a.sourceRank - b.sourceRank;
-        return a.overallIndex - b.overallIndex;
-      })
-      .map(({ key, kind, activityAt, item }) => ({ key, kind, activityAt, item }));
+    rankedEntries.sort((a, b) => {
+      const aTs = toTimestamp(a.activityAt);
+      const bTs = toTimestamp(b.activityAt);
+
+      if (aTs !== null && bTs !== null && aTs !== bTs) {
+        return bTs - aTs;
+      }
+      if (aTs !== null && bTs === null) return -1;
+      if (aTs === null && bTs !== null) return 1;
+      if (a.sourceIndex !== b.sourceIndex) return a.sourceIndex - b.sourceIndex;
+      if (a.sourceRank !== b.sourceRank) return a.sourceRank - b.sourceRank;
+      return a.overallIndex - b.overallIndex;
+    });
+
+    return rankedEntries.map((entry): MotionFeedEntry => {
+      if (entry.kind === 'moving_item') {
+        return {
+          key: entry.key,
+          kind: 'moving_item',
+          activityAt: entry.activityAt,
+          item: entry.item,
+        };
+      }
+
+      return {
+        key: entry.key,
+        kind: 'story_item',
+        activityAt: entry.activityAt,
+        item: entry.item,
+      };
+    });
   }, [items, movingItems]);
 
   const allMotionLoading = movingLoading && itemsLoading;
@@ -338,6 +366,7 @@ const styles = StyleSheet.create({
   },
   storyName: { textAlign: 'center' },
   storyCount: { fontSize: 12 },
+  stateBox: { gap: spacing.sm },
   storyEmptyState: { gap: spacing.sm, paddingVertical: spacing.sm },
   pulseIntro: { gap: spacing.xs, paddingTop: spacing.xs },
   partialWarning: {
