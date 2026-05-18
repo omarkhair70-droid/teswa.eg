@@ -24,7 +24,9 @@ import { CityPulseSection } from '@/components/motion/CityPulseSection';
 import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/lib/city-pulse';
 import { fetchMotionVideoDrops, MotionVideoDrop } from '@/lib/motion-video-drops';
 import { MotionVideoDropsSection } from '@/components/motion/MotionVideoDropsSection';
+import { MotionLiveSignals } from '@/components/motion/MotionLiveSignals';
 import { buildMotionVideoPresence } from '@/lib/motion-video-presence';
+import { buildMotionLiveSignals } from '@/lib/motion-live-signals';
 import {
   deleteCityPulseLocationCache,
   deleteCityPulseSnapshotCache,
@@ -90,6 +92,16 @@ export default function MotionScreen() {
   const videoPresence = useMemo(
     () => buildMotionVideoPresence(videoDrops),
     [videoDrops],
+  );
+
+  const liveSignals = useMemo(
+    () => buildMotionLiveSignals({
+      storiesCount: stories.length,
+      movingCount: movingItems.length,
+      storyItemsCount: items.length,
+      videoDropsCount: videoDrops.length,
+    }),
+    [stories.length, movingItems.length, items.length, videoDrops.length],
   );
 
   useEffect(() => {
@@ -513,6 +525,7 @@ export default function MotionScreen() {
                 <AppText weight="bold" style={styles.heroTitle}>حركة تِسوى</AppText>
                 <AppText style={styles.heroBody}>هنا الحاجات ما بتفضلش ساكتة. قصص بتتقال، وأبواب تبادل بدأت تتحرك.</AppText>
                 <AppText style={styles.heroMuted}>تابع النبض الحي من الناس والعناصر اللي دخلت مرحلة جديدة.</AppText>
+                <MotionLiveSignals state={liveSignals} />
                 {videoPresence.hasDrops && videoPresence.heroSummary ? (
                   <View style={styles.heroVideoPresence}>
                     <AppText style={styles.heroVideoPresenceTitle}>الفيديو حاضر في النبض</AppText>
