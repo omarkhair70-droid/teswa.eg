@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
@@ -17,34 +17,24 @@ export type MotionVideoDropsSectionProps = {
   onRetry: () => void;
 };
 
-function MotionVideoDropCard({ drop, active, onPlay, onStop }: { drop: MotionVideoDrop; active: boolean; onPlay: () => void; onStop: () => void }) {
-  const player = useVideoPlayer(drop.signedVideoUrl, (instance) => {
+function ActiveVideoPreview({ signedVideoUrl }: { signedVideoUrl: string }) {
+  const player = useVideoPlayer(signedVideoUrl, (instance) => {
     instance.loop = true;
+    instance.play();
   });
 
+  return <VideoView style={styles.media} player={player} nativeControls={false} fullscreenOptions={{ enable: false }} allowsPictureInPicture={false} />;
+}
+
+function MotionVideoDropCard({ drop, active, onPlay, onStop }: { drop: MotionVideoDrop; active: boolean; onPlay: () => void; onStop: () => void }) {
   const displayName = useMemo(() => drop.authorDisplayName?.trim() || (drop.authorUsername ? `@${drop.authorUsername}` : 'مستخدم'), [drop.authorDisplayName, drop.authorUsername]);
   const initial = displayName.charAt(0).toUpperCase();
   const durationLabel = drop.durationMs != null ? `${Math.max(0, Math.round(drop.durationMs / 1000))}ث` : null;
 
-  useEffect(() => {
-    if (!drop.signedVideoUrl) return;
-    if (active) {
-      player.play();
-      return;
-    }
-
-    player.pause();
-    player.currentTime = 0;
-  }, [active, drop.signedVideoUrl, player]);
-
   return (
     <View style={styles.card}>
       <View style={styles.mediaFrame}>
-        {drop.signedVideoUrl ? (
-          <VideoView style={styles.media} player={player} nativeControls={false} fullscreenOptions={{ enable: false }} allowsPictureInPicture={false} />
-        ) : (
-          <View style={styles.placeholder}><AppText muted>الفيديو غير متاح الآن</AppText></View>
-        )}
+        {active && drop.signedVideoUrl ? <ActiveVideoPreview signedVideoUrl={drop.signedVideoUrl} /> : <View style={styles.placeholder}><AppText muted>{drop.signedVideoUrl ? 'اضغط تشغيل لمعاينة الفيديو' : 'الفيديو غير متاح الآن'}</AppText></View>}
 
         <View style={styles.overlay}>
           <View style={styles.authorRow}>
@@ -62,21 +52,7 @@ function MotionVideoDropCard({ drop, active, onPlay, onStop }: { drop: MotionVid
       {drop.caption ? <AppText numberOfLines={2}>{drop.caption}</AppText> : null}
 
       <View style={styles.actionsRow}>
-        {drop.signedVideoUrl ? (
-          active ? (
-            <AppButton
-              label="إيقاف"
-              variant="neutral"
-              onPress={() => {
-                player.pause();
-                player.currentTime = 0;
-                onStop();
-              }}
-            />
-          ) : (
-            <AppButton label="تشغيل" variant="primary" onPress={onPlay} />
-          )
-        ) : null}
+        {drop.signedVideoUrl ? active ? <AppButton label="إيقاف" variant="neutral" onPress={onStop} /> : <AppButton label="تشغيل" variant="primary" onPress={onPlay} /> : null}
 
         <Pressable style={styles.openStoryButton} onPress={() => router.push(`/story/${drop.authorId}`)}>
           <AppText style={styles.openStoryText}>افتح القصة</AppText>
