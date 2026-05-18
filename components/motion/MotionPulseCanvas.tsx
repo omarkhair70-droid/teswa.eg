@@ -8,11 +8,12 @@ export type MotionPulseCanvasProps = {
   storiesCount: number;
   movingCount: number;
   storyItemsCount: number;
+  videoDropsCount: number;
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
-export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }: MotionPulseCanvasProps) {
+export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount, videoDropsCount }: MotionPulseCanvasProps) {
   const canvasSize = useSharedValue({ width: 0, height: 0 });
   const ambientProgress = useSharedValue(0);
   const tapProgress = useSharedValue(0);
@@ -27,17 +28,20 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
     const storiesBoost = clamp01(storiesCount / 14);
     const movingBoost = clamp01(movingCount / 10);
     const storyItemsBoost = clamp01(storyItemsCount / 14);
+    const videoBoost = clamp01(videoDropsCount / 8);
     return {
       storiesBoost,
       movingBoost,
       storyItemsBoost,
+      videoBoost,
       aggregate: clamp01(
-        storiesBoost * 0.34 +
-        movingBoost * 0.4 +
-        storyItemsBoost * 0.26
+        storiesBoost * 0.28 +
+        movingBoost * 0.34 +
+        storyItemsBoost * 0.22 +
+        videoBoost * 0.16
       ),
     };
-  }, [movingCount, storiesCount, storyItemsCount]);
+  }, [movingCount, storiesCount, storyItemsCount, videoDropsCount]);
 
   const centerX = useDerivedValue(() => canvasSize.value.width * 0.52);
   const centerY = useDerivedValue(() => canvasSize.value.height * 0.45);
@@ -46,7 +50,7 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
   const drift = useDerivedValue(() => ambientProgress.value * Math.PI * 2);
 
   const outerRingRadius = useDerivedValue(() => baseRadius.value + ambientProgress.value * 26 + dataIntensity.aggregate * 12);
-  const midRingRadius = useDerivedValue(() => baseRadius.value * 0.72 + (1 - ambientProgress.value) * 18 + dataIntensity.storiesBoost * 8);
+  const midRingRadius = useDerivedValue(() => baseRadius.value * 0.72 + (1 - ambientProgress.value) * 18 + dataIntensity.storiesBoost * 8 + dataIntensity.videoBoost * 6);
   const innerGlowRadius = useDerivedValue(() => baseRadius.value * (0.72 + ambientProgress.value * 0.22) + dataIntensity.movingBoost * 9);
 
   const nodeOneX = useDerivedValue(() => centerX.value + Math.cos(drift.value) * (baseRadius.value * 0.7 + dataIntensity.storiesBoost * 6));
@@ -82,7 +86,7 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount }
             <Circle cx={centerX} cy={centerY} r={midRingRadius} color="rgba(255,255,255,0.12)" />
             <Circle cx={centerX} cy={centerY} r={innerGlowRadius} color="rgba(255,255,255,0.14)" />
             <Circle cx={nodeOneX} cy={nodeOneY} r={nodeOneR} color="rgba(255,255,255,0.30)" />
-            <Circle cx={nodeTwoX} cy={nodeTwoY} r={3 + dataIntensity.movingBoost * 2.2} color="rgba(255,255,255,0.24)" />
+            <Circle cx={nodeTwoX} cy={nodeTwoY} r={3 + dataIntensity.movingBoost * 2.2 + dataIntensity.videoBoost * 1.8} color="rgba(255,255,255,0.24)" />
             <Group opacity={burstOpacity}>
               <Circle cx={tapX} cy={tapY} r={burstRadius} color="rgba(255,255,255,0.24)" />
             </Group>

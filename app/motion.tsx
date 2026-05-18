@@ -19,11 +19,12 @@ import { fetchMovingItems, MovingItemInterest } from '@/lib/motion-interest';
 import { readAnyMotionPublicFeedCache, readFreshMotionPublicFeedCache, writeMotionPublicFeedCache } from '@/lib/offline-motion-cache';
 import { MotionPulseCanvas } from '@/components/motion/MotionPulseCanvas';
 import { MotionEmptyAnimation } from '@/components/motion/MotionEmptyAnimation';
-import { MotionShareSheet } from '@/components/motion/MotionShareSheet';
-import type { MotionShareMoment } from '@/lib/motion-share';
 import { resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 import { CityPulseSection } from '@/components/motion/CityPulseSection';
 import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/lib/city-pulse';
+import { fetchMotionVideoDrops, MotionVideoDrop } from '@/lib/motion-video-drops';
+import { MotionVideoDropsSection } from '@/components/motion/MotionVideoDropsSection';
+import { buildMotionVideoPresence } from '@/lib/motion-video-presence';
 import {
   deleteCityPulseLocationCache,
   deleteCityPulseSnapshotCache,
@@ -73,8 +74,6 @@ export default function MotionScreen() {
   const [movingLoading, setMovingLoading] = useState(true);
   const [movingError, setMovingError] = useState<string | null>(null);
   const [motionCacheNotice, setMotionCacheNotice] = useState<string | null>(null);
-  const [shareMoment, setShareMoment] = useState<MotionShareMoment | null>(null);
-  const [shareSheetVisible, setShareSheetVisible] = useState(false);
   const [cityPulseLocation, setCityPulseLocation] = useState<CityPulseLocation | null>(null);
   const [cityPulseSnapshot, setCityPulseSnapshot] = useState<CityPulseSnapshot | null>(null);
   const [cityPulseLocationLoading, setCityPulseLocationLoading] = useState(false);
@@ -84,6 +83,14 @@ export default function MotionScreen() {
   const cityPulseSnapshotRef = useRef<CityPulseSnapshot | null>(null);
   const cityPulseLoadGenerationRef = useRef(0);
   const [cityPulseBootstrapped, setCityPulseBootstrapped] = useState(false);
+  const [videoDrops, setVideoDrops] = useState<MotionVideoDrop[]>([]);
+  const [videoDropsLoading, setVideoDropsLoading] = useState(true);
+  const [videoDropsError, setVideoDropsError] = useState<string | null>(null);
+
+  const videoPresence = useMemo(
+    () => buildMotionVideoPresence(videoDrops),
+    [videoDrops],
+  );
 
   useEffect(() => {
     cityPulseSnapshotRef.current = cityPulseSnapshot;
@@ -303,10 +310,24 @@ export default function MotionScreen() {
     setItemsLoading(false);
   }, []);
 
+  const loadMotionVideoDrops = useCallback(async () => {
+    setVideoDropsLoading(true);
+    setVideoDropsError(null);
+    try {
+      const drops = await fetchMotionVideoDrops({ limit: 8 });
+      setVideoDrops(drops);
+    } catch {
+      setVideoDropsError('تعذر تحميل لقطات الفيديو الآن.');
+    } finally {
+      setVideoDropsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStories();
     loadMotionPublicFeed();
-  }, [loadMotionPublicFeed, loadStories]);
+    loadMotionVideoDrops();
+  }, [loadMotionPublicFeed, loadMotionVideoDrops, loadStories]);
 
   const motionFeedEntries = useMemo<MotionFeedEntry[]>(() => {
     const movingEntries: RankedMotionFeedEntry[] = movingItems.map((item, index) => ({
@@ -422,15 +443,6 @@ export default function MotionScreen() {
       const moving = item.item;
       const metadata = [moving.category, moving.condition, moving.location].filter(Boolean).join(' / ');
       const badge = moving.openInterestCount === 1 ? 'وصلها اقتراح' : `وصلها ${moving.openInterestCount} اقتراحات مفتوحة`;
-      const shareData: MotionShareMoment = {
-        kind: 'moving_item',
-        itemId: moving.id,
-        title: moving.title,
-        badge,
-        metadata: metadata || null,
-        ownerDisplayName: moving.ownerDisplayName || null,
-        imageUrl: moving.imageUrl || null,
-      };
 
       return (
         <Animated.View entering={FadeInUp.duration(280).delay(index * 35)}>
@@ -455,17 +467,6 @@ export default function MotionScreen() {
                 {moving.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {moving.ownerDisplayName}</AppText> : null}
               </View>
             </Pressable>
-            <View style={styles.shareActionRow}>
-              <Pressable
-                style={styles.shareActionButton}
-                onPress={() => {
-                  setShareMoment(shareData);
-                  setShareSheetVisible(true);
-                }}
-              >
-                <AppText style={styles.shareActionLabel}>شارك النبض</AppText>
-              </Pressable>
-            </View>
           </View>
         </Animated.View>
       );
@@ -473,16 +474,6 @@ export default function MotionScreen() {
 
     const story = item.item;
     const metadata = [story.category, story.city, story.area].filter(Boolean).join(' / ');
-    const shareData: MotionShareMoment = {
-      kind: 'story_item',
-      itemId: story.id,
-      title: story.title,
-      storyLabel: story.storyLabel,
-      storySnippet: story.storySnippet,
-      metadata: metadata || null,
-      ownerDisplayName: story.ownerDisplayName || null,
-      imageUrl: story.imageUrl || null,
-    };
 
     return (
       <Animated.View entering={FadeInUp.duration(280).delay(index * 35)}>
@@ -502,17 +493,6 @@ export default function MotionScreen() {
               {story.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {story.ownerDisplayName}</AppText> : null}
             </View>
           </Pressable>
-          <View style={styles.shareActionRow}>
-            <Pressable
-              style={styles.shareActionButton}
-              onPress={() => {
-                setShareMoment(shareData);
-                setShareSheetVisible(true);
-              }}
-            >
-              <AppText style={styles.shareActionLabel}>شارك النبض</AppText>
-            </Pressable>
-          </View>
         </View>
       </Animated.View>
     );
@@ -528,11 +508,17 @@ export default function MotionScreen() {
         ListHeaderComponent={(
           <View style={styles.headerWrap}>
             <LinearGradient colors={[colors.primary, colors.accent, colors.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-              <MotionPulseCanvas storiesCount={stories.length} movingCount={movingItems.length} storyItemsCount={items.length} />
+              <MotionPulseCanvas storiesCount={stories.length} movingCount={movingItems.length} storyItemsCount={items.length} videoDropsCount={videoDrops.length} />
               <View style={styles.heroContent}>
                 <AppText weight="bold" style={styles.heroTitle}>حركة تِسوى</AppText>
                 <AppText style={styles.heroBody}>هنا الحاجات ما بتفضلش ساكتة. قصص بتتقال، وأبواب تبادل بدأت تتحرك.</AppText>
                 <AppText style={styles.heroMuted}>تابع النبض الحي من الناس والعناصر اللي دخلت مرحلة جديدة.</AppText>
+                {videoPresence.hasDrops && videoPresence.heroSummary ? (
+                  <View style={styles.heroVideoPresence}>
+                    <AppText style={styles.heroVideoPresenceTitle}>الفيديو حاضر في النبض</AppText>
+                    <AppText style={styles.heroVideoPresenceBody}>{videoPresence.heroSummary}</AppText>
+                  </View>
+                ) : null}
                 <View style={styles.metricsRow}>
                 {[
                   { label: 'قصص نشطة', value: stories.length },
@@ -570,9 +556,21 @@ export default function MotionScreen() {
               {renderStoryRail()}
             </View>
 
+            <View style={styles.storiesBand}>
+              <MotionVideoDropsSection
+                drops={videoDrops}
+                loading={videoDropsLoading}
+                error={videoDropsError}
+                onRetry={loadMotionVideoDrops}
+              />
+            </View>
+
             <View style={styles.pulseIntro}>
               <AppText weight="bold">النبض الآن</AppText>
               <AppText muted>حاجات عليها اهتمام، وحاجات أصحابها فتحوا لها باب حكاية.</AppText>
+              {videoPresence.hasDrops && videoPresence.pulseSummary ? (
+                <AppText muted>{videoPresence.pulseSummary}</AppText>
+              ) : null}
             </View>
 
             {motionCacheNotice ? (
@@ -603,14 +601,6 @@ export default function MotionScreen() {
         ) : null}
         renderItem={renderFeedItem}
       />
-      <MotionShareSheet
-        visible={shareSheetVisible}
-        moment={shareMoment}
-        onClose={() => {
-          setShareSheetVisible(false);
-          setShareMoment(null);
-        }}
-      />
     </AppScreen>
   );
 }
@@ -624,6 +614,18 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 28, color: colors.white },
   heroBody: { color: colors.white },
   heroMuted: { color: 'rgba(255,255,255,0.86)' },
+  heroVideoPresence: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: spacing.xs,
+  },
+  heroVideoPresenceTitle: { color: colors.white, fontSize: 12 },
+  heroVideoPresenceBody: { color: 'rgba(255,255,255,0.92)', fontSize: 13 },
   metricsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   metricChip: {
     flex: 1,
@@ -688,22 +690,6 @@ const styles = StyleSheet.create({
   overlayBadgeText: { color: colors.white, fontSize: 12 },
   imagePlaceholder: { height: 140, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   feedContent: { padding: spacing.md, gap: spacing.xs },
-  shareActionRow: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    alignItems: 'flex-start',
-  },
-  shareActionButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.white,
-  },
-  shareActionLabel: { color: colors.textMuted, fontSize: 13 },
   microLabel: { color: colors.primary, fontSize: 12 },
   storyLabelPill: {
     alignSelf: 'flex-start',
