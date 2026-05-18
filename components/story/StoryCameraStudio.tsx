@@ -19,6 +19,7 @@ const FLASH_LABEL: Record<'off' | 'auto' | 'on', string> = { off: 'فلاش مغ
 export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraStudioProps) {
   const cameraRef = useRef<CameraView | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingCancelledRef = useRef(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [mode, setMode] = useState<'picture' | 'video'>('picture');
@@ -42,6 +43,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
   useEffect(() => {
     if (!visible) {
       clearTimer();
+      recordingCancelledRef.current = false;
       setRecording(false);
       setCaptureBusy(false);
       setCameraReady(false);
@@ -52,6 +54,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
 
   const handleClose = async () => {
     if (recording && cameraRef.current) {
+      recordingCancelledRef.current = true;
       try { cameraRef.current.stopRecording(); } catch {}
     }
     clearTimer();
@@ -87,11 +90,13 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
   };
 
   const handleVideoAction = async () => {
-    if (!cameraReady || !cameraRef.current || captureBusy) return;
+    if (!cameraReady || !cameraRef.current) return;
     if (recording) {
       try { cameraRef.current.stopRecording(); } catch {}
       return;
     }
+    if (captureBusy) return;
+
     if (!microphonePermission?.granted) {
       const micResult = await requestMicrophonePermission();
       if (!micResult.granted) {
@@ -100,6 +105,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
       }
     }
 
+    recordingCancelledRef.current = false;
     setCaptureBusy(true);
     setRecording(true);
     setStudioError(null);
@@ -108,6 +114,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
 
     try {
       const result = await cameraRef.current.recordAsync();
+      if (recordingCancelledRef.current) return;
       if (!result?.uri) {
         setStudioError('تعذر حفظ الفيديو المسجل.');
         return;
@@ -115,9 +122,10 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
       onCaptured({ uri: result.uri, type: 'video', mimeType: 'video/mp4', fileName: `story-video-${Date.now()}.mp4` });
       onClose();
     } catch {
-      setStudioError('تعذر حفظ الفيديو المسجل.');
+      if (!recordingCancelledRef.current) setStudioError('تعذر حفظ الفيديو المسجل.');
     } finally {
       clearTimer();
+      recordingCancelledRef.current = false;
       setRecording(false);
       setCaptureBusy(false);
       setRecordingElapsedSeconds(0);
@@ -138,6 +146,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
             <AppText weight="bold">إذن الكاميرا مطلوب</AppText>
             <AppText muted>نحتاج الوصول للكاميرا حتى تلتقط قصتك من داخل تِسوى.</AppText>
             <Pressable style={styles.ctaButton} onPress={() => void requestCameraPermission()}><AppText style={styles.ctaText}>منح الإذن</AppText></Pressable>
+            <Pressable style={styles.closeButton} onPress={() => void handleClose()}><AppText muted>إغلاق</AppText></Pressable>
           </View>
         </View>
       </Modal>
@@ -157,20 +166,20 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
             <View style={styles.spacer} />
           </View>
 
-          <View style={styles.modeRow}>
-            <Pressable style={[styles.modeChip, mode === 'picture' && styles.modeChipActive]} onPress={() => setMode('picture')}><AppText style={styles.modeChipText}>صورة</AppText></Pressable>
-            <Pressable style={[styles.modeChip, mode === 'video' && styles.modeChipActive]} onPress={() => setMode('video')}><AppText style={styles.modeChipText}>فيديو</AppText></Pressable>
+          <View style={[styles.modeRow, recording && styles.disabledControl]}>
+            <Pressable style={[styles.modeChip, mode === 'picture' && styles.modeChipActive]} onPress={() => setMode('picture')} disabled={recording}><AppText style={styles.modeChipText}>صورة</AppText></Pressable>
+            <Pressable style={[styles.modeChip, mode === 'video' && styles.modeChipActive]} onPress={() => setMode('video')} disabled={recording}><AppText style={styles.modeChipText}>فيديو</AppText></Pressable>
           </View>
 
           <View style={styles.bottomPanel}>
             {recording ? <View style={styles.recordBadge}><AppText style={styles.lightText}>{elapsed}</AppText></View> : null}
             {studioError ? <AppText style={styles.errorText}>{studioError}</AppText> : null}
             <View style={styles.controlsRow}>
-              <Pressable style={styles.secondaryControl} onPress={() => setFacing((current) => (current === 'back' ? 'front' : 'back'))}><AppText style={styles.lightText}>تبديل الكاميرا</AppText></Pressable>
-              <Pressable style={[styles.captureButton, (!cameraReady || captureBusy) && styles.captureButtonDisabled]} onPress={() => void (mode === 'picture' ? handleCapturePhoto() : handleVideoAction())} disabled={!cameraReady || captureBusy}>
+              <Pressable style={[styles.secondaryControl, recording && styles.disabledControl]} onPress={() => setFacing((current) => (current === 'back' ? 'front' : 'back'))} disabled={recording}><AppText style={styles.lightText}>تبديل الكاميرا</AppText></Pressable>
+              <Pressable style={[styles.captureButton, (!cameraReady || (captureBusy && !recording)) && styles.captureButtonDisabled]} onPress={() => void (mode === 'picture' ? handleCapturePhoto() : handleVideoAction())} disabled={!cameraReady || (captureBusy && !recording)}>
                 <AppText weight="semibold">{mode === 'picture' ? 'التقاط' : recording ? 'إيقاف التسجيل' : 'بدء التسجيل'}</AppText>
               </Pressable>
-              <Pressable style={styles.secondaryControl} onPress={() => setFlash((current) => FLASH_CYCLE[(FLASH_CYCLE.indexOf(current) + 1) % FLASH_CYCLE.length])}><AppText style={styles.lightText}>{FLASH_LABEL[flash]}</AppText></Pressable>
+              <Pressable style={[styles.secondaryControl, recording && styles.disabledControl]} onPress={() => setFlash((current) => FLASH_CYCLE[(FLASH_CYCLE.indexOf(current) + 1) % FLASH_CYCLE.length])} disabled={recording}><AppText style={styles.lightText}>{FLASH_LABEL[flash]}</AppText></Pressable>
             </View>
           </View>
         </View>
@@ -195,6 +204,7 @@ const styles = StyleSheet.create({
   errorText: { color: '#B42318', textAlign: 'center' },
   controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   secondaryControl: { flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', borderRadius: radii.md, paddingVertical: spacing.sm, alignItems: 'center' },
+  disabledControl: { opacity: 0.45 },
   captureButton: { minWidth: 120, borderRadius: radii.round, backgroundColor: colors.white, paddingVertical: spacing.md, paddingHorizontal: spacing.md, alignItems: 'center' },
   captureButtonDisabled: { opacity: 0.5 },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0E0E10' },
@@ -202,4 +212,5 @@ const styles = StyleSheet.create({
   permissionCard: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
   ctaButton: { backgroundColor: colors.primary, borderRadius: radii.md, alignItems: 'center', paddingVertical: spacing.sm },
   ctaText: { color: colors.white },
+  closeButton: { alignItems: 'center', paddingVertical: spacing.xs },
 });
