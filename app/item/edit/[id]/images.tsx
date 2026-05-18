@@ -63,6 +63,41 @@ export default function EditListingImagesScreen() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
+
+  const appendNewAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
+    const validAssets = assets.filter((asset) => asset?.uri);
+    if (!validAssets.length) return;
+
+    setDraftImages((prev) => {
+      if (prev.length >= MAX_IMAGES) return prev;
+
+      const seenNewUris = new Set(prev.filter((img): img is Extract<DraftImage, { kind: 'new' }> => img.kind === 'new').map((img) => img.asset.uri));
+      const uniqueIncoming: ImagePicker.ImagePickerAsset[] = [];
+      const incomingSeen = new Set<string>();
+
+      for (const asset of validAssets) {
+        const uri = asset.uri;
+        if (!uri || seenNewUris.has(uri) || incomingSeen.has(uri)) continue;
+        incomingSeen.add(uri);
+        uniqueIncoming.push(asset);
+      }
+
+      if (!uniqueIncoming.length) return prev;
+
+      const remaining = Math.max(MAX_IMAGES - prev.length, 0);
+      if (!remaining) return prev;
+
+      const toAppend = uniqueIncoming.slice(0, remaining).map((asset) => ({
+        key: `new:${asset.uri}`,
+        kind: 'new' as const,
+        asset,
+        previewUri: asset.uri,
+      }));
+
+      return [...prev, ...toAppend];
+    });
+  };
+
   const pickFromCamera = async () => {
     const remaining = Math.max(MAX_IMAGES - draftImages.length, 0);
     if (!remaining) return setError('وصلت للحد الأقصى من الصور (4). احذف صورة لإضافة غيرها.');
@@ -73,7 +108,7 @@ export default function EditListingImagesScreen() {
     const asset = result.assets?.[0];
     if (!asset?.uri) return;
     setError(null);
-    setDraftImages((prev) => [...prev, { key: `new:${asset.uri}`, kind: 'new', asset, previewUri: asset.uri }]);
+    appendNewAssets([asset]);
   };
 
   const pickFromGallery = async () => {
@@ -82,7 +117,7 @@ export default function EditListingImagesScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: remaining, quality: 0.9 });
     if (result.canceled) return;
     setError(null);
-    setDraftImages((prev) => [...prev, ...(result.assets ?? []).filter((a) => a.uri).map((asset) => ({ key: `new:${asset.uri}`, kind: 'new' as const, asset, previewUri: asset.uri }))]);
+    appendNewAssets(result.assets ?? []);
   };
 
   const onSave = async () => {
@@ -122,9 +157,9 @@ export default function EditListingImagesScreen() {
     {error ? <AppCard><AppText style={styles.errorText}>{error}</AppText></AppCard> : null}
     {success ? <AppCard><View style={styles.group}><AppText weight='semibold'>تم حفظ صور العنصر بنجاح.</AppText>{success.storageCleanupFailed ? <AppText muted>تم الحفظ، لكن تعذر تنظيف بعض الملفات القديمة من التخزين.</AppText> : null}<AppButton label='العودة لإدارة عناصري' onPress={() => router.replace('/item/manage')} /><AppButton label='العودة لتعديل البيانات' variant='neutral' onPress={() => router.replace(`/item/edit/${itemId}`)} />{context.status === 'active' ? <AppButton label='عرض العنصر' variant='neutral' onPress={() => router.push(`/item/${itemId}`)} /> : null}</View></AppCard> : null}
 
-    <AppCard><View style={styles.group}>{!draftImages.length ? <View style={styles.group}><EmptyState title='أضف صورة واضحة للعنصر' description='يجب الاحتفاظ بصورة واحدة على الأقل، ويمكنك استخدام 4 صور كحد أقصى.' /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={saving} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={saving} /></View></View> : <View style={styles.group}><View style={styles.coverCard}><Image source={{ uri: cover.previewUri }} style={styles.coverImage} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View></View><AppText muted>اضغط مطولاً واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={draftImages} horizontal keyExtractor={(item) => item.key} contentContainerStyle={styles.thumbWrap} onDragBegin={() => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined)} onDragEnd={({ data }) => { setDraftImages(data); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined); }} renderItem={({ item, drag, getIndex, isActive }: RenderItemParams<DraftImage>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} style={[styles.thumbCard, index === 0 && styles.coverThumb, isActive && styles.thumbActive]}><Image source={{ uri: item.previewUri }} style={styles.thumbImage} /><View style={styles.thumbMeta}><AppText muted>#{index + 1}</AppText>{index === 0 ? <View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View> : null}</View><Pressable onPress={() => setDraftImages((prev) => prev.filter((entry) => entry.key !== item.key))} style={styles.remove}><AppText muted>حذف</AppText></Pressable></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={saving || draftImages.length >= MAX_IMAGES} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={saving || draftImages.length >= MAX_IMAGES} /></View></View>}</View></AppCard>
+    <AppCard><View style={styles.group}>{!draftImages.length ? <View style={styles.group}><EmptyState title='أضف صورة واضحة للعنصر' description='يجب الاحتفاظ بصورة واحدة على الأقل، ويمكنك استخدام 4 صور كحد أقصى.' /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={saving || Boolean(success)} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={saving || Boolean(success)} /></View></View> : <View style={styles.group}><View style={styles.coverCard}><Image source={{ uri: cover.previewUri }} style={styles.coverImage} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View></View><AppText muted>اضغط مطولاً واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={draftImages} horizontal keyExtractor={(item) => item.key} contentContainerStyle={styles.thumbWrap} onDragBegin={() => { if (success) return; void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined); }} onDragEnd={({ data }) => { if (success) return; setDraftImages(data); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined); }} renderItem={({ item, drag, getIndex, isActive }: RenderItemParams<DraftImage>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={success ? undefined : drag} disabled={Boolean(success)} style={[styles.thumbCard, index === 0 && styles.coverThumb, isActive && styles.thumbActive]}><Image source={{ uri: item.previewUri }} style={styles.thumbImage} /><View style={styles.thumbMeta}><AppText muted>#{index + 1}</AppText>{index === 0 ? <View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View> : null}</View><Pressable onPress={() => !success && setDraftImages((prev) => prev.filter((entry) => entry.key !== item.key))} disabled={Boolean(success)} style={styles.remove}><AppText muted>حذف</AppText></Pressable></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={pickFromCamera} disabled={saving || Boolean(success) || draftImages.length >= MAX_IMAGES} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={saving || Boolean(success) || draftImages.length >= MAX_IMAGES} /></View></View>}</View></AppCard>
 
-    <View style={styles.actions}><AppButton label='إلغاء' variant='neutral' onPress={() => router.back()} disabled={saving} /><AppButton label={saving ? saveProgress || 'جارٍ حفظ الصور...' : 'حفظ الصور'} onPress={() => void onSave()} disabled={saving || isDefinitelyOffline} /></View>
+    {!success ? <View style={styles.actions}><AppButton label='إلغاء' variant='neutral' onPress={() => router.back()} disabled={saving} /><AppButton label={saving ? saveProgress || 'جارٍ حفظ الصور...' : 'حفظ الصور'} onPress={() => void onSave()} disabled={saving || isDefinitelyOffline} /></View> : null}
   </View></AppScreen>;
 }
 
