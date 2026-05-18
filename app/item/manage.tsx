@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22 },
   filtersWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
-    borderRadius: radii.pill,
+    borderRadius: radii.round,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
@@ -200,6 +200,6 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   itemTitle: { flex: 1, fontSize: 18 },
-  badge: { borderRadius: radii.pill, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  badge: { borderRadius: radii.round, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   badgeText: { color: colors.primary },
 });
