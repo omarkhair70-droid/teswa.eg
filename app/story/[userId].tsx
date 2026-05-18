@@ -372,7 +372,13 @@ export default function StoryViewerScreen() {
       }
       const safeDurationMs = Math.min(rawDurationMs, MAX_STORY_VOICE_MS);
       const uri = audioRecorder.uri;
-      if (uri) setVoiceDraft({ uri, durationMs: safeDurationMs, mimeType: 'audio/m4a' });
+      if (!uri) {
+        setVoiceOpen(false);
+        setVoiceDraft(null);
+        setStoryReplyError('تعذر حفظ التسجيل الصوتي. حاول مرة أخرى.');
+        return;
+      }
+      setVoiceDraft({ uri, durationMs: safeDurationMs, mimeType: 'audio/m4a' });
     } catch {
       setStoryReplyError('تعذر حفظ التسجيل الصوتي. حاول مرة أخرى.');
     } finally { setVoiceBusy(false); }
