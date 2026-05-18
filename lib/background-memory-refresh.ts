@@ -80,7 +80,7 @@ TaskManager.defineTask(TESWA_BACKGROUND_MEMORY_REFRESH_TASK, async () => {
 
 export async function isTeswaBackgroundMemoryRefreshRegistered(): Promise<boolean> {
   try {
-    return await BackgroundTask.isTaskRegisteredAsync(TESWA_BACKGROUND_MEMORY_REFRESH_TASK);
+    return await TaskManager.isTaskRegisteredAsync(TESWA_BACKGROUND_MEMORY_REFRESH_TASK);
   } catch {
     return false;
   }
@@ -88,13 +88,13 @@ export async function isTeswaBackgroundMemoryRefreshRegistered(): Promise<boolea
 
 export async function ensureTeswaBackgroundMemoryRefreshRegistered(): Promise<void> {
   try {
-    const isRegistered = await BackgroundTask.isTaskRegisteredAsync(TESWA_BACKGROUND_MEMORY_REFRESH_TASK);
+    const isRegistered = await TaskManager.isTaskRegisteredAsync(TESWA_BACKGROUND_MEMORY_REFRESH_TASK);
     if (isRegistered) {
       return;
     }
 
     await BackgroundTask.registerTaskAsync(TESWA_BACKGROUND_MEMORY_REFRESH_TASK, {
-      minimumInterval: 60 * 60,
+      minimumInterval: 60,
     });
   } catch {
     if (__DEV__) {
