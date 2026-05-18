@@ -10,6 +10,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { useAuth } from '@/lib/auth';
 import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetchStoryViewerContextByUserId } from '@/lib/stories';
 import { markStoryViewedFromMobile } from '@/lib/story-views';
+import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/story-likes';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -94,6 +95,9 @@ export default function StoryViewerScreen() {
   const [mediaFailedIds, setMediaFailedIds] = useState<Record<string, boolean>>({});
   const [activeIndex, setActiveIndex] = useState(0);
   const [readyVideoStoryIds, setReadyVideoStoryIds] = useState<Record<string, boolean>>({});
+  const [likedStoryIds, setLikedStoryIds] = useState<Record<string, boolean>>({});
+  const [likeBusyStoryIds, setLikeBusyStoryIds] = useState<Record<string, boolean>>({});
+  const [likeActionError, setLikeActionError] = useState<string | null>(null);
 
   const closeViewer = useCallback(() => {
     router.back();
@@ -156,6 +160,8 @@ export default function StoryViewerScreen() {
   const currentStory = context?.stories[activeIndex] ?? null;
   const currentStoryAgeLabel = currentStory ? formatStoryAgeLabel(currentStory.createdAt) : null;
   const currentStorySignedUrl = currentStory ? urlsByStoryId[currentStory.id] : null;
+  const currentStoryLiked = currentStory ? Boolean(likedStoryIds[currentStory.id]) : false;
+  const currentStoryLikeBusy = currentStory ? Boolean(likeBusyStoryIds[currentStory.id]) : false;
   const storyDurationMs = useMemo(() => {
     if (!currentStory) return IMAGE_DURATION_MS;
     if (currentStory.mediaType === 'video') {
@@ -187,6 +193,34 @@ export default function StoryViewerScreen() {
     void markStoryViewedFromMobile({ storyId, viewerId: user.id });
   }, [currentStory, currentStorySignedUrl, isViewingOwnStories, user?.id]);
 
+
+  useEffect(() => {
+    if (!user?.id || !context?.stories.length || isViewingOwnStories) {
+      setLikedStoryIds({});
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const likedState = await fetchStoryLikeStateForViewer({
+          viewerId: user.id,
+          storyIds: context.stories.map((story) => story.id),
+        });
+        if (!cancelled) setLikedStoryIds(likedState);
+      } catch (likeStateError) {
+        if (__DEV__) console.warn('[story-viewer] like state failed', likeStateError);
+        if (!cancelled) setLikedStoryIds({});
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [context?.stories, isViewingOwnStories, user?.id]);
+
+  useEffect(() => {
+    setLikeActionError(null);
+  }, [activeIndex, currentStory?.id]);
+
   useEffect(() => {
     if (!context?.stories.length) return;
     progressAnim.stopAnimation();
@@ -207,6 +241,46 @@ export default function StoryViewerScreen() {
       animation.stop();
     };
   }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs]);
+
+
+  const handleToggleStoryLike = useCallback(async () => {
+    if (!user?.id) return;
+    if (!currentStory) return;
+    if (isViewingOwnStories) return;
+
+    const storyId = currentStory.id.trim();
+    if (!storyId || likeBusyStoryIds[storyId]) return;
+
+    setLikeActionError(null);
+    setLikeBusyStoryIds((prev) => ({ ...prev, [storyId]: true }));
+
+    try {
+      const result = await setStoryLikedFromMobile({
+        storyId,
+        likerId: user.id,
+        liked: !currentStoryLiked,
+      });
+
+      if (!result.ok) {
+        setLikeActionError(result.message);
+        return;
+      }
+
+      setLikeActionError(null);
+      setLikedStoryIds((prev) => {
+        if (result.liked) return { ...prev, [storyId]: true };
+        const next = { ...prev };
+        delete next[storyId];
+        return next;
+      });
+    } finally {
+      setLikeBusyStoryIds((prev) => {
+        const next = { ...prev };
+        delete next[storyId];
+        return next;
+      });
+    }
+  }, [currentStory, currentStoryLiked, isViewingOwnStories, likeBusyStoryIds, user?.id]);
 
   const renderUnavailableState = () => {
     if (isViewingOwnStories) {
@@ -318,6 +392,11 @@ export default function StoryViewerScreen() {
             </View>
           </View>
           <View style={styles.headerActions}>
+            {!isViewingOwnStories ? (
+              <Pressable onPress={() => void handleToggleStoryLike()} disabled={currentStoryLikeBusy} style={currentStoryLikeBusy ? styles.likeDisabled : undefined}>
+                <AppText style={[styles.likeText, currentStoryLiked && styles.likeTextActive]}>{currentStoryLiked ? '♥' : '♡'}</AppText>
+              </Pressable>
+            ) : null}
             {isViewingOwnStories ? (
               <Pressable onPress={() => router.push('/story/manage')}>
                 <AppText style={styles.manageText}>إدارة</AppText>
@@ -327,6 +406,12 @@ export default function StoryViewerScreen() {
           </View>
         </View>
       </View>
+
+      {likeActionError ? (
+        <View style={styles.likeErrorBox}>
+          <AppText style={styles.likeErrorText}>{likeActionError}</AppText>
+        </View>
+      ) : null}
 
       <View style={styles.navLayer} pointerEvents="box-none">
         <Pressable style={styles.leftZone} onPress={goPrevious} />
@@ -357,6 +442,9 @@ const styles = StyleSheet.create({
   authorUsername: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
   closeText: { color: '#fff', fontSize: 14 },
   manageText: { color: '#fff', fontSize: 14 },
+  likeText: { color: '#fff', fontSize: 18, lineHeight: 20 },
+  likeTextActive: { color: '#fff' },
+  likeDisabled: { opacity: 0.6 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   navLayer: {
     position: 'absolute',
@@ -381,6 +469,8 @@ const styles = StyleSheet.create({
     width: 88,
   },
   topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 56, paddingHorizontal: 12, gap: 12, zIndex: 3 },
+  likeErrorBox: { position: 'absolute', top: 118, left: 12, right: 12, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
+  likeErrorText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, textAlign: 'right' },
   captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
   captionText: { color: '#fff', textAlign: 'right' },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 10 },

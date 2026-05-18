@@ -13,6 +13,7 @@ import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { createStoryMediaSignedUrl, deleteStoryFromMobile, fetchActiveStoriesByUserId, StoryRecord } from '@/lib/stories';
 import { fetchStoryViewCountsForOwner } from '@/lib/story-views';
+import { fetchStoryLikeCountsForOwner } from '@/lib/story-likes';
 
 function formatRemainingTime(expiresAt: string): string {
   const expiresAtDate = new Date(expiresAt);
@@ -41,6 +42,8 @@ export default function StoryManageScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [viewCountsByStoryId, setViewCountsByStoryId] = useState<Record<string, number>>({});
   const [viewCountsError, setViewCountsError] = useState<string | null>(null);
+  const [likeCountsByStoryId, setLikeCountsByStoryId] = useState<Record<string, number>>({});
+  const [likeCountsError, setLikeCountsError] = useState<string | null>(null);
 
   const loadStories = useCallback(async () => {
     if (!user?.id) {
@@ -49,6 +52,8 @@ export default function StoryManageScreen() {
       setError(null);
       setViewCountsByStoryId({});
       setViewCountsError(null);
+      setLikeCountsByStoryId({});
+      setLikeCountsError(null);
       return;
     }
 
@@ -82,6 +87,19 @@ export default function StoryManageScreen() {
         setViewCountsByStoryId({});
         setViewCountsError('تعذر تحميل عدد المشاهدات حالياً.');
       }
+
+      try {
+        const likeCounts = await fetchStoryLikeCountsForOwner({
+          ownerId: user.id,
+          storyIds: activeStories.map((story) => story.id),
+        });
+        setLikeCountsByStoryId(likeCounts);
+        setLikeCountsError(null);
+      } catch (likeError) {
+        if (__DEV__) console.log('[story-manage] like counts failed', likeError);
+        setLikeCountsByStoryId({});
+        setLikeCountsError('تعذر تحميل عدد الإعجابات حالياً.');
+      }
     } catch (loadError) {
       if (__DEV__) console.log('[story-manage] load failed', loadError);
       setError('تعذر تحميل القصص النشطة حالياً. حاول مرة أخرى.');
@@ -89,6 +107,8 @@ export default function StoryManageScreen() {
       setImageSignedUrls({});
       setViewCountsByStoryId({});
       setViewCountsError(null);
+      setLikeCountsByStoryId({});
+      setLikeCountsError(null);
     } finally {
       setLoading(false);
     }
@@ -193,6 +213,7 @@ export default function StoryManageScreen() {
 
         {feedback ? <AppCard><AppText muted>{feedback}</AppText></AppCard> : null}
         {viewCountsError ? <AppCard><AppText muted>{viewCountsError}</AppText></AppCard> : null}
+        {likeCountsError ? <AppCard><AppText muted>{likeCountsError}</AppText></AppCard> : null}
 
         {stories.map((story) => {
           const imagePreviewUrl = story.mediaType === 'image' ? imageSignedUrls[story.id] : null;
@@ -206,11 +227,17 @@ export default function StoryManageScreen() {
             : new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }).format(expiresAtLabel);
 
           const viewCount = viewCountsByStoryId[story.id] ?? 0;
+          const likeCount = likeCountsByStoryId[story.id] ?? 0;
           const viewCountLabel = viewCount === 0
             ? 'لم يشاهدها أحد بعد.'
             : viewCount === 1
               ? 'شاهدها شخص واحد.'
               : `شاهدها ${viewCount} أشخاص.`;
+          const likeCountLabel = likeCount === 0
+            ? 'لا توجد إعجابات بعد.'
+            : likeCount === 1
+              ? 'إعجاب واحد.'
+              : `${likeCount} إعجابات.`;
 
           return (
             <AppCard key={story.id}>
@@ -232,6 +259,7 @@ export default function StoryManageScreen() {
                 <AppText muted>تنتهي: {expiresLabel}</AppText>
                 <AppText muted>{formatRemainingTime(story.expiresAt)}</AppText>
                 {!viewCountsError ? <AppText muted>{viewCountLabel}</AppText> : null}
+                {!likeCountsError ? <AppText muted>{likeCountLabel}</AppText> : null}
                 {viewCount > 0 ? (
                   <AppButton
                     label="عرض المشاهدين"
