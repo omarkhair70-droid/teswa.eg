@@ -21,6 +21,9 @@ import { MotionPulseCanvas } from '@/components/motion/MotionPulseCanvas';
 import { MotionEmptyAnimation } from '@/components/motion/MotionEmptyAnimation';
 import { MotionShareSheet } from '@/components/motion/MotionShareSheet';
 import type { MotionShareMoment } from '@/lib/motion-share';
+import { resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
+import { CityPulseSection } from '@/components/motion/CityPulseSection';
+import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/lib/city-pulse';
 
 type MotionFeedEntry =
   | {
@@ -63,6 +66,65 @@ export default function MotionScreen() {
   const [motionCacheNotice, setMotionCacheNotice] = useState<string | null>(null);
   const [shareMoment, setShareMoment] = useState<MotionShareMoment | null>(null);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
+  const [cityPulseLocation, setCityPulseLocation] = useState<CityPulseLocation | null>(null);
+  const [cityPulseSnapshot, setCityPulseSnapshot] = useState<CityPulseSnapshot | null>(null);
+  const [cityPulseLocationLoading, setCityPulseLocationLoading] = useState(false);
+  const [cityPulseLoading, setCityPulseLoading] = useState(false);
+  const [cityPulseError, setCityPulseError] = useState<string | null>(null);
+
+  const loadCityPulseForLocation = useCallback(async (location: CityPulseLocation) => {
+    setCityPulseLoading(true);
+    setCityPulseError(null);
+    try {
+      const snapshot = await fetchCityPulseSnapshot({ location });
+      setCityPulseSnapshot(snapshot);
+    } catch {
+      setCityPulseError('تعذر تحميل نبض مدينتك الآن. حاول مرة أخرى.');
+    } finally {
+      setCityPulseLoading(false);
+    }
+  }, []);
+
+  const activateCityPulse = useCallback(async () => {
+    setCityPulseLocationLoading(true);
+    setCityPulseError(null);
+    try {
+      const result = await resolveCurrentDiscoveryLocation();
+      if (!result.ok) {
+        setCityPulseError(result.message);
+        setCityPulseLocation(null);
+        setCityPulseSnapshot(null);
+        return;
+      }
+      const location = { label: result.label, matchTerms: result.matchTerms };
+      setCityPulseLocation(location);
+      setCityPulseLocationLoading(false);
+      await loadCityPulseForLocation(location);
+    } finally {
+      setCityPulseLocationLoading(false);
+    }
+  }, [loadCityPulseForLocation]);
+
+  const refreshCityPulse = useCallback(async () => {
+    if (!cityPulseLocation) return;
+    await loadCityPulseForLocation(cityPulseLocation);
+  }, [cityPulseLocation, loadCityPulseForLocation]);
+
+  const retryCityPulse = useCallback(async () => {
+    if (cityPulseLocation) {
+      await loadCityPulseForLocation(cityPulseLocation);
+      return;
+    }
+    await activateCityPulse();
+  }, [activateCityPulse, cityPulseLocation, loadCityPulseForLocation]);
+
+  const hideCityPulse = useCallback(() => {
+    setCityPulseLocation(null);
+    setCityPulseSnapshot(null);
+    setCityPulseError(null);
+    setCityPulseLocationLoading(false);
+    setCityPulseLoading(false);
+  }, []);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -385,6 +447,20 @@ export default function MotionScreen() {
                 </View>
               </View>
             </LinearGradient>
+
+            <View style={styles.storiesBand}>
+              <CityPulseSection
+                location={cityPulseLocation}
+                snapshot={cityPulseSnapshot}
+                loadingLocation={cityPulseLocationLoading}
+                loadingPulse={cityPulseLoading}
+                error={cityPulseError}
+                onActivate={activateCityPulse}
+                onRefresh={refreshCityPulse}
+                onHide={hideCityPulse}
+                onRetry={retryCityPulse}
+              />
+            </View>
 
             <View style={styles.storiesBand}>
               <AppText weight="bold">القصص الآن</AppText>
