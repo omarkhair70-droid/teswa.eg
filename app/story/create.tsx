@@ -11,6 +11,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StoryCameraStudio } from '@/components/story/StoryCameraStudio';
 import { StoryStudioPreview } from '@/components/story/StoryStudioPreview';
+import { StoryImageComposerSheet } from '@/components/story/StoryImageComposerSheet';
 import { spacing } from '@/constants/spacing';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
@@ -46,6 +47,7 @@ export default function StoryCreateScreen() {
   const [publishProgress, setPublishProgress] = useState<StoryPublishProgress | null>(null);
   const [published, setPublished] = useState(false);
   const [studioVisible, setStudioVisible] = useState(false);
+  const [imageComposerVisible, setImageComposerVisible] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -123,7 +125,7 @@ export default function StoryCreateScreen() {
         <View style={styles.content}>
           <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>استوديو القصة</AppText><AppText muted>صوّر لحظة من داخل تِسوى أو اختر وسائط جاهزة، ثم انشرها كقصة تظهر 24 ساعة.</AppText><AppButton label="فتح الاستوديو" onPress={() => setStudioVisible(true)} disabled={publishing} /><AppButton label="اختيار من المعرض" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /></View></AppCard>
 
-          {asset ? <AppCard><View style={styles.group}><StoryStudioPreview asset={asset} /><View style={styles.assetActions}><AppButton label="تغيير الوسائط" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /><AppButton label="تصوير جديد" variant="neutral" onPress={() => setStudioVisible(true)} disabled={publishing} /><AppButton label="إزالة" variant="neutral" onPress={() => setAsset(null)} disabled={publishing} /></View></View></AppCard> : null}
+          {asset ? <AppCard><View style={styles.group}><StoryStudioPreview asset={asset} /><View style={styles.assetActions}><AppButton label="تغيير الوسائط" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /><AppButton label="تصوير جديد" variant="neutral" onPress={() => setStudioVisible(true)} disabled={publishing} />{asset.type === 'image' ? <AppButton label="تهيئة الصورة" variant="neutral" onPress={() => setImageComposerVisible(true)} disabled={publishing} /> : null}<AppButton label="إزالة" variant="neutral" onPress={() => setAsset(null)} disabled={publishing} /></View></View></AppCard> : null}
 
           <AppCard><View style={styles.group}><AppInput value={caption} onChangeText={setCaption} placeholder="اكتب تعليقًا قصيرًا (اختياري)" multiline maxLength={240} style={styles.captionInput} editable={!publishing} /><AppText muted style={captionTooLong ? styles.errorText : undefined}>{caption.length}/{CAPTION_MAX}</AppText></View></AppCard>
           {publishing && publishProgress ? (
@@ -140,6 +142,16 @@ export default function StoryCreateScreen() {
         </View>
       </AppScreen>
       <StoryCameraStudio visible={studioVisible} onClose={() => setStudioVisible(false)} onCaptured={(capturedAsset) => { setAsset(capturedAsset); setError(null); setStudioVisible(false); }} />
+      <StoryImageComposerSheet
+        visible={imageComposerVisible}
+        originalAsset={asset?.type === 'image' ? asset : null}
+        onClose={() => setImageComposerVisible(false)}
+        onUseComposedImage={(composedAsset) => {
+          setAsset(composedAsset);
+          setError(null);
+          setImageComposerVisible(false);
+        }}
+      />
     </>
   );
 }
