@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -212,6 +213,13 @@ export default function DiscoverScreen() {
             <AppText weight="bold" style={styles.title}>اكتشف العناصر</AppText>
             <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
             <AppCard>
+              <View style={styles.peopleEntryBox}>
+                <AppText weight="bold">اكتشف الناس كمان</AppText>
+                <AppText muted>تِسوى مش عناصر بس. شوف مين بيعرض، مين عنده حكايات، وادخل ملفه.</AppText>
+                <AppButton label="ناس تِسوى" variant="neutral" onPress={() => router.push('/people')} />
+              </View>
+            </AppCard>
+            <AppCard>
               <View style={styles.nearbyBox}>
                 {activeNearbyLocation ? (
                   <>
@@ -310,6 +318,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   header: { gap: spacing.sm, marginBottom: spacing.md },
   title: { fontSize: 24 },
+  peopleEntryBox: { gap: spacing.sm },
   nearbyBox: { gap: spacing.sm },
   filterBox: { gap: spacing.sm },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
