@@ -367,8 +367,8 @@ export default function Screen() {
                 <>
                   <AppText>{recordingLabel}</AppText>
                   <View style={styles.voiceActions}>
-                    <AppButton label="إيقاف" variant="outline" onPress={() => void finalizeRecording()} disabled={voiceBusy} />
-                    <AppButton label="إلغاء" variant="ghost" onPress={() => void cancelVoiceComposer()} disabled={voiceBusy} />
+                    <AppButton label="إيقاف" variant="neutral" onPress={() => void finalizeRecording()} disabled={voiceBusy} />
+                    <AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceComposer()} disabled={voiceBusy} />
                   </View>
                 </>
               ) : voiceDraft ? (
@@ -385,14 +385,14 @@ export default function Screen() {
                   </Pressable>
                   <View style={styles.voiceActions}>
                     <AppButton label="إرسال الرسالة الصوتية" onPress={() => void sendVoiceDraft()} disabled={voiceSending || voiceBusy} />
-                    <AppButton label="إعادة التسجيل" variant="outline" onPress={() => void startVoiceRecording()} disabled={voiceSending || voiceBusy} />
-                    <AppButton label="إلغاء" variant="ghost" onPress={() => void cancelVoiceComposer()} disabled={voiceSending || voiceBusy} />
+                    <AppButton label="إعادة التسجيل" variant="neutral" onPress={() => void startVoiceRecording()} disabled={voiceSending || voiceBusy} />
+                    <AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceComposer()} disabled={voiceSending || voiceBusy} />
                   </View>
                 </>
               ) : (
                 <View style={styles.voiceActions}>
                   <AppButton label="بدء التسجيل" onPress={() => void startVoiceRecording()} disabled={voiceBusy} />
-                  <AppButton label="إلغاء" variant="ghost" onPress={() => void cancelVoiceComposer()} disabled={voiceBusy} />
+                  <AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceComposer()} disabled={voiceBusy} />
                 </View>
               )}
             </View>
