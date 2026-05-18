@@ -34,7 +34,7 @@ function MotionVideoDropCard({ drop, active, onPlay, onStop }: { drop: MotionVid
     }
 
     player.pause();
-    void player.seekTo(0).catch(() => undefined);
+    player.currentTime = 0;
   }, [active, drop.signedVideoUrl, player]);
 
   return (
@@ -69,7 +69,7 @@ function MotionVideoDropCard({ drop, active, onPlay, onStop }: { drop: MotionVid
               variant="neutral"
               onPress={() => {
                 player.pause();
-                void player.seekTo(0).catch(() => undefined);
+                player.currentTime = 0;
                 onStop();
               }}
             />
@@ -129,7 +129,7 @@ export function MotionVideoDropsSection({ drops, loading, error, onRetry }: Moti
 const styles = StyleSheet.create({
   section: { gap: spacing.sm },
   stateBox: { gap: spacing.sm, paddingVertical: spacing.xs },
-  errorText: { color: colors.error },
+  errorText: { color: '#B42318' },
   rail: { gap: spacing.sm, paddingVertical: spacing.xs },
   card: {
     width: 196,
