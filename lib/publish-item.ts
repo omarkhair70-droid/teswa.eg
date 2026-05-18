@@ -5,6 +5,7 @@ import { compressItemImage } from '@/lib/media/compress-item-image';
 import { ITEM_VIDEOS_BUCKET, uploadItemVideoTeaser } from '@/lib/item-videos';
 
 const ITEM_IMAGES_BUCKET = 'item-images';
+const MAX_VIDEO_TEASER_DURATION_MS = 15_000;
 
 export type ActiveCategory = { id: string; name_ar: string };
 export type ItemCondition = 'almost_new' | 'good_used' | 'minor_issues' | 'needs_repair';
@@ -56,6 +57,10 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
   if (videoTeaserAsset && videoTeaserAsset.type !== 'video' && !videoTeaserAsset.mimeType?.startsWith('video/')) {
     return { ok: false, reason: 'invalid_input', message: 'فيديو اللمحة يجب أن يكون ملف فيديو.' };
+  }
+
+  if (videoTeaserAsset?.duration != null && videoTeaserAsset.duration > MAX_VIDEO_TEASER_DURATION_MS) {
+    return { ok: false, reason: 'invalid_input', message: 'فيديو اللمحة يجب ألا يتجاوز 15 ثانية.' };
   }
 
   const itemId = Crypto.randomUUID();
@@ -133,7 +138,10 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
       if (!videoUpload.ok) {
         await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
-        await cleanupStorage(uploadedPaths);
+        const imageCleanup = await cleanupInsertedImageRowsThenStorage(itemId, uploadedPaths);
+        if (!imageCleanup.ok) {
+          return { ok: false, reason: 'upload_failed', message: 'تعذر إكمال نشر فيديو العنصر أو تنظيف الصور بأمان. حاول مرة أخرى.' };
+        }
         return { ok: false, reason: 'upload_failed', message: videoUpload.message || 'تعذر رفع فيديو العنصر. حاول مرة أخرى.' };
       }
 
@@ -150,8 +158,11 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
       if (videoInsertError) {
         if (__DEV__) console.log('[publishItem] video metadata insert failed', { userId, itemId, code: videoInsertError.code, message: videoInsertError.message });
         await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
-        await cleanupStorage(uploadedPaths);
         await cleanupItemVideoStorage(uploadedVideoPath);
+        const imageCleanup = await cleanupInsertedImageRowsThenStorage(itemId, uploadedPaths);
+        if (!imageCleanup.ok) {
+          return { ok: false, reason: 'video_insert_failed', message: 'تعذر تثبيت فيديو العنصر أو تنظيف الصور بأمان. حاول مرة أخرى.' };
+        }
         return { ok: false, reason: 'video_insert_failed', message: 'تعذر تثبيت فيديو العنصر. حاول مرة أخرى.' };
       }
     }
@@ -180,4 +191,15 @@ async function cleanupStorage(paths: string[]) {
 async function cleanupItemVideoStorage(path: string | null) {
   if (!path) return;
   await supabase.storage.from(ITEM_VIDEOS_BUCKET).remove([path]);
+}
+
+async function cleanupInsertedImageRowsThenStorage(itemId: string, storagePaths: string[]): Promise<{ ok: true } | { ok: false }> {
+  const { error: deleteRowsError } = await supabase.from('item_images').delete().eq('item_id', itemId);
+  if (deleteRowsError) {
+    if (__DEV__) console.log('[publishItem] image metadata cleanup failed', { itemId, code: deleteRowsError.code, message: deleteRowsError.message });
+    return { ok: false };
+  }
+
+  await cleanupStorage(storagePaths);
+  return { ok: true };
 }

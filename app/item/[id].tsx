@@ -32,6 +32,7 @@ function formatDuration(durationMs: number | null): string | null {
 function ItemVideoPlayer({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
+    instance.play();
   });
 
   return <VideoView style={styles.teaserVideo} player={player} nativeControls fullscreenOptions={{ enable: true }} allowsPictureInPicture={false} />;
@@ -52,7 +53,7 @@ function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoT
             {durationLabel ? <View style={styles.videoDurationPill}><AppText style={styles.videoDurationText}>{durationLabel}</AppText></View> : null}
           </View>
 
-          {active && teaser.signedVideoUrl ? (
+          {teaser.signedVideoUrl ? active ? (
             <ItemVideoPlayer uri={teaser.signedVideoUrl} />
           ) : (
             <Pressable style={styles.videoPreviewCard} onPress={onPlay} accessibilityRole="button" accessibilityLabel="تشغيل لمحة فيديو العنصر">
@@ -65,6 +66,16 @@ function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoT
                 </View>
               </View>
             </Pressable>
+          ) : (
+            <View style={[styles.videoPreviewCard, styles.videoUnavailableCard]}>
+              <View style={styles.videoPreviewContent}>
+                <View style={[styles.videoPlayButton, styles.videoUnavailableIcon]}><AppText weight="bold" style={styles.videoUnavailableIconText}>—</AppText></View>
+                <View style={styles.videoPreviewTextBlock}>
+                  <AppText weight="semibold" style={styles.videoUnavailableTitle}>تعذر تجهيز فيديو اللمحة الآن.</AppText>
+                  <AppText style={styles.videoUnavailableSubtitle}>جرّب فتح العنصر مرة أخرى بعد قليل.</AppText>
+                </View>
+              </View>
+            </View>
           )}
         </View>
       </AppCard>
@@ -307,6 +318,11 @@ const styles = StyleSheet.create({
   videoPreviewTextBlock: { flex: 1, gap: spacing.xs },
   videoPreviewTitle: { color: colors.surface, fontSize: 18 },
   videoPreviewSubtitle: { color: colors.surface },
+  videoUnavailableCard: { backgroundColor: colors.primarySoft },
+  videoUnavailableIcon: { backgroundColor: colors.surface },
+  videoUnavailableIconText: { color: colors.primary },
+  videoUnavailableTitle: { color: colors.text, fontSize: 18 },
+  videoUnavailableSubtitle: { color: colors.textMuted },
   teaserVideo: { width: '100%', height: 220, borderRadius: radii.lg, overflow: 'hidden', backgroundColor: colors.background },
   title: { fontSize: 24 },
   infoBlock: { gap: spacing.sm },
