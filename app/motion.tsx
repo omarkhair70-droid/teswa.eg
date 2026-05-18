@@ -24,6 +24,8 @@ import type { MotionShareMoment } from '@/lib/motion-share';
 import { resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 import { CityPulseSection } from '@/components/motion/CityPulseSection';
 import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/lib/city-pulse';
+import { fetchMotionVideoDrops, MotionVideoDrop } from '@/lib/motion-video-drops';
+import { MotionVideoDropsSection } from '@/components/motion/MotionVideoDropsSection';
 import {
   deleteCityPulseLocationCache,
   deleteCityPulseSnapshotCache,
@@ -84,6 +86,9 @@ export default function MotionScreen() {
   const cityPulseSnapshotRef = useRef<CityPulseSnapshot | null>(null);
   const cityPulseLoadGenerationRef = useRef(0);
   const [cityPulseBootstrapped, setCityPulseBootstrapped] = useState(false);
+  const [videoDrops, setVideoDrops] = useState<MotionVideoDrop[]>([]);
+  const [videoDropsLoading, setVideoDropsLoading] = useState(true);
+  const [videoDropsError, setVideoDropsError] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -304,10 +309,24 @@ export default function MotionScreen() {
     setItemsLoading(false);
   }, []);
 
+  const loadMotionVideoDrops = useCallback(async () => {
+    setVideoDropsLoading(true);
+    setVideoDropsError(null);
+    try {
+      const drops = await fetchMotionVideoDrops({ limit: 8 });
+      setVideoDrops(drops);
+    } catch {
+      setVideoDropsError('تعذر تحميل لقطات الفيديو الآن.');
+    } finally {
+      setVideoDropsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadStories();
     loadMotionPublicFeed();
-  }, [loadMotionPublicFeed, loadStories]);
+    loadMotionVideoDrops();
+  }, [loadMotionPublicFeed, loadMotionVideoDrops, loadStories]);
 
   const motionFeedEntries = useMemo<MotionFeedEntry[]>(() => {
     const movingEntries: RankedMotionFeedEntry[] = movingItems.map((item, index) => ({
@@ -569,6 +588,15 @@ export default function MotionScreen() {
               <AppText weight="bold">القصص الآن</AppText>
               <AppText muted>الناس اللي بتحرك المشهد في تِسوى دلوقتي.</AppText>
               {renderStoryRail()}
+            </View>
+
+            <View style={styles.storiesBand}>
+              <MotionVideoDropsSection
+                drops={videoDrops}
+                loading={videoDropsLoading}
+                error={videoDropsError}
+                onRetry={loadMotionVideoDrops}
+              />
             </View>
 
             <View style={styles.pulseIntro}>
