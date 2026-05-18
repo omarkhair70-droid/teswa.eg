@@ -51,10 +51,20 @@ async function fetchCityPulseMovingItems(matchTerms: string[], limit: number): P
   const { data: items, error: itemsError } = await supabase.from('items').select('id,title,city,area,condition,owner_id,category_id').in('id', itemIds).eq('status', 'active');
   if (itemsError) throw itemsError;
   const valid = (items ?? []) as ItemRow[];
+  const categoryIds = Array.from(
+    new Set(valid.map((item) => item.category_id).filter((value): value is string => Boolean(value))),
+  );
+  const ownerIds = Array.from(
+    new Set(valid.map((item) => item.owner_id).filter((value): value is string => Boolean(value))),
+  );
   const [imagesRes, categoriesRes, profilesRes] = await Promise.all([
     supabase.from('item_images').select('item_id,image_url,is_primary,sort_order').in('item_id', itemIds),
-    supabase.from('categories').select('id,name_ar').in('id', Array.from(new Set(valid.map((i) => i.category_id).filter(Boolean) as string[]))),
-    supabase.from('profiles').select('id,display_name').in('id', Array.from(new Set(valid.map((i) => i.owner_id).filter(Boolean) as string[]))),
+    categoryIds.length
+      ? supabase.from('categories').select('id,name_ar').in('id', categoryIds)
+      : Promise.resolve({ data: [] as { id: string; name_ar: string | null }[], error: null }),
+    ownerIds.length
+      ? supabase.from('profiles').select('id,display_name').in('id', ownerIds)
+      : Promise.resolve({ data: [] as { id: string; display_name: string | null }[], error: null }),
   ]);
   if (imagesRes.error) throw imagesRes.error; if (categoriesRes.error) throw categoriesRes.error; if (profilesRes.error) throw profilesRes.error;
   const itemMap = new Map(valid.map((i) => [i.id, i]));

@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import type { ReactNode } from 'react';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
 import { AppText } from '@/components/ui/AppText';
@@ -32,7 +33,7 @@ export function CityPulseSection({ location, snapshot, loadingLocation, loadingP
   </View>;
 }
 
-function Section({ title, subtitle, empty, children }: { title: string; subtitle?: string; empty: string; children: React.ReactNode[] }) { return <View style={styles.section}><AppText weight="semibold">{title}</AppText>{subtitle ? <AppText muted>{subtitle}</AppText> : null}{children.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>{children}</ScrollView> : <AppText muted>{empty}</AppText>}</View>; }
+function Section({ title, subtitle, empty, children }: { title: string; subtitle?: string; empty: string; children: ReactNode[] }) { return <View style={styles.section}><AppText weight="semibold">{title}</AppText>{subtitle ? <AppText muted>{subtitle}</AppText> : null}{children.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>{children}</ScrollView> : <AppText muted>{empty}</AppText>}</View>; }
 const Avatar = ({ uri, label }: { uri: string | null; label: string }) => uri ? <ExpoImage source={{ uri }} style={styles.avatar} /> : <View style={styles.avatarFallback}><AppText weight="bold">{label.charAt(0).toUpperCase()}</AppText></View>;
 const Thumb = ({ uri }: { uri: string | null }) => uri ? <ExpoImage source={{ uri }} style={styles.thumb} /> : <View style={[styles.thumb, styles.thumbFallback]}><AppText muted>بدون صورة</AppText></View>;
 

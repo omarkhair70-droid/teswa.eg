@@ -98,6 +98,7 @@ export default function MotionScreen() {
       }
       const location = { label: result.label, matchTerms: result.matchTerms };
       setCityPulseLocation(location);
+      setCityPulseLocationLoading(false);
       await loadCityPulseForLocation(location);
     } finally {
       setCityPulseLocationLoading(false);
