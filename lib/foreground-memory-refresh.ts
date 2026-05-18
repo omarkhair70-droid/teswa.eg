@@ -38,6 +38,10 @@ export async function runForegroundMemoryRefreshIfAllowed(
       return;
     }
 
+    if (foregroundRefreshInFlight) {
+      return foregroundRefreshInFlight;
+    }
+
     const now = Date.now();
     if (now - lastForegroundRefreshAtMs < FOREGROUND_MEMORY_REFRESH_MIN_INTERVAL_MS) {
       return;
