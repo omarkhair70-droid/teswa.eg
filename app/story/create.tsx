@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle } from 'react-native-svg';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -10,9 +9,10 @@ import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { StoryCameraStudio } from '@/components/story/StoryCameraStudio';
+import { StoryStudioPreview } from '@/components/story/StoryStudioPreview';
 import { spacing } from '@/constants/spacing';
 import { colors } from '@/constants/colors';
-import { radii } from '@/constants/radii';
 import { useAuth } from '@/lib/auth';
 import { publishStoryFromMobile, StoryPublishProgress } from '@/lib/stories';
 
@@ -45,6 +45,7 @@ export default function StoryCreateScreen() {
   const [publishing, setPublishing] = useState(false);
   const [publishProgress, setPublishProgress] = useState<StoryPublishProgress | null>(null);
   const [published, setPublished] = useState(false);
+  const [studioVisible, setStudioVisible] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -68,30 +69,6 @@ export default function StoryCreateScreen() {
   }, []);
 
   const captionTooLong = caption.trim().length > CAPTION_MAX;
-  const videoDurationLabel = useMemo(() => {
-    if (!asset || asset.type !== 'video' || asset.duration == null) return null;
-    const seconds = Math.max(0, Math.round(asset.duration / 1000));
-    return `${seconds} ثانية`;
-  }, [asset]);
-
-  const pickFromCamera = async (mediaType: 'images' | 'videos') => {
-    if (publishing) return;
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setError('نحتاج إذن الكاميرا لإضافة قصة جديدة.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: [mediaType], quality: 0.9 });
-      if (result.canceled) return;
-      const next = result.assets?.[0] ?? null;
-      if (!next) return setError('تعذر قراءة الوسائط المختارة. حاول مرة أخرى.');
-      setAsset(next);
-      setError(null);
-    } catch {
-      setError('تعذر فتح الكاميرا حالياً. حاول مرة أخرى.');
-    }
-  };
 
   const pickFromGallery = async () => {
     if (publishing) return;
@@ -141,38 +118,41 @@ export default function StoryCreateScreen() {
   }
 
   return (
-    <AppScreen scrollable>
-      <View style={styles.content}>
-        <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>إضافة قصة</AppText><AppText muted>شارك صورة أو فيديو يظهر لمدة 24 ساعة.</AppText></View></AppCard>
-        <AppCard><View style={styles.group}><AppButton label="التقط صورة" variant="neutral" onPress={() => void pickFromCamera('images')} disabled={publishing} /><AppButton label="صوّر فيديو" variant="neutral" onPress={() => void pickFromCamera('videos')} disabled={publishing} /><AppButton label="اختر من المعرض" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /></View></AppCard>
+    <>
+      <AppScreen scrollable>
+        <View style={styles.content}>
+          <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>استوديو القصة</AppText><AppText muted>صوّر لحظة من داخل تِسوى أو اختر وسائط جاهزة، ثم انشرها كقصة تظهر 24 ساعة.</AppText><AppButton label="فتح الاستوديو" onPress={() => setStudioVisible(true)} disabled={publishing} /><AppButton label="اختيار من المعرض" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /></View></AppCard>
 
-        {asset ? <AppCard><View style={styles.group}>
-          {asset.type === 'image' ? <ExpoImage source={{ uri: asset.uri }} style={styles.previewImage} contentFit="cover" transition={150} cachePolicy="memory-disk" /> : <View style={styles.videoPreview}><AppText weight="semibold">فيديو جاهز للنشر</AppText>{asset.fileName ? <AppText muted>{asset.fileName}</AppText> : null}{videoDurationLabel ? <AppText muted>المدة: {videoDurationLabel}</AppText> : null}</View>}
-          <View style={styles.assetActions}><AppButton label="تغيير الوسائط" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /><AppButton label="إزالة" variant="neutral" onPress={() => setAsset(null)} disabled={publishing} /></View>
-        </View></AppCard> : null}
+          {asset ? <AppCard><View style={styles.group}><StoryStudioPreview asset={asset} /><View style={styles.assetActions}><AppButton label="تغيير الوسائط" variant="neutral" onPress={() => void pickFromGallery()} disabled={publishing} /><AppButton label="تصوير جديد" variant="neutral" onPress={() => setStudioVisible(true)} disabled={publishing} /><AppButton label="إزالة" variant="neutral" onPress={() => setAsset(null)} disabled={publishing} /></View></View></AppCard> : null}
 
-        <AppCard><View style={styles.group}><AppInput value={caption} onChangeText={setCaption} placeholder="اكتب تعليقًا قصيرًا (اختياري)" multiline maxLength={240} style={styles.captionInput} editable={!publishing} /><AppText muted style={captionTooLong ? styles.errorText : undefined}>{caption.length}/{CAPTION_MAX}</AppText></View></AppCard>
-        {publishing && publishProgress ? (
-          <AppCard>
-            <View style={styles.publishingCard}>
-              <AppText weight="bold">جارٍ نشر قصتك</AppText>
-              {typeof publishProgress.uploadPercent === 'number' ? <UploadProgressRing percent={publishProgress.uploadPercent} /> : <View style={styles.indeterminateDot} />}
-              <AppText muted>{publishProgress.message}</AppText>
-            </View>
-          </AppCard>
-        ) : null}
-        {error ? <AppCard><AppText style={styles.errorText}>{error}</AppText></AppCard> : null}
-        <AppButton label={publishing ? 'جارٍ نشر القصة...' : 'نشر القصة'} onPress={() => void handlePublish()} disabled={publishing || !asset || captionTooLong} />
-      </View>
-    </AppScreen>
+          <AppCard><View style={styles.group}><AppInput value={caption} onChangeText={setCaption} placeholder="اكتب تعليقًا قصيرًا (اختياري)" multiline maxLength={240} style={styles.captionInput} editable={!publishing} /><AppText muted style={captionTooLong ? styles.errorText : undefined}>{caption.length}/{CAPTION_MAX}</AppText></View></AppCard>
+          {publishing && publishProgress ? (
+            <AppCard>
+              <View style={styles.publishingCard}>
+                <AppText weight="bold">جارٍ نشر قصتك</AppText>
+                {typeof publishProgress.uploadPercent === 'number' ? <UploadProgressRing percent={publishProgress.uploadPercent} /> : <View style={styles.indeterminateDot} />}
+                <AppText muted>{publishProgress.message}</AppText>
+              </View>
+            </AppCard>
+          ) : null}
+          {error ? <AppCard><AppText style={styles.errorText}>{error}</AppText></AppCard> : null}
+          <AppButton label={publishing ? 'جارٍ نشر القصة...' : 'نشر القصة'} onPress={() => void handlePublish()} disabled={publishing || !asset || captionTooLong} />
+        </View>
+      </AppScreen>
+      <StoryCameraStudio visible={studioVisible} onClose={() => setStudioVisible(false)} onCaptured={(capturedAsset) => { setAsset(capturedAsset); setError(null); setStudioVisible(false); }} />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { gap: spacing.md, paddingBottom: spacing.xxl }, group: { gap: spacing.sm }, title: { fontSize: 22 },
-  previewImage: { width: '100%', height: 280, borderRadius: radii.md, backgroundColor: colors.primarySoft },
-  videoPreview: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, borderStyle: 'dashed', padding: spacing.md, gap: spacing.xs },
-  assetActions: { gap: spacing.sm }, captionInput: { minHeight: 110, textAlignVertical: 'top' }, successBox: { gap: spacing.md }, successTitle: { fontSize: 20 }, errorText: { color: '#B00020' },
+  content: { gap: spacing.md, paddingBottom: spacing.xxl },
+  group: { gap: spacing.sm },
+  title: { fontSize: 22 },
+  assetActions: { gap: spacing.sm },
+  captionInput: { minHeight: 110, textAlignVertical: 'top' },
+  successBox: { gap: spacing.md },
+  successTitle: { fontSize: 20 },
+  errorText: { color: '#B42318' },
   publishingCard: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   progressRingWrap: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
   progressLabelCenter: { position: 'absolute' },
