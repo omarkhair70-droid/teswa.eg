@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Image as ExpoImage } from 'expo-image';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
-import { colors } from '@/constants/colors';
-import { radii } from '@/constants/radii';
+import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
+import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AccountProfile, fetchMyAccountProfile } from '@/lib/profiles';
 import { getNotificationPermissionStatus, hasStoredPushToken, requestAndRegisterPushDevice } from '@/lib/push-notifications';
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { useUnreadBadges } from '@/lib/unread-badges';
+import { buildProfilePresence } from '@/lib/profile-presence';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
 
@@ -39,6 +39,15 @@ export default function ProfileScreen() {
 
   const displayName = profile?.display_name?.trim() || 'مستخدم تِسوى';
   const location = [profile?.city, profile?.area].filter(Boolean).join(' - ');
+  const profilePresence = useMemo(
+    () => buildProfilePresence({
+      activeStoriesCount: myActiveStoriesCount,
+      successfulSwapsCount: profile?.successful_swaps_count ?? 0,
+      responseRate: profile?.response_rate ?? null,
+      variant: 'self',
+    }),
+    [myActiveStoriesCount, profile?.response_rate, profile?.successful_swaps_count],
+  );
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -142,28 +151,23 @@ export default function ProfileScreen() {
 
         {!loading && !error ? (
           <>
-            {profile?.cover_url ? (
-              <ExpoImage source={{ uri: profile.cover_url }} style={styles.cover} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-            ) : (
-              <View style={[styles.cover, styles.coverFallback]}><AppText muted>لا توجد صورة غلاف</AppText></View>
-            )}
+            <ProfileLivingHero
+              coverUrl={profile?.cover_url ?? null}
+              avatarUrl={profile?.avatar_url ?? null}
+              displayName={displayName}
+              username={profile?.username ?? null}
+              tagline={profile?.profile_tagline ?? null}
+              location={location || null}
+              memberSince={memberSince}
+              activeStoriesCount={myActiveStoriesCount}
+              onOpenStories={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
+              variant="self"
+            />
 
-            <AppCard>
-              <View style={styles.headerCard}>
-                {profile?.avatar_url ? (
-                  <ExpoImage source={{ uri: profile.avatar_url }} style={styles.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarFallback]}><AppText weight="bold">{displayName[0]}</AppText></View>
-                )}
-                <View style={styles.headerInfo}>
-                  <AppText weight="bold" style={styles.name}>{displayName}</AppText>
-                  {profile?.username ? <AppText muted>@{profile.username}</AppText> : null}
-                  {profile?.profile_tagline ? <AppText muted>{profile.profile_tagline}</AppText> : null}
-                  {location ? <AppText muted>{location}</AppText> : null}
-                  {memberSince ? <AppText muted>عضو منذ {memberSince}</AppText> : null}
-                </View>
-              </View>
-              {user?.id ? (
+            <ProfilePresenceSignals presence={profilePresence} />
+
+            {user?.id ? (
+              <AppCard>
                 <View style={styles.publicProfileAction}>
                   <AppButton label="تعديل ملفي" variant="neutral" onPress={() => router.push('/profile/edit')} />
                   <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
@@ -175,8 +179,8 @@ export default function ProfileScreen() {
                   <AppButton label="إدارة عناصري" variant="neutral" onPress={() => router.push('/item/manage')} />
                   {!myStoriesLoading && myActiveStoriesCount > 0 ? <AppText muted>لديك {myActiveStoriesCount} قصة نشطة الآن</AppText> : null}
                 </View>
-              ) : null}
-            </AppCard>
+              </AppCard>
+            ) : null}
 
             <AppCard>
               <View style={styles.group}>
@@ -242,13 +246,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   content: { gap: spacing.md, paddingBottom: spacing.xxl },
   title: { fontSize: 24 },
-  cover: { width: '100%', height: 180, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
-  coverFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1, borderStyle: 'dashed' },
-  headerCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
-  headerInfo: { flex: 1, gap: spacing.xs },
-  name: { fontSize: 22 },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primarySoft },
-  avatarFallback: { justifyContent: 'center', alignItems: 'center', borderColor: colors.border, borderWidth: 1 },
   group: { gap: spacing.sm },
   publicProfileAction: { marginTop: spacing.md, gap: spacing.sm },
   errorText: { color: '#B00020' },
