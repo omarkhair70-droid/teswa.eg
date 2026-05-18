@@ -19,6 +19,7 @@ import { clearAddItemDraftMedia, deleteAddItemDraftMediaAsset, persistAddItemDra
 import { useOfflineStatus } from '@/hooks/useOfflineStatus';
 import { resolveCurrentAddItemLocation } from '@/lib/discovery-location';
 import { ItemPhotoStudio } from '@/components/item/ItemPhotoStudio';
+import { ItemPhotoComposerSheet } from '@/components/item/ItemPhotoComposerSheet';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -45,6 +46,8 @@ export default function AddScreen() {
   const [progress, setProgress] = useState('');
   const [publishFailure, setPublishFailure] = useState<string | null>(null);
   const [itemPhotoStudioVisible, setItemPhotoStudioVisible] = useState(false);
+  const [itemPhotoComposerVisible, setItemPhotoComposerVisible] = useState(false);
+  const [itemPhotoComposerTargetIndex, setItemPhotoComposerTargetIndex] = useState<number | null>(null);
 
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -267,6 +270,14 @@ export default function AddScreen() {
     };
   }, []);
 
+  const openItemPhotoComposer = (index: number) => {
+    const target = assets[index];
+    if (!target) return;
+    setError(null);
+    setItemPhotoComposerTargetIndex(index);
+    setItemPhotoComposerVisible(true);
+  };
+
   const openItemPhotoStudio = () => {
     if (assets.length >= MAX_ASSETS) {
       setError('وصلت للحد الأقصى من الصور (4). احذف صورة لإضافة غيرها.');
@@ -452,7 +463,7 @@ export default function AddScreen() {
     {isDefinitelyOffline && <AppCard><View style={styles.gap}><AppText weight='bold'>أنت غير متصل بالإنترنت</AppText><AppText muted>يمكنك تجهيز الإعلان الآن، لكن النشر سيحتاج اتصالًا بالإنترنت. بيانات المسودة محفوظة.</AppText></View></AppCard>}
     {error && <AppCard><AppText style={styles.error}>{error}</AppText></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
-    {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
+    {step === 0 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => openItemPhotoComposer(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>تهيئة</AppText></Pressable><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><View style={styles.mediaActionRow}><Pressable onPress={() => openItemPhotoComposer(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>تهيئة</AppText></Pressable><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
     {step === 1 && <AppCard><View style={styles.gap}><View style={styles.sectionHeader}><AppText weight='bold'>تعريف الحاجة</AppText><AppText muted>أضف الأساسيات التي تساعد على الفهم السريع.</AppText></View><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
       <AppInput value={city} onChangeText={setCity} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={setArea} placeholder='المنطقة (اختياري)' />
@@ -481,6 +492,45 @@ export default function AddScreen() {
         setError(null);
         setItemPhotoStudioVisible(false);
         void appendAssets(capturedAssets, 'camera');
+      }}
+    />
+    <ItemPhotoComposerSheet
+      visible={itemPhotoComposerVisible}
+      originalAsset={
+        itemPhotoComposerTargetIndex !== null
+          ? assets[itemPhotoComposerTargetIndex] ?? null
+          : null
+      }
+      assetIndex={itemPhotoComposerTargetIndex}
+      onClose={() => {
+        setItemPhotoComposerVisible(false);
+        setItemPhotoComposerTargetIndex(null);
+      }}
+      onUseComposedPhoto={async ({ asset: composedAsset, assetIndex }) => {
+        const persisted = await persistAddItemDraftMediaAssets(user?.id, [composedAsset]);
+        const persistedComposed = persisted[0];
+
+        if (!persistedComposed) {
+          setError('تعذر حفظ الصورة المعدلة ضمن المسودة. حاول مرة أخرى.');
+          return;
+        }
+
+        const previousAsset = assets[assetIndex];
+        if (previousAsset?.uri) {
+          void deleteAddItemDraftMediaAsset(previousAsset);
+        }
+
+        setMediaState((prev) => ({
+          ...prev,
+          assets: prev.assets.map((asset, index) =>
+            index === assetIndex ? persistedComposed : asset
+          ),
+          feedback: null,
+        }));
+
+        setError(null);
+        setItemPhotoComposerVisible(false);
+        setItemPhotoComposerTargetIndex(null);
       }}
     />
   </AppScreen>;
