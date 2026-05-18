@@ -7,6 +7,7 @@ const MAX_ITEM_IMAGES = 4;
 const ITEM_IMAGES_PUBLIC_MARKER = '/storage/v1/object/public/item-images/';
 
 export type EditableListingImage = {
+  id: string;
   imageUrl: string;
   isPrimary: boolean;
   sortOrder: number | null;
@@ -21,7 +22,7 @@ export type EditableListingImagesContext = {
 };
 
 export type ListingImageDraftInput =
-  | { kind: 'existing'; imageUrl: string }
+  | { kind: 'existing'; imageId: string; imageUrl: string }
   | { kind: 'new'; asset: ImagePickerAsset };
 
 export type UpdateListingImagesProgress =
@@ -83,13 +84,14 @@ export async function fetchEditableListingImagesContext(itemId: string, ownerId:
 
   const { data: images, error: imagesError } = await supabase
     .from('item_images')
-    .select('image_url,is_primary,sort_order,created_at')
+    .select('id,image_url,is_primary,sort_order,created_at')
     .eq('item_id', itemId);
 
   if (imagesError) throw imagesError;
 
   const normalized = (images ?? [])
     .map((entry) => ({
+      id: entry.id,
       imageUrl: entry.image_url?.trim() || '',
       isPrimary: Boolean(entry.is_primary),
       sortOrder: typeof entry.sort_order === 'number' ? entry.sort_order : null,
@@ -132,22 +134,25 @@ export async function updateListingImagesFromMobile(input: {
   if (!item) return { ok: false, reason: 'not_found_or_unauthorized', message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.' };
   if (item.status !== 'active' && item.status !== 'archived') return { ok: false, reason: 'not_editable', message: 'لا يمكن تعديل صور هذا العنصر في حالته الحالية.' };
 
-  const { data: currentRows, error: currentError } = await supabase.from('item_images').select('image_url').eq('item_id', itemId);
+  const { data: currentRows, error: currentError } = await supabase.from('item_images').select('id,image_url').eq('item_id', itemId);
   if (currentError) return { ok: false, reason: 'unknown', message: 'تعذر تحميل صور العنصر الحالية.' };
 
-  const currentUrls = new Set((currentRows ?? []).map((row) => row.image_url?.trim()).filter((v): v is string => Boolean(v)));
+  const currentExistingById = new Map((currentRows ?? []).map((row) => [row.id, row.image_url?.trim() || '']));
+  const currentRowsById = new Map((currentRows ?? []).map((row) => [row.id, row]));
   const usedExisting = new Set<string>();
 
   for (const draft of orderedImages) {
     if (draft.kind === 'existing') {
+      const imageId = draft.imageId?.trim();
       const imageUrl = draft.imageUrl?.trim();
-      if (!imageUrl || !currentUrls.has(imageUrl)) {
+      const knownUrl = imageId ? currentExistingById.get(imageId) : null;
+      if (!imageId || !imageUrl || !knownUrl || knownUrl !== imageUrl) {
         return { ok: false, reason: 'invalid_input', message: 'تعذر التحقق من بعض الصور الحالية. أعد فتح الشاشة وحاول مرة أخرى.' };
       }
-      if (usedExisting.has(imageUrl)) {
+      if (usedExisting.has(imageId)) {
         return { ok: false, reason: 'invalid_input', message: 'لا يمكن تكرار نفس الصورة أكثر من مرة.' };
       }
-      usedExisting.add(imageUrl);
+      usedExisting.add(imageId);
     } else {
       if (!draft.asset?.uri) return { ok: false, reason: 'invalid_input', message: 'تعذر قراءة إحدى الصور الجديدة.' };
       if (draft.asset.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(draft.asset.mimeType)) {
@@ -157,14 +162,14 @@ export async function updateListingImagesFromMobile(input: {
   }
 
   const uploadedPaths: string[] = [];
-  const finalUrls: string[] = [];
+  const finalRows: Array<{ kind: 'existing'; imageId: string; imageUrl: string } | { kind: 'new'; imageUrl: string }> = [];
   const newUploadedRows: { image_url: string; is_primary: boolean; sort_order: number }[] = [];
 
   try {
     for (let i = 0; i < orderedImages.length; i += 1) {
       const draft = orderedImages[i];
       if (draft.kind === 'existing') {
-        finalUrls.push(draft.imageUrl.trim());
+        finalRows.push({ kind: 'existing', imageId: draft.imageId, imageUrl: draft.imageUrl.trim() });
         continue;
       }
 
@@ -189,7 +194,7 @@ export async function updateListingImagesFromMobile(input: {
       uploadedPaths.push(path);
       const { data: publicUrlData } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(path);
       const imageUrl = publicUrlData.publicUrl;
-      finalUrls.push(imageUrl);
+      finalRows.push({ kind: 'new', imageUrl });
       newUploadedRows.push({ image_url: imageUrl, is_primary: i === 0, sort_order: i });
     }
 
@@ -205,13 +210,12 @@ export async function updateListingImagesFromMobile(input: {
       }
     }
 
-    for (let i = 0; i < finalUrls.length; i += 1) {
-      const imageUrl = finalUrls[i];
-      const { error: updateError } = await supabase
-        .from('item_images')
-        .update({ is_primary: i === 0, sort_order: i })
-        .eq('item_id', itemId)
-        .eq('image_url', imageUrl);
+    for (let i = 0; i < finalRows.length; i += 1) {
+      const draftRow = finalRows[i];
+      const updateQuery = supabase.from('item_images').update({ is_primary: i === 0, sort_order: i }).eq('item_id', itemId);
+      const { error: updateError } = draftRow.kind === 'existing'
+        ? await updateQuery.eq('id', draftRow.imageId)
+        : await updateQuery.eq('image_url', draftRow.imageUrl);
 
       if (updateError) {
         if (newUploadedRows.length) {
@@ -222,11 +226,12 @@ export async function updateListingImagesFromMobile(input: {
       }
     }
 
-    const keptExistingUrls = new Set(finalUrls.filter((url) => currentUrls.has(url)));
-    const removedExistingUrls = [...currentUrls].filter((url) => !keptExistingUrls.has(url));
+    const keptExistingImageIds = new Set(finalRows.filter((row): row is { kind: 'existing'; imageId: string; imageUrl: string } => row.kind === 'existing').map((row) => row.imageId));
+    const removedExistingRows = [...currentRowsById.values()].filter((row) => !keptExistingImageIds.has(row.id));
+    const removedExistingImageIds = removedExistingRows.map((row) => row.id);
 
-    if (removedExistingUrls.length) {
-      const { error: deleteError } = await supabase.from('item_images').delete().eq('item_id', itemId).in('image_url', removedExistingUrls);
+    if (removedExistingImageIds.length) {
+      const { error: deleteError } = await supabase.from('item_images').delete().eq('item_id', itemId).in('id', removedExistingImageIds);
       if (deleteError) {
         return {
           ok: false,
@@ -235,14 +240,14 @@ export async function updateListingImagesFromMobile(input: {
         };
       }
 
-      const removablePaths = removedExistingUrls.map(deriveStoragePathFromPublicUrl).filter((v): v is string => Boolean(v));
+      const removablePaths = removedExistingRows.map((row) => row.image_url?.trim() || '').filter(Boolean).map(deriveStoragePathFromPublicUrl).filter((v): v is string => Boolean(v));
       if (removablePaths.length) {
         const { error: cleanupError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(removablePaths);
-        if (cleanupError) return { ok: true, imageCount: finalUrls.length, storageCleanupFailed: true };
+        if (cleanupError) return { ok: true, imageCount: finalRows.length, storageCleanupFailed: true };
       }
     }
 
-    return { ok: true, imageCount: finalUrls.length };
+    return { ok: true, imageCount: finalRows.length };
   } catch {
     await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(uploadedPaths);
     return { ok: false, reason: 'unknown', message: 'حدث خطأ غير متوقع أثناء حفظ الصور.' };

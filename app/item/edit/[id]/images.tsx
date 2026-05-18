@@ -17,7 +17,7 @@ import { useAuth } from '@/lib/auth';
 import { fetchEditableListingImagesContext, ListingImageDraftInput, updateListingImagesFromMobile, type EditableListingImagesContext, type UpdateListingImagesProgress } from '@/lib/edit-listing-images';
 
 type DraftImage =
-  | { key: string; kind: 'existing'; imageUrl: string; previewUri: string }
+  | { key: string; kind: 'existing'; imageId: string; imageUrl: string; previewUri: string }
   | { key: string; kind: 'new'; asset: ImagePicker.ImagePickerAsset; previewUri: string };
 
 const MAX_IMAGES = 4;
@@ -52,7 +52,7 @@ export default function EditListingImagesScreen() {
         setDraftImages([]);
       } else {
         setContext(data);
-        setDraftImages(data.images.map((img) => ({ key: `existing:${img.imageUrl}`, kind: 'existing', imageUrl: img.imageUrl, previewUri: img.imageUrl })));
+        setDraftImages(data.images.map((img) => ({ key: `existing:${img.id}`, kind: 'existing', imageId: img.id, imageUrl: img.imageUrl, previewUri: img.imageUrl })));
       }
     } catch {
       setLoadError('تعذر تحميل صور العنصر حالياً. حاول مرة أخرى.');
@@ -90,7 +90,7 @@ export default function EditListingImagesScreen() {
     setError(null);
     setSuccess(null);
     setSaving(true);
-    const orderedImages: ListingImageDraftInput[] = draftImages.map((img) => img.kind === 'existing' ? { kind: 'existing', imageUrl: img.imageUrl } : { kind: 'new', asset: img.asset });
+    const orderedImages: ListingImageDraftInput[] = draftImages.map((img) => img.kind === 'existing' ? { kind: 'existing', imageId: img.imageId, imageUrl: img.imageUrl } : { kind: 'new', asset: img.asset });
     const result = await updateListingImagesFromMobile({
       itemId,
       ownerId: user.id,
