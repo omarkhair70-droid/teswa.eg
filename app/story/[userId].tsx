@@ -340,6 +340,10 @@ export default function StoryViewerScreen() {
     if (!user?.id || !currentStory) return;
     setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceBusy(true);
     try {
+      voicePlayer.pause();
+      try {
+        await voicePlayer.seekTo(0);
+      } catch {}
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) { setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.'); return; }
       setVoiceDraft(null);
@@ -352,7 +356,7 @@ export default function StoryViewerScreen() {
       setVoiceDraft(null);
       setStoryReplyError('تعذر بدء الرد الصوتي. حاول مرة أخرى.');
     } finally { setVoiceBusy(false); }
-  }, [audioRecorder, currentStory, user?.id]);
+  }, [audioRecorder, currentStory, user?.id, voicePlayer]);
 
   const autoStopHandledRef = useRef(false);
 
@@ -393,6 +397,24 @@ export default function StoryViewerScreen() {
       setStoryReplyError('تعذر إرسال الرد الصوتي الآن. حاول مرة أخرى.');
     } finally { setVoiceSending(false); }
   }, [voiceDraft, user?.id, currentStory]);
+
+
+  const cancelVoiceComposer = useCallback(async () => {
+    try {
+      if (recorderState.isRecording) {
+        await audioRecorder.stop();
+      }
+    } catch {
+      setStoryReplyError('تعذر إلغاء التسجيل الصوتي. حاول مرة أخرى.');
+    } finally {
+      setVoiceOpen(false);
+      setVoiceDraft(null);
+      voicePlayer.pause();
+      try {
+        await voicePlayer.seekTo(0);
+      } catch {}
+    }
+  }, [audioRecorder, recorderState.isRecording, voicePlayer]);
 
 const renderUnavailableState = () => {
     if (isViewingOwnStories) {
@@ -436,6 +458,7 @@ const renderUnavailableState = () => {
         ref={pagerRef}
         style={styles.pager}
         initialPage={0}
+        scrollEnabled={!voiceReplyInteractionActive}
         onPageSelected={(event) => setActiveIndex(event.nativeEvent.position)}
       >
         {context.stories.map((story: StoryRecord, index) => {
@@ -543,8 +566,8 @@ const renderUnavailableState = () => {
           </View>
           <Pressable onPress={() => void handleStartVoiceReply()} disabled={voiceBusy || recorderState.isRecording || voiceSending} style={styles.replyVoiceButton}><AppText style={styles.replySendButtonText}>رد بصوتك</AppText></Pressable>
           {voiceOpen ? (<View style={styles.voiceBox}>
-            {recorderState.isRecording ? (<View style={styles.replyComposerRow}><AppText style={styles.replyFeedbackText}>جاري التسجيل {formatMs(recorderState.durationMillis)}</AppText><Pressable onPress={() => void stopVoice()}><AppText style={styles.replySendButtonText}>إيقاف</AppText></Pressable><Pressable onPress={() => { audioRecorder.stop(); setVoiceOpen(false); setVoiceDraft(null); }}><AppText style={styles.replySendButtonText}>إلغاء</AppText></Pressable></View>) : null}
-            {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={async () => { if (voicePlayerStatus.playing) { voicePlayer.pause(); return; } await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => setVoiceDraft(null)}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
+            {recorderState.isRecording ? (<View style={styles.replyComposerRow}><AppText style={styles.replyFeedbackText}>جاري التسجيل {formatMs(recorderState.durationMillis)}</AppText><Pressable onPress={() => void stopVoice()}><AppText style={styles.replySendButtonText}>إيقاف</AppText></Pressable><Pressable onPress={() => void cancelVoiceComposer()}><AppText style={styles.replySendButtonText}>إلغاء</AppText></Pressable></View>) : null}
+            {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={async () => { if (voicePlayerStatus.playing) { voicePlayer.pause(); return; } await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => { setVoiceDraft(null); void handleStartVoiceReply(); }}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
           </View>) : null}
 
         </View>
