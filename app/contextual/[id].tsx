@@ -198,13 +198,14 @@ export default function Screen() {
   const cancelVoiceComposer = useCallback(async () => {
     try {
       if (recorderState.isRecording) await audioRecorder.stop();
+    } catch {
+      setError('تعذر إلغاء التسجيل الصوتي.');
+    } finally {
       previewPlayer.pause();
       await previewPlayer.seekTo(0).catch(() => undefined);
       setVoiceDraft(null);
       setVoiceOpen(false);
       autoStopTriggeredRef.current = false;
-    } catch {
-      setError('تعذر إلغاء التسجيل الصوتي.');
     }
   }, [audioRecorder, previewPlayer, recorderState.isRecording]);
 
@@ -224,7 +225,9 @@ export default function Screen() {
         setError('تعذر حفظ التسجيل الصوتي. حاول مرة أخرى.');
         return;
       }
-      const durationMsRaw = preStopDuration ?? postStatus.durationMillis ?? null;
+      const postStopDuration = postStatus.durationMillis ?? 0;
+      const durationMsRaw =
+        preStopDuration && preStopDuration > 0 ? preStopDuration : postStopDuration;
       if (durationMsRaw == null || !Number.isFinite(durationMsRaw) || durationMsRaw <= 0) {
         setVoiceDraft(null);
         setVoiceOpen(false);
@@ -340,6 +343,8 @@ export default function Screen() {
               {message.messageKind === 'voice' ? (
                 <Pressable onPress={async () => {
                   if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; }
+                  previewPlayer.pause();
+                  await previewPlayer.seekTo(0).catch(() => undefined);
                   const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? '');
                   if (!signed) return;
                   await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
