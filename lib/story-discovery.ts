@@ -87,9 +87,13 @@ export async function fetchStoryDiscoveryItems(input?: { limit?: number }): Prom
   }
 
   const categoryById = new Map<string, string | null>(((categoriesResult.data ?? []) as CategoryRow[]).map((category) => [category.id, cleanText(category.name_ar)]));
-  const ownerById = new Map<string, string | null>(((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, cleanText(profile.display_name)]));
+  const visibleProfiles = (profilesResult.data ?? []) as ProfileRow[];
+  const visibleOwnerIds = new Set(visibleProfiles.map((profile) => profile.id));
+  const ownerById = new Map<string, string | null>(visibleProfiles.map((profile) => [profile.id, cleanText(profile.display_name)]));
 
-  return normalizedRows.slice(0, resolvedLimit).map(({ row, storyLabel, storySnippet }) => {
+  const publiclyVisibleRows = normalizedRows.filter(({ row }) => !row.owner_id || visibleOwnerIds.has(row.owner_id));
+
+  return publiclyVisibleRows.slice(0, resolvedLimit).map(({ row, storyLabel, storySnippet }) => {
     const itemImages = [...(imagesByItemId.get(row.id) ?? [])].sort((a, b) => {
       if (Boolean(b.is_primary) !== Boolean(a.is_primary)) return Number(Boolean(b.is_primary)) - Number(Boolean(a.is_primary));
       const sortA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
