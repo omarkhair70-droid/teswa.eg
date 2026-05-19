@@ -15,6 +15,7 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { radii } from '@/constants/radii';
 import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
+import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discovery';
 import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 import {
   readAnyMarketplaceFirstPageCache,
@@ -22,6 +23,10 @@ import {
   writeMarketplaceFirstPageCache,
 } from '@/lib/offline-marketplace-cache';
 import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
+import { buildDiscoverIntelligenceState, buildDiscoverSpotlightItems } from '@/lib/discover-intelligence';
+import { DiscoverIntelligencePanel } from '@/components/discover/DiscoverIntelligencePanel';
+import { DiscoverStoryHighlightsRail } from '@/components/discover/DiscoverStoryHighlightsRail';
+import { DiscoverSpotlightRail } from '@/components/discover/DiscoverSpotlightRail';
 
 export default function DiscoverScreen() {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
@@ -41,6 +46,9 @@ export default function DiscoverScreen() {
   const [videoMoments, setVideoMoments] = useState<ItemVideoDiscoveryMoment[]>([]);
   const [videoMomentsLoading, setVideoMomentsLoading] = useState(true);
   const [videoMomentsError, setVideoMomentsError] = useState<string | null>(null);
+  const [storyHighlights, setStoryHighlights] = useState<StoryDiscoveryItem[]>([]);
+  const [storyHighlightsLoading, setStoryHighlightsLoading] = useState(true);
+  const [storyHighlightsError, setStoryHighlightsError] = useState<string | null>(null);
 
   const clearAllFilters = useCallback(() => {
     setQuery('');
@@ -107,6 +115,20 @@ export default function DiscoverScreen() {
     }
   }, []);
 
+  const loadStoryHighlights = useCallback(async () => {
+    setStoryHighlightsLoading(true);
+    setStoryHighlightsError(null);
+    try {
+      const highlights = await fetchStoryDiscoveryItems({ limit: 8 });
+      setStoryHighlights(highlights);
+    } catch {
+      setStoryHighlights([]);
+      setStoryHighlightsError('تعذر تحميل العناصر ذات الحكاية الآن.');
+    } finally {
+      setStoryHighlightsLoading(false);
+    }
+  }, []);
+
   const refreshItems = useCallback(async () => {
     if (refreshing) {
       return;
@@ -121,12 +143,13 @@ export default function DiscoverScreen() {
       setError(null);
       void writeMarketplaceFirstPageCache(page);
       void loadVideoMoments();
+      void loadStoryHighlights();
     } catch {
       // Keep existing items visible on refresh failure.
     } finally {
       setRefreshing(false);
     }
-  }, [loadVideoMoments, refreshing]);
+  }, [loadStoryHighlights, loadVideoMoments, refreshing]);
 
   const loadMoreItems = useCallback(async () => {
     if (loading || refreshing || loadingMore || !hasMore || error) {
@@ -177,7 +200,8 @@ export default function DiscoverScreen() {
   useEffect(() => {
     loadItems();
     void loadVideoMoments();
-  }, [loadItems, loadVideoMoments]);
+    void loadStoryHighlights();
+  }, [loadItems, loadStoryHighlights, loadVideoMoments]);
 
   const availableCategories = useMemo(() => {
     const uniqueByLowercase = new Map<string, string>();
@@ -204,6 +228,7 @@ export default function DiscoverScreen() {
   }, [items]);
 
   const hasActiveFilters = Boolean(query.trim() || activeNearbyLocation || selectedCategory || selectedCondition);
+  const activeFiltersCount = [Boolean(query.trim()), Boolean(activeNearbyLocation), Boolean(selectedCategory), Boolean(selectedCondition)].filter(Boolean).length;
   const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
 
   const filtered = useMemo(() => {
@@ -227,6 +252,15 @@ export default function DiscoverScreen() {
       ? categoryFiltered.filter((item) => item.condition?.trim().toLocaleLowerCase() === selectedCondition.toLocaleLowerCase())
       : categoryFiltered;
   }, [activeNearbyLocation, items, query, selectedCategory, selectedCondition]);
+  const discoverIntelligenceState = buildDiscoverIntelligenceState({
+    visibleItemsCount: filtered.length,
+    loadedItemsCount: items.length,
+    videoMomentsCount: videoMoments.length,
+    storyHighlightsCount: storyHighlights.length,
+    activeFiltersCount,
+    nearbyLabel: activeNearbyLocation?.label ?? null,
+  });
+  const spotlightItems = buildDiscoverSpotlightItems(hasActiveFilters ? filtered : items, 6);
   const isFilteredEmptyWithMore = hasActiveFilters && filtered.length === 0 && hasMore;
 
   const renderListFooter = useCallback(() => {
@@ -335,6 +369,10 @@ export default function DiscoverScreen() {
                 />
               </AppCard>
             ) : null}
+            <AppCard>
+              <DiscoverStoryHighlightsRail items={storyHighlights} loading={storyHighlightsLoading} errorMessage={storyHighlightsError} onRetry={loadStoryHighlights} />
+            </AppCard>
+            <DiscoverIntelligencePanel state={discoverIntelligenceState} />
 
             <AppCard>
               <View style={styles.browseBox}>
@@ -424,6 +462,9 @@ export default function DiscoverScreen() {
                 </View>
               </AppCard>
             ) : null}
+            <AppCard>
+              <DiscoverSpotlightRail items={spotlightItems} />
+            </AppCard>
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
