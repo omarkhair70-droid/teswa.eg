@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
@@ -264,7 +265,15 @@ export default function PublicProfileScreen() {
                       </View>
                     )}
                     <View style={styles.listingContent}>
-                      <AppText numberOfLines={1} weight="semibold">{listing.title}</AppText>
+                      <View style={styles.listingTitleRow}>
+                        <AppText numberOfLines={1} weight="semibold" style={styles.listingTitle}>{listing.title}</AppText>
+                        {listing.hasVideoTeaser === true ? (
+                          <View style={styles.listingVideoBadge}>
+                            <Ionicons name="play-circle-outline" size={13} color={colors.primary} />
+                            <AppText weight="semibold" style={styles.listingVideoBadgeText}>لمحة فيديو</AppText>
+                          </View>
+                        ) : null}
+                      </View>
                       {meta ? <AppText muted numberOfLines={1}>{meta}</AppText> : null}
                     </View>
                   </Pressable>
@@ -296,4 +305,18 @@ const styles = StyleSheet.create({
   listingImage: { width: 56, height: 56, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
   listingImageFallback: { justifyContent: 'center', alignItems: 'center' },
   listingContent: { flex: 1, gap: spacing.xs },
+  listingTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  listingTitle: { flex: 1 },
+  listingVideoBadge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(184,98,63,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+  },
+  listingVideoBadgeText: { color: colors.primary, fontSize: 11 },
 });

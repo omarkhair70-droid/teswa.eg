@@ -1,3 +1,4 @@
+import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { supabase } from '@/lib/supabase/client';
 
 export type StoryDiscoveryItem = {
@@ -12,6 +13,7 @@ export type StoryDiscoveryItem = {
   storyLabel: 'حكاية العنصر' | 'ليه صاحبه بيبدله' | 'مفيد لمين';
   storySnippet: string;
   createdAt: string | null;
+  hasVideoTeaser: boolean;
 };
 
 type ItemRow = {
@@ -69,10 +71,11 @@ export async function fetchStoryDiscoveryItems(input?: { limit?: number }): Prom
   const categoryIds = Array.from(new Set(normalizedRows.map(({ row }) => row.category_id).filter((value): value is string => Boolean(value))));
   const ownerIds = Array.from(new Set(normalizedRows.map(({ row }) => row.owner_id).filter((value): value is string => Boolean(value))));
 
-  const [imagesResult, categoriesResult, profilesResult] = await Promise.all([
+  const [imagesResult, categoriesResult, profilesResult, videoPresenceByItemId] = await Promise.all([
     supabase.from('item_images').select('item_id,image_url,is_primary,sort_order').in('item_id', itemIds),
     categoryIds.length ? supabase.from('categories').select('id,name_ar').in('id', categoryIds) : Promise.resolve({ data: [] as CategoryRow[], error: null }),
     ownerIds.length ? supabase.from('profiles').select('id,display_name').in('id', ownerIds) : Promise.resolve({ data: [] as ProfileRow[], error: null }),
+    fetchItemVideoPresenceMap(itemIds),
   ]);
 
   if (imagesResult.error) throw imagesResult.error;
@@ -114,6 +117,7 @@ export async function fetchStoryDiscoveryItems(input?: { limit?: number }): Prom
       storyLabel,
       storySnippet,
       createdAt: row.created_at ?? null,
+      hasVideoTeaser: videoPresenceByItemId.get(row.id) === true,
     };
   });
 }

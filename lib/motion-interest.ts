@@ -1,3 +1,4 @@
+import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { supabase } from '@/lib/supabase/client';
 
 export type MovingItemInterest = {
@@ -10,6 +11,7 @@ export type MovingItemInterest = {
   ownerDisplayName: string | null;
   openInterestCount: number;
   latestInterestAt: string | null;
+  hasVideoTeaser: boolean;
 };
 
 type PublicMovingItemRow = {
@@ -56,6 +58,7 @@ export async function fetchMovingItems(input?: { limit?: number }): Promise<Movi
   }
 
   const itemMap = new Map((marketplaceRows as MarketplaceItemRow[] | null ?? []).map((item) => [item.id, item]));
+  const videoPresenceByItemId = await fetchItemVideoPresenceMap(itemIds);
 
   return rows.flatMap((row) => {
     const item = itemMap.get(row.item_id);
@@ -73,6 +76,7 @@ export async function fetchMovingItems(input?: { limit?: number }): Promise<Movi
       ownerDisplayName: item.owner_display_name ?? null,
       openInterestCount: Number(row.open_interest_count ?? 0),
       latestInterestAt: row.latest_interest_at ?? null,
+      hasVideoTeaser: videoPresenceByItemId.get(item.id) === true,
     }];
   });
 }

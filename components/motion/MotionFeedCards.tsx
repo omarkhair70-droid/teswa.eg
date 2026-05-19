@@ -212,6 +212,12 @@ export function MotionMovingItemCard({
               </AppText>
             </View>
           </View>
+          {item.hasVideoTeaser === true ? (
+            <View style={styles.videoPresencePill}>
+              <Ionicons name="play-circle-outline" size={13} color={colors.primary} />
+              <AppText weight="semibold" style={styles.videoPresenceText}>له لمحة فيديو</AppText>
+            </View>
+          ) : null}
           <AppText weight="bold" numberOfLines={2} style={styles.title}>
             {item.title}
           </AppText>
@@ -271,6 +277,12 @@ export function MotionStoryItemCard({
               </AppText>
             </View>
           </View>
+          {item.hasVideoTeaser === true ? (
+            <View style={[styles.videoPresencePill, styles.storyVideoPresencePill]}>
+              <Ionicons name="videocam-outline" size={13} color={colors.accent} />
+              <AppText weight="semibold" style={[styles.videoPresenceText, styles.storyVideoPresenceText]}>لمحة فيديو</AppText>
+            </View>
+          ) : null}
           <AppText weight="bold" numberOfLines={2} style={styles.title}>
             {item.title}
           </AppText>
@@ -398,6 +410,24 @@ const styles = StyleSheet.create({
     borderColor: "rgba(62,124,115,0.18)",
   },
   storyLabelText: { color: colors.accent, fontSize: 12 },
+  videoPresencePill: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(255,253,248,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.2)',
+  },
+  storyVideoPresencePill: {
+    backgroundColor: 'rgba(255,255,255,0.68)',
+    borderColor: 'rgba(62,124,115,0.18)',
+  },
+  videoPresenceText: { color: colors.primary, fontSize: 12 },
+  storyVideoPresenceText: { color: colors.accent },
   title: { fontSize: 18, lineHeight: 26, color: colors.text },
   metaWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: spacing.xs },
   metaPill: {

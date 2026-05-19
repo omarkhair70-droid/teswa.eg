@@ -1,3 +1,4 @@
+import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { supabase } from '@/lib/supabase/client';
 
 const PROFILE_FETCH_TIMEOUT_MS = 12_000;
@@ -75,6 +76,7 @@ export type PublicProfileListing = {
   city: string | null;
   area: string | null;
   createdAt: string | null;
+  hasVideoTeaser: boolean;
 };
 
 export type UpdateMyProfileInput = {
@@ -227,7 +229,7 @@ export async function fetchPublicProfileActiveListings(
   const itemIds = items.map((item) => item.id);
   const categoryIds = Array.from(new Set(items.map((item) => item.category_id).filter(Boolean)));
 
-  const [imagesResult, categoriesResult] = await Promise.all([
+  const [imagesResult, categoriesResult, videoPresenceByItemId] = await Promise.all([
     supabase
       .from('item_images')
       .select('item_id, image_url, is_primary, sort_order')
@@ -235,6 +237,7 @@ export async function fetchPublicProfileActiveListings(
     categoryIds.length > 0
       ? supabase.from('categories').select('id, name_ar').in('id', categoryIds)
       : Promise.resolve({ data: [], error: null }),
+    fetchItemVideoPresenceMap(itemIds),
   ]);
 
   if (imagesResult.error) throw imagesResult.error;
@@ -278,5 +281,6 @@ export async function fetchPublicProfileActiveListings(
     city: item.city?.trim() || null,
     area: item.area?.trim() || null,
     createdAt: item.created_at ?? null,
+    hasVideoTeaser: videoPresenceByItemId.get(item.id) === true,
   }));
 }
