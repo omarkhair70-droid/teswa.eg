@@ -323,6 +323,8 @@ export default function DiscoverScreen() {
             {shouldShowVideoMomentsRail ? (
               <AppCard>
                 <ItemVideoDiscoveryRail
+            onOpenViewer={() => router.push('/motion/viewer')}
+            viewerCtaLabel='افتح الريل المرئي'
                   eyebrow="اكتشاف مرئي"
                   title="شوف عناصر لها لمحة فيديو"
                   description="قبل ما تدخل التفاصيل، فيه عناصر تفتح لك لقطة أقرب من شكلها الحقيقي."
