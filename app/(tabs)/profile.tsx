@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -9,6 +10,7 @@ import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
 import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
+import { authenticateTeswaAppLock, BiometricCapabilityState, getBiometricCapabilityState, readBiometricAppLockEnabled, writeBiometricAppLockEnabled } from '@/lib/biometric-app-lock';
 import { AccountProfile, fetchMyAccountProfile } from '@/lib/profiles';
 import { getNotificationPermissionStatus, hasStoredPushToken, requestAndRegisterPushDevice } from '@/lib/push-notifications';
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
@@ -29,6 +31,11 @@ export default function ProfileScreen() {
   const [enablingPush, setEnablingPush] = useState(false);
   const [myActiveStoriesCount, setMyActiveStoriesCount] = useState(0);
   const [myStoriesLoading, setMyStoriesLoading] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricCapability, setBiometricCapability] = useState<BiometricCapabilityState | null>(null);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+  const [biometricMessage, setBiometricMessage] = useState<string | null>(null);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -49,6 +56,17 @@ export default function ProfileScreen() {
     [myActiveStoriesCount, profile?.response_rate, profile?.successful_swaps_count],
   );
 
+  const capabilityMessage = useMemo(() => {
+    if (!biometricCapability) return null;
+    if (biometricCapability.status === 'available') {
+      const labels = biometricCapability.supportedLabels.join('، ');
+      return labels ? `الجهاز جاهز: ${labels}` : 'الجهاز جاهز للتحقق البيومتري.';
+    }
+    if (biometricCapability.status === 'no_hardware') return 'هذا الجهاز لا يدعم التحقق البيومتري المتاح لقفل التطبيق.';
+    if (biometricCapability.status === 'not_enrolled') return 'سجّل بصمة أو تعرفًا على الوجه من إعدادات الهاتف أولاً.';
+    return 'تعذر التحقق من جاهزية الحماية الآن.';
+  }, [biometricCapability]);
+
   const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -63,6 +81,21 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   }, [user]);
+
+  const loadBiometricState = useCallback(async () => {
+    if (!user?.id) return;
+    setBiometricLoading(true);
+    try {
+      const [capability, enabled] = await Promise.all([
+        getBiometricCapabilityState(),
+        readBiometricAppLockEnabled(user.id),
+      ]);
+      setBiometricCapability(capability);
+      setBiometricEnabled(enabled);
+    } finally {
+      setBiometricLoading(false);
+    }
+  }, [user?.id]);
 
   const loadMyStoriesState = useCallback(async () => {
     if (!user?.id) {
@@ -86,7 +119,8 @@ export default function ProfileScreen() {
     useCallback(() => {
       loadData();
       loadMyStoriesState();
-    }, [loadData, loadMyStoriesState]),
+      void loadBiometricState();
+    }, [loadData, loadMyStoriesState, loadBiometricState]),
   );
 
   useEffect(() => {
@@ -131,6 +165,36 @@ export default function ProfileScreen() {
     } finally {
       setEnablingPush(false);
     }
+  };
+
+  const handleBiometricAction = async () => {
+    if (!user?.id) return;
+
+    if (biometricEnabled) {
+      setBiometricBusy(true);
+      await writeBiometricAppLockEnabled(user.id, false);
+      setBiometricEnabled(false);
+      setBiometricMessage('تم إيقاف قفل التطبيق.');
+      setBiometricBusy(false);
+      return;
+    }
+
+    if (biometricCapability?.status !== 'available') {
+      setBiometricMessage('الحماية البيومترية غير متاحة الآن على هذا الجهاز.');
+      return;
+    }
+
+    setBiometricBusy(true);
+    const result = await authenticateTeswaAppLock('enable');
+    if (result.success) {
+      await writeBiometricAppLockEnabled(user.id, true);
+      setBiometricEnabled(true);
+      setBiometricMessage('تم تفعيل قفل التطبيق على هذا الجهاز.');
+    } else {
+      setBiometricEnabled(false);
+      setBiometricMessage('لم يتم تفعيل القفل. تقدر تحاول مرة تانية.');
+    }
+    setBiometricBusy(false);
   };
 
   const handleSignOut = async () => {
@@ -182,27 +246,9 @@ export default function ProfileScreen() {
               </AppCard>
             ) : null}
 
-            <AppCard>
-              <View style={styles.group}>
-                <AppText weight="semibold">نبذة</AppText>
-                {profile?.bio?.trim() ? <AppText>{profile.bio}</AppText> : <AppText muted>لم تضف نبذة بعد.</AppText>}
-              </View>
-            </AppCard>
-
-            <AppCard>
-              <View style={styles.group}>
-                <AppText weight="semibold">الثقة والإحصائيات</AppText>
-                <AppText>المقايضات الناجحة: {profile?.successful_swaps_count ?? 0}</AppText>
-                <AppText>معدل الرد: {profile?.response_rate != null ? `${profile.response_rate}%` : 'غير متاح بعد'}</AppText>
-              </View>
-            </AppCard>
-
-            <AppCard>
-              <View style={styles.group}>
-                <AppText weight="semibold">بيانات الحساب</AppText>
-                <AppText>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText>
-              </View>
-            </AppCard>
+            <AppCard><View style={styles.group}><AppText weight="semibold">نبذة</AppText>{profile?.bio?.trim() ? <AppText>{profile.bio}</AppText> : <AppText muted>لم تضف نبذة بعد.</AppText>}</View></AppCard>
+            <AppCard><View style={styles.group}><AppText weight="semibold">الثقة والإحصائيات</AppText><AppText>المقايضات الناجحة: {profile?.successful_swaps_count ?? 0}</AppText><AppText>معدل الرد: {profile?.response_rate != null ? `${profile.response_rate}%` : 'غير متاح بعد'}</AppText></View></AppCard>
+            <AppCard><View style={styles.group}><AppText weight="semibold">بيانات الحساب</AppText><AppText>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText></View></AppCard>
 
             <AppCard>
               <View style={styles.group}>
@@ -212,6 +258,26 @@ export default function ProfileScreen() {
                 {pushState === 'denied' ? <AppText muted>لم يتم منح إذن الإشعارات. تقدر تفعّله لاحقًا من إعدادات الهاتف.</AppText> : null}
                 {pushState === 'error' ? <AppText muted>تعذر تفعيل الإشعارات حالياً. حاول مرة تانية.</AppText> : null}
                 {pushState !== 'enabled' ? <AppButton label={enablingPush ? 'جاري التفعيل...' : 'تفعيل إشعارات الموبايل'} disabled={enablingPush} onPress={handleEnablePush} variant="neutral" /> : null}
+              </View>
+            </AppCard>
+
+            <AppCard>
+              <View style={styles.group}>
+                <View style={styles.securityTitleRow}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#7C2D12" />
+                  <AppText weight="semibold">حماية التطبيق</AppText>
+                </View>
+                <AppText muted>اقفل تِسوى على هذا الجهاز بالبصمة أو التحقق البيومتري المتاح.</AppText>
+                {biometricLoading ? <AppText muted>جاري التحقق من جاهزية الجهاز...</AppText> : null}
+                {capabilityMessage ? <AppText muted>{capabilityMessage}</AppText> : null}
+                {biometricEnabled ? <AppText style={styles.successText}>قفل التطبيق مفعّل على هذا الجهاز.</AppText> : null}
+                {biometricMessage ? <AppText muted>{biometricMessage}</AppText> : null}
+                <AppButton
+                  label={biometricEnabled ? 'إيقاف القفل' : 'تفعيل القفل بالبصمة'}
+                  onPress={handleBiometricAction}
+                  disabled={biometricBusy || biometricLoading}
+                  variant="neutral"
+                />
               </View>
             </AppCard>
 
@@ -230,12 +296,7 @@ export default function ProfileScreen() {
           <View style={styles.group}>
             <AppText muted>تقدر تسجل خروجك وتدخل بحساب مختلف وقت ما تحب.</AppText>
             {signOutError ? <AppText style={styles.errorText}>{signOutError}</AppText> : null}
-            <AppButton
-              label={isSigningOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
-              disabled={isSigningOut}
-              onPress={handleSignOut}
-              variant="neutral"
-            />
+            <AppButton label={isSigningOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'} disabled={isSigningOut} onPress={handleSignOut} variant="neutral" />
           </View>
         </AppCard>
       </View>
@@ -249,4 +310,6 @@ const styles = StyleSheet.create({
   group: { gap: spacing.sm },
   publicProfileAction: { marginTop: spacing.md, gap: spacing.sm },
   errorText: { color: '#B00020' },
+  securityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  successText: { color: '#7C2D12' },
 });
