@@ -155,7 +155,7 @@ function OwnerLine({
         color={tone === "story" ? colors.accent : colors.primary}
       />
       <AppText muted numberOfLines={1} style={styles.ownerText}>
-        من مساحة {owner}
+        صاحبها {owner}
       </AppText>
     </View>
   );
