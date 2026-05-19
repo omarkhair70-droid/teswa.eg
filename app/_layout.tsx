@@ -141,12 +141,12 @@ function RootNavigator() {
       return;
     }
 
-    if (!user) {
-      if (inPublicComplianceRoute) {
-        void SplashScreen.hideAsync();
-        return;
-      }
+    if (inPublicComplianceRoute) {
+      void SplashScreen.hideAsync();
+      return;
+    }
 
+    if (!user) {
       if (!onboardingCompleted && !inOnboarding) {
         router.replace('/(auth)/onboarding');
       } else if (onboardingCompleted && !inLoginOrSignup) {
