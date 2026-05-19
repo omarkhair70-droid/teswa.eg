@@ -49,7 +49,7 @@ function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoT
             <View style={styles.videoTitleBlock}>
               <View style={styles.sectionEyebrowRow}>
                 <Ionicons name="videocam-outline" size={16} color={colors.primary} />
-                <AppText muted style={styles.sectionEyebrow}>M41A</AppText>
+                <AppText muted style={styles.sectionEyebrow}>لمحة مرئية</AppText>
               </View>
               <AppText weight="bold">لمحة فيديو</AppText>
               <AppText muted>شوف العنصر في لقطة قصيرة قبل ما تبدأ التبديل.</AppText>
@@ -201,7 +201,11 @@ export default function ItemDetailsScreen() {
         </View></AppCard>
       </Animated.View>
 
-      {owner?.id ? <Animated.View entering={FadeInDown.duration(220).delay(110)}><Pressable onPress={() => router.push(`/profile/${owner.id}`)}><AppCard style={styles.ownerCard}><View style={styles.ownerHeader}><AppText muted>صاحب العنصر</AppText><Ionicons name="chevron-back" size={16} color={colors.textMuted} /></View><View style={styles.ownerMain}><View style={styles.avatar}><AppText weight="bold" style={styles.avatarText}>{(owner.displayName?.[0] || owner.username?.[0] || '؟').toUpperCase()}</AppText></View><View style={styles.ownerTextBlock}><AppText weight="bold">{owner.displayName || 'صاحب العنصر'}</AppText>{owner.username ? <AppText muted>@{owner.username}</AppText> : null}{owner.profileTagline ? <AppText muted>{owner.profileTagline}</AppText> : null}</View></View>{(owner.city || owner.area) ? <AppText muted>{[owner.city, owner.area].filter(Boolean).join(' • ')}</AppText> : null}<View style={styles.ownerSignals}>{owner.successfulSwapsCount != null ? <View style={styles.signalPill}><Ionicons name="swap-horizontal-outline" size={12} color={colors.primary} /><AppText style={styles.signalText}>{owner.successfulSwapsCount} تبديل ناجح</AppText></View> : null}{owner.responseRate != null ? <View style={styles.signalPill}><Ionicons name="flash-outline" size={12} color={colors.primary} /><AppText style={styles.signalText}>{owner.responseRate}% معدل الرد</AppText></View> : null}</View></AppCard></Pressable></Animated.View> : null}
+      {owner?.id ? <Animated.View entering={FadeInDown.duration(220).delay(110)}><Pressable onPress={() => router.push(`/profile/${owner.id}`)}><AppCard style={styles.ownerCard}><View style={styles.ownerHeader}><AppText muted>صاحب العنصر</AppText><Ionicons name="chevron-back" size={16} color={colors.textMuted} /></View><View style={styles.ownerMain}>{owner.avatarUrl ? (
+                <ExpoImage source={{ uri: owner.avatarUrl }} style={styles.avatarImage} contentFit="cover" transition={120} cachePolicy="memory-disk" />
+              ) : (
+                <View style={styles.avatar}><AppText weight="bold" style={styles.avatarText}>{(owner.displayName?.[0] || owner.username?.[0] || '؟').toUpperCase()}</AppText></View>
+              )}<View style={styles.ownerTextBlock}><AppText weight="bold">{owner.displayName || 'صاحب العنصر'}</AppText>{owner.username ? <AppText muted>@{owner.username}</AppText> : null}{owner.profileTagline ? <AppText muted>{owner.profileTagline}</AppText> : null}</View></View>{(owner.city || owner.area) ? <AppText muted>{[owner.city, owner.area].filter(Boolean).join(' • ')}</AppText> : null}<View style={styles.ownerSignals}>{owner.successfulSwapsCount != null ? <View style={styles.signalPill}><Ionicons name="swap-horizontal-outline" size={12} color={colors.primary} /><AppText style={styles.signalText}>{owner.successfulSwapsCount} مقايضات ناجحة</AppText></View> : null}{owner.responseRate != null ? <View style={styles.signalPill}><Ionicons name="flash-outline" size={12} color={colors.primary} /><AppText style={styles.signalText}>{owner.responseRate}% معدل الرد</AppText></View> : null}</View></AppCard></Pressable></Animated.View> : null}
 
       <Animated.View entering={FadeInDown.duration(220).delay(140)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="sparkles-outline" size={16} color={colors.primary} /><AppText weight="semibold">حالة العنصر</AppText></View><View style={styles.infoBlock}><AppText>{item.condition || 'غير محددة'}</AppText>{item.conditionNotes ? <AppText muted>{item.conditionNotes}</AppText> : null}</View></AppCard></Animated.View>
       {item.itemStory ? <Animated.View entering={FadeInDown.duration(220).delay(170)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="book-outline" size={16} color={colors.primary} /><AppText weight="semibold">قصة العنصر</AppText></View><AppText>{item.itemStory}</AppText></AppCard></Animated.View> : null}
@@ -224,7 +228,7 @@ const styles = StyleSheet.create({
   mediaCue: { position: 'absolute', top: spacing.sm, right: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 4 },
   mediaCueText: { color: colors.white, fontSize: 11 },
   thumbsRow: { gap: spacing.sm, paddingTop: spacing.sm },
-  thumbPressable: { borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, padding: 3, backgroundColor: colors.surface, shadowColor: colors.black, shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  thumbPressable: { borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, padding: 3, backgroundColor: colors.surface, shadowColor: '#000000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   thumbActive: { borderColor: colors.primary, borderWidth: 2 },
   thumb: { width: 74, height: 74, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
   premiumCard: { borderWidth: 1, borderColor: colors.border },
@@ -259,6 +263,7 @@ const styles = StyleSheet.create({
   ownerHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   ownerMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primarySoft },
   avatarText: { color: colors.primary },
   ownerTextBlock: { flex: 1, gap: 2 },
   ownerSignals: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
