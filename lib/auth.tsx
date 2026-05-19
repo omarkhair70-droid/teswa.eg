@@ -7,6 +7,7 @@ import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications'
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
+const SIGNED_IN_PROFILE_RETRY_DELAY_MS = 650;
 
 type AuthContextValue = {
   bootstrapReady: boolean;
@@ -49,7 +50,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const checkPromise = (async () => {
       try {
-        const profile = await fetchMyProfile(userId);
+        const shouldRetrySignedInBootstrap =
+          reason === 'auth_state_change' || reason === 'bootstrap_session';
+
+        const fetchProfileWithOptionalRetry = async () => {
+          try {
+            return await fetchMyProfile(userId);
+          } catch (firstError) {
+            if (!shouldRetrySignedInBootstrap) throw firstError;
+            await new Promise((resolve) => setTimeout(resolve, SIGNED_IN_PROFILE_RETRY_DELAY_MS));
+            return await fetchMyProfile(userId);
+          }
+        };
+
+        const profile = await fetchProfileWithOptionalRetry();
         const completed = isProfileComplete(profile);
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
         setProfileCompleted(completed);

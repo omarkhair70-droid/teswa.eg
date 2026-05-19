@@ -146,7 +146,16 @@ function RootNavigator() {
     void SplashScreen.hideAsync();
   }, [bootstrapReady, loadingProfile, segments, user, onboardingCompleted, profileCompleted, profileCheckError, router]);
 
-  if (!bootstrapReady || loadingProfile) return null;
+  if (!bootstrapReady) return null;
+
+  if (user && loadingProfile) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>نجهّز حسابك...</Text>
+        <Text style={styles.errorSubtitle}>لحظات ونفتح لك تِسوى.</Text>
+      </View>
+    );
+  }
 
   if (user && profileCheckError) {
     return (
