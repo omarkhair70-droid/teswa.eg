@@ -46,16 +46,14 @@ async function removeStoragePaths(
   if (error) throw new Error(`storage_remove_failed:${bucket}`);
 }
 
-async function deleteWithErrorCheck(
-  admin: ReturnType<typeof createClient>,
-  table: string,
-  apply: (query: ReturnType<ReturnType<typeof createClient>["from"]>["delete"]) => ReturnType<ReturnType<typeof createClient>["from"]>["delete"],
+async function runDeleteStep(
+  label: string,
+  deleteQuery: Promise<{ error: { code?: string | null; message?: string | null } | null }>,
   errorCode: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const baseDelete = admin.from(table).delete();
-  const { error } = await apply(baseDelete);
+  const { error } = await deleteQuery;
   if (error) {
-    console.error("Account deletion DB cleanup failed", { table, code: error.code, message: error.message });
+    console.error("Account deletion DB cleanup failed", { label, code: error.code, message: error.message });
     return {
       ok: false,
       response: jsonResponse(500, { ok: false, error: errorCode, message: "تعذر إكمال حذف البيانات المرتبطة بالحساب." }),
@@ -229,22 +227,68 @@ Deno.serve(async (req: Request) => {
     await removeStoragePaths(admin, "contextual-voice-messages", contextualVoicePaths);
     await removeStoragePaths(admin, "deal-voice-messages", dealVoicePaths);
 
-    const cleanupSteps: Array<Promise<{ ok: true } | { ok: false; response: Response }>> = [
-      deleteWithErrorCheck(admin, "notifications", (q) => q.eq("user_id", userId), "notifications_delete_failed"),
-      deleteWithErrorCheck(admin, "push_devices", (q) => q.eq("user_id", userId), "push_devices_delete_failed"),
-      deleteWithErrorCheck(admin, "contextual_message_reads", (q) => q.eq("user_id", userId), "contextual_reads_delete_failed"),
-      deleteWithErrorCheck(admin, "contextual_conversations", (q) => q.or(`starter_id.eq.${userId},recipient_id.eq.${userId}`), "contextual_conversations_delete_failed"),
-      deleteWithErrorCheck(admin, "deal_messages", (q) => q.in("deal_id", myDealIds.length ? myDealIds : ["00000000-0000-0000-0000-000000000000"]), "deal_messages_delete_failed"),
-      deleteWithErrorCheck(admin, "swap_deals", (q) => q.or(`requester_id.eq.${userId},offerer_id.eq.${userId}`), "swap_deals_delete_failed"),
-      deleteWithErrorCheck(admin, "offers", (q) => q.or(`sender_id.eq.${userId},receiver_id.eq.${userId}`), "offers_delete_failed"),
-      deleteWithErrorCheck(admin, "reviews", (q) => q.or(`reviewer_id.eq.${userId},reviewee_id.eq.${userId}`), "reviews_delete_failed"),
-      deleteWithErrorCheck(admin, "reports", (q) => q.or(`reporter_id.eq.${userId},reported_user_id.eq.${userId}`), "reports_delete_failed"),
-    ];
+    const notificationsCleanup = await runDeleteStep(
+      "notifications",
+      admin.from("notifications").delete().eq("user_id", userId),
+      "notifications_delete_failed",
+    );
+    if (!notificationsCleanup.ok) return notificationsCleanup.response;
 
-    for (const step of cleanupSteps) {
-      const result = await step;
-      if (!result.ok) return result.response;
-    }
+    const pushDevicesCleanup = await runDeleteStep(
+      "push_devices",
+      admin.from("push_devices").delete().eq("user_id", userId),
+      "push_devices_delete_failed",
+    );
+    if (!pushDevicesCleanup.ok) return pushDevicesCleanup.response;
+
+    const contextualReadsCleanup = await runDeleteStep(
+      "contextual_message_reads",
+      admin.from("contextual_message_reads").delete().eq("user_id", userId),
+      "contextual_reads_delete_failed",
+    );
+    if (!contextualReadsCleanup.ok) return contextualReadsCleanup.response;
+
+    const contextualConversationsCleanup = await runDeleteStep(
+      "contextual_conversations",
+      admin.from("contextual_conversations").delete().or(`starter_id.eq.${userId},recipient_id.eq.${userId}`),
+      "contextual_conversations_delete_failed",
+    );
+    if (!contextualConversationsCleanup.ok) return contextualConversationsCleanup.response;
+
+    const dealMessagesCleanup = await runDeleteStep(
+      "deal_messages",
+      admin.from("deal_messages").delete().in("deal_id", myDealIds.length ? myDealIds : ["00000000-0000-0000-0000-000000000000"]),
+      "deal_messages_delete_failed",
+    );
+    if (!dealMessagesCleanup.ok) return dealMessagesCleanup.response;
+
+    const swapDealsCleanup = await runDeleteStep(
+      "swap_deals",
+      admin.from("swap_deals").delete().or(`requester_id.eq.${userId},offerer_id.eq.${userId}`),
+      "swap_deals_delete_failed",
+    );
+    if (!swapDealsCleanup.ok) return swapDealsCleanup.response;
+
+    const offersCleanup = await runDeleteStep(
+      "offers",
+      admin.from("offers").delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+      "offers_delete_failed",
+    );
+    if (!offersCleanup.ok) return offersCleanup.response;
+
+    const reviewsCleanup = await runDeleteStep(
+      "reviews",
+      admin.from("reviews").delete().or(`reviewer_id.eq.${userId},reviewee_id.eq.${userId}`),
+      "reviews_delete_failed",
+    );
+    if (!reviewsCleanup.ok) return reviewsCleanup.response;
+
+    const reportsCleanup = await runDeleteStep(
+      "reports",
+      admin.from("reports").delete().or(`reporter_id.eq.${userId},reported_user_id.eq.${userId}`),
+      "reports_delete_failed",
+    );
+    if (!reportsCleanup.ok) return reportsCleanup.response;
 
     const { error: deleteAuthError } = await admin.auth.admin.deleteUser(userId);
     if (deleteAuthError) {
