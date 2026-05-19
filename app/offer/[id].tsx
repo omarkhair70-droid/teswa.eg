@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
+import { TeswaMomentCard } from '@/components/ui/TeswaMomentCard';
 import { spacing } from '@/constants/spacing';
 import { acceptOfferFromMobile, fetchOfferById, getOfferStatusLabel, markOfferThinkingFromMobile, OfferDetail, softRejectOfferFromMobile } from '@/lib/offers';
 import { useAuth } from '@/lib/auth';
@@ -17,12 +18,13 @@ function ItemSummary({ title, item }: { title: string; item: OfferDetail['reques
 
 export default function OfferDetailScreen() {
   const { user } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, moment } = useLocalSearchParams<{ id: string; moment?: string }>();
   const [offer, setOffer] = useState<OfferDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [actionLoading, setActionLoading] = useState<'thinking' | 'reject' | 'accept' | null>(null);
+  const [actionMoment, setActionMoment] = useState<'thinking' | 'rejected' | null>(null);
 
   const loadOffer = useCallback(async () => {
     if (!id || !user?.id) return;
@@ -44,16 +46,18 @@ export default function OfferDetailScreen() {
         if (!r.ok) return setError(r.message);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         await loadOffer();
+        setActionMoment('thinking');
       } else if (action === 'reject') {
         const r = await softRejectOfferFromMobile({ offerId: id, currentUserId: user.id, note });
         if (!r.ok) return setError(r.message);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         await loadOffer();
+        setActionMoment('rejected');
       } else {
         const r = await acceptOfferFromMobile({ offerId: id, currentUserId: user.id });
         if (!r.ok || !r.dealId) return setError(r.ok ? 'تعذر فتح الصفقة.' : r.message);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-        router.replace(`/deal/${r.dealId}`);
+        router.replace(`/deal/${r.dealId}?moment=accepted`);
       }
     } catch (err) {
       if (__DEV__) console.log('[offer-detail] action failed', { action, offerId: id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
@@ -69,7 +73,14 @@ export default function OfferDetailScreen() {
 
   const receiverCanRespond = offer.viewerRole === 'receiver' && (offer.status === 'pending' || offer.status === 'thinking');
 
-  return <AppScreen scrollable><AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>تفاصيل العرض</AppText><AppText muted>حالة العرض: {getOfferStatusLabel(offer.status)}</AppText>{!!offer.createdAt && <AppText muted>تاريخ الإرسال: {new Date(offer.createdAt).toLocaleString('ar-EG')}</AppText>}</View></AppCard>
+  const showSentMoment = moment === 'sent';
+
+
+  return <AppScreen scrollable>
+    {actionMoment === 'thinking' ? <TeswaMomentCard eyebrow="تم إرسال ردك" title="الطرف الآخر عرف إنك محتاج وقت" body="العرض ما زال مفتوحًا، وردك اتسجل بوضوح." icon="hourglass-outline" tone="waiting" /> : null}
+    {actionMoment === 'rejected' ? <TeswaMomentCard eyebrow="ردك وصل" title="تم رفض العرض بلطف" body="قفلنا هذا العرض بهدوء، ويمكن لصاحبه متابعة فرص أخرى." icon="heart-dislike-outline" tone="calm" /> : null}
+    {showSentMoment ? <TeswaMomentCard eyebrow="لحظة جديدة" title="عرضك وصل" body="أرسلنا عرض التبديل لصاحب العنصر. تابع حالته من هنا." icon="paper-plane-outline" tone="warm" /> : null}
+    <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>تفاصيل العرض</AppText><AppText muted>حالة العرض: {getOfferStatusLabel(offer.status)}</AppText>{!!offer.createdAt && <AppText muted>تاريخ الإرسال: {new Date(offer.createdAt).toLocaleString('ar-EG')}</AppText>}</View></AppCard>
     <ItemSummary title="العنصر المطلوب" item={offer.requestedItem} />
     <ItemSummary title="العنصر المعروض" item={offer.offeredItem} />
     {offer.message ? <AppCard><View style={styles.group}><AppText weight="semibold">الرسالة</AppText><AppText>{offer.message}</AppText></View></AppCard> : null}
