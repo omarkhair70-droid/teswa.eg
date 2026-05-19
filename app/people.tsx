@@ -191,7 +191,7 @@ export default function PeopleScreen() {
             <View style={styles.signalRow}>
               <View style={styles.signalPill}>
                 <Ionicons name="swap-horizontal-outline" size={14} color={colors.primary} />
-                <AppText muted>{item.successfulSwapsCount} مقايضات</AppText>
+                <AppText muted>{item.successfulSwapsCount} مقايضات ناجحة</AppText>
               </View>
               <View style={styles.signalPill}>
                 <Ionicons name="cube-outline" size={14} color={colors.primary} />
@@ -281,10 +281,10 @@ const styles = StyleSheet.create({
   avatarFallbackText: { color: colors.primary },
   identityBox: { flex: 1, gap: spacing.xs, paddingTop: spacing.sm },
   displayName: { fontSize: 17 },
-  locationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: spacing.xs, paddingVertical: 4, borderRadius: radii.pill, backgroundColor: 'rgba(62,124,115,0.08)' },
+  locationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: spacing.xs, paddingVertical: 4, borderRadius: radii.round, backgroundColor: 'rgba(62,124,115,0.08)' },
   locationText: { fontSize: 12 },
   signalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  signalPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.xs, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: 'rgba(255, 164, 59, 0.12)' },
+  signalPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.xs, paddingVertical: 6, borderRadius: radii.round, backgroundColor: 'rgba(255, 164, 59, 0.12)' },
   openCue: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
   stateBox: { gap: spacing.md },
 });
