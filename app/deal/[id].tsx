@@ -317,6 +317,47 @@ export default function Screen() {
     ],
   );
 
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user?.id || !deal?.otherParticipant?.id) return;
+      const state = await fetchUserBlockState(user.id, deal.otherParticipant.id);
+      if (cancelled) return;
+      if (state.ok) {
+        setBlockedByMe(state.state.blockedByMe);
+      } else {
+        setBlockError(state.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deal?.otherParticipant?.id, user?.id]);
+
+  const onToggleBlock = useCallback(async () => {
+    if (!user?.id || !deal?.otherParticipant?.id || blockBusy) return;
+    setBlockBusy(true);
+    setBlockError(null);
+    const result = blockedByMe
+      ? await unblockUserFromMobile(user.id, deal.otherParticipant.id)
+      : await blockUserFromMobile(user.id, deal.otherParticipant.id);
+
+    if (!result.ok) {
+      setBlockError(result.message);
+      setBlockBusy(false);
+      return;
+    }
+
+    const refreshed = await fetchUserBlockState(user.id, deal.otherParticipant.id);
+    if (refreshed.ok) {
+      setBlockedByMe(refreshed.state.blockedByMe);
+    } else {
+      setBlockError(refreshed.message);
+    }
+    setBlockBusy(false);
+  }, [blockBusy, blockedByMe, deal?.otherParticipant?.id, user?.id]);
+
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
     setError(null);
