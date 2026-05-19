@@ -51,7 +51,7 @@ export function ItemCard({ item }: { item: MarketplaceItem }) {
                 <View style={styles.placeholderIcon}>
                   <Ionicons name="image-outline" size={24} color={colors.primary} />
                 </View>
-                <AppText muted weight="semibold" style={styles.placeholderText}>الصورة لسه جاية</AppText>
+                <AppText muted weight="semibold" style={styles.placeholderText}>الصورة غير متاحة</AppText>
               </LinearGradient>
             )}
             <LinearGradient colors={['rgba(29,26,22,0)', 'rgba(29,26,22,0.16)']} style={styles.imageShade} />
