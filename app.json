@@ -2,6 +2,7 @@
   "expo": {
     "name": "Teswa",
     "slug": "teswa-mobile",
+    "owner": "omarkhair70-droids-organization",
     "scheme": "teswa",
     "version": "1.0.7",
     "orientation": "portrait",
