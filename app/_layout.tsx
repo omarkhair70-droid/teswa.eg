@@ -87,11 +87,16 @@ function ForegroundMemoryRefreshCoordinator() {
 }
 
 function RootNavigator() {
-  const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile } = useAuth();
+  const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
+
+  const retryAccountStateChecks = async () => {
+    if (profileCheckError) await refreshProfile();
+    if (policyAcceptanceCheckError) await refreshPolicyAcceptance();
+  };
 
   useEffect(() => {
     if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
@@ -112,13 +117,14 @@ function RootNavigator() {
 
 
   useEffect(() => {
-    if (!bootstrapReady || loadingProfile) return;
+    if (!bootstrapReady || loadingProfile || loadingPolicyAcceptance) return;
 
     const rootGroup = segments[0];
     const leaf = segments.at(1);
     const inAuth = rootGroup === '(auth)';
     const atRoot = !rootGroup;
     const inProfileSetup = inAuth && leaf === 'profile-setup';
+    const inPolicyAcceptance = inAuth && leaf === 'policy-acceptance';
     const inOnboarding = inAuth && leaf === 'onboarding';
     const inLoginOrSignup = inAuth && (leaf === 'login' || leaf === 'signup');
     const inOAuthCallback = rootGroup === 'auth' && leaf === 'callback';
@@ -135,12 +141,12 @@ function RootNavigator() {
       return;
     }
 
-    if (!user) {
-      if (inPublicComplianceRoute) {
-        void SplashScreen.hideAsync();
-        return;
-      }
+    if (inPublicComplianceRoute) {
+      void SplashScreen.hideAsync();
+      return;
+    }
 
+    if (!user) {
       if (!onboardingCompleted && !inOnboarding) {
         router.replace('/(auth)/onboarding');
       } else if (onboardingCompleted && !inLoginOrSignup) {
@@ -151,16 +157,21 @@ function RootNavigator() {
       return;
     } else if (!profileCompleted) {
       if (!inProfileSetup) router.replace('/(auth)/profile-setup');
-    } else if (inAuth || atRoot) {
+    } else if (policyAcceptanceCheckError) {
+      void SplashScreen.hideAsync();
+      return;
+    } else if (!requiredPoliciesAccepted) {
+      if (!inPolicyAcceptance) router.replace('/(auth)/policy-acceptance');
+    } else if ((inAuth && !inPolicyAcceptance) || atRoot) {
       router.replace('/(tabs)/home');
     }
 
     void SplashScreen.hideAsync();
-  }, [bootstrapReady, loadingProfile, segments, user, onboardingCompleted, profileCompleted, profileCheckError, router]);
+  }, [bootstrapReady, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router]);
 
   if (!bootstrapReady) return null;
 
-  if (user && loadingProfile) {
+  if (user && (loadingProfile || loadingPolicyAcceptance)) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>نجهّز حسابك...</Text>
@@ -169,12 +180,12 @@ function RootNavigator() {
     );
   }
 
-  if (user && profileCheckError) {
+  if (user && (profileCheckError || policyAcceptanceCheckError)) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>تعذر التحقق من بيانات الحساب.</Text>
+        <Text style={styles.errorTitle}>تعذر التحقق من حالة حسابك.</Text>
         <Text style={styles.errorSubtitle}>حاول مرة تانية.</Text>
-        <Pressable style={styles.retryButton} onPress={() => void refreshProfile()}>
+        <Pressable style={styles.retryButton} onPress={() => void retryAccountStateChecks()}>
           <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
         </Pressable>
       </View>

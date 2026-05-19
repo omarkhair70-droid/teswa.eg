@@ -32,11 +32,12 @@ After deployment/public hosting is completed operationally, provide:
 - The pages are **not** hosted or published in this PR.
 - No backend web deletion form is added in this PR; deletion initiation from web uses support email.
 
-## Next phase (M44D)
+## M44D status update
 
-Policy acceptance gating before creating/uploading UGC is still required and intentionally deferred to:
+M44D has now been implemented and includes:
 
-- **M44D — Policy Acceptance Gate + Play Console Declarations Pack**
+- Versioned policy acceptance gate (Terms of Use + Community Guidelines) before authenticated app access.
+- Play Console declarations documentation pack (Data Safety worksheet, declarations guidance, reviewer access template).
 
 ## Support email used
 
