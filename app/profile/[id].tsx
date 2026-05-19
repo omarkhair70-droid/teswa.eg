@@ -185,16 +185,8 @@ export default function PublicProfileScreen() {
     loadPresence();
   }, [loadPresence]);
 
-  if (!id) return <AppScreen><EmptyState title="معرّف غير صالح" description="تعذر تحديد الملف المطلوب." /></AppScreen>;
-  if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نقوم بتحضير الملف العام." /></AppScreen>;
-  if (error) {
-    return <AppScreen><View style={styles.stateBox}><EmptyState title="خطأ في التحميل" description={error} /><AppButton label="إعادة المحاولة" onPress={loadProfile} /></View></AppScreen>;
-  }
-  if (!profile) return <AppScreen><EmptyState title="الملف غير موجود" description="قد يكون الحساب غير متاح حالياً أو تم حذفه." /></AppScreen>;
-
-  const displayName = profile.display_name?.trim() || 'مستخدم تِسوى';
-  const location = [profile.city, profile.area].filter(Boolean).join(' - ');
-  const isOwnProfile = !!user?.id && user.id === profile.id;
+  const profileId = profile?.id ?? '';
+  const isOwnProfile = !!user?.id && !!profileId && user.id === profileId;
 
   useEffect(() => {
     let cancelled = false;
@@ -218,6 +210,16 @@ export default function PublicProfileScreen() {
     }
     setBlockBusy(false);
   }, [blockBusy, blockedByMe, profile?.id, user?.id]);
+
+  if (!id) return <AppScreen><EmptyState title="معرّف غير صالح" description="تعذر تحديد الملف المطلوب." /></AppScreen>;
+  if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نقوم بتحضير الملف العام." /></AppScreen>;
+  if (error) {
+    return <AppScreen><View style={styles.stateBox}><EmptyState title="خطأ في التحميل" description={error} /><AppButton label="إعادة المحاولة" onPress={loadProfile} /></View></AppScreen>;
+  }
+  if (!profile) return <AppScreen><EmptyState title="الملف غير موجود" description="قد يكون الحساب غير متاح حالياً أو تم حذفه." /></AppScreen>;
+
+  const displayName = profile.display_name?.trim() || 'مستخدم تِسوى';
+  const location = [profile.city, profile.area].filter(Boolean).join(' - ');
 
   const profilePresence = buildProfilePresence({
     activeStoriesCount,

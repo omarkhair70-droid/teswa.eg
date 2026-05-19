@@ -1,42 +1,9 @@
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { Pressable, StyleSheet, TextInput, View, Image } from "react-native";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
-import {
-  KeyboardAwareScrollView,
-  KeyboardStickyView,
-} from "react-native-keyboard-controller";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
+import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { File } from "expo-file-system";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import {
   AudioModule,
   RecordingPresets,
@@ -46,71 +13,16 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { Ionicons } from "@expo/vector-icons";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { AppScreen } from "@/components/ui/AppScreen";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { EmptyState } from "@/components/ui/EmptyState";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { AppButton } from "@/components/ui/AppButton";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { AppCard } from "@/components/ui/AppCard";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { AppText } from "@/components/ui/AppText";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { TeswaMomentCard } from "@/components/ui/TeswaMomentCard";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { colors } from "@/constants/colors";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { radii } from "@/constants/radii";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { spacing } from "@/constants/spacing";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import {
   confirmDealCompletedFromMobile,
   createDealVoiceMessageSignedUrl,
@@ -121,24 +33,14 @@ import {
   sendDealMessageFromMobile,
   sendDealVoiceMessageFromMobile,
 } from "@/lib/deals";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { useAuth } from "@/lib/auth";
-import {
-  blockUserFromMobile,
-  fetchUserBlockState,
-  unblockUserFromMobile,
-} from '@/lib/user-blocks';
 import { supabase } from "@/lib/supabase/client";
+import { useUnreadBadges } from "@/lib/unread-badges";
 import {
   blockUserFromMobile,
   fetchUserBlockState,
   unblockUserFromMobile,
 } from '@/lib/user-blocks';
-import { useUnreadBadges } from "@/lib/unread-badges";
 
 type VoiceDraft = {
   uri: string;
@@ -166,6 +68,8 @@ export default function Screen() {
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
+  const [blockedByMe, setBlockedByMe] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
   const [completionMoment, setCompletionMoment] = useState<"confirmed_waiting" | "completed" | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "live" | "unavailable"
@@ -951,6 +855,7 @@ export default function Screen() {
                   disabled={blockBusy}
                   variant="neutral"
                 />
+                {blockError ? <AppText muted>{blockError}</AppText> : null}
               </View>
             </AppCard>
           </View>

@@ -216,10 +216,6 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     .single();
   if (insertError) throw insertError;
 
-  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
-  const blockedState = await fetchUserBlockState(input.currentUserId, otherParticipantId);
-  if (!blockedState.ok) return { ok: false as const, reason: 'unknown' as const, message: blockedState.message };
-  if (blockedState.state.isBlockedEitherDirection) return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكن إرسال رسائل لأن بينكما حظر.' };
   void notify({
     target_user_id: otherParticipantId,
     notification_type: 'system',
@@ -345,6 +341,13 @@ export async function sendDealVoiceMessageFromMobile(input: {
 
   if (!['coordinating', 'completed_pending_confirmation'].includes(deal.status as string)) {
     return { ok: false as const, reason: 'invalid_status' as const, message: 'المراسلة متاحة فقط أثناء التنسيق أو انتظار التأكيد.' };
+  }
+
+  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
+  const blockedState = await fetchUserBlockState(input.currentUserId, otherParticipantId);
+  if (!blockedState.ok) return { ok: false as const, reason: 'unknown' as const, message: blockedState.message };
+  if (blockedState.state.isBlockedEitherDirection) {
+    return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكن إرسال رسائل صوتية لأن بينكما حظر.' };
   }
 
   const since = new Date(Date.now() - 60_000).toISOString();
