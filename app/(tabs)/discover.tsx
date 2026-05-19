@@ -220,7 +220,7 @@ export default function DiscoverScreen() {
     if (loadMoreError) {
       return (
         <View style={styles.footerBox}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
           <AppText>تعذر تحميل المزيد. حاول مرة أخرى.</AppText>
           <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadMoreItems} />
         </View>
