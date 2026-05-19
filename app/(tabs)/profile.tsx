@@ -330,6 +330,18 @@ export default function ProfileScreen() {
 
         <AppCard>
           <View style={styles.group}>
+            <AppText weight="semibold">الخصوصية والسياسات</AppText>
+            <AppButton label="سياسة الخصوصية" variant="neutral" onPress={() => router.push('/legal/privacy')} />
+            <AppButton label="شروط الاستخدام" variant="neutral" onPress={() => router.push('/legal/terms')} />
+            <AppButton label="إرشادات المجتمع" variant="neutral" onPress={() => router.push('/legal/community-guidelines')} />
+            <AppButton label="طلب حذف الحساب عبر الويب" variant="neutral" onPress={() => router.push('/account-deletion')} />
+          </View>
+        </AppCard>
+
+
+
+        <AppCard>
+          <View style={styles.group}>
             <AppText weight="semibold" style={styles.dangerTitle}>حذف الحساب نهائيًا</AppText>
             <AppText muted>حذف الحساب يزيل حساب تِسوى والبيانات المرتبطة به داخل التطبيق بشكل نهائي، ولا يمكن التراجع بعد التأكيد.</AppText>
             {accountDeletionError ? <AppText style={styles.errorText}>{accountDeletionError}</AppText> : null}

@@ -122,6 +122,13 @@ function RootNavigator() {
     const inOnboarding = inAuth && leaf === 'onboarding';
     const inLoginOrSignup = inAuth && (leaf === 'login' || leaf === 'signup');
     const inOAuthCallback = rootGroup === 'auth' && leaf === 'callback';
+    const inPublicLegalRoute = rootGroup === 'legal' && (
+      leaf === 'privacy'
+      || leaf === 'terms'
+      || leaf === 'community-guidelines'
+    );
+    const inPublicAccountDeletionRoute = rootGroup === 'account-deletion';
+    const inPublicComplianceRoute = inPublicLegalRoute || inPublicAccountDeletionRoute;
 
     if (inOAuthCallback && !user) {
       void SplashScreen.hideAsync();
@@ -129,6 +136,11 @@ function RootNavigator() {
     }
 
     if (!user) {
+      if (inPublicComplianceRoute) {
+        void SplashScreen.hideAsync();
+        return;
+      }
+
       if (!onboardingCompleted && !inOnboarding) {
         router.replace('/(auth)/onboarding');
       } else if (onboardingCompleted && !inLoginOrSignup) {
