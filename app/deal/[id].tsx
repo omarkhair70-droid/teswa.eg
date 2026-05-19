@@ -843,6 +843,12 @@ export default function Screen() {
                   onPress={() => router.push(`/report/deal/${deal.id}`)}
                   variant="neutral"
                 />
+
+                <AppButton
+                  label="حظر هذا المستخدم"
+                  onPress={() => router.push(`/profile/${deal.otherParticipant.id}`)}
+                  variant="neutral"
+                />
               </View>
             </AppCard>
           </View>

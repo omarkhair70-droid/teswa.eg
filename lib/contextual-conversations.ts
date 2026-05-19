@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { supabase } from '@/lib/supabase/client';
+import { fetchUserBlockState } from '@/lib/user-blocks';
 
 export type ContextualConversationType = 'story_reply';
 
@@ -144,6 +145,11 @@ export async function sendStoryReplyFromMobile(input: {
   if (!storyId) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد القصة المطلوبة.' };
   if (!body) return { ok: false, reason: 'invalid_body', message: 'اكتب ردك أولاً.' };
   if (body.length > 800) return { ok: false, reason: 'invalid_body', message: 'الرد طويل زيادة عن الحد (800 حرف).' };
+  const { data: storyOwnerRow, error: storyOwnerError } = await supabase.from('stories').select('user_id').eq('id', storyId).maybeSingle();
+  if (storyOwnerError || !storyOwnerRow?.user_id) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد صاحب القصة.' };
+  const blockState = await fetchUserBlockState(currentUserId, storyOwnerRow.user_id as string);
+  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
+  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رد لأن بينكما حظر.' };
 
   const { data, error } = await supabase.rpc('create_story_reply_thread', {
     p_story_id: storyId,
