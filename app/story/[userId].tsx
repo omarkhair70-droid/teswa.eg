@@ -13,6 +13,7 @@ import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetch
 import { markStoryViewedFromMobile } from '@/lib/story-views';
 import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/story-likes';
 import { sendStoryReplyFromMobile, sendStoryVoiceReplyFromMobile } from '@/lib/contextual-conversations';
+import { buildCachedVideoSource, getMediaNeighborIndexes, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -32,7 +33,8 @@ function StoryVideo({
   onError: () => void;
   onReady?: () => void;
 }) {
-  const player = useVideoPlayer(uri, (instance) => {
+  const source = buildCachedVideoSource(uri);
+  const player = useVideoPlayer(source, (instance) => {
     instance.loop = false;
   });
   const readyRef = useRef(false);
@@ -182,6 +184,22 @@ export default function StoryViewerScreen() {
 
     return () => { cancelled = true; };
   }, [userId]);
+
+  useEffect(() => {
+    if (!context?.author.avatarUrl) return;
+    void prefetchImagesMemoryDisk([context.author.avatarUrl]);
+  }, [context?.author.avatarUrl]);
+
+  useEffect(() => {
+    if (!context?.stories.length) return;
+    const neighborIndexes = getMediaNeighborIndexes(activeIndex, context.stories.length, { previous: 1, next: 2 });
+    const candidateIndexes = [activeIndex, ...neighborIndexes];
+    const imageUrls = candidateIndexes
+      .map((index) => context.stories[index])
+      .filter((story): story is StoryRecord => Boolean(story) && story.mediaType === 'image')
+      .map((story) => urlsByStoryId[story.id]);
+    void prefetchImagesMemoryDisk(imageUrls);
+  }, [activeIndex, context?.stories, urlsByStoryId]);
 
   const currentStory = context?.stories[activeIndex] ?? null;
   const currentStoryAgeLabel = currentStory ? formatStoryAgeLabel(currentStory.createdAt) : null;
@@ -485,14 +503,23 @@ const renderUnavailableState = () => {
                   onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
                 />
               ) : (
-                <StoryVideo
-                  uri={signedUrl}
-                  active={index === activeIndex}
-                  onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
-                  onReady={() => setReadyVideoStoryIds((prev) => (
-                    prev[story.id] ? prev : { ...prev, [story.id]: true }
-                  ))}
-                />
+                <>
+                  <StoryVideo
+                    uri={signedUrl}
+                    active={index === activeIndex}
+                    onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
+                    onReady={() => setReadyVideoStoryIds((prev) => (
+                      prev[story.id] ? prev : { ...prev, [story.id]: true }
+                    ))}
+                  />
+                  {index === activeIndex && !mediaFailedIds[story.id] && !readyVideoStoryIds[story.id] ? (
+                    <View pointerEvents="none" style={styles.videoLoadingOverlay}>
+                      <View style={styles.videoLoadingChip}>
+                        <AppText style={styles.videoLoadingText}>نجهّز الفيديو...</AppText>
+                      </View>
+                    </View>
+                  ) : null}
+                </>
               )}
             </View>
           );
@@ -518,7 +545,7 @@ const renderUnavailableState = () => {
           <View style={styles.authorRow}>
             <View style={styles.authorAvatar}>
               {context.author.avatarUrl ? (
-                <ExpoImage source={{ uri: context.author.avatarUrl }} style={styles.authorAvatarImage} contentFit="cover" />
+                <ExpoImage source={{ uri: context.author.avatarUrl }} style={styles.authorAvatarImage} contentFit="cover" cachePolicy="memory-disk" transition={100} />
               ) : (
                 <AppText style={styles.authorFallback} weight="bold">{(context.author.displayName ?? context.author.username ?? 'م').charAt(0)}</AppText>
               )}
@@ -651,5 +678,8 @@ const styles = StyleSheet.create({
   loadingText: { color: '#fff' },
   mediaFallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   mediaFallbackText: { color: '#fff' },
+  videoLoadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  videoLoadingChip: { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  videoLoadingText: { color: '#fff', fontSize: 13 },
   stateActions: { width: '100%', gap: 10 },
 });
