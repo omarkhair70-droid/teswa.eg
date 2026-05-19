@@ -8,7 +8,7 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { recordRequiredPolicyAcceptances } from '@/lib/policy-acceptance';
+import { fetchRequiredPolicyAcceptanceState, recordRequiredPolicyAcceptances } from '@/lib/policy-acceptance';
 
 export default function PolicyAcceptanceScreen() {
   const router = useRouter();
@@ -32,6 +32,14 @@ export default function PolicyAcceptanceScreen() {
     }
 
     await refreshPolicyAcceptance();
+    const state = await fetchRequiredPolicyAcceptanceState(user.id);
+
+    if (!state.ok || !state.requiredPoliciesAccepted) {
+      setSubmitting(false);
+      setError(state.message || 'تعذر تأكيد الموافقة على السياسات. حاول مرة ثانية.');
+      return;
+    }
+
     setSubmitting(false);
     router.replace('/(tabs)/home');
   };

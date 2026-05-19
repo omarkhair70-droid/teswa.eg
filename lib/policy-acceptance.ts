@@ -116,7 +116,10 @@ export async function recordRequiredPolicyAcceptances(userId: string): Promise<{
 
   const { error } = await supabase
     .from('user_policy_acceptances')
-    .insert(payload, { upsert: true, onConflict: 'user_id,policy_key,policy_version' });
+    .upsert(payload, {
+      onConflict: 'user_id,policy_key,policy_version',
+      ignoreDuplicates: true,
+    });
 
   if (error) {
     return { ok: false, message: 'تعذر حفظ موافقات السياسات حالياً. حاول مرة ثانية.' };

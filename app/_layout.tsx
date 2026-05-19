@@ -87,11 +87,16 @@ function ForegroundMemoryRefreshCoordinator() {
 }
 
 function RootNavigator() {
-  const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile } = useAuth();
+  const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
+
+  const retryAccountStateChecks = async () => {
+    if (profileCheckError) await refreshProfile();
+    if (policyAcceptanceCheckError) await refreshPolicyAcceptance();
+  };
 
   useEffect(() => {
     if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
@@ -180,7 +185,7 @@ function RootNavigator() {
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>تعذر التحقق من حالة حسابك.</Text>
         <Text style={styles.errorSubtitle}>حاول مرة تانية.</Text>
-        <Pressable style={styles.retryButton} onPress={() => void refreshProfile()}>
+        <Pressable style={styles.retryButton} onPress={() => void retryAccountStateChecks()}>
           <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
         </Pressable>
       </View>
