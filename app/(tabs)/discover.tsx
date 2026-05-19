@@ -10,6 +10,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
+import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { radii } from '@/constants/radii';
@@ -20,6 +21,7 @@ import {
   readFreshMarketplaceFirstPageCache,
   writeMarketplaceFirstPageCache,
 } from '@/lib/offline-marketplace-cache';
+import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
 
 export default function DiscoverScreen() {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
@@ -36,6 +38,9 @@ export default function DiscoverScreen() {
   const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; matchTerms: string[] } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
+  const [videoMoments, setVideoMoments] = useState<ItemVideoDiscoveryMoment[]>([]);
+  const [videoMomentsLoading, setVideoMomentsLoading] = useState(true);
+  const [videoMomentsError, setVideoMomentsError] = useState<string | null>(null);
 
   const clearAllFilters = useCallback(() => {
     setQuery('');
@@ -101,12 +106,13 @@ export default function DiscoverScreen() {
       setHasMore(page.hasMore);
       setError(null);
       void writeMarketplaceFirstPageCache(page);
+      void loadVideoMoments();
     } catch {
       // Keep existing items visible on refresh failure.
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing]);
+  }, [loadVideoMoments, refreshing]);
 
   const loadMoreItems = useCallback(async () => {
     if (loading || refreshing || loadingMore || !hasMore || error) {
@@ -130,6 +136,20 @@ export default function DiscoverScreen() {
       setLoadingMore(false);
     }
   }, [error, hasMore, items.length, loading, loadingMore, refreshing]);
+
+  const loadVideoMoments = useCallback(async () => {
+    setVideoMomentsLoading(true);
+    setVideoMomentsError(null);
+    try {
+      const moments = await fetchRecentItemVideoDiscoveryMoments(8);
+      setVideoMoments(moments);
+    } catch {
+      setVideoMoments([]);
+      setVideoMomentsError('تعذر تحميل اللمحات المرئية الآن.');
+    } finally {
+      setVideoMomentsLoading(false);
+    }
+  }, []);
 
   const handleUseMyLocation = useCallback(async () => {
     setNearbyLoading(true);
@@ -156,7 +176,8 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     loadItems();
-  }, [loadItems]);
+    void loadVideoMoments();
+  }, [loadItems, loadVideoMoments]);
 
   const availableCategories = useMemo(() => {
     const uniqueByLowercase = new Map<string, string>();
@@ -183,6 +204,7 @@ export default function DiscoverScreen() {
   }, [items]);
 
   const hasActiveFilters = Boolean(query.trim() || activeNearbyLocation || selectedCategory || selectedCondition);
+  const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -297,6 +319,20 @@ export default function DiscoverScreen() {
                 </View>
               </View>
             </AppCard>
+
+            {shouldShowVideoMomentsRail ? (
+              <AppCard>
+                <ItemVideoDiscoveryRail
+                  eyebrow="اكتشاف مرئي"
+                  title="شوف عناصر لها لمحة فيديو"
+                  description="قبل ما تدخل التفاصيل، فيه عناصر تفتح لك لقطة أقرب من شكلها الحقيقي."
+                  moments={videoMoments}
+                  loading={videoMomentsLoading}
+                  errorMessage={videoMomentsError}
+                  onRetry={loadVideoMoments}
+                />
+              </AppCard>
+            ) : null}
 
             <AppCard>
               <View style={styles.browseBox}>
