@@ -93,6 +93,20 @@ export default function DiscoverScreen() {
     }
   }, []);
 
+  const loadVideoMoments = useCallback(async () => {
+    setVideoMomentsLoading(true);
+    setVideoMomentsError(null);
+    try {
+      const moments = await fetchRecentItemVideoDiscoveryMoments(8);
+      setVideoMoments(moments);
+    } catch {
+      setVideoMoments([]);
+      setVideoMomentsError('تعذر تحميل اللمحات المرئية الآن.');
+    } finally {
+      setVideoMomentsLoading(false);
+    }
+  }, []);
+
   const refreshItems = useCallback(async () => {
     if (refreshing) {
       return;
@@ -136,20 +150,6 @@ export default function DiscoverScreen() {
       setLoadingMore(false);
     }
   }, [error, hasMore, items.length, loading, loadingMore, refreshing]);
-
-  const loadVideoMoments = useCallback(async () => {
-    setVideoMomentsLoading(true);
-    setVideoMomentsError(null);
-    try {
-      const moments = await fetchRecentItemVideoDiscoveryMoments(8);
-      setVideoMoments(moments);
-    } catch {
-      setVideoMoments([]);
-      setVideoMomentsError('تعذر تحميل اللمحات المرئية الآن.');
-    } finally {
-      setVideoMomentsLoading(false);
-    }
-  }, []);
 
   const handleUseMyLocation = useCallback(async () => {
     setNearbyLoading(true);
