@@ -3,6 +3,22 @@ import { supabase } from '@/lib/supabase/client';
 export const CURRENT_TERMS_POLICY_VERSION = '2026-05';
 export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-05';
 
+const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS = 12_000;
+const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE = 'استغرق التحقق من موافقات السياسات وقتًا أطول من المتوقع. حاول مرة ثانية.';
+
+const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 export const REQUIRED_POLICIES = [
   { key: 'terms_of_use', version: CURRENT_TERMS_POLICY_VERSION },
   { key: 'community_guidelines', version: CURRENT_COMMUNITY_GUIDELINES_VERSION },
@@ -58,15 +74,38 @@ export async function fetchRequiredPolicyAcceptanceState(
     };
   }
 
-  const { data, error } = await supabase
-    .from('user_policy_acceptances')
-    .select('user_id, policy_key, policy_version, accepted_at')
-    .eq('user_id', trimmedUserId)
-    .or(
-      REQUIRED_POLICIES
-        .map((policy) => `and(policy_key.eq.${policy.key},policy_version.eq.${policy.version})`)
-        .join(','),
+  let data: PolicyAcceptanceRow[] | null = null;
+  let error: { message?: string } | null = null;
+
+  try {
+    const result = await withTimeout<{ data: PolicyAcceptanceRow[] | null; error: { message?: string } | null }>(
+      supabase
+        .from('user_policy_acceptances')
+        .select('user_id, policy_key, policy_version, accepted_at')
+        .eq('user_id', trimmedUserId)
+        .or(
+          REQUIRED_POLICIES
+            .map((policy) => `and(policy_key.eq.${policy.key},policy_version.eq.${policy.version})`)
+            .join(','),
+        ),
+      POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS,
+      POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE,
     );
+
+    data = (result.data as PolicyAcceptanceRow[] | null) ?? null;
+    error = result.error;
+  } catch (requestError) {
+    const timeoutMessage = requestError instanceof Error ? requestError.message : POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE;
+    return {
+      ok: false,
+      requiredPoliciesAccepted: false,
+      acceptancesByKey,
+      missingKeys: REQUIRED_POLICIES.map((policy) => policy.key),
+      message: timeoutMessage || POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE,
+    };
+  }
+
+
 
   if (error) {
     return {
@@ -78,7 +117,7 @@ export async function fetchRequiredPolicyAcceptanceState(
     };
   }
 
-  (data as PolicyAcceptanceRow[] | null)?.forEach((row) => {
+  data?.forEach((row) => {
     if (row.policy_key in acceptancesByKey) acceptancesByKey[row.policy_key] = true;
   });
 

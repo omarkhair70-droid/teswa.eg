@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -86,18 +86,39 @@ function ForegroundMemoryRefreshCoordinator() {
   return null;
 }
 
+const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 11_000;
+
 function RootNavigator() {
   const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
+  const [accountStateCheckStalled, setAccountStateCheckStalled] = useState(false);
 
   const retryAccountStateChecks = async () => {
-    if (profileCheckError) await refreshProfile();
-    if (policyAcceptanceCheckError) await refreshPolicyAcceptance();
+    const shouldRefreshProfile = loadingProfile || profileCheckError;
+    const shouldRefreshPolicy = loadingPolicyAcceptance || policyAcceptanceCheckError;
+
+    setAccountStateCheckStalled(false);
+
+    if (shouldRefreshProfile) await refreshProfile();
+    if (shouldRefreshPolicy) await refreshPolicyAcceptance();
   };
 
+
+  useEffect(() => {
+    if (!user || (!loadingProfile && !loadingPolicyAcceptance)) {
+      setAccountStateCheckStalled(false);
+      return;
+    }
+
+    const stallTimer = setTimeout(() => {
+      setAccountStateCheckStalled(true);
+    }, ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS);
+
+    return () => clearTimeout(stallTimer);
+  }, [user, loadingProfile, loadingPolicyAcceptance]);
   useEffect(() => {
     if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
     void syncPushDeviceRegistrationIfPermitted(user.id);
@@ -172,6 +193,18 @@ function RootNavigator() {
   if (!bootstrapReady) return null;
 
   if (user && (loadingProfile || loadingPolicyAcceptance)) {
+    if (accountStateCheckStalled) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>التحقق من حسابك يستغرق وقتًا أطول من المتوقع.</Text>
+          <Text style={styles.errorSubtitle}>تقدر تعيد المحاولة الآن بدون إغلاق التطبيق.</Text>
+          <Pressable style={styles.retryButton} onPress={() => void retryAccountStateChecks()}>
+            <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>نجهّز حسابك...</Text>
