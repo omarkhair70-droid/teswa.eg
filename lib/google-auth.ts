@@ -1,6 +1,14 @@
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+import {
+  GoogleSignin,
+  isCancelledResponse,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 
 import { supabase } from '@/lib/supabase/client';
 
@@ -9,10 +17,12 @@ WebBrowser.maybeCompleteAuthSession();
 const GOOGLE_AUTH_ERROR = 'تعذر فتح تسجيل الدخول بجوجل. حاول مرة تانية.';
 const GOOGLE_AUTH_CANCELLED = 'تم إلغاء تسجيل الدخول بجوجل.';
 const GOOGLE_AUTH_CALLBACK_FAILED = 'تم الرجوع من جوجل، لكن تعذر إكمال تسجيل الدخول. حاول مرة تانية.';
+const GOOGLE_AUTH_IN_PROGRESS = 'جاري فتح جوجل بالفعل.';
 const RECENT_CALLBACK_TTL_MS = 60_000;
 
 let inFlightCallbackCompletion = new Map<string, Promise<{ error: string | null }>>();
 let recentSuccessfulCallbacks = new Map<string, number>();
+let isGoogleSigninConfigured = false;
 type QueryParamValue = string | string[] | undefined;
 type OAuthCallbackParams = Record<string, QueryParamValue>;
 
@@ -71,7 +81,7 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
   }
 }
 
-export async function signInWithGoogle(): Promise<{ error: string | null }> {
+async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | null }> {
   try {
     const redirectTo = makeRedirectUri({ scheme: 'teswa', path: 'auth/callback' });
 
@@ -101,4 +111,80 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
   } catch {
     return { error: GOOGLE_AUTH_ERROR };
   }
+}
+
+async function signInWithGoogleNative(): Promise<{ error: string | null; fallbackToBrowser?: boolean }> {
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+  if (!webClientId) {
+    return { error: null, fallbackToBrowser: true };
+  }
+
+  try {
+    if (!isGoogleSigninConfigured) {
+      GoogleSignin.configure({ webClientId });
+      isGoogleSigninConfigured = true;
+    }
+
+    if (Platform.OS === 'android') {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    }
+
+    const signInResponse = await GoogleSignin.signIn();
+
+    if (isCancelledResponse(signInResponse)) {
+      return { error: GOOGLE_AUTH_CANCELLED };
+    }
+
+    if (!isSuccessResponse(signInResponse)) {
+      return { error: GOOGLE_AUTH_ERROR };
+    }
+
+    const { idToken } = await GoogleSignin.getTokens();
+    if (!idToken) {
+      return { error: GOOGLE_AUTH_ERROR };
+    }
+
+    const { error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+
+    if (error) {
+      return { error: GOOGLE_AUTH_ERROR };
+    }
+
+    return { error: null };
+  } catch (error: unknown) {
+    if (isErrorWithCode(error)) {
+      if (error.code === statusCodes.IN_PROGRESS) {
+        return { error: GOOGLE_AUTH_IN_PROGRESS };
+      }
+
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return { error: GOOGLE_AUTH_CANCELLED };
+      }
+
+      if (
+        error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE ||
+        error.code === statusCodes.ONE_TAP_START_FAILED
+      ) {
+        return { error: null, fallbackToBrowser: true };
+      }
+    }
+
+    return { error: null, fallbackToBrowser: true };
+  }
+}
+
+export async function signInWithGoogle(): Promise<{ error: string | null }> {
+  if (Platform.OS === 'web') {
+    return signInWithGoogleBrowserOAuth();
+  }
+
+  const nativeResult = await signInWithGoogleNative();
+  if (!nativeResult.fallbackToBrowser) {
+    return { error: nativeResult.error ?? GOOGLE_AUTH_ERROR };
+  }
+
+  return signInWithGoogleBrowserOAuth();
 }

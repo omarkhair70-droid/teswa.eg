@@ -4,7 +4,7 @@
     "slug": "teswa-mobile",
     "owner": "omarkhair70-droids-organization",
     "scheme": "teswa",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
@@ -77,7 +77,8 @@
       ],
       "expo-video",
       "expo-sqlite",
-      "expo-background-task"
+      "expo-background-task",
+      "@react-native-google-signin/google-signin"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
