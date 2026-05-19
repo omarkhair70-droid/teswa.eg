@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
+import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -23,6 +24,7 @@ import {
   writeMarketplaceFirstPageCache,
 } from '@/lib/offline-marketplace-cache';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
+import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -57,6 +59,9 @@ export default function HomeScreen() {
   const [dashboard, setDashboard] = useState<HomeDashboardSummary | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [videoMoments, setVideoMoments] = useState<ItemVideoDiscoveryMoment[]>([]);
+  const [videoMomentsLoading, setVideoMomentsLoading] = useState(true);
+  const [videoMomentsError, setVideoMomentsError] = useState<string | null>(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -131,13 +136,28 @@ export default function HomeScreen() {
     }
   }, [user?.id]);
 
+  const loadVideoMoments = useCallback(async () => {
+    setVideoMomentsLoading(true);
+    setVideoMomentsError(null);
+    try {
+      const moments = await fetchRecentItemVideoDiscoveryMoments(6);
+      setVideoMoments(moments);
+    } catch {
+      setVideoMoments([]);
+      setVideoMomentsError('تعذر تحميل اللمحات المرئية الآن.');
+    } finally {
+      setVideoMomentsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadItems();
     loadStories();
+    void loadVideoMoments();
     if (user?.id) {
       void loadDashboard();
     }
-  }, [loadDashboard, loadItems, loadStories, user?.id]);
+  }, [loadDashboard, loadItems, loadStories, loadVideoMoments, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -151,6 +171,7 @@ export default function HomeScreen() {
   const myStorySummary = useMemo(() => stories.find((summary) => summary.author.id === user?.id) ?? null, [stories, user?.id]);
   const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== user?.id), [stories, user?.id]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
+  const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
 
   const nextAction = useMemo(() => {
     if (!dashboard) {
@@ -423,6 +444,20 @@ export default function HomeScreen() {
                 ) : null}
               </View>
             </AppCard>
+
+            {shouldShowVideoMomentsRail ? (
+              <AppCard>
+                <ItemVideoDiscoveryRail
+                  eyebrow="لمحات مرئية"
+                  title="عناصر تقدر تشوفها أقرب"
+                  description="فيديوهات قصيرة تساعدك تلمح العنصر قبل ما تفتح تفاصيله."
+                  moments={videoMoments}
+                  loading={videoMomentsLoading}
+                  errorMessage={videoMomentsError}
+                  onRetry={loadVideoMoments}
+                />
+              </AppCard>
+            ) : null}
 
             {itemsCacheNotice ? (
               <AppCard>
