@@ -6,6 +6,7 @@
     "scheme": "teswa",
     "version": "1.0.8",
     "orientation": "portrait",
+    "icon": "./assets/branding/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -14,6 +15,11 @@
       "edgeToEdgeEnabled": true,
       "package": "com.teswa.mobile",
       "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/branding/adaptive-icon-foreground.png",
+        "backgroundColor": "#B8623F",
+        "monochromeImage": "./assets/branding/monochrome-icon.png"
+      },
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
@@ -96,6 +102,15 @@
             "photo",
             "video"
           ]
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F9F3EA",
+          "image": "./assets/branding/splash-mark.png",
+          "imageWidth": 180,
+          "resizeMode": "contain"
         }
       ]
     ],
