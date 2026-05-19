@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -209,7 +211,8 @@ export default function DiscoverScreen() {
     if (loadingMore) {
       return (
         <View style={styles.footerBox}>
-          <AppText>جارٍ تحميل المزيد...</AppText>
+          <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
+          <AppText>جارٍ فتح المزيد من العناصر...</AppText>
         </View>
       );
     }
@@ -217,6 +220,7 @@ export default function DiscoverScreen() {
     if (loadMoreError) {
       return (
         <View style={styles.footerBox}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
           <AppText>تعذر تحميل المزيد. حاول مرة أخرى.</AppText>
           <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadMoreItems} />
         </View>
@@ -226,7 +230,8 @@ export default function DiscoverScreen() {
     if (!hasMore && items.length > 0) {
       return (
         <View style={styles.footerBox}>
-          <AppText>وصلت لنهاية النتائج.</AppText>
+          <Ionicons name="checkmark-done-outline" size={16} color={colors.primary} />
+          <AppText>وصلت لنهاية المشهد الحالي.</AppText>
         </View>
       );
     }
@@ -235,7 +240,7 @@ export default function DiscoverScreen() {
   }, [hasMore, items.length, loadMoreError, loadMoreItems, loadingMore]);
 
   return (
-    <AppScreen style={styles.screen}>
+    <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -246,50 +251,77 @@ export default function DiscoverScreen() {
         onEndReachedThreshold={0.35}
         ListHeaderComponent={
           <View style={styles.header}>
-            <AppCard>
+            <LinearGradient colors={['#FFF6E8', '#FFE7C8', 'rgba(62,124,115,0.24)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+              <View style={styles.heroOrbOne} />
+              <View style={styles.heroOrbTwo} />
+              <View style={styles.heroIconShell}>
+                <Ionicons name="compass-outline" size={18} color={colors.primary} />
+              </View>
               <View style={styles.heroBox}>
                 <AppText weight="bold" style={styles.heroTitle}>اكتشف تِسوى</AppText>
-                <AppText>ناس، حكايات، وحاجات بتدور على رحلة جديدة. اختار الباب اللي عايز تبدأ منه.</AppText>
-                <AppText muted>ولو بتدور على عنصر محدد، كمّل تحت وفلتر النتائج براحتك.</AppText>
+                <AppText>ناس، حركة، وحاجات بتدور على رحلة جديدة. اختار الباب اللي تحب تبدأ منه.</AppText>
+                <AppText muted>لو هدفك عنصر معيّن، مركز التصفح تحت يختصر الطريق عليك.</AppText>
               </View>
-            </AppCard>
+            </LinearGradient>
+
             <AppCard>
               <View style={styles.worldPathsBox}>
                 <AppText weight="bold">أبواب الاكتشاف</AppText>
-                <AppText muted>تِسوى مش قائمة عناصر فقط. ادخل من الناس، من الحركة، أو انزل للتصفح المباشر.</AppText>
-                <View style={styles.pathBlock}>
-                  <AppText weight="bold">ناس تِسوى</AppText>
-                  <AppText muted>شوف مين بيعرض، مين عنده حكايات، وافتح ملفه.</AppText>
+                <AppText muted>تِسوى مش مجرد قائمة عناصر؛ فيها ناس، حركة، وتصفح حيّ للعناصر الجاهزة للتبديل.</AppText>
+                <View style={styles.gateCard}>
+                  <View style={styles.gateTitleRow}>
+                    <Ionicons name="people-outline" size={16} color={colors.primary} />
+                    <AppText weight="bold">ناس تِسوى</AppText>
+                  </View>
+                  <AppText muted>اكتشف الناس، عناصرهم، والحكايات اللي تعرّفك على أسلوب كل واحد في التبديل.</AppText>
                   <AppButton label="اكتشف الناس" variant="neutral" onPress={() => router.push('/people')} />
                 </View>
-                <View style={styles.pathSeparator} />
-                <View style={styles.pathBlock}>
-                  <AppText weight="bold">حركة تِسوى</AppText>
-                  <AppText muted>قصص نشطة، حاجات ليها حكاية، وأبواب بدأت تتحرك.</AppText>
+                <View style={styles.gateCard}>
+                  <View style={styles.gateTitleRow}>
+                    <Ionicons name="pulse-outline" size={16} color={colors.primary} />
+                    <AppText weight="bold">حركة تِسوى</AppText>
+                  </View>
+                  <AppText muted>شاهد القصص النشطة والحركة الظاهرة حولك، وخليك قريب من الأبواب اللي بدأت تتفتح.</AppText>
                   <AppButton label="ادخل الحركة" variant="neutral" onPress={() => router.push('/motion')} />
                 </View>
-                <View style={styles.pathSeparator} />
-                <View style={styles.pathBlock}>
-                  <AppText weight="bold">العناصر</AppText>
-                  <AppText muted>ابحث وفلتر العناصر الجاهزة للتبديل.</AppText>
+                <View style={styles.gateCard}>
+                  <View style={styles.gateTitleRow}>
+                    <Ionicons name="cube-outline" size={16} color={colors.primary} />
+                    <AppText weight="bold">العناصر</AppText>
+                  </View>
+                  <AppText muted>تصفح العناصر الجاهزة للتبديل، وفلتر النتائج حسب ما يناسبك بسرعة ووضوح.</AppText>
                   <View style={styles.itemsHint}>
-                    <AppText muted>كمّل للتصفح</AppText>
+                    <Ionicons name="arrow-down-outline" size={13} color={colors.primary} />
+                    <AppText muted>التصفح يبدأ تحت</AppText>
                   </View>
                 </View>
               </View>
             </AppCard>
-            <View style={styles.browseIntro}>
-              <AppText weight="bold" style={styles.browseTitle}>تصفح العناصر</AppText>
-              <AppText muted>ابحث بالاسم أو الفئة أو المدينة، وقرّب النتائج لموقعك.</AppText>
-            </View>
-            <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
+
+            <AppCard>
+              <View style={styles.browseBox}>
+                <AppText style={styles.eyebrow}>تصفح مباشر</AppText>
+                <AppText weight="bold" style={styles.browseTitle}>مركز استكشاف العناصر</AppText>
+                <AppText muted>ابحث بسرعة، فعّل الموقع القريب، واضبط الفلاتر عشان توصل للعنصر المناسب بثقة.</AppText>
+                <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
+              </View>
+            </AppCard>
+
             {itemsCacheNotice ? (
               <AppCard>
-                <AppText muted>{itemsCacheNotice}</AppText>
+                <View style={styles.noticeRow}>
+                  <Ionicons name="layers-outline" size={16} color={colors.primary} />
+                  <AppText muted style={styles.noticeText}>{itemsCacheNotice}</AppText>
+                </View>
               </AppCard>
             ) : null}
+
             <AppCard>
               <View style={styles.nearbyBox}>
+                <View style={styles.nearbyTitleRow}>
+                  <Ionicons name="navigate-outline" size={16} color={colors.primary} />
+                  <AppText weight="bold">التصفح القريب</AppText>
+                </View>
                 {activeNearbyLocation ? (
                   <>
                     <AppText>نعرض العناصر الأقرب إلى: {activeNearbyLocation.label}</AppText>
@@ -304,9 +336,13 @@ export default function DiscoverScreen() {
                 {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
               </View>
             </AppCard>
+
             <AppCard>
               <View style={styles.filterBox}>
-                <AppText weight="bold">الفئة</AppText>
+                <View style={styles.filterHeaderRow}>
+                  <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
+                  <AppText weight="bold">الفئة</AppText>
+                </View>
                 <View style={styles.chipsRow}>
                   <Pressable onPress={() => setSelectedCategory(null)} style={[styles.chip, !selectedCategory && styles.chipActive]}>
                     <AppText style={!selectedCategory ? styles.chipTextActive : undefined}>الكل</AppText>
@@ -320,7 +356,10 @@ export default function DiscoverScreen() {
                     );
                   })}
                 </View>
-                <AppText weight="bold">الحالة</AppText>
+                <View style={styles.filterHeaderRow}>
+                  <Ionicons name="sparkles-outline" size={15} color={colors.primary} />
+                  <AppText weight="bold">الحالة</AppText>
+                </View>
                 <View style={styles.chipsRow}>
                   <Pressable onPress={() => setSelectedCondition(null)} style={[styles.chip, !selectedCondition && styles.chipActive]}>
                     <AppText style={!selectedCondition ? styles.chipTextActive : undefined}>الكل</AppText>
@@ -339,7 +378,10 @@ export default function DiscoverScreen() {
             {!loading && !error ? (
               <AppCard>
                 <View style={styles.resultsRow}>
-                  <AppText>{hasActiveFilters ? `نستعرض ${filtered.length} عنصرًا مطابقًا` : `نستعرض ${filtered.length} عنصرًا`}</AppText>
+                  <View style={styles.resultsLabelRow}>
+                    <Ionicons name="search-outline" size={15} color={colors.primary} />
+                    <AppText>{hasActiveFilters ? `وجدنا ${filtered.length} عنصرًا قريبًا من اختيارك` : `المشهد يضم ${filtered.length} عنصرًا للتصفح الآن`}</AppText>
+                  </View>
                   {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
                 </View>
               </AppCard>
@@ -350,7 +392,7 @@ export default function DiscoverScreen() {
         ListFooterComponent={renderListFooter}
         ListEmptyComponent={
           loading ? (
-            <EmptyState title="جاري التحميل" description="نجهز لك نتائج التصفح." />
+            <EmptyState title="جاري التحميل" description="نجهز لك بوابة التصفح الآن." />
           ) : error ? (
             <View style={styles.stateBox}>
               <EmptyState title="تعذر تحميل التصفح" description={error} />
@@ -386,16 +428,73 @@ const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   header: { gap: spacing.sm, marginBottom: spacing.md },
+  heroCard: {
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(62,124,115,0.28)',
+    overflow: 'hidden',
+    gap: spacing.xs,
+  },
+  heroOrbOne: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+    top: -40,
+    right: -20,
+  },
+  heroOrbTwo: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,226,182,0.5)',
+    bottom: -44,
+    left: -30,
+  },
+  heroIconShell: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(62,124,115,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+  },
   heroBox: { gap: spacing.sm },
   heroTitle: { fontSize: 26 },
   worldPathsBox: { gap: spacing.sm },
-  pathBlock: { gap: spacing.xs },
-  pathSeparator: { height: 1, backgroundColor: colors.border },
-  itemsHint: { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: colors.primarySoft, borderRadius: radii.round },
-  browseIntro: { gap: spacing.xs, marginTop: spacing.sm },
+  gateCard: {
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  gateTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  itemsHint: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.round,
+  },
+  browseBox: { gap: spacing.sm },
+  eyebrow: { color: colors.primary, fontSize: 12 },
   browseTitle: { fontSize: 24 },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  noticeText: { flex: 1 },
   nearbyBox: { gap: spacing.sm },
+  nearbyTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   filterBox: { gap: spacing.sm },
+  filterHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
     borderWidth: 1,
@@ -403,10 +502,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+    backgroundColor: 'rgba(255,255,255,0.74)',
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipTextActive: { color: colors.white },
   resultsRow: { gap: spacing.sm },
+  resultsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   stateBox: { gap: spacing.md },
-  footerBox: { gap: spacing.sm, marginTop: spacing.md },
+  footerBox: { gap: spacing.sm, marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
 });
