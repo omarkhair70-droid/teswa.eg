@@ -3,7 +3,7 @@
 ## What this phase implements
 - In-app **Account Deletion** entry in Profile with explicit user confirmation.
 - Authenticated mobile helper that calls Supabase Edge Function `delete-account`.
-- Backend deletion core to remove Teswa-owned data/media, then delete the Supabase Auth user.
+- Backend deletion core to remove Teswa-owned data/media (including deal voice and full contextual conversation voice media), then delete the Supabase Auth user.
 
 ## Required deployment
 Deploy this Edge Function before release testing:
