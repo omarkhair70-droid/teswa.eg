@@ -12,11 +12,10 @@ async function removeStoragePrefix(
   bucket: string,
   prefix: string,
 ): Promise<void> {
-  let offset = 0;
   const limit = 100;
 
   while (true) {
-    const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit, offset });
+    const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit, offset: 0 });
     if (error) throw new Error(`storage_list_failed:${bucket}:${prefix}`);
 
     const objects = data ?? [];
@@ -32,7 +31,6 @@ async function removeStoragePrefix(
     }
 
     if (objects.length < limit) break;
-    offset += limit;
   }
 }
 
@@ -51,10 +49,11 @@ async function removeStoragePaths(
 async function deleteWithErrorCheck(
   admin: ReturnType<typeof createClient>,
   table: string,
-  apply: (query: ReturnType<typeof admin.from>) => ReturnType<typeof admin.from>,
+  apply: (query: ReturnType<ReturnType<typeof createClient>["from"]>["delete"]) => ReturnType<ReturnType<typeof createClient>["from"]>["delete"],
   errorCode: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const { error } = await apply(admin.from(table)).delete();
+  const baseDelete = admin.from(table).delete();
+  const { error } = await apply(baseDelete);
   if (error) {
     console.error("Account deletion DB cleanup failed", { table, code: error.code, message: error.message });
     return {
@@ -64,6 +63,22 @@ async function deleteWithErrorCheck(
   }
 
   return { ok: true };
+}
+
+const ITEM_IMAGES_PUBLIC_MARKER = "/storage/v1/object/public/item-images/";
+
+function deriveItemImagePath(url: string | null | undefined): string | null {
+  const value = typeof url === "string" ? url.trim() : "";
+  if (!value) return null;
+  const markerIndex = value.indexOf(ITEM_IMAGES_PUBLIC_MARKER);
+  if (markerIndex < 0) return null;
+  const raw = value.slice(markerIndex + ITEM_IMAGES_PUBLIC_MARKER.length).split("?")[0];
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 function deriveProfilePath(url: string | null | undefined): string | null {
@@ -151,6 +166,16 @@ Deno.serve(async (req: Request) => {
     if (myItemsError) return jsonResponse(500, { ok: false, error: "items_lookup_failed", message: "تعذر تجهيز حذف بيانات العناصر." });
 
     const myItemIds = new Set((myItems ?? []).map((row) => row.id as string));
+    const myItemIdsList = Array.from(myItemIds);
+
+    const { data: itemImageRows, error: itemImagesError } = myItemIdsList.length
+      ? await admin.from("item_images").select("image_url").in("item_id", myItemIdsList)
+      : { data: [], error: null };
+    if (itemImagesError) return jsonResponse(500, { ok: false, error: "item_images_lookup_failed", message: "تعذر تجهيز حذف صور العناصر." });
+
+    const itemImagePaths = (itemImageRows ?? [])
+      .map((row) => deriveItemImagePath(row.image_url))
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
     const itemVideoPaths = (itemVideoRows ?? [])
       .filter((row) => myItemIds.has(row.item_id as string))
       .map((row) => row.video_storage_path)
@@ -198,6 +223,7 @@ Deno.serve(async (req: Request) => {
     await removeStoragePrefix(admin, "story-media", `${userId}/`);
 
     await removeStoragePaths(admin, "profile-images", profilePaths);
+    await removeStoragePaths(admin, "item-images", itemImagePaths);
     await removeStoragePaths(admin, "story-media", storyPaths);
     await removeStoragePaths(admin, "item-videos", itemVideoPaths);
     await removeStoragePaths(admin, "contextual-voice-messages", contextualVoicePaths);
