@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,6 +23,24 @@ import {
   writeMarketplaceFirstPageCache,
 } from '@/lib/offline-marketplace-cache';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
+
+const nextActionVisuals: Record<NextActionKind, { icon: IoniconName; color: string; soft: string }> = {
+  profile: { icon: 'person-circle-outline', color: colors.primary, soft: 'rgba(184,98,63,0.13)' },
+  offers: { icon: 'swap-horizontal-outline', color: colors.primary, soft: 'rgba(184,98,63,0.13)' },
+  messages: { icon: 'chatbubbles-outline', color: colors.accent, soft: 'rgba(62,124,115,0.13)' },
+  replies: { icon: 'sparkles-outline', color: colors.accent, soft: 'rgba(62,124,115,0.13)' },
+  firstItem: { icon: 'add-circle-outline', color: colors.primary, soft: 'rgba(184,98,63,0.13)' },
+  calm: { icon: 'pulse-outline', color: colors.accent, soft: 'rgba(62,124,115,0.13)' },
+};
+
+const metricSignals: Array<{ key: 'offers' | 'messages' | 'listings'; label: string; icon: IoniconName; color: string }> = [
+  { key: 'offers', label: 'العروض الواردة', icon: 'swap-horizontal-outline', color: colors.primary },
+  { key: 'messages', label: 'رسائل وردود', icon: 'chatbubble-ellipses-outline', color: colors.accent },
+  { key: 'listings', label: 'عناصر نشطة', icon: 'cube-outline', color: '#8A5A2D' },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -143,6 +164,7 @@ export default function HomeScreen() {
         buttonLabel: 'تعديل ملفي',
         route: '/profile/edit' as const,
         variant: 'primary' as const,
+        kind: 'profile' as const,
       };
     }
 
@@ -154,6 +176,7 @@ export default function HomeScreen() {
         buttonLabel: 'افتح الرسائل والعروض',
         route: '/(tabs)/messages' as const,
         variant: 'primary' as const,
+        kind: 'offers' as const,
       };
     }
 
@@ -167,6 +190,7 @@ export default function HomeScreen() {
         buttonLabel: 'افتح الرسائل',
         route: '/(tabs)/messages' as const,
         variant: 'primary' as const,
+        kind: 'messages' as const,
       };
     }
 
@@ -180,6 +204,7 @@ export default function HomeScreen() {
         buttonLabel: 'افتح الردود',
         route: '/(tabs)/messages' as const,
         variant: 'primary' as const,
+        kind: 'replies' as const,
       };
     }
 
@@ -191,6 +216,7 @@ export default function HomeScreen() {
         buttonLabel: 'افتح الدردشات',
         route: '/(tabs)/messages' as const,
         variant: 'primary' as const,
+        kind: 'messages' as const,
       };
     }
 
@@ -201,6 +227,7 @@ export default function HomeScreen() {
         buttonLabel: 'اعرض حاجة',
         route: '/(tabs)/add' as const,
         variant: 'primary' as const,
+        kind: 'firstItem' as const,
       };
     }
 
@@ -210,34 +237,50 @@ export default function HomeScreen() {
       buttonLabel: 'ادخل حركة تِسوى',
       route: '/motion' as const,
       variant: 'neutral' as const,
+      kind: 'calm' as const,
     };
   }, [dashboard, profileCompleted]);
 
   return (
-    <AppScreen style={styles.screen}>
+    <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <AppCard>
-              <View style={styles.heroCard}>
-                <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
-                <AppText>هنا تبدأ الحكايات، وتتحرك الحاجات، وتفتح المقايضات أبوابها.</AppText>
-                <AppText muted>تابع ما يهمك الآن، أو خذ جولة في الجديد.</AppText>
+            <LinearGradient
+              colors={['#FFFDF8', '#F4DDCC', '#FFF6E8']}
+              start={{ x: 0.08, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCard}
+            >
+              <View style={[styles.heroOrb, styles.heroOrbPrimary]} />
+              <View style={[styles.heroOrb, styles.heroOrbAccent]} />
+              <View style={styles.heroIconShell}>
+                <Ionicons name="home-outline" size={20} color={colors.primary} />
               </View>
-            </AppCard>
+              <View style={styles.heroCopy}>
+                <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
+                <AppText style={styles.heroBody}>هنا تبدأ الحكايات، تتحرك الحاجات، وتفتح المقايضات بابها بهدوء.</AppText>
+                <AppText muted style={styles.heroSupport}>تابع ما يهمك الآن، أو خذ جولة دافئة في الجديد حولك.</AppText>
+              </View>
+            </LinearGradient>
 
             {user ? (
               <AppCard>
                 <View style={styles.dashboardSection}>
                   <View style={styles.sectionHeader}>
-                    <AppText weight="bold">يهمك الآن</AppText>
-                    <AppText muted>لمحة سريعة عمّا يحتاج انتباهك داخل تِسوى.</AppText>
+                    <AppText weight="bold" style={styles.sectionTitle}>يهمك الآن</AppText>
+                    <AppText muted>نبضة شخصية تجمع لك أقرب خطوة، من غير ضجيج.</AppText>
                   </View>
 
-                  {dashboardLoading ? <AppText muted>نجهّز لمحتك الآن...</AppText> : null}
+                  {dashboardLoading ? (
+                    <View style={styles.loadingPanel}>
+                      <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+                      <AppText muted>نجهّز لمحتك الآن...</AppText>
+                    </View>
+                  ) : null}
 
                   {!dashboardLoading && dashboardError ? (
                     <View style={styles.inlineStateRow}>
@@ -247,31 +290,49 @@ export default function HomeScreen() {
                   ) : null}
 
                   {!dashboardLoading && !dashboardError && nextAction ? (
-                    <View style={styles.nextActionBlock}>
-                      <AppText weight="bold">{nextAction.title}</AppText>
-                      <AppText muted>{nextAction.description}</AppText>
+                    <LinearGradient
+                      colors={['rgba(255,253,248,0.98)', nextActionVisuals[nextAction.kind].soft, 'rgba(255,246,232,0.92)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.nextActionBlock}
+                    >
+                      <View style={styles.nextActionTopRow}>
+                        <View style={[styles.nextActionIcon, { backgroundColor: nextActionVisuals[nextAction.kind].soft }]}>
+                          <Ionicons name={nextActionVisuals[nextAction.kind].icon} size={21} color={nextActionVisuals[nextAction.kind].color} />
+                        </View>
+                        <View style={styles.nextActionCopy}>
+                          <AppText weight="bold" style={styles.nextActionTitle}>{nextAction.title}</AppText>
+                          <AppText muted>{nextAction.description}</AppText>
+                        </View>
+                      </View>
                       <AppButton
                         label={nextAction.buttonLabel}
                         variant={nextAction.variant}
                         onPress={() => router.push(nextAction.route)}
                       />
-                    </View>
+                    </LinearGradient>
                   ) : null}
 
                   {dashboard ? (
                     <View style={styles.metricsRow}>
-                      <View style={styles.metricChip}>
-                        <AppText muted style={styles.metricLabel}>العروض الواردة</AppText>
-                        <AppText weight="bold" style={styles.metricValue}>{dashboard.incomingActionableOffersCount}</AppText>
-                      </View>
-                      <View style={styles.metricChip}>
-                        <AppText muted style={styles.metricLabel}>رسائل وردود غير مقروءة</AppText>
-                        <AppText weight="bold" style={styles.metricValue}>{dashboard.unreadDealMessagesCount + dashboard.unreadContextualMessagesCount}</AppText>
-                      </View>
-                      <View style={styles.metricChip}>
-                        <AppText muted style={styles.metricLabel}>عناصر نشطة</AppText>
-                        <AppText weight="bold" style={styles.metricValue}>{dashboard.activeListingsCount}</AppText>
-                      </View>
+                      {metricSignals.map((signal) => {
+                        const value =
+                          signal.key === 'offers'
+                            ? dashboard.incomingActionableOffersCount
+                            : signal.key === 'messages'
+                              ? dashboard.unreadDealMessagesCount + dashboard.unreadContextualMessagesCount
+                              : dashboard.activeListingsCount;
+
+                        return (
+                          <View key={signal.key} style={styles.metricCard}>
+                            <View style={[styles.metricIcon, { backgroundColor: signal.color === colors.accent ? 'rgba(62,124,115,0.12)' : 'rgba(184,98,63,0.12)' }]}>
+                              <Ionicons name={signal.icon} size={16} color={signal.color} />
+                            </View>
+                            <AppText weight="bold" style={styles.metricValue}>{value}</AppText>
+                            <AppText muted style={styles.metricLabel}>{signal.label}</AppText>
+                          </View>
+                        );
+                      })}
                     </View>
                   ) : null}
                 </View>
@@ -280,38 +341,44 @@ export default function HomeScreen() {
 
             <AppCard>
               <View style={styles.storiesSection}>
-                <View style={styles.sectionHeader}>
-                  <AppText weight="bold">القصص</AppText>
-                  <AppText muted>لقطات قصيرة من عالم تِسوى الآن.</AppText>
-                </View>
-
                 <View style={styles.storiesHeaderRow}>
+                  <View style={styles.sectionHeader}>
+                    <AppText weight="bold" style={styles.sectionTitle}>القصص</AppText>
+                    <AppText muted>لقطات قريبة من عالم تِسوى الآن.</AppText>
+                  </View>
                   {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
-                    <AppText muted style={styles.storyCount}>{totalActiveStories} قصة</AppText>
+                    <View style={styles.storyCountBadge}>
+                      <Ionicons name="radio-outline" size={13} color={colors.primary} />
+                      <AppText weight="semibold" style={styles.storyCountText}>{totalActiveStories} قصة</AppText>
+                    </View>
                   ) : <View />}
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRail}>
                   {myStorySummary && user?.id ? (
-                    <Pressable style={styles.storyTile} onPress={() => router.push(`/story/${user.id}`)}>
-                      <View style={[styles.storyAvatar, styles.myStoryActiveAvatar]}>
-                        {myStorySummary.author.avatarUrl ? (
-                          <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-                        ) : (
-                          <AppText weight="bold" style={styles.fallbackInitial}>
-                            {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
-                          </AppText>
-                        )}
-                      </View>
-                      <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
-                      {myStorySummary.stories.length > 1 ? <AppText muted style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
+                    <Pressable style={[styles.storyTile, styles.myStoryTile]} onPress={() => router.push(`/story/${user.id}`)}>
+                      <LinearGradient colors={[colors.primary, '#F2B978', colors.accent]} style={styles.storyAvatarRing}>
+                        <View style={styles.storyAvatar}>
+                          {myStorySummary.author.avatarUrl ? (
+                            <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                          ) : (
+                            <AppText weight="bold" style={styles.fallbackInitial}>
+                              {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
+                            </AppText>
+                          )}
+                        </View>
+                      </LinearGradient>
+                      <AppText numberOfLines={1} weight="semibold" style={styles.storyLabel}>قصتك</AppText>
+                      {myStorySummary.stories.length > 1 ? <AppText weight="semibold" style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
                     </Pressable>
                   ) : (
-                    <Pressable style={styles.storyTile} onPress={() => router.push('/story/create')}>
-                      <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
-                        <AppText weight="bold" style={styles.addStoryPlus}>+</AppText>
-                      </View>
-                      <AppText numberOfLines={1} style={styles.storyLabel}>قصتك</AppText>
+                    <Pressable style={[styles.storyTile, styles.addStoryTile]} onPress={() => router.push('/story/create')}>
+                      <LinearGradient colors={['#FFF6E8', colors.primarySoft]} style={styles.storyAvatarRing}>
+                        <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
+                          <Ionicons name="add" size={26} color={colors.primary} />
+                        </View>
+                      </LinearGradient>
+                      <AppText numberOfLines={1} weight="semibold" style={styles.storyLabel}>قصتك</AppText>
                     </Pressable>
                   )}
 
@@ -321,20 +388,27 @@ export default function HomeScreen() {
 
                     return (
                       <Pressable key={story.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${story.author.id}`)}>
-                        <View style={styles.storyAvatar}>
-                          {story.author.avatarUrl ? (
-                            <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-                          ) : (
-                            <AppText weight="bold" style={styles.fallbackInitial}>{fallbackInitial}</AppText>
-                          )}
-                        </View>
+                        <LinearGradient colors={['#F2B978', colors.primarySoft, colors.accent]} style={styles.storyAvatarRing}>
+                          <View style={styles.storyAvatar}>
+                            {story.author.avatarUrl ? (
+                              <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                            ) : (
+                              <AppText weight="bold" style={styles.fallbackInitial}>{fallbackInitial}</AppText>
+                            )}
+                          </View>
+                        </LinearGradient>
                         <AppText numberOfLines={1} style={styles.storyLabel}>{label}</AppText>
                       </Pressable>
                     );
                   })}
                 </ScrollView>
 
-                {storiesLoading ? <AppText muted>جارٍ تحميل القصص...</AppText> : null}
+                {storiesLoading ? (
+                  <View style={styles.loadingPanel}>
+                    <Ionicons name="ellipsis-horizontal-circle-outline" size={18} color={colors.accent} />
+                    <AppText muted>نفتح القصص القريبة الآن...</AppText>
+                  </View>
+                ) : null}
                 {!storiesLoading && storiesError ? (
                   <View style={styles.inlineStateRow}>
                     <AppText muted>{storiesError}</AppText>
@@ -342,34 +416,41 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
                 {!storiesLoading && !storiesError && stories.length === 0 ? (
-                  <AppText muted>لا توجد قصص نشطة بعد.</AppText>
+                  <View style={styles.quietStoryState}>
+                    <Ionicons name="moon-outline" size={17} color={colors.textMuted} />
+                    <AppText muted>لا توجد قصص نشطة بعد. كن أول نبضة اليوم.</AppText>
+                  </View>
                 ) : null}
               </View>
             </AppCard>
 
             {itemsCacheNotice ? (
               <AppCard>
-                <AppText muted>{itemsCacheNotice}</AppText>
+                <View style={styles.cacheNoticeRow}>
+                  <Ionicons name="cloud-offline-outline" size={18} color={colors.accent} />
+                  <AppText muted style={styles.cacheNoticeText}>{itemsCacheNotice}</AppText>
+                </View>
               </AppCard>
             ) : null}
 
             <View style={styles.itemsHeader}>
-              <AppText weight="bold">أحدث العناصر</AppText>
-              <AppText muted>حاجات جديدة جاهزة لتبدأ رحلة تبادل.</AppText>
+              <AppText weight="semibold" style={styles.itemsEyebrow}>ظهر حديثًا</AppText>
+              <AppText weight="bold" style={styles.itemsTitle}>أحدث العناصر</AppText>
+              <AppText muted>حاجات وصلت للتو، جاهزة تفتح رحلة تبادل جديدة.</AppText>
             </View>
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
         ListEmptyComponent={
           loading ? (
-            <EmptyState title="جاري التحميل" description="نقوم بجلب العناصر المتاحة الآن." />
+            <EmptyState title="جاري التحميل" description="نلمّ أحدث العناصر المتاحة الآن." />
           ) : error ? (
             <View style={styles.stateBox}>
               <EmptyState title="حدث خطأ" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
             </View>
           ) : (
-            <EmptyState title="لا توجد عناصر حالياً" description="أضفنا الأساس، وستظهر العناصر هنا فور توفرها." />
+            <EmptyState title="لا توجد عناصر حالياً" description="الواجهة هادئة الآن، وستظهر العناصر هنا فور توفرها." />
           )
         }
       />
@@ -381,77 +462,148 @@ const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   header: { gap: spacing.md, marginBottom: spacing.md },
-  heroCard: { gap: spacing.sm },
-  title: { fontSize: 24 },
-  sectionHeader: { gap: spacing.xs },
-  dashboardSection: { gap: spacing.sm },
+  heroCard: {
+    minHeight: 190,
+    gap: spacing.md,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+    padding: spacing.lg,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  heroOrb: { position: 'absolute', borderRadius: radii.round, opacity: 0.34 },
+  heroOrbPrimary: { width: 132, height: 132, right: -34, top: -26, backgroundColor: colors.primarySoft },
+  heroOrbAccent: { width: 112, height: 112, left: -28, bottom: -36, backgroundColor: 'rgba(62,124,115,0.18)' },
+  heroIconShell: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(255,253,248,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: { gap: spacing.sm, maxWidth: '92%' },
+  title: { fontSize: 27, lineHeight: 34 },
+  heroBody: { fontSize: 16, lineHeight: 24 },
+  heroSupport: { lineHeight: 22 },
+  sectionHeader: { gap: spacing.xs, flexShrink: 1 },
+  sectionTitle: { fontSize: 18 },
+  dashboardSection: { gap: spacing.md },
   dashboardErrorText: { color: '#B42318' },
   nextActionBlock: {
-    gap: spacing.sm,
+    gap: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
+    borderColor: 'rgba(184,98,63,0.16)',
+    borderRadius: radii.lg,
     padding: spacing.md,
+    overflow: 'hidden',
   },
+  nextActionTopRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  nextActionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,253,248,0.74)',
+  },
+  nextActionCopy: { flex: 1, gap: spacing.xs },
+  nextActionTitle: { fontSize: 17 },
   metricsRow: {
     flexDirection: 'row-reverse',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  metricChip: {
+  metricCard: {
     flex: 1,
+    minWidth: 92,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    paddingVertical: spacing.sm,
+    borderColor: 'rgba(221,208,197,0.82)',
+    borderRadius: radii.lg,
+    backgroundColor: 'rgba(255,253,248,0.82)',
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
     gap: spacing.xs,
   },
-  metricLabel: { fontSize: 11, textAlign: 'center' },
-  metricValue: { fontSize: 18 },
+  metricIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricLabel: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
+  metricValue: { fontSize: 22, lineHeight: 27 },
   storiesSection: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   storiesHeaderRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
-  storyCount: { fontSize: 12 },
+  storyCountBadge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+    backgroundColor: 'rgba(238,216,203,0.42)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  storyCountText: { fontSize: 12, color: colors.primary },
   storiesRail: {
     gap: spacing.sm,
     paddingVertical: spacing.xs,
+    paddingRight: 2,
   },
   storyTile: {
-    width: 72,
+    width: 76,
     alignItems: 'center',
     gap: 6,
+    borderRadius: radii.lg,
+    paddingVertical: spacing.xs,
+  },
+  myStoryTile: { backgroundColor: 'rgba(238,216,203,0.24)' },
+  addStoryTile: { backgroundColor: 'rgba(255,246,232,0.68)' },
+  storyAvatarRing: {
+    width: 66,
+    height: 66,
+    borderRadius: radii.round,
+    padding: 3,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   storyAvatar: {
-    width: 64,
-    height: 64,
+    flex: 1,
     borderRadius: radii.round,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.surface,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   addStoryAvatar: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary,
-  },
-  myStoryActiveAvatar: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  addStoryPlus: {
-    fontSize: 28,
-    color: colors.primary,
-    lineHeight: 30,
+    backgroundColor: '#FFF8EC',
   },
   avatarImage: {
     width: '100%',
@@ -466,16 +618,50 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   myStoryCount: {
+    minWidth: 20,
+    overflow: 'hidden',
+    borderRadius: radii.round,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: -5,
+    color: colors.primary,
+    backgroundColor: '#FFF6E8',
     fontSize: 10,
-    marginTop: -4,
+    textAlign: 'center',
   },
   inlineStateRow: {
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(221,208,197,0.8)',
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(255,253,248,0.7)',
+    padding: spacing.md,
   },
+  loadingPanel: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(255,253,248,0.62)',
+    padding: spacing.sm,
+  },
+  quietStoryState: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(249,243,234,0.72)',
+    padding: spacing.sm,
+  },
+  cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  cacheNoticeText: { flex: 1 },
   itemsHeader: {
     gap: spacing.xs,
     marginTop: spacing.xs,
     marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
+  itemsEyebrow: { color: colors.primary, fontSize: 12 },
+  itemsTitle: { fontSize: 21 },
   stateBox: { gap: spacing.md },
 });
