@@ -18,6 +18,8 @@ type ItemVideoDiscoveryRailProps = {
   loading?: boolean;
   errorMessage?: string | null;
   onRetry?: () => void;
+  viewerCtaLabel?: string;
+  onOpenViewer?: () => void;
 };
 
 function formatDuration(durationMs: number | null): string | null {
@@ -28,7 +30,7 @@ function formatDuration(durationMs: number | null): string | null {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ItemVideoDiscoveryRail({ title, eyebrow, description, moments, loading, errorMessage, onRetry }: ItemVideoDiscoveryRailProps) {
+export function ItemVideoDiscoveryRail({ title, eyebrow, description, moments, loading, errorMessage, onRetry, viewerCtaLabel, onOpenViewer }: ItemVideoDiscoveryRailProps) {
   if (!loading && !errorMessage && moments.length === 0) {
     return null;
   }
@@ -40,6 +42,7 @@ export function ItemVideoDiscoveryRail({ title, eyebrow, description, moments, l
           {eyebrow ? <AppText style={styles.eyebrow}>{eyebrow}</AppText> : null}
           <AppText weight="bold" style={styles.title}>{title}</AppText>
           <AppText muted>{description}</AppText>
+        {onOpenViewer ? <Pressable style={styles.viewerCta} onPress={onOpenViewer}><AppText style={styles.viewerCtaText}>{viewerCtaLabel ?? "شوف المشاهد"}</AppText></Pressable> : null}
         </View>
         <View style={styles.videoIconShell}>
           <Ionicons name="videocam-outline" size={18} color={colors.primary} />
@@ -127,6 +130,8 @@ const styles = StyleSheet.create({
   headerTextBox: { flex: 1, gap: spacing.xs },
   eyebrow: { color: colors.accent, fontSize: 12 },
   title: { fontSize: 20 },
+  viewerCta: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.round, backgroundColor: 'rgba(62,124,115,0.12)' },
+  viewerCtaText: { color: colors.accent, fontSize: 12 },
   videoIconShell: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.12)' },
   inlineState: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   errorText: { flex: 1 },

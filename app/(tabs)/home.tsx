@@ -448,6 +448,8 @@ export default function HomeScreen() {
             {shouldShowVideoMomentsRail ? (
               <AppCard>
                 <ItemVideoDiscoveryRail
+            onOpenViewer={() => router.push('/motion/viewer')}
+            viewerCtaLabel='شوف المشاهد'
                   eyebrow="لمحات مرئية"
                   title="عناصر تقدر تشوفها أقرب"
                   description="فيديوهات قصيرة تساعدك تلمح العنصر قبل ما تفتح تفاصيله."

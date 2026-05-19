@@ -630,6 +630,10 @@ export default function MotionScreen() {
 }
 
 const styles = StyleSheet.create({
+  viewerCtaCard: { marginTop: spacing.sm, borderWidth: 1, borderColor: "rgba(184,98,63,0.25)", borderRadius: radii.lg, padding: spacing.md, backgroundColor: "rgba(255,249,241,0.84)", gap: spacing.xs },
+  viewerCtaTitle: { fontSize: 18 },
+  viewerCtaBtn: { alignSelf: "flex-start", marginTop: spacing.xs, backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radii.round },
+  viewerCtaBtnText: { color: colors.white },
   screen: { backgroundColor: colors.background },
   listContent: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl },
   headerWrap: { gap: spacing.md },
