@@ -1,28 +1,30 @@
 # GOOGLE_PLAY_UGC_SAFETY (M44B1)
 
 ## What this phase implements
-- Core in-app reporting across users, items, stories, and existing deal reporting.
-- Core user blocking with Supabase-backed `user_blocks` table and RLS.
-- Blocking-aware enforcement for creating offers, starting/sending story replies, and sending deal chat messages.
+- In-app reporting for deal, user, item, and story surfaces.
+- User blocking with Supabase-backed `user_blocks` and RLS.
+- Secure bidirectional block-state lookup via `get_user_block_state` RPC.
+- Block enforcement in offer creation, story replies (text/voice), contextual text/voice messages, and deal text/voice messages.
 
 ## Reportable UGC surfaces
-- User profiles (`/report/user/[userId]`)
-- Marketplace items (`/report/item/[itemId]`)
-- Stories (`/report/story/[storyId]`)
-- Deal flow (existing: `/report/deal/[dealId]`)
+- Deal chat (`/report/deal/[dealId]`)
+- User profile (`/report/user/[userId]`)
+- Marketplace item (`/report/item/[itemId]`)
+- Story (`/report/story/[storyId]`)
 
-## Where blocking is available
-- Public profile surface (`/profile/[id]`)
+## Where user blocking is available
+- Public profile (`/profile/[id]`)
 - Story viewer (`/story/[userId]`)
-- Deal chat (`/deal/[id]`)
+- Deal chat safety section (`/deal/[id]`)
 
-## Current blocking enforcement
-- Prevents creating new swap offers when either side blocked the other.
-- Prevents story replies (text/voice flow guard) when either side blocked the other.
-- Prevents creating/sending new direct interaction messages in blocked deal relationships.
-- Contextual story-reply RPC includes DB-side block checks for conversation/message creation.
+## Current interaction blocking effect
+- Prevents creating new offers if either side blocked the other.
+- Prevents starting/sending story replies when blocked in either direction.
+- Prevents sending new contextual text/voice messages when blocked in either direction.
+- Prevents sending new deal text/voice messages when blocked in either direction.
+- Historical viewing is still available; enforcement targets new interactions.
 
 ## Deferred for later phases
-- Terms/Community Guidelines acceptance gate.
-- Public policy pages.
+- Legal acceptance gate (Terms/Community Guidelines).
+- Public legal/policy pages.
 - Admin moderation operations/dashboard.

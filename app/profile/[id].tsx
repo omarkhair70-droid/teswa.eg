@@ -15,6 +15,8 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { buildProfilePresence } from '@/lib/profile-presence';
+import { useAuth } from '@/lib/auth';
+import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
 import {
   deletePublicProfileCache,
@@ -41,7 +43,11 @@ export default function PublicProfileScreen() {
   const [presenceError, setPresenceError] = useState<string | null>(null);
   const [profileCacheNotice, setProfileCacheNotice] = useState<string | null>(null);
   const [listingsCacheNotice, setListingsCacheNotice] = useState<string | null>(null);
+  const { user } = useAuth();
   const profileConfirmedMissingRef = useRef(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
+  const [blockedByMe, setBlockedByMe] = useState(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -188,6 +194,31 @@ export default function PublicProfileScreen() {
 
   const displayName = profile.display_name?.trim() || 'مستخدم تِسوى';
   const location = [profile.city, profile.area].filter(Boolean).join(' - ');
+  const isOwnProfile = !!user?.id && user.id === profile.id;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user?.id || !profile?.id || user.id === profile.id) return;
+      const state = await fetchUserBlockState(user.id, profile.id);
+      if (!cancelled && state.ok) setBlockedByMe(state.state.blockedByMe);
+      if (!cancelled && !state.ok) setBlockError(state.message);
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, user?.id]);
+
+  const onToggleBlock = useCallback(async () => {
+    if (!user?.id || !profile?.id || blockBusy) return;
+    setBlockBusy(true); setBlockError(null);
+    const res = blockedByMe ? await unblockUserFromMobile(user.id, profile.id) : await blockUserFromMobile(user.id, profile.id);
+    if (!res.ok) setBlockError(res.message);
+    else {
+      const state = await fetchUserBlockState(user.id, profile.id);
+      if (state.ok) setBlockedByMe(state.state.blockedByMe);
+    }
+    setBlockBusy(false);
+  }, [blockBusy, blockedByMe, profile?.id, user?.id]);
+
   const profilePresence = buildProfilePresence({
     activeStoriesCount,
     listingsCount: listings.length,
@@ -218,6 +249,19 @@ export default function PublicProfileScreen() {
       ) : null}
 
       <ProfilePresenceSignals presence={profilePresence} />
+
+
+      {!isOwnProfile ? (
+        <AppCard>
+          <View style={styles.group}>
+            <AppText weight="semibold">الأمان</AppText>
+            <AppText muted>لو احتجت، تقدر تبلغ عن المستخدم أو تتحكم في الحظر.</AppText>
+            <AppButton label="الإبلاغ عن المستخدم" variant="neutral" onPress={() => router.push(`/report/user/${profile.id}`)} />
+            <AppButton label={blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم')} onPress={onToggleBlock} disabled={blockBusy} variant="neutral" />
+            {blockError ? <AppText muted>{blockError}</AppText> : null}
+          </View>
+        </AppCard>
+      ) : null}
 
       <AppCard>
         <View style={styles.group}>

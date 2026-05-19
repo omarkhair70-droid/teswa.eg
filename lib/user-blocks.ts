@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from '@/lib/supabase/client';
 
 export type UserBlockState = { blockedByMe: boolean; blockedMe: boolean; isBlockedEitherDirection: boolean };
 
@@ -7,14 +7,18 @@ export async function fetchUserBlockState(currentUserId: string, targetUserId: s
   const target = targetUserId.trim();
   if (!me || !target) return { ok: false, message: 'تعذر تحديد المستخدم المطلوب.' };
   if (me === target) return { ok: true, state: { blockedByMe: false, blockedMe: false, isBlockedEitherDirection: false } };
-  const [byMe, meBy] = await Promise.all([
-    supabase.from('user_blocks').select('id').eq('blocker_id', me).eq('blocked_user_id', target).limit(1),
-    supabase.from('user_blocks').select('id').eq('blocker_id', target).eq('blocked_user_id', me).limit(1),
-  ]);
-  if (byMe.error || meBy.error) return { ok: false, message: 'تعذر تحميل حالة الحظر حالياً.' };
-  const blockedByMe = Boolean((byMe.data ?? []).length);
-  const blockedMe = Boolean((meBy.data ?? []).length);
-  return { ok: true, state: { blockedByMe, blockedMe, isBlockedEitherDirection: blockedByMe || blockedMe } };
+
+  const { data, error } = await supabase.rpc('get_user_block_state', { p_target_user_id: target });
+  if (error) return { ok: false, message: 'تعذر تحميل حالة الحظر حالياً.' };
+  const row = Array.isArray(data) ? data[0] : null;
+  return {
+    ok: true,
+    state: {
+      blockedByMe: Boolean(row?.blocked_by_me),
+      blockedMe: Boolean(row?.blocked_me),
+      isBlockedEitherDirection: Boolean(row?.is_blocked_either_direction),
+    },
+  };
 }
 
 export async function isInteractionBlockedBetweenUsers(currentUserId: string, targetUserId: string) {

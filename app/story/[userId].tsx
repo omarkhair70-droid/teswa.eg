@@ -13,6 +13,7 @@ import { StoryRecord, StoryViewerContext, createStoryMediaSignedUrlCached, fetch
 import { markStoryViewedFromMobile } from '@/lib/story-views';
 import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/story-likes';
 import { sendStoryReplyFromMobile, sendStoryVoiceReplyFromMobile } from '@/lib/contextual-conversations';
+import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { buildCachedVideoSource, getMediaNeighborIndexes, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 
 const IMAGE_DURATION_MS = 5000;
@@ -114,6 +115,8 @@ export default function StoryViewerScreen() {
   const [voiceDraft, setVoiceDraft] = useState<{ uri: string; durationMs: number; mimeType: string } | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceSending, setVoiceSending] = useState(false);
+  const [blockedByMe, setBlockedByMe] = useState(false);
+  const [safetyBusy, setSafetyBusy] = useState(false);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder, 250);
   const voicePlayer = useAudioPlayer(voiceDraft?.uri ?? null, { updateInterval: 250 });
@@ -202,6 +205,15 @@ export default function StoryViewerScreen() {
   }, [activeIndex, context?.stories, urlsByStoryId]);
 
   const currentStory = context?.stories[activeIndex] ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user?.id || !context?.author.id || isViewingOwnStories) return;
+      const s = await fetchUserBlockState(user.id, context.author.id);
+      if (!cancelled && s.ok) setBlockedByMe(s.state.blockedByMe);
+    })();
+    return () => { cancelled = true; };
+  }, [context?.author.id, isViewingOwnStories, user?.id]);
   const currentStoryAgeLabel = currentStory ? formatStoryAgeLabel(currentStory.createdAt) : null;
   const currentStorySignedUrl = currentStory ? urlsByStoryId[currentStory.id] : null;
   const currentStoryLiked = currentStory ? Boolean(likedStoryIds[currentStory.id]) : false;
@@ -570,7 +582,11 @@ const renderUnavailableState = () => {
                 <AppText style={styles.manageText}>إدارة</AppText>
               </Pressable>
             ) : null}
-            <Pressable onPress={closeViewer}><AppText style={styles.closeText}>إغلاق</AppText></Pressable>
+            <View style={styles.safetyRow}>
+              {!isViewingOwnStories && currentStory ? <Pressable onPress={() => router.push(`/report/story/${currentStory.id}`)}><AppText style={styles.closeText}>الإبلاغ عن القصة</AppText></Pressable> : null}
+              {!isViewingOwnStories ? <Pressable disabled={safetyBusy} onPress={async () => { if (!user?.id || !context?.author.id || safetyBusy) return; setSafetyBusy(true); const r = blockedByMe ? await unblockUserFromMobile(user.id, context.author.id) : await blockUserFromMobile(user.id, context.author.id); if (r.ok) { const s = await fetchUserBlockState(user.id, context.author.id); if (s.ok) setBlockedByMe(s.state.blockedByMe); } setSafetyBusy(false); }}><AppText style={styles.closeText}>{safetyBusy ? '...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم')}</AppText></Pressable> : null}
+              <Pressable onPress={closeViewer}><AppText style={styles.closeText}>إغلاق</AppText></Pressable>
+            </View>
           </View>
         </View>
       </View>
@@ -661,6 +677,7 @@ const styles = StyleSheet.create({
   likeErrorText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, textAlign: 'right' },
   captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
   captionBoxWithReplyComposer: { bottom: 76 },
+  safetyRow: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
   replyComposerOverlay: { position: 'absolute', left: 12, right: 12, bottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 12, padding: 8, gap: 6, zIndex: 4 },
   replyComposerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   replyInput: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 10, color: '#fff', backgroundColor: 'rgba(255,255,255,0.08)' },

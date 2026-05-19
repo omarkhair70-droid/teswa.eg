@@ -354,6 +354,12 @@ export async function sendContextualMessageFromMobile(input: {
     return { ok: false, reason: 'invalid_body', message: 'الرسالة طويلة زيادة عن الحد (800 حرف).' };
   }
 
+  const otherParticipantId = await getOtherParticipantInConversation(conversationId, currentUserId);
+  if (!otherParticipantId) return { ok: false, reason: 'send_failed', message: 'تعذر تحديد طرف المحادثة.' };
+  const blockState = await fetchUserBlockState(currentUserId, otherParticipantId);
+  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
+  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رسائل لأن بينكما حظر.' };
+
   const { data, error } = await supabase
     .from('contextual_messages')
     .insert({ conversation_id: conversationId, sender_id: currentUserId, body, message_kind: 'text' })
@@ -402,6 +408,15 @@ function sanitizeAudioFileName(name: string | null | undefined, fallback: string
   return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
 }
 
+async function getOtherParticipantInConversation(conversationId: string, currentUserId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('contextual_conversations').select('starter_id,recipient_id').eq('id', conversationId).maybeSingle();
+  if (error || !data) return null;
+  const starterId = data.starter_id as string;
+  const recipientId = data.recipient_id as string;
+  if (currentUserId !== starterId && currentUserId !== recipientId) return null;
+  return currentUserId === starterId ? recipientId : starterId;
+}
+
 async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
   const response = await fetch(uri);
   return response.arrayBuffer();
@@ -428,6 +443,12 @@ export async function sendContextualVoiceMessageFromMobile(input: {
   if (!localUri) return { ok: false, reason: 'invalid_audio', message: 'تعذر قراءة التسجيل الصوتي.' };
   if (input.durationMs <= 0 || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS) return { ok: false, reason: 'invalid_duration', message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.' };
   if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) return { ok: false, reason: 'invalid_audio', message: 'حجم الرسالة الصوتية كبير جدًا.' };
+
+  const otherParticipantId = await getOtherParticipantInConversation(conversationId, currentUserId);
+  if (!otherParticipantId) return { ok: false, reason: 'send_failed', message: 'تعذر تحديد طرف المحادثة.' };
+  const blockState = await fetchUserBlockState(currentUserId, otherParticipantId);
+  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
+  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رسائل صوتية لأن بينكما حظر.' };
 
   const contentType = input.mimeType || 'audio/m4a';
   const ext = getAudioExtension(input.fileName, contentType);
@@ -470,6 +491,12 @@ export async function sendStoryVoiceReplyFromMobile(input: {
   if (!localUri) return { ok: false, reason: 'invalid_audio', message: 'تعذر قراءة التسجيل الصوتي.' };
   if (input.durationMs <= 0 || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS) return { ok: false, reason: 'invalid_duration', message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.' };
   if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) return { ok: false, reason: 'invalid_audio', message: 'حجم الرسالة الصوتية كبير جدًا.' };
+
+  const { data: storyOwnerRow, error: storyOwnerError } = await supabase.from('stories').select('user_id').eq('id', storyId).maybeSingle();
+  if (storyOwnerError || !storyOwnerRow?.user_id) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد صاحب القصة.' };
+  const blockState = await fetchUserBlockState(currentUserId, storyOwnerRow.user_id as string);
+  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
+  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رد لأن بينكما حظر.' };
 
   const { data: convData, error: convErr } = await supabase.rpc('ensure_story_reply_conversation', { p_story_id: storyId });
   const row = Array.isArray(convData) ? convData[0] : null;

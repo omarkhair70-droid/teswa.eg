@@ -129,7 +129,7 @@ export async function acceptOfferFromMobile(input: { offerId: string; currentUse
 }
 
 // kept from M5
-export type OfferCreationContextResult = | { ok: true; requestedItem: OfferItemSummary; myActiveItems: OfferItemSummary[] } | { ok: false; reason: OfferInvalidReason; message: string };
+export type OfferCreationContextResult = | { ok: true; requestedItem: OfferItemSummary; myActiveItems: OfferItemSummary[] } | { ok: false; reason: OfferInvalidReason | 'unknown'; message: string };
 export type CreateSwapOfferResult = | { ok: true; offerId: string } | { ok: false; reason: OfferInvalidReason | 'unknown'; message: string };
 function getInvalidMessage(reason: OfferInvalidReason): string { const messages: Record<OfferInvalidReason, string> = { requested_not_found: 'العنصر المطلوب غير موجود.', requested_inactive: 'العنصر المطلوب غير متاح حالياً للتبديل.', own_requested_item: 'لا يمكنك إرسال عرض على عنصرك الخاص.', offered_not_found: 'العنصر الذي اخترته للعرض غير موجود.', offered_inactive: 'العنصر الذي اخترته غير نشط حالياً.', offered_not_owned: 'يمكنك فقط العرض بعنصر تملكه أنت.', same_item: 'لا يمكن استخدام نفس العنصر كعنصر مطلوب ومعروض.', blocked_interaction: 'لا يمكن إنشاء عرض لأن بينكما حظر.' }; return messages[reason]; }
 function isTransientSupabaseError(error: unknown): boolean {
