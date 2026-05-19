@@ -1,7 +1,9 @@
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
+import { signInWithGoogleNative } from '@/lib/google-native-auth';
 import { supabase } from '@/lib/supabase/client';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -29,28 +31,31 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
   }
 
   const completionPromise = (async () => {
-  const { params, errorCode } = QueryParams.getQueryParams(url) as { params: OAuthCallbackParams; errorCode: string | null };
+    const { params, errorCode } = QueryParams.getQueryParams(url) as {
+      params: OAuthCallbackParams;
+      errorCode: string | null;
+    };
 
-  if (errorCode || params.error || params.error_description) {
-    return { error: GOOGLE_AUTH_CALLBACK_FAILED };
-  }
+    if (errorCode || params.error || params.error_description) {
+      return { error: GOOGLE_AUTH_CALLBACK_FAILED };
+    }
 
-  if (params.access_token && params.refresh_token) {
-    const { error: sessionError } = await supabase.auth.setSession({
-      access_token: String(params.access_token),
-      refresh_token: String(params.refresh_token),
-    });
+    if (params.access_token && params.refresh_token) {
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: String(params.access_token),
+        refresh_token: String(params.refresh_token),
+      });
 
-    return { error: sessionError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
-  }
+      return { error: sessionError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
+    }
 
-  const code = typeof params.code === 'string' ? params.code : null;
-  if (!code) {
-    return { error: GOOGLE_AUTH_CALLBACK_FAILED };
-  }
+    const code = typeof params.code === 'string' ? params.code : null;
+    if (!code) {
+      return { error: GOOGLE_AUTH_CALLBACK_FAILED };
+    }
 
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  return { error: exchangeError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    return { error: exchangeError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
   })();
 
   inFlightCallbackCompletion.set(url, completionPromise);
@@ -71,7 +76,7 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
   }
 }
 
-export async function signInWithGoogle(): Promise<{ error: string | null }> {
+async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | null }> {
   try {
     const redirectTo = makeRedirectUri({ scheme: 'teswa', path: 'auth/callback' });
 
@@ -101,4 +106,17 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
   } catch {
     return { error: GOOGLE_AUTH_ERROR };
   }
+}
+
+export async function signInWithGoogle(): Promise<{ error: string | null }> {
+  if (Platform.OS === 'web') {
+    return signInWithGoogleBrowserOAuth();
+  }
+
+  const nativeResult = await signInWithGoogleNative();
+  if (!nativeResult.fallbackToBrowser) {
+    return { error: nativeResult.error ?? GOOGLE_AUTH_ERROR };
+  }
+
+  return signInWithGoogleBrowserOAuth();
 }
