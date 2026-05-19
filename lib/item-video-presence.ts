@@ -23,7 +23,7 @@ export async function fetchItemVideoPresenceMap(itemIds: string[]): Promise<Map<
     .in('item_id', normalizedIds);
 
   if (error) {
-    throw error;
+    return new Map();
   }
 
   return new Map(
