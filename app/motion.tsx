@@ -25,6 +25,7 @@ import { CityPulseLocation, CityPulseSnapshot, fetchCityPulseSnapshot } from '@/
 import { fetchMotionVideoDrops, MotionVideoDrop } from '@/lib/motion-video-drops';
 import { MotionVideoDropsSection } from '@/components/motion/MotionVideoDropsSection';
 import { MotionLiveSignals } from '@/components/motion/MotionLiveSignals';
+import { MotionMovingItemCard, MotionStoryItemCard } from '@/components/motion/MotionFeedCards';
 import { buildMotionVideoPresence } from '@/lib/motion-video-presence';
 import { buildMotionLiveSignals } from '@/lib/motion-live-signals';
 import {
@@ -503,59 +504,19 @@ export default function MotionScreen() {
   const renderFeedItem = ({ item, index }: { item: MotionFeedEntry; index: number }) => {
     if (item.kind === 'moving_item') {
       const moving = item.item;
-      const metadata = [moving.category, moving.condition, moving.location].filter(Boolean).join(' / ');
-      const badge = moving.openInterestCount === 1 ? 'وصلها اقتراح' : `وصلها ${moving.openInterestCount} اقتراحات مفتوحة`;
 
       return (
         <Animated.View entering={FadeInUp.duration(280).delay(index * 35)}>
-          <View style={styles.feedCard}>
-            <Pressable onPress={() => router.push(`/item/${moving.id}`)}>
-              <View style={styles.feedImageFrame}>
-                {moving.imageUrl ? (
-                  <ExpoImage source={{ uri: moving.imageUrl }} style={styles.feedImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
-                ) : (
-                  <View style={styles.imagePlaceholder}><AppText muted>بدون صورة</AppText></View>
-                )}
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.68)']} style={styles.imageOverlay}>
-                  <BlurView intensity={18} tint="dark" style={styles.overlayBadge}>
-                    <AppText style={styles.overlayBadgeText}>{badge}</AppText>
-                  </BlurView>
-                </LinearGradient>
-              </View>
-              <View style={styles.feedContent}>
-                <AppText style={styles.microLabel}>باب بيتحرك</AppText>
-                <AppText weight="semibold" numberOfLines={1}>{moving.title}</AppText>
-                {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
-                {moving.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {moving.ownerDisplayName}</AppText> : null}
-              </View>
-            </Pressable>
-          </View>
+          <MotionMovingItemCard item={moving} onPress={() => router.push(`/item/${moving.id}`)} />
         </Animated.View>
       );
     }
 
     const story = item.item;
-    const metadata = [story.category, story.city, story.area].filter(Boolean).join(' / ');
 
     return (
       <Animated.View entering={FadeInUp.duration(280).delay(index * 35)}>
-        <View style={styles.feedCard}>
-          <Pressable onPress={() => router.push(`/item/${story.id}`)}>
-            {story.imageUrl ? (
-              <ExpoImage source={{ uri: story.imageUrl }} style={styles.feedImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
-            ) : (
-              <View style={styles.imagePlaceholder}><AppText muted>بدون صورة</AppText></View>
-            )}
-            <View style={styles.feedContent}>
-              <AppText style={styles.microLabel}>حكاية ظاهرة</AppText>
-              <View style={styles.storyLabelPill}><AppText style={styles.storyLabelText}>{story.storyLabel}</AppText></View>
-              <AppText weight="semibold" numberOfLines={1}>{story.title}</AppText>
-              <AppText numberOfLines={3}>{story.storySnippet}</AppText>
-              {metadata ? <AppText muted numberOfLines={1}>{metadata}</AppText> : null}
-              {story.ownerDisplayName ? <AppText muted numberOfLines={1}>بواسطة {story.ownerDisplayName}</AppText> : null}
-            </View>
-          </Pressable>
-        </View>
+        <MotionStoryItemCard item={story} onPress={() => router.push(`/item/${story.id}`)} />
       </Animated.View>
     );
   };
@@ -630,7 +591,7 @@ export default function MotionScreen() {
 
             <View style={styles.pulseIntro}>
               <AppText weight="bold">النبض الآن</AppText>
-              <AppText muted>حاجات عليها اهتمام، وحاجات أصحابها فتحوا لها باب حكاية.</AppText>
+              <AppText muted>عناصر دخلت الحركة، وحكايات بدأت تشد الانتباه.</AppText>
               {videoPresence.hasDrops && videoPresence.pulseSummary ? (
                 <AppText muted>{videoPresence.pulseSummary}</AppText>
               ) : null}
@@ -817,29 +778,5 @@ const styles = StyleSheet.create({
   },
   partialActions: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   errorText: { color: '#B42318' },
-  feedCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.xl,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
-  },
-  feedImageFrame: { position: 'relative' },
-  feedImage: { width: '100%', height: 180, backgroundColor: colors.background },
-  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.sm, paddingTop: spacing.lg },
-  overlayBadge: { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.md, overflow: 'hidden' },
-  overlayBadgeText: { color: colors.white, fontSize: 12 },
-  imagePlaceholder: { height: 140, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  feedContent: { padding: spacing.md, gap: spacing.xs },
-  microLabel: { color: colors.primary, fontSize: 12 },
-  storyLabelPill: {
-    alignSelf: 'flex-start',
-    borderRadius: radii.md,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  storyLabelText: { color: colors.primary, fontSize: 12 },
   emptyWrap: { gap: spacing.sm, paddingVertical: spacing.lg },
 });
