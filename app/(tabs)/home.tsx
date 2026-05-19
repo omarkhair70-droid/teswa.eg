@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
@@ -25,6 +25,15 @@ import {
 } from '@/lib/offline-marketplace-cache';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
+import { PersonalLivingWorldCard } from '@/components/home/PersonalLivingWorldCard';
+import {
+  buildPersonalLivingWorldState,
+  countActiveStoriesSince,
+  countVideoMomentsSince,
+  fetchNewMarketplaceItemsCountSince,
+  readPersonalLivingWorldLastSeen,
+  writePersonalLivingWorldLastSeen,
+} from '@/lib/personal-living-world';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -62,6 +71,10 @@ export default function HomeScreen() {
   const [videoMoments, setVideoMoments] = useState<ItemVideoDiscoveryMoment[]>([]);
   const [videoMomentsLoading, setVideoMomentsLoading] = useState(true);
   const [videoMomentsError, setVideoMomentsError] = useState<string | null>(null);
+  const [personalWorldLastSeenAtMs, setPersonalWorldLastSeenAtMs] = useState<number | null>(null);
+  const [personalWorldNewItemsCount, setPersonalWorldNewItemsCount] = useState<number | null>(null);
+  const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
+  const personalWorldSeenCommittedRef = useRef(false);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -150,6 +163,22 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const loadPersonalLivingWorldMarker = useCallback(async () => {
+    if (!user?.id) {
+      setPersonalWorldLastSeenAtMs(null);
+      setPersonalWorldNewItemsCount(null);
+      setPersonalWorldLoading(false);
+      return;
+    }
+
+    setPersonalWorldLoading(true);
+    const lastSeen = await readPersonalLivingWorldLastSeen(user.id);
+    setPersonalWorldLastSeenAtMs(lastSeen);
+    const newItemsCount = await fetchNewMarketplaceItemsCountSince(lastSeen);
+    setPersonalWorldNewItemsCount(newItemsCount);
+    setPersonalWorldLoading(false);
+  }, [user?.id]);
+
   useEffect(() => {
     loadItems();
     loadStories();
@@ -158,6 +187,22 @@ export default function HomeScreen() {
       void loadDashboard();
     }
   }, [loadDashboard, loadItems, loadStories, loadVideoMoments, user?.id]);
+
+  useEffect(() => {
+    void loadPersonalLivingWorldMarker();
+  }, [loadPersonalLivingWorldMarker]);
+
+  useEffect(() => {
+    personalWorldSeenCommittedRef.current = false;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || personalWorldSeenCommittedRef.current) return;
+    if (personalWorldLoading || storiesLoading || videoMomentsLoading || dashboardLoading) return;
+
+    personalWorldSeenCommittedRef.current = true;
+    void writePersonalLivingWorldLastSeen(user.id);
+  }, [dashboardLoading, personalWorldLoading, storiesLoading, user?.id, videoMomentsLoading]);
 
   useFocusEffect(
     useCallback(() => {
@@ -172,6 +217,27 @@ export default function HomeScreen() {
   const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== user?.id), [stories, user?.id]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
   const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
+  const newActiveStoriesCount = useMemo(
+    () => countActiveStoriesSince(stories, personalWorldLastSeenAtMs),
+    [personalWorldLastSeenAtMs, stories],
+  );
+  const newVideoMomentsCount = useMemo(
+    () => countVideoMomentsSince(videoMoments, personalWorldLastSeenAtMs),
+    [personalWorldLastSeenAtMs, videoMoments],
+  );
+  const personalLivingWorldState = useMemo(
+    () =>
+      buildPersonalLivingWorldState({
+        lastSeenAtMs: personalWorldLastSeenAtMs,
+        actionableOffersCount: dashboard?.incomingActionableOffersCount ?? 0,
+        unreadDealMessagesCount: dashboard?.unreadDealMessagesCount ?? 0,
+        unreadContextualMessagesCount: dashboard?.unreadContextualMessagesCount ?? 0,
+        newActiveStoriesCount,
+        newVideoMomentsCount,
+        newMarketplaceItemsCount: personalWorldNewItemsCount,
+      }),
+    [dashboard, newActiveStoriesCount, newVideoMomentsCount, personalWorldLastSeenAtMs, personalWorldNewItemsCount],
+  );
 
   const nextAction = useMemo(() => {
     if (!dashboard) {
@@ -358,6 +424,18 @@ export default function HomeScreen() {
                   ) : null}
                 </View>
               </AppCard>
+            ) : null}
+
+            {user ? (
+              <PersonalLivingWorldCard
+                state={personalLivingWorldState}
+                loading={personalWorldLoading}
+                onPrimaryAction={() => {
+                  if (personalLivingWorldState.primaryActionRoute) {
+                    router.push(personalLivingWorldState.primaryActionRoute as any);
+                  }
+                }}
+              />
             ) : null}
 
             <AppCard>
