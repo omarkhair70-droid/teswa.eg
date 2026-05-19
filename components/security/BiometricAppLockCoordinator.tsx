@@ -57,7 +57,19 @@ export function BiometricAppLockCoordinator() {
         return;
       }
 
-      if (nextState === 'active' && lockEnabled && coordinatorActive) {
+      if (nextState !== 'active' || !coordinatorActive) return;
+
+      const handleResume = async () => {
+        if (!user?.id) return;
+
+        const enabled = await readBiometricAppLockEnabled(user.id);
+        setLockEnabled(enabled);
+
+        if (!enabled) {
+          setLocked(false);
+          return;
+        }
+
         const elapsed = Date.now() - (backgroundedAtRef.current ?? Date.now());
         if (elapsed >= RELOCK_AFTER_BACKGROUND_MS) {
           setLocked(true);
@@ -65,11 +77,13 @@ export function BiometricAppLockCoordinator() {
           setMessage(null);
           autoAttemptedForLockRef.current = false;
         }
-      }
+      };
+
+      void handleResume();
     });
 
     return () => sub.remove();
-  }, [coordinatorActive, lockEnabled]);
+  }, [coordinatorActive, user?.id]);
 
   const attemptUnlock = useCallback(async () => {
     if (!lockEnabled || busy) return;
