@@ -39,6 +39,18 @@ export type MarketplaceItemDetailImage = {
   sortOrder: number | null;
 };
 
+export type MarketplaceItemOwnerPresence = {
+  id: string;
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  profileTagline: string | null;
+  city: string | null;
+  area: string | null;
+  successfulSwapsCount: number | null;
+  responseRate: number | null;
+};
+
 export type MarketplaceItemDetail = MarketplaceItem & {
   area: string | null;
   conditionNotes: string | null;
@@ -50,6 +62,7 @@ export type MarketplaceItemDetail = MarketplaceItem & {
   wantedTags: string[];
   images: MarketplaceItemDetailImage[];
   videoTeaser: ItemVideoTeaser | null;
+  ownerPresence?: MarketplaceItemOwnerPresence | null;
 };
 
 function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false): MarketplaceItem {
@@ -192,7 +205,7 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
   const [imagesResult, categoryResult, ownerResult, wantedTagsResult, videoTeaser] = await Promise.all([
     supabase.from('item_images').select('image_url, is_primary, sort_order').eq('item_id', id),
     item.category_id ? supabase.from('categories').select('name_ar').eq('id', item.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    item.owner_id ? supabase.from('profiles').select('display_name, is_banned').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    item.owner_id ? supabase.from('profiles').select('id, display_name, username, avatar_url, profile_tagline, city, area, successful_swaps_count, response_rate, is_banned').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     supabase.from('item_wanted_tags').select('tag').eq('item_id', id),
     fetchItemVideoTeaserByItemId(id),
   ]);
@@ -220,7 +233,18 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     }));
 
 
-  const ownerProfile = ownerResult.data as { display_name: string | null; is_banned: boolean | null } | null;
+  const ownerProfile = ownerResult.data as {
+    id: string;
+    display_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+    profile_tagline: string | null;
+    city: string | null;
+    area: string | null;
+    successful_swaps_count: number | null;
+    response_rate: number | null;
+    is_banned: boolean | null;
+  } | null;
   if (ownerProfile?.is_banned === true) return null;
 
   const wantedTags = ((wantedTagsResult.data ?? []) as { tag: string | null }[])
@@ -247,5 +271,18 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     wantedTags,
     images,
     videoTeaser,
+    ownerPresence: ownerProfile
+      ? {
+          id: ownerProfile.id,
+          displayName: normalizeNullableText(ownerProfile.display_name),
+          username: normalizeNullableText(ownerProfile.username),
+          avatarUrl: normalizeNullableText(ownerProfile.avatar_url),
+          profileTagline: normalizeNullableText(ownerProfile.profile_tagline),
+          city: normalizeNullableText(ownerProfile.city),
+          area: normalizeNullableText(ownerProfile.area),
+          successfulSwapsCount: ownerProfile.successful_swaps_count,
+          responseRate: ownerProfile.response_rate,
+        }
+      : null,
   };
 }
