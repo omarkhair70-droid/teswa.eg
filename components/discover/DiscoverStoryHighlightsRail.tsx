@@ -2,9 +2,9 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppText } from '@/components/ui/AppText';
-import { RemoteImage } from '@/components/ui/RemoteImage';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -33,7 +33,7 @@ export function DiscoverStoryHighlightsRail({ items, loading = false, errorMessa
           {items.map((item) => (
             <Pressable key={item.id} onPress={() => router.push(`/item/${item.id}`)} style={styles.card}>
               {item.imageUrl ? (
-                <RemoteImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" />
+                <ExpoImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={120} />
               ) : (
                 <LinearGradient colors={['#FFF2E0', '#EBDCC5']} style={styles.image} />
               )}

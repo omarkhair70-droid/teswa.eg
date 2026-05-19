@@ -1,8 +1,8 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppText } from '@/components/ui/AppText';
-import { RemoteImage } from '@/components/ui/RemoteImage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -20,7 +20,7 @@ export function DiscoverSpotlightRail({ items }: Props) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
         {items.map((item) => (
           <Pressable key={item.id} onPress={() => router.push(`/item/${item.id}`)} style={styles.card}>
-            {item.imageUrl ? <RemoteImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" /> : <LinearGradient colors={['#F6EFE2', '#ECE2D4']} style={styles.image} />}
+            {item.imageUrl ? <ExpoImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={120} /> : <LinearGradient colors={['#F6EFE2', '#ECE2D4']} style={styles.image} />}
             <View style={styles.content}>
               <AppText weight="bold" numberOfLines={1}>{item.title}</AppText>
               <AppText muted numberOfLines={1}>{[item.category, item.location].filter(Boolean).join(' • ')}</AppText>

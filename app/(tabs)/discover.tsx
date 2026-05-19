@@ -369,9 +369,11 @@ export default function DiscoverScreen() {
                 />
               </AppCard>
             ) : null}
-            <AppCard>
-              <DiscoverStoryHighlightsRail items={storyHighlights} loading={storyHighlightsLoading} errorMessage={storyHighlightsError} onRetry={loadStoryHighlights} />
-            </AppCard>
+            {storyHighlightsLoading || Boolean(storyHighlightsError) || storyHighlights.length > 0 ? (
+              <AppCard>
+                <DiscoverStoryHighlightsRail items={storyHighlights} loading={storyHighlightsLoading} errorMessage={storyHighlightsError} onRetry={loadStoryHighlights} />
+              </AppCard>
+            ) : null}
             <DiscoverIntelligencePanel state={discoverIntelligenceState} />
 
             <AppCard>
@@ -462,9 +464,11 @@ export default function DiscoverScreen() {
                 </View>
               </AppCard>
             ) : null}
-            <AppCard>
-              <DiscoverSpotlightRail items={spotlightItems} />
-            </AppCard>
+            {spotlightItems.length > 0 ? (
+              <AppCard>
+                <DiscoverSpotlightRail items={spotlightItems} />
+              </AppCard>
+            ) : null}
           </View>
         }
         renderItem={({ item }) => <ItemCard item={item} />}
