@@ -78,7 +78,26 @@
       "expo-video",
       "expo-sqlite",
       "expo-background-task",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "نستخدم التحقق البيومتري لحماية بياناتك المحلية داخل تِسوى."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "نحتاج الوصول إلى صورك وفيديوهاتك عند استخدام ميزات الحفظ أو إدارة الوسائط داخل تِسوى.",
+          "savePhotosPermission": "نحتاج الإذن لحفظ الصور أو الفيديوهات التي تطلب حفظها من تِسوى.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": [
+            "photo",
+            "video"
+          ]
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "appVersion"
