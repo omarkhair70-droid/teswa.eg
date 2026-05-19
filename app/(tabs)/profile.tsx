@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
@@ -16,6 +16,7 @@ import { getNotificationPermissionStatus, hasStoredPushToken, requestAndRegister
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { buildProfilePresence } from '@/lib/profile-presence';
+import { requestMyAccountDeletion } from '@/lib/account-deletion';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
 
@@ -23,6 +24,9 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [accountDeletionError, setAccountDeletionError] = useState<string | null>(null);
+  const [accountDeletionNotice, setAccountDeletionNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
@@ -197,6 +201,37 @@ export default function ProfileScreen() {
     setBiometricBusy(false);
   };
 
+
+  const handleDeleteAccount = async () => {
+    setAccountDeletionError(null);
+    setAccountDeletionNotice(null);
+
+    Alert.alert(
+      'تأكيد حذف الحساب',
+      'حذف الحساب نهائي ولا يمكن التراجع عنه. سيتم حذف حساب تِسوى والبيانات المرتبطة به داخل التطبيق. هل أنت متأكد؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'نعم، احذف الحساب',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingAccount(true);
+            const result = await requestMyAccountDeletion();
+            if (!result.ok) {
+              setAccountDeletionError(result.message);
+              setIsDeletingAccount(false);
+              return;
+            }
+
+            setAccountDeletionNotice(result.message);
+            await signOut();
+            setIsDeletingAccount(false);
+          },
+        },
+      ],
+    );
+  };
+
   const handleSignOut = async () => {
     setIsSigningOut(true);
     setSignOutError(null);
@@ -292,6 +327,22 @@ export default function ProfileScreen() {
           </>
         ) : null}
 
+
+        <AppCard>
+          <View style={styles.group}>
+            <AppText weight="semibold" style={styles.dangerTitle}>حذف الحساب نهائيًا</AppText>
+            <AppText muted>حذف الحساب يزيل حساب تِسوى والبيانات المرتبطة به داخل التطبيق بشكل نهائي، ولا يمكن التراجع بعد التأكيد.</AppText>
+            {accountDeletionError ? <AppText style={styles.errorText}>{accountDeletionError}</AppText> : null}
+            {accountDeletionNotice ? <AppText style={styles.successText}>{accountDeletionNotice}</AppText> : null}
+            <AppButton
+              label={isDeletingAccount ? 'جارٍ حذف الحساب...' : 'حذف الحساب'}
+              disabled={isDeletingAccount || isSigningOut}
+              onPress={handleDeleteAccount}
+              variant="neutral"
+            />
+          </View>
+        </AppCard>
+
         <AppCard>
           <View style={styles.group}>
             <AppText muted>تقدر تسجل خروجك وتدخل بحساب مختلف وقت ما تحب.</AppText>
@@ -312,4 +363,5 @@ const styles = StyleSheet.create({
   errorText: { color: '#B00020' },
   securityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   successText: { color: '#7C2D12' },
+  dangerTitle: { color: '#B00020' },
 });
