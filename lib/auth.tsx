@@ -3,11 +3,13 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
+import { fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
 import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
 const SIGNED_IN_PROFILE_RETRY_DELAY_MS = 650;
+const POLICY_CHECK_ERROR_MESSAGE = 'تعذر التحقق من موافقات السياسات. حاول مرة تانية.';
 
 type AuthContextValue = {
   bootstrapReady: boolean;
@@ -17,7 +19,11 @@ type AuthContextValue = {
   onboardingCompleted: boolean;
   profileCompleted: boolean;
   profileCheckError: string | null;
+  loadingPolicyAcceptance: boolean;
+  requiredPoliciesAccepted: boolean;
+  policyAcceptanceCheckError: string | null;
   refreshProfile: () => Promise<void>;
+  refreshPolicyAcceptance: () => Promise<void>;
   signOut: () => Promise<{ ok: true } | { ok: false; message: string }>;
   setOnboardingCompletedState: (value: boolean) => void;
 };
@@ -32,9 +38,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [profileCompleted, setProfileCompleted] = useState(false);
   const [profileCheckError, setProfileCheckError] = useState<string | null>(null);
+  const [loadingPolicyAcceptance, setLoadingPolicyAcceptance] = useState(false);
+  const [requiredPoliciesAccepted, setRequiredPoliciesAccepted] = useState(false);
+  const [policyAcceptanceCheckError, setPolicyAcceptanceCheckError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const inFlightProfileChecksRef = useRef<Map<string, Promise<void>>>(new Map());
   const activeProfileCheckTokenRef = useRef(0);
+  const inFlightPolicyChecksRef = useRef<Map<string, Promise<void>>>(new Map());
+  const activePolicyCheckTokenRef = useRef(0);
 
   const checkProfileForUser = async (userId: string, reason: string) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
@@ -90,6 +101,52 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   };
 
+
+  const checkPolicyAcceptanceForUser = async (userId: string) => {
+    const existingCheck = inFlightPolicyChecksRef.current.get(userId);
+    if (existingCheck) {
+      await existingCheck;
+      return;
+    }
+
+    activePolicyCheckTokenRef.current += 1;
+    const checkToken = activePolicyCheckTokenRef.current;
+    setLoadingPolicyAcceptance(true);
+    setPolicyAcceptanceCheckError(null);
+
+    const checkPromise = (async () => {
+      try {
+        const state = await fetchRequiredPolicyAcceptanceState(userId);
+        if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
+        if (!state.ok) {
+          setRequiredPoliciesAccepted(false);
+          setPolicyAcceptanceCheckError(state.message || POLICY_CHECK_ERROR_MESSAGE);
+          return;
+        }
+
+        setRequiredPoliciesAccepted(state.requiredPoliciesAccepted);
+        setPolicyAcceptanceCheckError(null);
+      } catch (error) {
+        if (__DEV__) console.log('[Auth] policy acceptance check failed', { userId, error });
+        if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
+        setRequiredPoliciesAccepted(false);
+        setPolicyAcceptanceCheckError(POLICY_CHECK_ERROR_MESSAGE);
+      } finally {
+        if (mountedRef.current && activePolicyCheckTokenRef.current === checkToken) {
+          setLoadingPolicyAcceptance(false);
+        }
+      }
+    })();
+
+    inFlightPolicyChecksRef.current.set(userId, checkPromise);
+    try {
+      await checkPromise;
+    } finally {
+      const activeCheck = inFlightPolicyChecksRef.current.get(userId);
+      if (activeCheck === checkPromise) inFlightPolicyChecksRef.current.delete(userId);
+    }
+  };
+
   const refreshProfile = async () => {
     if (!user) {
       setProfileCompleted(false);
@@ -97,6 +154,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return;
     }
     await checkProfileForUser(user.id, 'manual_refresh');
+  };
+
+  const refreshPolicyAcceptance = async () => {
+    if (!user) {
+      setRequiredPoliciesAccepted(false);
+      setPolicyAcceptanceCheckError(null);
+      return;
+    }
+    await checkPolicyAcceptanceForUser(user.id);
   };
 
   const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -124,6 +190,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
         await checkProfileForUser(currentSession.user.id, 'bootstrap_session');
+        await checkPolicyAcceptanceForUser(currentSession.user.id);
       } else {
         setProfileCheckError(null);
       }
@@ -137,25 +204,31 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(nextSession?.user ?? null);
       if (!nextSession?.user) {
         activeProfileCheckTokenRef.current += 1;
+        activePolicyCheckTokenRef.current += 1;
         setProfileCompleted(false);
         setLoadingProfile(false);
         setProfileCheckError(null);
+        setRequiredPoliciesAccepted(false);
+        setLoadingPolicyAcceptance(false);
+        setPolicyAcceptanceCheckError(null);
         return;
       }
 
       await checkProfileForUser(nextSession.user.id, 'auth_state_change');
+      await checkPolicyAcceptanceForUser(nextSession.user.id);
     });
 
     return () => {
       mountedRef.current = false;
       activeProfileCheckTokenRef.current += 1;
+      activePolicyCheckTokenRef.current += 1;
       listener.subscription.unsubscribe();
     };
   }, []);
 
   const value = useMemo(
-    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, refreshProfile, signOut, setOnboardingCompletedState: setOnboardingCompleted }),
-    [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError],
+    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, signOut, setOnboardingCompletedState: setOnboardingCompleted }),
+    [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
