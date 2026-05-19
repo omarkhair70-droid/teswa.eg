@@ -8,7 +8,7 @@ Core lines:
 
 ## Current Product Status
 
-Teswa Mobile has progressed far beyond initial app foundation and now ships as a broad native product system. Teswa Mobile currently includes a functioning native marketplace, social story layer, motion/discovery surfaces, local city pulse, voice interactions, and offline/resilience systems.
+Teswa Mobile is now a broad Arabic-first native social swap product across marketplace, stories, motion/video discovery, personal Living World recap, lightweight discover intelligence, emotional offer/deal milestones, premium auth entry, and a native security layer. The product also includes a stronger media-performance base and expanded native capability reserve. The latest Android Preview APK has been built, installed, and validated successfully on device.
 
 ## Implemented Product Systems
 
@@ -16,63 +16,58 @@ Teswa Mobile has progressed far beyond initial app foundation and now ships as a
 - Expo SDK 55, React Native, TypeScript, and Expo Router architecture.
 - Arabic-first mobile UX with RTL readiness.
 - Supabase-integrated mobile data/auth foundation.
-- App routing, auth-aware navigation flows, design tokens, and reusable UI primitives.
+- Mature routed mobile product structure with auth-aware navigation flows.
+- Reusable UI primitives, design tokens, and richer ambient/premium surface patterns.
 
-### 2. Auth & Onboarding
-- Branded splash and onboarding flow.
-- Login/signup/session redirect behavior.
-- Initial profile setup and early account shaping.
+### 2. Auth, Onboarding & Native Entry
+- Cinematic branded onboarding and premium first-entry flow.
+- Premium login/signup/profile setup path.
+- Native-first Google Sign-In with browser fallback compatibility.
+- Supabase session exchange preserved across auth entry points.
+- Smoother first-sign-in bootstrap/session handling from the latest expansion cycle.
 
-### 3. Marketplace & Item Discovery
-- Home and Discover browsing surfaces.
-- Item detail screen and listing context.
-- Marketplace cards and discovery navigation flows.
-- Nearby/location-aware discovery foundation.
+### 3. Marketplace, Item Detail & Creator Studio
+- Home and Discover marketplace browsing surfaces.
+- Richer premium item detail presentation.
+- Item video teaser support in discovery/detail contexts.
+- Creator/Add-Item studio visual system with image/video media surfaces.
+- Multi-step add-item flow remains intact (capture/import/compose/publish).
 
-### 4. Add Item Native Studio
-- Native item photo capture studio.
-- Multi-photo capture support.
-- Gallery intake/import.
-- Image composer/editing flow.
-- Draft/publish foundations integrated into add-item experience.
+### 4. Offers, Deals, Messages & Emotional Utility
+- Offer/deal lifecycle flows and decision support remain intact.
+- Warmer communication hub across deal messaging contexts.
+- Deal chat and voice-enabled messaging behavior.
+- Emotional milestone cards for key moments, including offer sent, accepted-deal start, and confirmation/waiting/completed states.
 
-### 5. Offers, Deals, Messages
-- Offer/deal lifecycle flows.
-- Deal chat experience.
-- Voice messages in deal conversations.
-- Unread badges and message-center behaviors.
-
-### 6. Notifications
-- Expo push registration and persisted device-token handling.
-- Supabase notification data model.
-- Server-side push fanout through Edge Function + webhook routing.
-- Contextual story-reply notification routing.
-- Voice-aware contextual notification copy.
-
-### 7. Stories & Story Creation
+### 5. Stories & Story Creation
 - Story viewer with social interaction loop.
-- Story likes and replies.
-- Native story camera studio.
-- Gallery upload entry points.
-- Story image composer.
-- Publishing overlay and success state.
-- Contextual reply thread surfaces.
+- Story likes, replies, and story voice replies.
+- Native story camera studio and gallery entry points.
+- Story publishing flow with contextual success/engagement surfaces.
+- Improved viewer readiness/loading behavior and stronger nearby story/media prefetch posture.
 
-### 8. Motion / حركة تِسوى
-- Motion 2.0 mixed discovery feed.
-- Motion hero/pulse visual experience.
-- Shareable Motion moments.
-- Story-rich and moving-item discovery behavior.
+### 6. Motion / حركة تِسوى
+- Video-led discovery moments inside Motion.
+- Fullscreen vertical Pulse Viewer behavior.
+- Motion viewer that can combine story videos with item teaser videos.
+- Cinematic CTA-style entry paths from Motion/Home/Discover where relevant.
 
-### 9. Offline Memory & Recovery
+### 7. Discover Intelligence & Living World
+- Personal Living World recap card on Home.
+- Discover Intelligence Light Layer.
+- Discover story highlights rail.
+- Spotlight rail.
+- Lightweight scene interpretation/signals to improve discovery readability.
+
+### 8. Offline Memory & Recovery
 - SQLite-backed public JSON cache layer.
 - Marketplace/Home/Discover warm-start behavior.
 - Motion/People/detail/profile offline memory coverage.
 - Background public-memory refresh.
 - Foreground recovery refresh.
 
-### 10. City Pulse / نبض تِسوى حولك
-- Location-based local pulse inside Motion.
+### 9. City Pulse / نبض تِسوى حولك
+- Location/city/area-aware local pulse surfaces inside Motion.
 - Nearby stories.
 - Nearby moving items.
 - Nearby story-rich items.
@@ -80,41 +75,59 @@ Teswa Mobile has progressed far beyond initial app foundation and now ships as a
 - Saved City Pulse memory.
 - Local "نبض المدينة الآن" signal summaries.
 
-### 11. Audio Moments / الصوت داخل عالم تِسوى
+### 10. Audio Moments / الصوت داخل عالم تِسوى
 - Story voice replies.
 - Voice messages inside contextual story reply threads.
 - Voice-aware message summaries.
 - Voice-aware notification copy.
 
+### 11. Native Security & Device Trust
+- Optional Biometric App Lock.
+- Root lock coordinator behavior.
+- Resume relock behavior.
+- Local app-lock preference persistence.
+- Secure local capability foundation/reserve for continued trust-layer hardening.
+
+### 12. Media Performance Engine
+- Cached video source handling.
+- Image memory/disk prefetch behavior.
+- Adjacent Pulse Viewer media warmups.
+- Story/item media prefetch improvements.
+- Graceful loading states in place of blank media transitions.
+
+### 13. Native Capability Reserve Pack
+Installed/reserved in the native binary to reduce future rebuild pressure (not all surfaced yet as full product features):
+- `expo-secure-store`
+- `expo-clipboard`
+- `expo-document-picker`
+- `expo-intent-launcher`
+- `expo-store-review`
+- `expo-media-library`
+- `react-native-maps`
+
 ## Native Capability Coverage
 
-Teswa intentionally treats native Expo/React Native capabilities as product surfaces, not just technical dependencies. Current coverage includes camera capture, image manipulation, video playback, audio recording/playback, sharing flows, notifications, location, haptics, offline SQLite memory, and background-task/foreground-recovery behavior.
+Teswa intentionally treats native Expo/React Native capabilities as product surfaces, not just technical dependencies. Current coverage includes camera capture, image manipulation, video playback, audio recording/playback, sharing flows, notifications, location, haptics, offline SQLite memory, and background-task/foreground-recovery behavior, with additional native reserve capacity embedded for upcoming rollout layers.
 
 ## Current Track / Where We Are Now
 
-The Living World track is underway and has completed:
-- M37 City Pulse
-- M38 Audio Moments / Audio Presence
-
-Next product expansion will continue the Living World track by deepening media-rich motion, video-led discovery, or other high-impact world-building layers.
+- Product expansion through M43I is merged.
+- Latest Android Preview APK validated successfully on device.
+- Native Google Sign-In and Biometric App Lock are confirmed working in the APK.
+- Immediate pre–Google Play step: **M43J — Teswa App Icon + Launch Identity Pack**.
+- After icon/launch identity completion: Production AAB build, Google Play Console setup, then Internal Testing track rollout.
 
 ## Tech Stack
 
-- Expo SDK 55
-- React Native
-- TypeScript
+- Expo SDK 55 + React Native + TypeScript
 - Expo Router
 - Supabase (Auth, Database, Storage, Edge Functions)
-- Expo Notifications
-- Expo Camera
-- Expo Audio
-- Expo Video
-- Expo Image
-- Expo Image Manipulator
-- Expo Location
-- Expo Sharing / share flows
-- SQLite
-- Reanimated, Skia, and Lottie (where relevant)
+- Native auth/security: Google Sign-In, Expo Local Authentication, Expo Secure Store
+- Media/motion: Expo Camera, Expo Audio, Expo Video, Expo Image, Expo Image Manipulator, Expo Media Library
+- Platform/device ops: Expo Notifications, Expo Location, Expo Store Review, Expo Document Picker, Expo Intent Launcher, Expo Clipboard, Expo Sharing
+- Data/performance: SQLite
+- UI/motion: Reanimated, Skia, and Lottie (where relevant)
+- Maps foundation: React Native Maps
 
 ## Setup
 
@@ -130,6 +143,7 @@ Add these in `.env`:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (used by native-first Google Sign-In orchestration and browser fallback compatibility)
 
 Server-side secrets (for push delivery and other backend operations) should remain in operational/runtime configuration rather than mobile client environment variables.
 
@@ -144,15 +158,28 @@ npx expo start --web
 
 ## Preview APK + OTA Updates
 
-- Build and install a Preview APK when native dependencies/configuration change:
+- Build and install a Preview APK for native-layer changes (dependencies/plugins/config/runtime-native behavior):
   ```bash
   eas build --platform android --profile preview
   ```
-- Ship many JS/UI/business-logic-only updates over OTA when the native layer is unchanged:
+- Ship JS/UI/business-logic updates over OTA when native runtime compatibility is unchanged:
   ```bash
   eas update --channel preview --message "..."
   ```
-- Any native dependency/plugin/config changes still require a new Preview APK build.
+- Native dependency/plugin/config changes still require a new APK/AAB build.
+- The preview APK + OTA workflow is active and used as the current delivery path.
+
+## Google Play Readiness
+
+Teswa is now approaching Google Play Internal Testing.
+
+Immediate flow:
+1. Finalize App Icon / Launch Identity.
+2. Build Production AAB.
+3. Configure Google Play Console.
+4. Run Internal Testing rollout.
+
+Note: after Play Console setup, Google Sign-In distribution may require adding the **Play App Signing SHA-1** to the Google Cloud Android OAuth client configuration.
 
 ## Push Delivery Operations
 
