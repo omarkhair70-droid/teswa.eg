@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useEventListener } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { PulseViewerEntry } from '@/lib/pulse-video-viewer';
+import { buildCachedVideoSource } from '@/lib/media/media-performance';
 
 function formatDuration(durationMs: number | null): string | null {
   if (!durationMs || durationMs <= 0) return null;
@@ -19,10 +21,20 @@ function formatDuration(durationMs: number | null): string | null {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function ActiveVideo({ url, paused }: { url: string; paused: boolean }) {
-  const player = useVideoPlayer(url, (instance) => {
+function ActiveVideo({ url, paused, onReady, onError }: { url: string; paused: boolean; onReady?: () => void; onError?: () => void }) {
+  const source = buildCachedVideoSource(url);
+  const player = useVideoPlayer(source, (instance) => {
     instance.loop = true;
     instance.play();
+  });
+  const readyRef = useRef(false);
+
+  useEventListener(player, 'statusChange', ({ status, error }) => {
+    if (error) onError?.();
+    if (status === 'readyToPlay' && !readyRef.current) {
+      readyRef.current = true;
+      onReady?.();
+    }
   });
 
   useEffect(() => {
@@ -35,17 +47,22 @@ function ActiveVideo({ url, paused }: { url: string; paused: boolean }) {
 
 export function PulseViewerVideoPage({ entry, active }: { entry: PulseViewerEntry; active: boolean }) {
   const [paused, setPaused] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
   const durationLabel = useMemo(() => formatDuration(entry.durationMs), [entry.durationMs]);
 
   useEffect(() => { setPaused(false); }, [entry.id, active]);
+  useEffect(() => { setReady(false); setFailed(false); }, [entry.id]);
 
   const ctaLabel = entry.kind === 'story_video' ? 'افتح القصة' : 'افتح العنصر';
 
   return (
     <View style={styles.page}>
-      {active ? <ActiveVideo url={entry.signedVideoUrl} paused={paused} /> : null}
+      {active ? <ActiveVideo url={entry.signedVideoUrl} paused={paused} onReady={() => setReady(true)} onError={() => setFailed(true)} /> : null}
       {!active ? <LinearGradient colors={['#130F10', '#2B1C16', '#101012']} style={StyleSheet.absoluteFill} /> : null}
+      {active && !ready && !failed ? <LinearGradient colors={['#130F10', '#2B1C16', '#101012']} style={StyleSheet.absoluteFill} /> : null}
       <LinearGradient colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.64)']} style={StyleSheet.absoluteFill} />
+      {active && !ready && !failed ? <View pointerEvents="none" style={styles.loadingOverlay}><AppText style={styles.loadingText}>نجهّز المشهد...</AppText></View> : null}
 
       <View style={styles.overlay}>
         <View style={styles.pillsRow}>
@@ -56,7 +73,7 @@ export function PulseViewerVideoPage({ entry, active }: { entry: PulseViewerEntr
         {entry.kind === 'story_video' ? (
           <View style={styles.body}>
             <View style={styles.authorRow}>
-              {entry.authorAvatarUrl ? <ExpoImage source={{ uri: entry.authorAvatarUrl }} style={styles.avatar} contentFit="cover" /> : <View style={styles.avatarFallback}><AppText weight="bold" style={styles.avatarText}>{(entry.authorDisplayName || entry.authorUsername || 'م').charAt(0)}</AppText></View>}
+              {entry.authorAvatarUrl ? <ExpoImage source={{ uri: entry.authorAvatarUrl }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" transition={100} /> : <View style={styles.avatarFallback}><AppText weight="bold" style={styles.avatarText}>{(entry.authorDisplayName || entry.authorUsername || 'م').charAt(0)}</AppText></View>}
               <AppText weight="bold" style={styles.title}>{entry.authorDisplayName?.trim() || (entry.authorUsername ? `@${entry.authorUsername}` : 'مستخدم')}</AppText>
             </View>
             {entry.caption ? <AppText numberOfLines={3} style={styles.description}>{entry.caption}</AppText> : null}
@@ -85,4 +102,6 @@ const styles = StyleSheet.create({
   pillText: { color: '#FFF', fontSize: 12 }, body: { gap: spacing.xs }, authorRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs }, avatar: { width: 34, height: 34, borderRadius: 17 }, avatarFallback: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, avatarText: { color: '#fff' },
   title: { color: '#fff', fontSize: 20 }, description: { color: 'rgba(255,255,255,0.9)' }, actions: { flexDirection: 'row-reverse', gap: spacing.sm, alignItems: 'center' },
   ctaBtn: { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.round }, ctaText: { color: '#fff' }, pauseBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.round }, pauseText: { color: '#fff' },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { color: '#fff', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
 });

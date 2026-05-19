@@ -12,6 +12,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { MotionVideoDrop } from '@/lib/motion-video-drops';
+import { buildCachedVideoSource } from '@/lib/media/media-performance';
 
 export type MotionVideoDropsSectionProps = {
   drops: MotionVideoDrop[];
@@ -21,7 +22,8 @@ export type MotionVideoDropsSectionProps = {
 };
 
 function ActiveVideoPreview({ signedVideoUrl }: { signedVideoUrl: string }) {
-  const player = useVideoPlayer(signedVideoUrl, (instance) => {
+  const source = buildCachedVideoSource(signedVideoUrl);
+  const player = useVideoPlayer(source, (instance) => {
     instance.loop = true;
     instance.play();
   });

@@ -22,6 +22,7 @@ import {
   readFreshItemDetailCache,
   writeItemDetailCache,
 } from '@/lib/offline-item-detail-cache';
+import { buildCachedVideoSource, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 
 function formatDuration(durationMs: number | null): string | null {
   if (durationMs == null) return null;
@@ -30,7 +31,8 @@ function formatDuration(durationMs: number | null): string | null {
 }
 
 function ItemVideoPlayer({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (instance) => {
+  const source = buildCachedVideoSource(uri);
+  const player = useVideoPlayer(source, (instance) => {
     instance.loop = false;
     instance.play();
   });
@@ -152,6 +154,11 @@ export default function ItemDetailsScreen() {
   }, [id]);
 
   useEffect(() => { loadItem(); }, [loadItem]);
+  useEffect(() => {
+    if (!item?.id) return;
+    if (!item.images.length) return;
+    void prefetchImagesMemoryDisk(item.images.map((image) => image.imageUrl));
+  }, [item?.id, item?.images]);
 
   const handleShareItem = useCallback(async () => {
     if (!item) return;
