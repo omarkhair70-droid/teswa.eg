@@ -63,8 +63,7 @@ async function fetchItemTeaserEntries(limit: number): Promise<PulseViewerItemTea
   const { data: items, error: itemsError } = await supabase
     .from('marketplace_items')
     .select('id,title,description,cover_image_url,category,item_condition,city,owner_display_name')
-    .in('id', itemIds)
-    .eq('status', 'published');
+    .in('id', itemIds);
 
   if (itemsError) throw itemsError;
 

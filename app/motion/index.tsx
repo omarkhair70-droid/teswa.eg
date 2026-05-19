@@ -589,6 +589,14 @@ export default function MotionScreen() {
               />
             </View>
 
+            <View style={styles.viewerCtaCard}>
+              <AppText weight="bold" style={styles.viewerCtaTitle}>شوف الحركة عموديًا</AppText>
+              <AppText muted>ريل سريع يجمع لقطات القصص ولمحات العناصر في مشهد واحد.</AppText>
+              <Pressable style={styles.viewerCtaBtn} onPress={() => router.push('/motion/viewer')}>
+                <AppText weight="semibold" style={styles.viewerCtaBtnText}>افتح المشاهد</AppText>
+              </Pressable>
+            </View>
+
             <View style={styles.pulseIntro}>
               <AppText weight="bold">النبض الآن</AppText>
               <AppText muted>عناصر دخلت الحركة، وحكايات بدأت تشد الانتباه.</AppText>
