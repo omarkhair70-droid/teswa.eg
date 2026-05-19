@@ -14,6 +14,7 @@ import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
 import { createForegroundMemoryRefreshSubscription } from '@/lib/foreground-memory-refresh';
+import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -210,6 +211,7 @@ export default function RootLayout() {
             <BackgroundMemoryRefreshCoordinator />
             <ForegroundMemoryRefreshCoordinator />
             <RootNavigator />
+            <BiometricAppLockCoordinator />
           </UnreadBadgesProvider>
         </AuthProvider>
         </GestureHandlerRootView>
