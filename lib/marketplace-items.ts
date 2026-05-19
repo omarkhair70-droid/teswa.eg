@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { fetchItemVideoTeaserByItemId, type ItemVideoTeaser } from '@/lib/item-videos';
 
 const MARKETPLACE_PAGE_SIZE = 20;
@@ -24,6 +25,7 @@ export type MarketplaceItem = {
   condition: string | null;
   location: string | null;
   ownerDisplayName: string | null;
+  hasVideoTeaser: boolean;
 };
 
 export type MarketplaceItemsPage = {
@@ -50,7 +52,7 @@ export type MarketplaceItemDetail = MarketplaceItem & {
   videoTeaser: ItemVideoTeaser | null;
 };
 
-function mapRowToMarketplaceItem(row: MarketplaceItemRow): MarketplaceItem {
+function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false): MarketplaceItem {
   return {
     id: row.id,
     title: row.title?.trim() || 'عنصر بدون عنوان',
@@ -60,6 +62,7 @@ function mapRowToMarketplaceItem(row: MarketplaceItemRow): MarketplaceItem {
     condition: row.item_condition,
     location: row.city,
     ownerDisplayName: row.owner_display_name,
+    hasVideoTeaser,
   };
 }
 
@@ -93,8 +96,10 @@ export async function fetchMarketplaceItemsPage(options?: { offset?: number; lim
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
+  const videoPresenceByItemId = await fetchItemVideoPresenceMap(pageRows.map((row) => row.id));
+
   return {
-    items: pageRows.map((row) => mapRowToMarketplaceItem(row)),
+    items: pageRows.map((row) => mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true)),
     hasMore,
   };
 }
@@ -119,7 +124,10 @@ export async function fetchMarketplaceItemById(id: string): Promise<MarketplaceI
     return null;
   }
 
-  return mapRowToMarketplaceItem(data as MarketplaceItemRow);
+  const row = data as MarketplaceItemRow;
+  const videoPresenceByItemId = await fetchItemVideoPresenceMap([row.id]);
+
+  return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true);
 }
 
 type ItemDetailRow = {
@@ -228,6 +236,7 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     condition: normalizeNullableText(item.condition),
     location: normalizeNullableText(item.city),
     ownerDisplayName: normalizeNullableText(ownerProfile?.display_name ?? null),
+    hasVideoTeaser: Boolean(videoTeaser),
     area: normalizeNullableText(item.area),
     conditionNotes: normalizeNullableText(item.condition_notes),
     itemStory: normalizeNullableText(item.item_story),
