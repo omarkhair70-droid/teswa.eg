@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { AppText } from "@/components/ui/AppText";
+import { TeswaMomentCard } from "@/components/ui/TeswaMomentCard";
 import { colors } from "@/constants/colors";
 import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
@@ -57,13 +58,14 @@ const formatResponseRate = (responseRate: number | null) =>
 export default function Screen() {
   const { user } = useAuth();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, moment } = useLocalSearchParams<{ id: string; moment?: string }>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deal, setDeal] = useState<any>(null);
   const [messageBody, setMessageBody] = useState("");
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [completionMoment, setCompletionMoment] = useState<"confirmed_waiting" | "completed" | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "live" | "unavailable"
   >("connecting");
@@ -526,6 +528,7 @@ export default function Screen() {
       void Haptics.notificationAsync(
         Haptics.NotificationFeedbackType.Success,
       ).catch(() => undefined);
+      setCompletionMoment(result.completed ? "completed" : "confirmed_waiting");
       await load();
     } catch {
       setError("تعذر تأكيد الإتمام حالياً.");
@@ -641,6 +644,35 @@ export default function Screen() {
             <AppCard>
               <AppText muted>{voiceMessage}</AppText>
             </AppCard>
+          ) : null}
+          {moment === "accepted" ? (
+            <TeswaMomentCard
+              eyebrow="الصفقة بدأت"
+              title="العرض اتقبل"
+              body="اتفتحت دردشة الصفقة. ابدأوا تنسيق تفاصيل التبديل من هنا."
+              icon="chatbubble-ellipses-outline"
+              tone="success"
+            />
+          ) : null}
+          {completionMoment === "confirmed_waiting" ? (
+            <TeswaMomentCard
+              eyebrow="تأكيدك اتسجل"
+              title="مستنيين الطرف التاني"
+              body="أنت أكدت إن المقايضة تمت. أول ما الطرف الآخر يؤكد، هنقفل الصفقة بنجاح."
+              icon="hourglass-outline"
+              tone="waiting"
+            />
+          ) : null}
+          {completionMoment === "completed" ? (
+            <TeswaMomentCard
+              eyebrow="لحظة مكتملة"
+              title="المقايضة تمت"
+              body="الطرفين أكدوا الإتمام. تقدر الآن تقيّم التجربة."
+              icon="checkmark-circle-outline"
+              tone="success"
+              primaryActionLabel="قيّم التجربة"
+              onPrimaryAction={() => router.push(`/review/deal/${deal.id}`)}
+            />
           ) : null}
           <View style={styles.threadSection}>
             <View style={styles.threadTopLine}>

@@ -60,7 +60,7 @@ export default function CreateOfferScreen() {
         setSubmitError(result.message);
         return;
       }
-      router.replace(`/offer/${result.offerId}`);
+      router.replace(`/offer/${result.offerId}?moment=sent`);
     } catch (err) {
       if (__DEV__) console.log('[offer-create] submit failed', { itemId, offeredItemId: selectedOfferedItemId, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
       setSubmitError('تعذر إرسال العرض حالياً. حاول مرة أخرى.');
