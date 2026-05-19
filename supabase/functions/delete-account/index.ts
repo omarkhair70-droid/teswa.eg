@@ -46,9 +46,11 @@ async function removeStoragePaths(
   if (error) throw new Error(`storage_remove_failed:${bucket}`);
 }
 
+type DeleteStepResult = { error: { code?: string | null; message?: string | null } | null };
+
 async function runDeleteStep(
   label: string,
-  deleteQuery: Promise<{ error: { code?: string | null; message?: string | null } | null }>,
+  deleteQuery: PromiseLike<DeleteStepResult>,
   errorCode: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
   const { error } = await deleteQuery;
