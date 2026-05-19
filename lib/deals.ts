@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import { fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
 import { supabase } from '@/lib/supabase/client';
+import { fetchUserBlockState } from '@/lib/user-blocks';
 
 export type DealStatus = 'coordinating' | 'completed_pending_confirmation' | 'completed' | 'cancelled' | 'disputed' | string;
 export type DealViewerRole = 'requester' | 'offerer';
@@ -191,6 +192,11 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     return { ok: false as const, reason: 'invalid_status' as const, message: 'المراسلة متاحة فقط أثناء التنسيق أو انتظار التأكيد.' };
   }
 
+  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
+  const blockedState = await fetchUserBlockState(input.currentUserId, otherParticipantId);
+  if (!blockedState.ok) return { ok: false as const, reason: 'unknown' as const, message: blockedState.message };
+  if (blockedState.state.isBlockedEitherDirection) return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكن إرسال رسائل لأن بينكما حظر.' };
+
   const since = new Date(Date.now() - 60_000).toISOString();
   const { count, error: rateError } = await supabase
     .from('deal_messages')
@@ -210,7 +216,6 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     .single();
   if (insertError) throw insertError;
 
-  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
   void notify({
     target_user_id: otherParticipantId,
     notification_type: 'system',
@@ -338,6 +343,13 @@ export async function sendDealVoiceMessageFromMobile(input: {
     return { ok: false as const, reason: 'invalid_status' as const, message: 'المراسلة متاحة فقط أثناء التنسيق أو انتظار التأكيد.' };
   }
 
+  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
+  const blockedState = await fetchUserBlockState(input.currentUserId, otherParticipantId);
+  if (!blockedState.ok) return { ok: false as const, reason: 'unknown' as const, message: blockedState.message };
+  if (blockedState.state.isBlockedEitherDirection) {
+    return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكن إرسال رسائل صوتية لأن بينكما حظر.' };
+  }
+
   const since = new Date(Date.now() - 60_000).toISOString();
   const { count, error: rateError } = await supabase
     .from('deal_messages')
@@ -383,7 +395,6 @@ export async function sendDealVoiceMessageFromMobile(input: {
     return { ok: false as const, reason: 'insert_failed' as const, message: 'تعذر إرسال الرسالة الصوتية. حاول مرة أخرى.' };
   }
 
-  const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
   void notify({
     target_user_id: otherParticipantId,
     notification_type: 'system',

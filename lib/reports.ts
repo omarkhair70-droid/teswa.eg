@@ -1,116 +1,26 @@
 import { supabase } from '@/lib/supabase/client';
 
-export type ReportReason = 'misleading_item' | 'inappropriate_content' | 'spam_offer' | 'unsafe_behavior' | 'no_show' | 'other';
+export type ReportReason = 'misleading_item' | 'inappropriate_content' | 'spam_offer' | 'unsafe_behavior' | 'no_show' | 'harassment' | 'fraud' | 'other';
 
 type ReportContextReason = 'not_found' | 'unauthorized' | 'unknown';
+type ParticipantSummary = { id: string; displayName: string | null; username: string | null; avatarUrl: string | null };
+export type DealReportContext = { dealId: string; reporterId: string; reportedUser: ParticipantSummary };
+export type UserReportContext = { reportedUser: ParticipantSummary };
+export type ItemReportContext = { itemId: string; title: string; owner: ParticipantSummary };
+export type StoryReportContext = { storyId: string; author: ParticipantSummary; caption: string | null };
+const ALLOWED_REASONS: ReportReason[] = ['misleading_item','inappropriate_content','spam_offer','unsafe_behavior','no_show','harassment','fraud','other'];
 
-type ParticipantSummary = {
-  id: string;
-  displayName: string | null;
-  username: string | null;
-  avatarUrl: string | null;
-};
+async function fetchProfile(userId: string): Promise<ParticipantSummary | null> { const { data, error } = await supabase.from('profiles').select('id,display_name,username,avatar_url').eq('id', userId).maybeSingle(); if (error || !data) return null; return { id: data.id as string, displayName: (data.display_name as string | null) ?? null, username: (data.username as string | null) ?? null, avatarUrl: (data.avatar_url as string | null) ?? null }; }
 
-export type DealReportContext = {
-  dealId: string;
-  reporterId: string;
-  reportedUser: ParticipantSummary;
-};
+export async function fetchDealReportContext(dealId: string, currentUserId: string) { try { const { data: deal, error } = await supabase.from('swap_deals').select('id,requester_id,offerer_id').eq('id', dealId).maybeSingle(); if (error) throw error; if (!deal) return { ok: false as const, reason: 'not_found' as const, message: 'الصفقة غير موجودة.' }; const requesterId = deal.requester_id as string; const offererId = deal.offerer_id as string; if (currentUserId !== requesterId && currentUserId !== offererId) return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بإرسال بلاغ من هذه الصفقة.' }; const reportedUserId = currentUserId === requesterId ? offererId : requesterId; const reportedUser = await fetchProfile(reportedUserId); if (!reportedUser) return { ok: false as const, reason: 'unknown' as const, message: 'تعذر تحميل بيانات الطرف الآخر.' }; return { ok: true as const, context: { dealId, reporterId: currentUserId, reportedUser } }; } catch { return { ok: false as const, reason: 'unknown' as const, message: 'تعذر تجهيز شاشة البلاغ حالياً.' }; } }
 
-export type SubmitDealReportInput = {
-  dealId: string;
-  currentUserId: string;
-  reason: ReportReason;
-  details?: string;
-};
+async function insertReport(payload: any) { const { error } = await supabase.from('reports').insert(payload); if (error?.code === '42501') return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بإرسال هذا البلاغ.' }; if (error) return { ok: false as const, reason: 'unknown' as const, message: 'تعذر إرسال البلاغ حالياً.' }; return { ok: true as const, message: 'تم استلام البلاغ.' }; }
 
-export type SubmitDealReportResult =
-  | { ok: true; message: string }
-  | { ok: false; reason: 'invalid_reason' | 'not_found' | 'unauthorized' | 'unknown'; message: string };
+export async function submitDealReport(input: { dealId: string; currentUserId: string; reason: ReportReason; details?: string }) { if (!ALLOWED_REASONS.includes(input.reason)) return { ok: false as const, reason: 'invalid_reason' as const, message: 'سبب البلاغ غير صالح.' }; const c = await fetchDealReportContext(input.dealId, input.currentUserId); if (!c.ok) return c; return insertReport({ reporter_id: input.currentUserId, reported_user_id: c.context.reportedUser.id, deal_id: input.dealId, reason: input.reason, details: input.details?.trim() || null, item_id: null, offer_id: null, deal_message_id: null, story_id: null }); }
 
-const ALLOWED_REASONS: ReportReason[] = ['misleading_item', 'inappropriate_content', 'spam_offer', 'unsafe_behavior', 'no_show', 'other'];
-
-export async function fetchDealReportContext(
-  dealId: string,
-  currentUserId: string
-): Promise<{ ok: true; context: DealReportContext } | { ok: false; reason: ReportContextReason; message: string }> {
-  try {
-    const { data: deal, error: dealError } = await supabase
-      .from('swap_deals')
-      .select('id,requester_id,offerer_id')
-      .eq('id', dealId)
-      .maybeSingle();
-
-    if (dealError) throw dealError;
-    if (!deal) return { ok: false, reason: 'not_found', message: 'الصفقة غير موجودة.' };
-
-    const isParticipant = deal.requester_id === currentUserId || deal.offerer_id === currentUserId;
-    if (!isParticipant) return { ok: false, reason: 'unauthorized', message: 'غير مسموح لك بإرسال بلاغ من هذه الصفقة.' };
-
-    const reportedUserId = deal.requester_id === currentUserId ? deal.offerer_id : deal.requester_id;
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id,display_name,username,avatar_url')
-      .eq('id', reportedUserId)
-      .maybeSingle();
-
-    if (profileError) throw profileError;
-    if (!profile) return { ok: false, reason: 'unknown', message: 'تعذر تحميل بيانات الطرف الآخر.' };
-
-    return {
-      ok: true,
-      context: {
-        dealId,
-        reporterId: currentUserId,
-        reportedUser: {
-          id: profile.id as string,
-          displayName: (profile.display_name as string | null) ?? null,
-          username: (profile.username as string | null) ?? null,
-          avatarUrl: (profile.avatar_url as string | null) ?? null,
-        },
-      },
-    };
-  } catch (error) {
-    if (__DEV__) console.log('[reports] fetchDealReportContext failed', { dealId, currentUserId, code: (error as { code?: string })?.code, message: (error as { message?: string })?.message });
-    return { ok: false, reason: 'unknown', message: 'تعذر تجهيز شاشة البلاغ حالياً.' };
-  }
-}
-
-export async function submitDealReport(input: SubmitDealReportInput): Promise<SubmitDealReportResult> {
-  if (!ALLOWED_REASONS.includes(input.reason)) {
-    return { ok: false, reason: 'invalid_reason', message: 'سبب البلاغ غير صالح.' };
-  }
-
-  const contextResult = await fetchDealReportContext(input.dealId, input.currentUserId);
-  if (!contextResult.ok) {
-    return { ok: false, reason: contextResult.reason, message: contextResult.message };
-  }
-
-  const { reportedUser } = contextResult.context;
-
-  try {
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: input.currentUserId,
-      reported_user_id: reportedUser.id,
-      deal_id: input.dealId,
-      reason: input.reason,
-      details: input.details?.trim() ? input.details.trim() : null,
-      item_id: null,
-      offer_id: null,
-      deal_message_id: null,
-    });
-
-    if (error) {
-      if (error.code === '42501') {
-        return { ok: false, reason: 'unauthorized', message: 'غير مسموح لك بإرسال بلاغ لهذه الصفقة.' };
-      }
-      if (__DEV__) console.log('[reports] submitDealReport insert failed', { dealId: input.dealId, currentUserId: input.currentUserId, code: error.code, message: error.message });
-      return { ok: false, reason: 'unknown', message: 'تعذر إرسال البلاغ حالياً.' };
-    }
-
-    return { ok: true, message: 'تم استلام البلاغ.' };
-  } catch (error) {
-    if (__DEV__) console.log('[reports] submitDealReport failed', { dealId: input.dealId, currentUserId: input.currentUserId, code: (error as { code?: string })?.code, message: (error as { message?: string })?.message });
-    return { ok: false, reason: 'unknown', message: 'تعذر إرسال البلاغ حالياً.' };
-  }
-}
+export async function fetchUserReportContext(userId: string, currentUserId: string) { if (userId === currentUserId) return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكنك الإبلاغ عن نفسك.' }; const p = await fetchProfile(userId); if (!p) return { ok: false as const, reason: 'not_found' as const, message: 'المستخدم غير موجود.' }; return { ok: true as const, context: { reportedUser: p } }; }
+export async function submitUserReport(input: { reportedUserId: string; currentUserId: string; reason: ReportReason; details?: string }) { if (!ALLOWED_REASONS.includes(input.reason)) return { ok: false as const, reason: 'invalid_reason' as const, message: 'سبب البلاغ غير صالح.' }; const c = await fetchUserReportContext(input.reportedUserId, input.currentUserId); if (!c.ok) return c; return insertReport({ reporter_id: input.currentUserId, reported_user_id: input.reportedUserId, reason: input.reason, details: input.details?.trim() || null, item_id: null, offer_id: null, deal_id: null, deal_message_id: null, story_id: null }); }
+export async function fetchItemReportContext(itemId: string, _currentUserId: string) { const { data, error } = await supabase.from('items').select('id,title,owner_id,status').eq('id', itemId).maybeSingle(); if (error) throw error; if (!data) return { ok: false as const, reason: 'not_found' as const, message: 'العنصر غير موجود.' }; const owner = await fetchProfile(data.owner_id as string); if (!owner) return { ok: false as const, reason: 'unknown' as const, message: 'تعذر تحميل بيانات صاحب العنصر.' }; return { ok: true as const, context: { itemId, title: ((data.title as string | null)?.trim() || 'عنصر بدون عنوان'), owner } }; }
+export async function submitItemReport(input: { itemId: string; currentUserId: string; reason: ReportReason; details?: string }) { if (!ALLOWED_REASONS.includes(input.reason)) return { ok: false as const, reason: 'invalid_reason' as const, message: 'سبب البلاغ غير صالح.' }; const c = await fetchItemReportContext(input.itemId, input.currentUserId); if (!c.ok) return c; return insertReport({ reporter_id: input.currentUserId, reported_user_id: c.context.owner.id, item_id: input.itemId, reason: input.reason, details: input.details?.trim() || null, offer_id: null, deal_id: null, deal_message_id: null, story_id: null }); }
+export async function fetchStoryReportContext(storyId: string, currentUserId: string) { const { data, error } = await supabase.from('stories').select('id,user_id,caption,expires_at').eq('id', storyId).maybeSingle(); if (error) throw error; if (!data) return { ok: false as const, reason: 'not_found' as const, message: 'القصة غير موجودة.' }; if ((data.user_id as string) === currentUserId) return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكنك الإبلاغ عن قصتك.' }; const author = await fetchProfile(data.user_id as string); if (!author) return { ok: false as const, reason: 'unknown' as const, message: 'تعذر تحميل بيانات صاحب القصة.' }; return { ok: true as const, context: { storyId, author, caption: (data.caption as string | null) ?? null } }; }
+export async function submitStoryReport(input: { storyId: string; currentUserId: string; reason: ReportReason; details?: string }) { if (!ALLOWED_REASONS.includes(input.reason)) return { ok: false as const, reason: 'invalid_reason' as const, message: 'سبب البلاغ غير صالح.' }; const c = await fetchStoryReportContext(input.storyId, input.currentUserId); if (!c.ok) return c; return insertReport({ reporter_id: input.currentUserId, reported_user_id: c.context.author.id, story_id: input.storyId, reason: input.reason, details: input.details?.trim() || null, item_id: null, offer_id: null, deal_id: null, deal_message_id: null }); }

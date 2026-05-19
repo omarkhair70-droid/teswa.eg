@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View, Image } from "react-native";
-import {
-  KeyboardAwareScrollView,
-  KeyboardStickyView,
-} from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { File } from "expo-file-system";
@@ -39,6 +36,11 @@ import {
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { useUnreadBadges } from "@/lib/unread-badges";
+import {
+  blockUserFromMobile,
+  fetchUserBlockState,
+  unblockUserFromMobile,
+} from '@/lib/user-blocks';
 
 type VoiceDraft = {
   uri: string;
@@ -65,6 +67,9 @@ export default function Screen() {
   const [messageBody, setMessageBody] = useState("");
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockedByMe, setBlockedByMe] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
   const [completionMoment, setCompletionMoment] = useState<"confirmed_waiting" | "completed" | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "live" | "unavailable"
@@ -311,6 +316,47 @@ export default function Screen() {
       voicePlayerStatus.playing,
     ],
   );
+
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user?.id || !deal?.otherParticipant?.id) return;
+      const state = await fetchUserBlockState(user.id, deal.otherParticipant.id);
+      if (cancelled) return;
+      if (state.ok) {
+        setBlockedByMe(state.state.blockedByMe);
+      } else {
+        setBlockError(state.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deal?.otherParticipant?.id, user?.id]);
+
+  const onToggleBlock = useCallback(async () => {
+    if (!user?.id || !deal?.otherParticipant?.id || blockBusy) return;
+    setBlockBusy(true);
+    setBlockError(null);
+    const result = blockedByMe
+      ? await unblockUserFromMobile(user.id, deal.otherParticipant.id)
+      : await blockUserFromMobile(user.id, deal.otherParticipant.id);
+
+    if (!result.ok) {
+      setBlockError(result.message);
+      setBlockBusy(false);
+      return;
+    }
+
+    const refreshed = await fetchUserBlockState(user.id, deal.otherParticipant.id);
+    if (refreshed.ok) {
+      setBlockedByMe(refreshed.state.blockedByMe);
+    } else {
+      setBlockError(refreshed.message);
+    }
+    setBlockBusy(false);
+  }, [blockBusy, blockedByMe, deal?.otherParticipant?.id, user?.id]);
 
   const sendMessage = useCallback(async () => {
     if (!deal || !user?.id) return;
@@ -843,6 +889,14 @@ export default function Screen() {
                   onPress={() => router.push(`/report/deal/${deal.id}`)}
                   variant="neutral"
                 />
+
+                <AppButton
+                  label={blockBusy ? "جاري التنفيذ..." : (blockedByMe ? "إلغاء الحظر" : "حظر هذا المستخدم")}
+                  onPress={onToggleBlock}
+                  disabled={blockBusy}
+                  variant="neutral"
+                />
+                {blockError ? <AppText muted>{blockError}</AppText> : null}
               </View>
             </AppCard>
           </View>
