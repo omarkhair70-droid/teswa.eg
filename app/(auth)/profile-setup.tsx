@@ -43,7 +43,7 @@ export default function ProfileSetupScreen() {
       setLoading(true); setError('');
       const attemptOneResult = await saveProfileOnce(currentUserId);
       if (attemptOneResult.error) { handleUpsertError(attemptOneResult.error); return; }
-      await refreshProfile(); router.replace('/(tabs)/home');
+      await refreshProfile(); router.replace('/(auth)/policy-acceptance');
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message === 'PROFILE_UPSERT_TIMEOUT') {
         if (__DEV__) console.log('[ProfileSetup] upsert timeout, retrying once');
@@ -51,7 +51,7 @@ export default function ProfileSetupScreen() {
           if (__DEV__) console.log('[ProfileSetup] upsert attempt 2 started');
           const attemptTwoResult = await saveProfileOnce(currentUserId);
           if (attemptTwoResult.error) { handleUpsertError(attemptTwoResult.error); return; }
-          await refreshProfile(); router.replace('/(tabs)/home'); return;
+          await refreshProfile(); router.replace('/(auth)/policy-acceptance'); return;
         } catch (retryError) {
           if (__DEV__) console.log('[ProfileSetup] retry failed', retryError);
           if (retryError instanceof Error && retryError.message === 'PROFILE_UPSERT_TIMEOUT') { setError('استغرق حفظ البيانات وقتًا أطول من المتوقع. حاول مرة تانية.'); return; }
