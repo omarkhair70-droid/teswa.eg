@@ -61,8 +61,6 @@ export async function fetchNewMarketplaceItemsCountSince(lastSeenAtMs: number | 
   const { count, error } = await supabase
     .from('marketplace_items')
     .select('id', { head: true, count: 'exact' })
-    .eq('is_public', true)
-    .eq('status', 'active')
     .gt('created_at', sinceIso);
 
   if (error) return null;
