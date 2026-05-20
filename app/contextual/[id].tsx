@@ -246,6 +246,7 @@ export default function Screen() {
 
   const startVoiceRecording = useCallback(async () => {
     if (voiceBusy || recorderState.isRecording) return;
+    setVoiceOpen(true);
     setVoiceBusy(true);
     setError(null);
     try {

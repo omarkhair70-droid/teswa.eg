@@ -368,7 +368,7 @@ export default function StoryViewerScreen() {
   
   const handleStartVoiceReply = useCallback(async () => {
     if (!user?.id || !currentStory) return;
-    setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceBusy(true);
+    setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceOpen(true); setVoiceBusy(true);
     try {
       voicePlayer.pause();
       try {
