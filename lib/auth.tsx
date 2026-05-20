@@ -81,6 +81,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [requiredPoliciesAccepted, setRequiredPoliciesAccepted] = useState(false);
   const [policyAcceptanceCheckError, setPolicyAcceptanceCheckError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const lastAuthenticatedUserIdRef = useRef<string | null>(null);
   const inFlightProfileChecksRef = useRef<Map<string, Promise<void>>>(new Map());
   const activeProfileCheckTokenRef = useRef(0);
   const inFlightPolicyChecksRef = useRef<Map<string, Promise<void>>>(new Map());
@@ -205,6 +206,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const activeUserId = user?.id ?? session?.user?.id ?? lastAuthenticatedUserIdRef.current;
+    if (activeUserId) await clearAccountGateCache(activeUserId);
     await disableRegisteredPushDeviceIfPossible();
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -227,6 +230,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const currentSession = sessionResult.data.session;
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
       if (currentSession?.user) {
         const cachedGate = await readAccountGateCache(currentSession.user.id);
         if (mountedRef.current && cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
@@ -250,6 +254,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       if (!nextSession?.user) {
+        const userIdToClear = lastAuthenticatedUserIdRef.current;
+        lastAuthenticatedUserIdRef.current = null;
         activeProfileCheckTokenRef.current += 1;
         activePolicyCheckTokenRef.current += 1;
         setProfileCompleted(false);
@@ -258,9 +264,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setRequiredPoliciesAccepted(false);
         setLoadingPolicyAcceptance(false);
         setPolicyAcceptanceCheckError(null);
-        void clearAccountGateCache(session?.user?.id);
+        void clearAccountGateCache(userIdToClear);
         return;
       }
+      lastAuthenticatedUserIdRef.current = nextSession.user.id;
 
       const cachedGate = await readAccountGateCache(nextSession.user.id);
       if (cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {

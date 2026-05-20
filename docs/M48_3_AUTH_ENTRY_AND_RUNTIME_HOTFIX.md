@@ -13,6 +13,12 @@
 - Cache is cleared on sign-out/session loss.
 - If revalidation later finds missing profile/policy, routing still forces profile setup/policy acceptance.
 
+## Follow runtime failure — confirmed root cause and exact fix
+- Confirmed root cause: `follow_user(...)` inserts notification type `user_followed_you`, but that enum value was missing from `public.notification_type`, causing RPC failure.
+- Exact DB fix: add enum value explicitly:
+  - `alter type public.notification_type add value if not exists 'user_followed_you';`
+- After applying the migration, follow notification inserts should succeed for this type.
+
 ## What still blocks and why
 - Unknown/new users without safe cache still see truthful checking state until first verification completes.
 - Hard verification errors still show retry UI (we do not bypass policy/profile enforcement).
