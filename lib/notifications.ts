@@ -8,8 +8,13 @@ export type NotificationType =
   | 'offer_soft_rejected'
   | 'offer_redirected'
   | 'deal_created'
+  | 'deal_message_received'
+  | 'deal_voice_message_received'
+  | 'deal_completion_confirmation_needed'
   | 'deal_completed'
   | 'deal_cancelled'
+  | 'story_reply_received'
+  | 'contextual_message_received'
   | 'report_update'
   | 'system';
 
@@ -124,8 +129,13 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   offer_soft_rejected: 'لم يتم قبول العرض',
   offer_redirected: 'عرض بديل',
   deal_created: 'صفقة جديدة',
+  deal_message_received: 'رسالة جديدة في الصفقة',
+  deal_voice_message_received: 'رسالة صوتية في الصفقة',
+  deal_completion_confirmation_needed: 'الصفقة مستنية تأكيدك',
   deal_completed: 'المقايضة تمت',
   deal_cancelled: 'الصفقة اتلغت',
+  story_reply_received: 'رد جديد على القصة',
+  contextual_message_received: 'رسالة جديدة في محادثة القصة',
   report_update: 'تحديث بلاغ',
   system: 'تنبيه',
 };
