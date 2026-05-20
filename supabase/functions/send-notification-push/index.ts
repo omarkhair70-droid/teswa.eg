@@ -19,11 +19,8 @@ type NotificationType =
 
 const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "offer_received",
-  "offer_thinking",
   "offer_accepted",
   "offer_soft_rejected",
-  "offer_redirected",
-  "deal_created",
   "deal_message_received",
   "deal_voice_message_received",
   "deal_completion_confirmation_needed",
