@@ -192,7 +192,7 @@ function RootNavigator() {
 
   if (!bootstrapReady) return null;
 
-  if (user && (loadingProfile || loadingPolicyAcceptance)) {
+  if (user && ((loadingProfile && !profileCompleted) || (loadingPolicyAcceptance && !requiredPoliciesAccepted))) {
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>

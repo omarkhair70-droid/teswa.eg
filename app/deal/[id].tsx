@@ -842,15 +842,10 @@ export default function Screen() {
               deal.status,
             ) ? (
               <AppCard>
-                <View style={styles.group}>
+                <View style={styles.compactActionGroup}>
                   <AppText weight="semibold">تأكيد إتمام المقايضة</AppText>
-                  <AppText>أنت: {deal.iConfirmed ? "أكدت" : "لسه"}</AppText>
-                  <AppText>
-                    الطرف التاني: {deal.otherConfirmed ? "أكد" : "لسه"}
-                  </AppText>
-                  <AppText muted>
-                    ما تضغطش تأكيد الإتمام غير بعد ما المقايضة تحصل فعلًا.
-                  </AppText>
+                  <AppText muted style={styles.compactStatusRow}>أنت: {deal.iConfirmed ? "✅" : "⏳"} • الطرف التاني: {deal.otherConfirmed ? "✅" : "⏳"}</AppText>
+                  <AppText muted>ما تضغطش تأكيد الإتمام غير بعد ما المقايضة تحصل فعلًا.</AppText>
                   {deal.canConfirmCompletion ? (
                     <AppButton
                       label={
@@ -879,13 +874,11 @@ export default function Screen() {
               </AppCard>
             ) : null}
             <AppCard>
-              <View style={styles.group}>
-                <AppText weight="semibold">في مشكلة؟</AppText>
-                <AppText muted>
-                  لو حصل شيء غير مناسب أثناء التنسيق، ابعت بلاغًا من هنا.
-                </AppText>
-                <AppButton
-                  label="الإبلاغ عن مشكلة"
+              <View style={styles.compactActionGroup}>
+                <AppText weight="semibold">الأمان</AppText>
+                <AppText muted>إبلاغ سريع أو حظر/إلغاء الحظر.</AppText>
+                <View style={styles.safetyRow}><AppButton
+                  label="إبلاغ"
                   onPress={() => router.push(`/report/deal/${deal.id}`)}
                   variant="neutral"
                 />
@@ -895,7 +888,7 @@ export default function Screen() {
                   onPress={onToggleBlock}
                   disabled={blockBusy}
                   variant="neutral"
-                />
+                /></View>
                 {blockError ? <AppText muted>{blockError}</AppText> : null}
               </View>
             </AppCard>
@@ -1065,6 +1058,9 @@ const styles = StyleSheet.create({
   messageBody: { lineHeight: 22, fontSize: 15, color: colors.text },
   metaText: { fontSize: 11 },
   voiceBubble: { gap: spacing.xs },
+  compactActionGroup: { gap: spacing.xs },
+  compactStatusRow: { fontSize: 13 },
+  safetyRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   voiceBubbleHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",

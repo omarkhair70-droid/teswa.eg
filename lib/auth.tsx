@@ -1,15 +1,17 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
-import { fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
+import { REQUIRED_POLICIES, fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
 import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
 const SIGNED_IN_PROFILE_RETRY_DELAY_MS = 650;
 const POLICY_CHECK_ERROR_MESSAGE = 'تعذر التحقق من موافقات السياسات. حاول مرة تانية.';
+const ACCOUNT_GATE_CACHE_PREFIX = 'teswa:account-gate:v1';
 
 type AuthContextValue = {
   bootstrapReady: boolean;
@@ -30,6 +32,43 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+type AccountGateCache = {
+  userId: string;
+  profileCompleted: boolean;
+  requiredPoliciesAccepted: boolean;
+  policyFingerprint: string;
+  verifiedAt: string;
+};
+
+const policyFingerprint = () => REQUIRED_POLICIES.map((policy) => `${policy.key}:${policy.version}`).join('|');
+const accountGateCacheKey = (userId: string) => `${ACCOUNT_GATE_CACHE_PREFIX}:${userId}`;
+
+async function readAccountGateCache(userId: string): Promise<AccountGateCache | null> {
+  try {
+    const raw = await AsyncStorage.getItem(accountGateCacheKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AccountGateCache;
+    if (parsed.userId !== userId || parsed.policyFingerprint !== policyFingerprint()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeAccountGateCache(entry: AccountGateCache): Promise<void> {
+  try {
+    await AsyncStorage.setItem(accountGateCacheKey(entry.userId), JSON.stringify(entry));
+  } catch {}
+}
+
+async function clearAccountGateCache(userId: string | null | undefined): Promise<void> {
+  if (!userId) return;
+  try {
+    await AsyncStorage.removeItem(accountGateCacheKey(userId));
+  } catch {}
+}
+
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [bootstrapReady, setBootstrapReady] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
@@ -42,6 +81,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [requiredPoliciesAccepted, setRequiredPoliciesAccepted] = useState(false);
   const [policyAcceptanceCheckError, setPolicyAcceptanceCheckError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const lastAuthenticatedUserIdRef = useRef<string | null>(null);
   const inFlightProfileChecksRef = useRef<Map<string, Promise<void>>>(new Map());
   const activeProfileCheckTokenRef = useRef(0);
   const inFlightPolicyChecksRef = useRef<Map<string, Promise<void>>>(new Map());
@@ -166,6 +206,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const activeUserId = user?.id ?? session?.user?.id ?? lastAuthenticatedUserIdRef.current;
+    if (activeUserId) await clearAccountGateCache(activeUserId);
     await disableRegisteredPushDeviceIfPossible();
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -188,13 +230,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const currentSession = sessionResult.data.session;
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
       if (currentSession?.user) {
-        await checkProfileForUser(currentSession.user.id, 'bootstrap_session');
-        await checkPolicyAcceptanceForUser(currentSession.user.id);
+        const cachedGate = await readAccountGateCache(currentSession.user.id);
+        if (mountedRef.current && cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
+          setProfileCompleted(true);
+          setRequiredPoliciesAccepted(true);
+        }
+        if (mountedRef.current) setBootstrapReady(true);
+        await Promise.all([
+          checkProfileForUser(currentSession.user.id, 'bootstrap_session'),
+          checkPolicyAcceptanceForUser(currentSession.user.id),
+        ]);
       } else {
         setProfileCheckError(null);
+        if (mountedRef.current) setBootstrapReady(true);
       }
-      if (mountedRef.current) setBootstrapReady(true);
     };
 
     bootstrap();
@@ -203,6 +254,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       if (!nextSession?.user) {
+        const userIdToClear = lastAuthenticatedUserIdRef.current;
+        lastAuthenticatedUserIdRef.current = null;
         activeProfileCheckTokenRef.current += 1;
         activePolicyCheckTokenRef.current += 1;
         setProfileCompleted(false);
@@ -211,11 +264,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setRequiredPoliciesAccepted(false);
         setLoadingPolicyAcceptance(false);
         setPolicyAcceptanceCheckError(null);
+        void clearAccountGateCache(userIdToClear);
         return;
       }
+      lastAuthenticatedUserIdRef.current = nextSession.user.id;
 
-      await checkProfileForUser(nextSession.user.id, 'auth_state_change');
-      await checkPolicyAcceptanceForUser(nextSession.user.id);
+      const cachedGate = await readAccountGateCache(nextSession.user.id);
+      if (cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
+        setProfileCompleted(true);
+        setRequiredPoliciesAccepted(true);
+      }
+      await Promise.all([
+        checkProfileForUser(nextSession.user.id, 'auth_state_change'),
+        checkPolicyAcceptanceForUser(nextSession.user.id),
+      ]);
     });
 
     return () => {
@@ -226,6 +288,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
+
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (profileCheckError || policyAcceptanceCheckError) return;
+    if (!profileCompleted || !requiredPoliciesAccepted) return;
+    void writeAccountGateCache({
+      userId: user.id,
+      profileCompleted: true,
+      requiredPoliciesAccepted: true,
+      policyFingerprint: policyFingerprint(),
+      verifiedAt: new Date().toISOString(),
+    });
+  }, [policyAcceptanceCheckError, profileCheckError, profileCompleted, requiredPoliciesAccepted, user?.id]);
   const value = useMemo(
     () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, signOut, setOnboardingCompletedState: setOnboardingCompleted }),
     [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError],

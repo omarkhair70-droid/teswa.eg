@@ -8,6 +8,8 @@ import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
 import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
+import { colors } from '@/constants/colors';
+import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { authenticateTeswaAppLock, BiometricCapabilityState, getBiometricCapabilityState, readBiometricAppLockEnabled, writeBiometricAppLockEnabled } from '@/lib/biometric-app-lock';
@@ -267,7 +269,20 @@ export default function ProfileScreen() {
             />
 
             <ProfilePresenceSignals presence={profilePresence} />
-            {user?.id ? <AppCard><View style={styles.group}><Pressable onPress={() => router.push(`/profile-followers/${user.id}`)}><AppText>المتابعون: {followCounts.followerCount}</AppText></Pressable><Pressable onPress={() => router.push(`/profile-following/${user.id}`)}><AppText>يتابع: {followCounts.followingCount}</AppText></Pressable></View></AppCard> : null}
+            {user?.id ? (
+              <AppCard>
+                <View style={styles.followStatsRow}>
+                  <Pressable style={styles.followStatTile} onPress={() => router.push(`/profile-followers/${user.id}`)}>
+                    <AppText muted style={styles.followStatLabel}>المتابعون</AppText>
+                    <AppText weight="semibold" style={styles.followStatValue}>{followCounts.followerCount}</AppText>
+                  </Pressable>
+                  <Pressable style={styles.followStatTile} onPress={() => router.push(`/profile-following/${user.id}`)}>
+                    <AppText muted style={styles.followStatLabel}>يتابع</AppText>
+                    <AppText weight="semibold" style={styles.followStatValue}>{followCounts.followingCount}</AppText>
+                  </Pressable>
+                </View>
+              </AppCard>
+            ) : null}
 
             {user?.id ? (
               <AppCard>
@@ -375,6 +390,21 @@ const styles = StyleSheet.create({
   content: { gap: spacing.md, paddingBottom: spacing.xxl },
   title: { fontSize: 24 },
   group: { gap: spacing.sm },
+  followStatsRow: { flexDirection: 'row', gap: spacing.sm },
+  followStatTile: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  followStatLabel: { fontSize: 13 },
+  followStatValue: { fontSize: 19 },
   publicProfileAction: { marginTop: spacing.md, gap: spacing.sm },
   errorText: { color: '#B00020' },
   securityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
