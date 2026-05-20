@@ -14,8 +14,14 @@ import { radii } from '@/constants/radii';
 
 type FollowProfileRow = { profile_id: string; display_name: string | null; username: string | null; avatar_url: string | null; city: string | null; area: string | null };
 
+function normalizeRouteParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0]?.trim() ?? '';
+  return value?.trim() ?? '';
+}
+
 export default function FollowingScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = normalizeRouteParam(params.id);
   const { user } = useAuth();
   const [rows, setRows] = useState<FollowProfileRow[]>([]);
   const [loading, setLoading] = useState(true);

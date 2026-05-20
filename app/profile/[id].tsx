@@ -33,8 +33,14 @@ import {
 const FETCH_ERROR = 'تعذر تحميل الملف العام حالياً. حاول مرة أخرى.';
 const PRESENCE_ERROR = 'تعذر تحميل القصص والعناصر لهذا الملف حالياً.';
 
+function normalizeRouteParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0]?.trim() ?? '';
+  return value?.trim() ?? '';
+}
+
 export default function PublicProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = normalizeRouteParam(params.id);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
