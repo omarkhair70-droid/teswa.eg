@@ -78,3 +78,32 @@ So final end-to-end export success cannot be asserted from this environment alon
 - **Framework Preset:** `Other`
 - **Build Command:** `npm run export:web`
 - **Output Directory:** `dist`
+
+
+## Follow-up blocker: Expo SQLite WASM on web
+
+After the PagerView fix, the next local export blocker reported by owner was:
+
+- `Unable to resolve module ./wa-sqlite/wa-sqlite.wasm`
+- import chain starts from `expo-sqlite/web/worker.ts` and reaches app routes through `lib/offline-cache.ts`.
+
+### Why this fails export
+
+`lib/offline-cache.ts` imported `expo-sqlite` directly. On web export this pulls Expo SQLite web worker/WASM paths into the bundle, which can break static export in some toolchains.
+
+### Fix applied
+
+Implemented a clean platform split for offline cache:
+
+- `lib/offline-cache.ts`: unchanged native/mobile SQLite implementation (Android/iOS behavior preserved).
+- `lib/offline-cache.web.ts`: web-safe implementation with the same public API (`writeOfflineJsonCache`, `readOfflineJsonCache`, `deleteOfflineJsonCache`, `pruneExpiredOfflineJsonCache`, and `OfflineJsonCacheRead`).
+
+Web fallback behavior:
+
+- Uses guarded `localStorage` only when `window` is available at runtime.
+- Falls back to in-memory storage when `localStorage` is unavailable.
+- Safe for static rendering/SSR contexts (no unguarded browser globals).
+
+### Validation ownership
+
+This environment may still be unable to run full Expo export; owner local validation remains the source of truth for end-to-end `npm run export:web` confirmation after this fix.
