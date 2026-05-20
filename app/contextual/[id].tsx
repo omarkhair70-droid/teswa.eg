@@ -252,6 +252,8 @@ export default function Screen() {
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (!permission.granted) {
+        setVoiceOpen(false);
+        setVoiceDraft(null);
         setError('الرجاء تفعيل إذن الميكروفون لإرسال رسالة صوتية.');
         return;
       }
@@ -267,6 +269,8 @@ export default function Screen() {
       audioRecorder.record();
       setVoiceOpen(true);
     } catch {
+      setVoiceOpen(false);
+      setVoiceDraft(null);
       setError('تعذر بدء التسجيل الصوتي.');
     } finally {
       setVoiceBusy(false);

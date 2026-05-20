@@ -375,7 +375,12 @@ export default function StoryViewerScreen() {
         await voicePlayer.seekTo(0);
       } catch {}
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) { setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.'); return; }
+      if (!perm.granted) {
+        setVoiceOpen(false);
+        setVoiceDraft(null);
+        setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.');
+        return;
+      }
       setVoiceDraft(null);
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await audioRecorder.prepareToRecordAsync();

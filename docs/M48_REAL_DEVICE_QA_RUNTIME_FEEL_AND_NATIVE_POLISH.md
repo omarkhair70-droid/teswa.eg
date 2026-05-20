@@ -86,6 +86,8 @@ M48 is a launch-quality runtime and polish pass for Teswa mobile. It focuses on 
 ### A1. Voice recording/sending lag
 - **Audit result:** Voice recording start path exists in deal, contextual, and story reply surfaces with async permission + recorder preparation. Perceived lag came from UI active-state visibility waiting until after async steps on story/contextual paths.
 - **M48 fix in this PR:** Voice composer is opened immediately before async permission/recorder init in story and contextual flows, so the user sees instant acknowledgment while setup completes.
+- **Permission-state correction:** If microphone permission is denied (or recorder start fails), story/contextual voice UI is now reset to closed state to avoid showing an active composer when no recording started.
+- **Deal path re-audit:** Deal playback already exposes immediate `جارٍ التحميل...` while signed URL/audio-mode preparation runs; deal recording start uses immediate busy lock (`voiceBusy`) and deal send uses immediate `جاري الإرسال...` state. No additional UI patch was required in this PR after explicit re-audit.
 - **Remaining real-device validation:** Verify cold-start microphone permission prompt timing and low-end device recorder init delay.
 
 ### A2. Story open / viewer feel
@@ -110,6 +112,8 @@ M48 is a launch-quality runtime and polish pass for Teswa mobile. It focuses on 
 - **Motion share note:** Existing Motion capture sharing (expo-sharing file share) preserved as-is.
 
 ## 5) Native capability leverage decisions
+- **Operational config added:** `EXPO_PUBLIC_SHARE_BASE_URL` must be set to a public HTTPS base (no trailing slash) for clickable external item links. Without it, sharing intentionally falls back to deep-link-oriented text and does not claim guaranteed public web clickability.
+
 - **expo-location:** Audited and confirmed active usage for reverse-geocode city/area discovery, not kilometer-radius nearby filtering.
 - **expo-network:** Not activated in this PR; no direct code path added to avoid unnecessary phase expansion.
 - **expo-intent-launcher:** Not activated in this PR; permission recovery UX can be added in a dedicated targeted pass if needed.

@@ -144,6 +144,7 @@ Add these in `.env`:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (used by native-first Google Sign-In orchestration and browser fallback compatibility)
+- `EXPO_PUBLIC_SHARE_BASE_URL` (public HTTPS base used for externally shared item links; format: `https://your-domain.com` without trailing slash. Example shape: `https://example.com`. When set, item share uses clickable HTTPS `/item/:id`; when unset, sharing falls back to app deep-link text and does not promise public web clickability)
 
 Server-side secrets (for push delivery and other backend operations) should remain in operational/runtime configuration rather than mobile client environment variables.
 
