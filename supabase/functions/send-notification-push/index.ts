@@ -15,7 +15,15 @@ type NotificationType =
   | "story_reply_received"
   | "contextual_message_received"
   | "report_update"
-  | "system";
+  | "system"
+  | "reminder_offer_response_needed"
+  | "reminder_deal_coordination_needed"
+  | "reminder_deal_confirmation_pending"
+  | "reminder_unread_deal_message"
+  | "reminder_unread_contextual_message"
+  | "nudge_listing_refresh_or_media"
+  | "digest_local_activity_pulse"
+  | "nudge_return_to_teswa";
 
 const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "offer_received",
@@ -30,6 +38,14 @@ const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "contextual_message_received",
   "report_update",
   "system",
+  "reminder_offer_response_needed",
+  "reminder_deal_coordination_needed",
+  "reminder_deal_confirmation_pending",
+  "reminder_unread_deal_message",
+  "reminder_unread_contextual_message",
+  "nudge_listing_refresh_or_media",
+  "digest_local_activity_pulse",
+  "nudge_return_to_teswa",
 ]);
 
 type NotificationRecord = {

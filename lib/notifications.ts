@@ -16,7 +16,15 @@ export type NotificationType =
   | 'story_reply_received'
   | 'contextual_message_received'
   | 'report_update'
-  | 'system';
+  | 'system'
+  | 'reminder_offer_response_needed'
+  | 'reminder_deal_coordination_needed'
+  | 'reminder_deal_confirmation_pending'
+  | 'reminder_unread_deal_message'
+  | 'reminder_unread_contextual_message'
+  | 'nudge_listing_refresh_or_media'
+  | 'digest_local_activity_pulse'
+  | 'nudge_return_to_teswa';
 
 export type AppNotification = {
   id: string;
@@ -119,7 +127,7 @@ export function resolveNotificationRoute(notification: Pick<AppNotification, 'co
   if (notification.dealId) return `/deal/${notification.dealId}`;
   if (notification.offerId) return `/offer/${notification.offerId}`;
   if (notification.itemId) return `/item/${notification.itemId}`;
-  return null;
+  return '/notifications';
 }
 
 export const notificationTypeLabel: Record<NotificationType, string> = {
@@ -138,4 +146,12 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   contextual_message_received: 'رسالة جديدة في محادثة القصة',
   report_update: 'تحديث بلاغ',
   system: 'تنبيه',
+  reminder_offer_response_needed: 'تذكير عرض يحتاج قرارك',
+  reminder_deal_coordination_needed: 'تذكير تنسيق الصفقة',
+  reminder_deal_confirmation_pending: 'تأكيد إتمام الصفقة',
+  reminder_unread_deal_message: 'تذكير برسالة صفقة غير مقروءة',
+  reminder_unread_contextual_message: 'تذكير برد غير مقروء من القصة',
+  nudge_listing_refresh_or_media: 'اقتراح لتحسين عرضك',
+  digest_local_activity_pulse: 'نبض جديد قريب منك',
+  nudge_return_to_teswa: 'تحديث مهم في تِسوى',
 };
