@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ItemCondition } from '@/lib/publish-item';
 
-const ADD_ITEM_DRAFT_VERSION = 1 as const;
-const ADD_ITEM_DRAFT_PREFIX = 'teswa:add_item_draft:v1';
+const ADD_ITEM_DRAFT_VERSION = 2 as const;
+const ADD_ITEM_DRAFT_PREFIX = 'teswa:add_item_draft:v2';
 const CONDITION_VALUES: ItemCondition[] = ['almost_new', 'good_used', 'minor_issues', 'needs_repair'];
 const DESIRE_MODE_VALUES = ['specific', 'flexible', 'surprise'] as const;
 
@@ -25,6 +25,8 @@ export type AddItemDraft = {
   categoryId: string | null;
   city: string;
   area: string;
+  locationLatitude: number | null;
+  locationLongitude: number | null;
   condition: ItemCondition;
   conditionNotes: string;
   description: string;
@@ -46,6 +48,12 @@ const isValidDesireMode = (value: unknown): value is DesireMode => DESIRE_MODE_V
 const sanitizeStep = (value: unknown) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.floor(value));
+};
+
+const sanitizeCoordinate = (value: unknown, min: number, max: number): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value < min || value > max) return null;
+  return value;
 };
 
 
@@ -75,7 +83,7 @@ const sanitizeMediaAssets = (value: unknown): AddItemDraftMediaAsset[] => {
 const sanitizeAddItemDraft = (value: unknown): AddItemDraft | null => {
   if (!value || typeof value !== 'object') return null;
   const input = value as Partial<AddItemDraft>;
-  if (input.version !== ADD_ITEM_DRAFT_VERSION) return null;
+  if (input.version !== 1 && input.version !== ADD_ITEM_DRAFT_VERSION) return null;
 
   const condition = isValidCondition(input.condition) ? input.condition : 'good_used';
   const desireMode = isValidDesireMode(input.desireMode) ? input.desireMode : 'flexible';
@@ -88,6 +96,8 @@ const sanitizeAddItemDraft = (value: unknown): AddItemDraft | null => {
     categoryId: sanitizeNullableString(input.categoryId),
     city: sanitizeString(input.city),
     area: sanitizeString(input.area),
+    locationLatitude: sanitizeCoordinate((input as { locationLatitude?: unknown }).locationLatitude, -90, 90),
+    locationLongitude: sanitizeCoordinate((input as { locationLongitude?: unknown }).locationLongitude, -180, 180),
     condition,
     conditionNotes: sanitizeString(input.conditionNotes),
     description: sanitizeString(input.description),

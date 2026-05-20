@@ -14,6 +14,7 @@ type MarketplaceItemRow = {
   city: string | null;
   owner_display_name: string | null;
   created_at: string;
+  distance_km?: number | null;
 };
 
 export type MarketplaceItem = {
@@ -26,6 +27,7 @@ export type MarketplaceItem = {
   location: string | null;
   ownerDisplayName: string | null;
   hasVideoTeaser: boolean;
+  distanceKm?: number | null;
 };
 
 export type MarketplaceItemsPage = {
@@ -76,6 +78,7 @@ function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false
     location: row.city,
     ownerDisplayName: row.owner_display_name,
     hasVideoTeaser,
+    distanceKm: row.distance_km ?? null,
   };
 }
 
@@ -120,6 +123,38 @@ export async function fetchMarketplaceItemsPage(options?: { offset?: number; lim
 export async function fetchMarketplaceItems(): Promise<MarketplaceItem[]> {
   const page = await fetchMarketplaceItemsPage({ offset: 0, limit: MARKETPLACE_PAGE_SIZE });
   return page.items;
+}
+
+export async function fetchNearbyMarketplaceItemsPage(options: {
+  latitude: number;
+  longitude: number;
+  radiusKm?: number;
+  offset?: number;
+  limit?: number;
+}): Promise<MarketplaceItemsPage> {
+  const offset = options.offset ?? 0;
+  const limit = options.limit ?? MARKETPLACE_PAGE_SIZE;
+  const radiusKm = options.radiusKm ?? 3;
+
+  const { data, error } = await supabase.rpc('get_nearby_marketplace_items', {
+    p_latitude: options.latitude,
+    p_longitude: options.longitude,
+    p_radius_km: radiusKm,
+    p_limit: limit + 1,
+    p_offset: offset,
+  });
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as MarketplaceItemRow[];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const videoPresenceByItemId = await fetchItemVideoPresenceMap(pageRows.map((row) => row.id));
+
+  return {
+    items: pageRows.map((row) => mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true)),
+    hasMore,
+  };
 }
 
 export async function fetchMarketplaceItemById(id: string): Promise<MarketplaceItem | null> {

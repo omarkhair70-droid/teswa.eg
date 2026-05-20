@@ -5,6 +5,8 @@ export type DiscoveryLocationResult =
       ok: true;
       label: string;
       matchTerms: string[];
+      latitude: number;
+      longitude: number;
     }
   | {
       ok: false;
@@ -16,6 +18,8 @@ type GeocodedAddressResult =
   | {
       ok: true;
       address: Location.LocationGeocodedAddress;
+      latitude: number;
+      longitude: number;
     }
   | {
       ok: false;
@@ -64,7 +68,7 @@ export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocati
     };
   }
 
-  const { address } = geocoded;
+  const { address, latitude, longitude } = geocoded;
 
   const label =
     normalizeTerm(address.city) ??
@@ -87,6 +91,8 @@ export async function resolveCurrentDiscoveryLocation(): Promise<DiscoveryLocati
     ok: true,
     label,
     matchTerms,
+    latitude,
+    longitude,
   };
 }
 
@@ -96,6 +102,8 @@ export async function resolveCurrentAddItemLocation(): Promise<
       city: string;
       area: string | null;
       label: string;
+      latitude: number;
+      longitude: number;
     }
   | {
       ok: false;
@@ -114,7 +122,7 @@ export async function resolveCurrentAddItemLocation(): Promise<
     };
   }
 
-  const { address } = geocoded;
+  const { address, latitude, longitude } = geocoded;
   const city = normalizeTerm(address.city) ?? normalizeTerm(address.subregion) ?? normalizeTerm(address.region);
   if (!city) {
     return {
@@ -134,6 +142,8 @@ export async function resolveCurrentAddItemLocation(): Promise<
     city,
     area,
     label,
+    latitude,
+    longitude,
   };
 }
 
@@ -176,15 +186,10 @@ async function resolveCurrentGeocodedAddress(): Promise<GeocodedAddressResult> {
     return { ok: false, reason: 'reverse_geocode_failed' };
   }
 
-  return { ok: true, address };
-}
-
-export function matchesDiscoveryLocation(itemLocation: string | null, matchTerms: string[]): boolean {
-  const normalizedLocation = itemLocation?.trim().toLowerCase();
-  if (!normalizedLocation) return false;
-
-  const normalizedTerms = matchTerms.map((term) => term.trim().toLowerCase()).filter(Boolean);
-  if (normalizedTerms.length === 0) return false;
-
-  return normalizedTerms.some((term) => normalizedLocation.includes(term) || term.includes(normalizedLocation));
+  return {
+    ok: true,
+    address,
+    latitude: currentPosition.coords.latitude,
+    longitude: currentPosition.coords.longitude,
+  };
 }

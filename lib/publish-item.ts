@@ -16,6 +16,8 @@ export type PublishItemPayload = {
   categoryId: string | null;
   city: string | null;
   area: string | null;
+  locationLatitude: number | null;
+  locationLongitude: number | null;
   condition: ItemCondition;
   conditionNotes: string | null;
   description: string | null;
@@ -109,6 +111,8 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
       condition_notes: payload.conditionNotes,
       city: payload.city,
       area: payload.area,
+      location_latitude: payload.locationLatitude,
+      location_longitude: payload.locationLongitude,
       desire_mode: payload.desireMode,
       desire_text: payload.desireText,
       item_story: payload.itemStory,
