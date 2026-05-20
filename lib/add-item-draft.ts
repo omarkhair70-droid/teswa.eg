@@ -83,8 +83,10 @@ const sanitizeMediaAssets = (value: unknown): AddItemDraftMediaAsset[] => {
 
 const sanitizeAddItemDraft = (value: unknown): AddItemDraft | null => {
   if (!value || typeof value !== 'object') return null;
+  const rawVersion = (value as { version?: unknown }).version;
+  if (rawVersion !== 1 && rawVersion !== ADD_ITEM_DRAFT_VERSION) return null;
+
   const input = value as Partial<AddItemDraft>;
-  if (input.version !== 1 && input.version !== ADD_ITEM_DRAFT_VERSION) return null;
 
   const condition = isValidCondition(input.condition) ? input.condition : 'good_used';
   const desireMode = isValidDesireMode(input.desireMode) ? input.desireMode : 'flexible';
