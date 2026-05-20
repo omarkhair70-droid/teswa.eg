@@ -1,58 +1,99 @@
-# M46B Smart Re-engagement Notification Engine (Expanded Launch)
+# M46B Smart Re-engagement Notification Engine (Launch Scope Implemented)
 
-## Launch-enabled taxonomy
-- `reminder_offer_response_needed` ✅ launch
-- `reminder_deal_coordination_needed` ⚠ deferred emitter in this phase
-- `reminder_deal_confirmation_pending` ⚠ deferred emitter in this phase
-- `reminder_unread_deal_message` ⚠ deferred emitter in this phase
-- `reminder_unread_contextual_message` ⚠ deferred emitter in this phase
-- `nudge_listing_refresh_or_media` ⚠ deferred emitter in this phase
-- `digest_local_activity_pulse` ⚠ deferred emitter in this phase
-- `nudge_return_to_teswa` ⚠ deferred (needs reliable last-active source)
+## Implemented launch-enabled categories
+1. `reminder_offer_response_needed`
+   - Signal: `offers.status in ('pending','thinking')` and `created_at <= now - 12h`.
+   - Recipient: `offers.receiver_id`.
+   - Route: `/offer/:offerId`.
+   - Dedupe key: `offer_response:{offerId}:{UTC-day}`.
 
-## Eligibility, windows, cooldown, dedupe
-- Offer response reminder: offer status in `pending|thinking`, age >= 12h, recipient is offer receiver.
-- Dedup key: `offer:{offerId}:{UTC-date}`.
-- Cooldown: one per offer/day.
-- Daily proactive cap: 4 reminders per user/day.
+2. `reminder_deal_coordination_needed`
+   - Signal: `swap_deals.status='coordinating'`, deal age >=24h, and latest activity (`max(deal_messages.created_at, swap_deals.created_at)`) older than 24h.
+   - Recipient: both participants (`requester_id`, `offerer_id`) with per-user dedupe.
+   - Route: `/deal/:dealId`.
+   - Dedupe key: `deal_coordination:{dealId}:{userId}:{UTC-day}`.
+
+3. `reminder_deal_confirmation_pending`
+   - Signal: `swap_deals.status='completed_pending_confirmation'` and user missing from `deal_confirmations`.
+   - Recipient: only unconfirmed participant(s).
+   - Route: `/deal/:dealId`.
+   - Dedupe key: `deal_confirmation:{dealId}:{userId}:{UTC-day}`.
+
+4. `reminder_unread_deal_message`
+   - Signal: unread `notifications` rows of `type='deal_message_received'`, `read_at is null`, age >=6h.
+   - Recipient: owning `notifications.user_id`.
+   - Route: `/deal/:dealId`.
+   - Dedupe key: `unread_deal:{dealId}:{userId}:{UTC-day}`.
+
+5. `reminder_unread_contextual_message`
+   - Signal: unread `notifications` rows of `type='contextual_message_received'`, `read_at is null`, age >=6h.
+   - Recipient: owning `notifications.user_id`.
+   - Route: `/contextual/:conversationId`.
+   - Dedupe key: `unread_contextual:{conversationId}:{userId}:{UTC-day}`.
+
+6. `nudge_listing_refresh_or_media`
+   - Conservative launch-safe signal: `items.status='active'`, item age >=7 days, and zero offers (`offers.requested_item_id=item.id`).
+   - Recipient: item owner.
+   - Route: `/notifications` (safe fallback; direct manage deep-link can be added after route contract hardening).
+   - Dedupe key: `listing_refresh:{itemId}:{UTC-day}`.
+
+## Deferred categories (exact reasons)
+1. `digest_local_activity_pulse` deferred.
+   - Missing reliable “minimum meaningful local movement threshold” contract across city/area for both items and stories in one stable server-side query path.
+   - Unlock: add a production SQL view/RPC returning per-user local activity aggregates with anti-noise thresholds.
+
+2. `nudge_return_to_teswa` deferred.
+   - Missing authoritative last-active signal per user (no dedicated `last_seen_at`/presence timestamp suitable for scheduler decisions).
+   - Unlock: add server-side last-active field updated by authenticated sessions/app foreground heartbeat.
 
 ## Preferences mapping
-- reminder_* => `reminders_enabled`
-- digest_local_activity_pulse => `discovery_digest_enabled`
-- nudge_return_to_teswa => `return_nudges_enabled`
+- `reminder_*` and `nudge_listing_refresh_or_media` -> `reminders_enabled`.
+- `digest_local_activity_pulse` -> `discovery_digest_enabled` (deferred).
+- `nudge_return_to_teswa` -> `return_nudges_enabled` (deferred).
 
-## Arabic copy samples
-- `reminder_offer_response_needed`: "عندك عرض مستني قرارك"
-- `reminder_deal_coordination_needed`: "الصفقة لسه فاتحة بابها — كمّلوا التنسيق"
-- `reminder_unread_contextual_message`: "في رد لسه مستنيك من محادثة بدأت بقصة"
-- `nudge_listing_refresh_or_media`: "حاجتك لسه لها قيمة. جرّب تقوّي ظهورها بصورة أو فيديو"
-- `digest_local_activity_pulse`: "في حركة جديدة قريبة منك على تِسوى"
+## Quiet-hours behavior
+- Preference fields used: `quiet_hours_start`, `quiet_hours_end`, `timezone`.
+- Engine computes current local minute-of-day using user timezone via `Intl.DateTimeFormat`.
+- If timezone is invalid/missing, fallback is UTC to keep behavior deterministic and safe.
+- If local time is inside quiet-hours interval, proactive notification is skipped and counted as `skipped.quietHours`.
 
-## Scheduled architecture
-- Function: `supabase/functions/run-smart-reengagement-notifications/index.ts`
+## Anti-spam and dedupe controls
+- Per-user daily cap: 4 sent proactive notifications/day.
+- Atomic dedupe reservation: insert dispatch ledger row first with unique `dedupe_key` and `status='reserved'`.
+  - Conflict (`23505`) => dedupe skip.
+  - Reservation success => attempt notification insert.
+  - Notification insert failure => mark dispatch `status='failed'` + `failure_reason`.
+  - Success => finalize dispatch `status='sent'` + `notification_id`.
+- This prevents duplicate user-facing notifications from concurrent scheduler runs for the same dedupe key.
+
+## Operational response payload
+Function returns:
+- `sentByType`
+- `skipped.dedupe`
+- `skipped.cap`
+- `skipped.preferences`
+- `skipped.quietHours`
+- `failures` keyed by category/reason
+- `deferred` categories list
+
+## Deployment and schedule
+- Edge Function: `supabase/functions/run-smart-reengagement-notifications/index.ts`
 - Secret: `TESWA_SMART_NOTIFICATION_JOB_SECRET`
-- Auth header: `x-teswa-smart-job-secret`
-- Delivery path: inserts into `public.notifications`; existing webhook pipeline delivers push.
-- Dispatch ledger: `public.smart_notification_dispatches`
-- User prefs: `public.notification_preferences`
+- Header: `x-teswa-smart-job-secret`
+- Suggested cadence: hourly
 
-### Suggested cadence
-- Run every hour.
-
-### Manual run example
+### Manual invoke
 ```bash
 curl -X POST "$SUPABASE_URL/functions/v1/run-smart-reengagement-notifications" \
   -H "x-teswa-smart-job-secret: $TESWA_SMART_NOTIFICATION_JOB_SECRET"
 ```
 
 ## Manual verification matrix
-| Category | Setup state | Run | Expected notification row | Push? | Route | Dedupe on second run | Preference-off behavior | Quiet-hours behavior |
-|---|---|---|---|---|---|---|---|---|
-| offer response reminder | offer pending >12h | invoke function | `reminder_offer_response_needed` with `offer_id` | Yes | `/offer/:offerId` | skipped (`dedupe`) | skipped when `reminders_enabled=false` | deferred |
-| deal coordination reminder | active quiet deal | invoke function | deferred in this implementation | N/A | `/deal/:dealId` | N/A | N/A | deferred |
-| deal confirmation reminder | completed_pending_confirmation | invoke function | deferred in this implementation | N/A | `/deal/:dealId` | N/A | N/A | deferred |
-| unread deal message reminder | unread after delay | invoke function | deferred in this implementation | N/A | `/deal/:dealId` | N/A | N/A | deferred |
-| unread contextual reminder | unread contextual after delay | invoke function | deferred in this implementation | N/A | `/contextual/:id` | N/A | N/A | deferred |
-| listing improvement nudge | active listing old/no offers | invoke function | deferred in this implementation | N/A | `/item/manage` or `/notifications` | N/A | N/A | deferred |
-| local pulse digest | meaningful city activity | invoke function | deferred in this implementation | N/A | `/notifications` | N/A | N/A | deferred |
-| dormant return nudge | inactive user + real signal | invoke function | deferred in this implementation | N/A | `/notifications` | N/A | N/A | deferred |
+| Category | Setup state | Expected row | Push | Route | 2nd run | Pref-off | Quiet-hours |
+|---|---|---|---|---|---|---|---|
+| offer response | pending/thinking offer >12h | `reminder_offer_response_needed` + `offer_id` | yes | `/offer/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| deal coordination | coordinating deal quiet >24h | `reminder_deal_coordination_needed` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| deal confirmation | status `completed_pending_confirmation` + user unconfirmed | `reminder_deal_confirmation_pending` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| unread deal message | unread `deal_message_received` notification >6h | `reminder_unread_deal_message` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| unread contextual | unread `contextual_message_received` notification >6h | `reminder_unread_contextual_message` + `contextual_conversation_id` | yes | `/contextual/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| listing nudge | active item >7d with no offers | `nudge_listing_refresh_or_media` + `item_id` | yes | `/notifications` | dedupe skip | skip when `reminders_enabled=false` | skip |

@@ -46,13 +46,12 @@ export async function updateMyNotificationPreferences(input: Partial<Pick<Notifi
   if (input.quietHoursEnd === null || typeof input.quietHoursEnd === 'number') payload.quiet_hours_end = input.quietHoursEnd;
   if (input.timezone === null || typeof input.timezone === 'string') payload.timezone = input.timezone;
 
-  const { data: userRes } = await supabase.auth.getUser();
-  const userId = userRes.user?.id;
-  if (!userId) return { ok: false, error: null };
+  const ensured = await getOrCreateNotificationPreferences();
+  if (!ensured.ok) return ensured;
 
-  if (!Object.keys(payload).length) {
-    return getOrCreateNotificationPreferences();
-  }
+  const userId = ensured.data.userId;
+
+  if (!Object.keys(payload).length) return ensured;
 
   const { data, error } = await supabase
     .from('notification_preferences')
