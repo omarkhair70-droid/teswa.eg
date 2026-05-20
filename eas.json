@@ -23,5 +23,12 @@
       "channel": "production",
       "environment": "production"
     }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }
