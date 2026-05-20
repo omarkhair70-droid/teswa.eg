@@ -36,6 +36,7 @@ export type AppNotification = {
   offerId: string | null;
   dealId: string | null;
   contextualConversationId: string | null;
+  actorUserId: string | null;
   readAt: string | null;
   createdAt: string;
   isRead: boolean;
@@ -57,6 +58,7 @@ function mapNotificationRow(row: {
   offer_id: string | null;
   deal_id: string | null;
   contextual_conversation_id: string | null;
+  actor_user_id: string | null;
   read_at: string | null;
   created_at: string;
 }): AppNotification {
@@ -69,6 +71,7 @@ function mapNotificationRow(row: {
     offerId: row.offer_id,
     dealId: row.deal_id,
     contextualConversationId: row.contextual_conversation_id,
+    actorUserId: row.actor_user_id,
     readAt: row.read_at,
     createdAt: row.created_at,
     isRead: Boolean(row.read_at),
@@ -78,7 +81,7 @@ function mapNotificationRow(row: {
 export async function fetchMyNotifications(userId: string): Promise<{ ok: true; data: AppNotification[] } | { ok: false; message: string; error?: PostgrestError | null }> {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, type, title, body, item_id, offer_id, deal_id, contextual_conversation_id, read_at, created_at')
+    .select('id, type, title, body, item_id, offer_id, deal_id, contextual_conversation_id, actor_user_id, read_at, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -123,7 +126,8 @@ export async function markAllNotificationsRead(userId: string): Promise<Notifica
   return { ok: true };
 }
 
-export function resolveNotificationRoute(notification: Pick<AppNotification, 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId'>): string | null {
+export function resolveNotificationRoute(notification: Pick<AppNotification, 'type' | 'actorUserId' | 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId'>): string | null {
+  if (notification.type === 'user_followed_you' && notification.actorUserId) return `/profile/${notification.actorUserId}`;
   if (notification.contextualConversationId) return `/contextual/${notification.contextualConversationId}`;
   if (notification.dealId) return `/deal/${notification.dealId}`;
   if (notification.offerId) return `/offer/${notification.offerId}`;

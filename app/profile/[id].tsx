@@ -287,7 +287,7 @@ export default function PublicProfileScreen() {
               <Pressable onPress={() => router.push(`/profile-followers/${profile.id}`)}><AppText>المتابعون: {followState.followerCount}</AppText></Pressable>
               <Pressable onPress={() => router.push(`/profile-following/${profile.id}`)}><AppText>يتابع: {followState.followingCount}</AppText></Pressable>
             </View>
-            <AppButton label={followBusy ? 'جاري التنفيذ...' : (followState.followingByMe ? 'تتابعه' : (followState.followsMe ? 'تابعه أيضًا' : 'تابع'))} onPress={onToggleFollow} disabled={followBusy || blockedByMe} />
+            <AppButton label={followBusy ? 'جاري التنفيذ...' : (followState.followingByMe ? 'إلغاء المتابعة' : (followState.followsMe ? 'تابعه أيضًا' : 'تابع'))} onPress={onToggleFollow} disabled={followBusy || blockedByMe} />
             {followState.followsMe && !followState.followingByMe ? <AppText muted>يتابعك</AppText> : null}
             {followState.mutual ? <AppText muted>متابعة متبادلة</AppText> : null}
             {followMessage ? <AppText muted>{followMessage}</AppText> : null}

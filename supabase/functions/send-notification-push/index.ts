@@ -60,6 +60,7 @@ type NotificationRecord = {
   offer_id: string | null;
   deal_id: string | null;
   contextual_conversation_id: string | null;
+  actor_user_id: string | null;
 };
 
 type WebhookPayload = {
@@ -215,6 +216,7 @@ Deno.serve(async (req: Request) => {
         ...(record.contextual_conversation_id
           ? { contextualConversationId: record.contextual_conversation_id }
           : {}),
+        ...(record.actor_user_id ? { actorUserId: record.actor_user_id } : {}),
       },
     }));
 
