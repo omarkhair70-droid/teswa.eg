@@ -17,9 +17,9 @@ export function DiscoverStoryHighlightsRail({ items, loading = false, errorMessa
 
   return (
     <View style={styles.box}>
-      <AppText style={styles.eyebrow}>اكتشاف أعمق</AppText>
-      <AppText weight="bold" style={styles.title}>عناصر لها حكاية</AppText>
-      <AppText muted>تفاصيل من أصحابها تخليك تفهم العنصر قبل ما تفتح بابه.</AppText>
+      <AppText style={styles.eyebrow}>حكاية تقود لفرصة</AppText>
+      <AppText weight="bold" style={styles.title}>عناصر تستاهل تفتحها</AppText>
+      <AppText muted>القصص هنا مش للفرجة فقط؛ بتعطيك سياق يساعدك تبدأ محادثة مناسبة.</AppText>
       {loading ? <AppText>نجهّز العناصر ذات الحكاية...</AppText> : null}
       {errorMessage ? (
         <View style={styles.errorRow}>

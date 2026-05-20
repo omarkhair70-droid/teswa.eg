@@ -533,9 +533,9 @@ export default function MotionScreen() {
             <LinearGradient colors={[colors.primary, colors.accent, colors.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
               <MotionPulseCanvas storiesCount={stories.length} movingCount={movingItems.length} storyItemsCount={items.length} videoDropsCount={videoDrops.length} />
               <View style={styles.heroContent}>
-                <AppText weight="bold" style={styles.heroTitle}>حركة تِسوى</AppText>
-                <AppText style={styles.heroBody}>هنا الحاجات ما بتفضلش ساكتة. قصص بتتقال، وأبواب تبادل بدأت تتحرك.</AppText>
-                <AppText style={styles.heroMuted}>تابع النبض الحي من الناس والعناصر اللي دخلت مرحلة جديدة.</AppText>
+                <AppText weight="bold" style={styles.heroTitle}>نبض تِسوى الحي</AppText>
+                <AppText style={styles.heroBody}>هنا تشوف تِسوى وهي بتتحرك قدامك: قصص، لمحات عناصر، وإشارات محلية بتقربك من فرص تبادل.</AppText>
+                <AppText style={styles.heroMuted}>موشن هو القلب المرئي للتجربة.. مش مجرد فيد محتوى.</AppText>
                 <MotionLiveSignals state={liveSignals} />
                 {videoPresence.hasDrops && videoPresence.heroSummary ? (
                   <View style={styles.heroVideoPresence}>
@@ -590,16 +590,16 @@ export default function MotionScreen() {
             </View>
 
             <View style={styles.viewerCtaCard}>
-              <AppText weight="bold" style={styles.viewerCtaTitle}>شوف الحركة عموديًا</AppText>
-              <AppText muted>ريل سريع يجمع لقطات القصص ولمحات العناصر في مشهد واحد.</AppText>
+              <AppText weight="bold" style={styles.viewerCtaTitle}>شوف النبض عموديًا</AppText>
+              <AppText muted>ريل حي يجمع القصص ولمحات العناصر عشان تتلقط الفرص بسرعة.</AppText>
               <Pressable style={styles.viewerCtaBtn} onPress={() => router.push('/motion/viewer')}>
                 <AppText weight="semibold" style={styles.viewerCtaBtnText}>افتح المشاهد</AppText>
               </Pressable>
             </View>
 
             <View style={styles.pulseIntro}>
-              <AppText weight="bold">النبض الآن</AppText>
-              <AppText muted>عناصر دخلت الحركة، وحكايات بدأت تشد الانتباه.</AppText>
+              <AppText weight="bold">الحركة الآن</AppText>
+              <AppText muted>إشارات لحظية من عناصر وقصص دخلت مسار تفاعل حقيقي.</AppText>
               {videoPresence.hasDrops && videoPresence.pulseSummary ? (
                 <AppText muted>{videoPresence.pulseSummary}</AppText>
               ) : null}
@@ -627,8 +627,8 @@ export default function MotionScreen() {
         ListEmptyComponent={motionEmpty ? (
           <View style={styles.emptyWrap}>
             <MotionEmptyAnimation />
-            <EmptyState title="النبض لسه هادي" description="أول ما تبدأ الحكايات والعروض تتحرك، هتشوفها هنا." />
-            <AppButton label="استكشف العناصر" variant="neutral" onPress={() => router.push('/(tabs)/discover')} />
+            <EmptyState title="النبض لسه هادي" description="أول ما القصص ولمحات العناصر تبدأ تتحرك، هتظهر هنا فورًا." />
+            <AppButton label="اعرض عنصر أو قصة" variant="neutral" onPress={() => router.push('/story/create')} />
           </View>
         ) : null}
         renderItem={renderFeedItem}

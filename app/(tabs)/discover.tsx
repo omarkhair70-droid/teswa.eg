@@ -314,16 +314,16 @@ export default function DiscoverScreen() {
                 <Ionicons name="compass-outline" size={18} color={colors.primary} />
               </View>
               <View style={styles.heroBox}>
-                <AppText weight="bold" style={styles.heroTitle}>اكتشف تِسوى</AppText>
-                <AppText>ناس، حركة، وحاجات بتدور على رحلة جديدة. اختار الباب اللي تحب تبدأ منه.</AppText>
-                <AppText muted>لو هدفك عنصر معيّن، مركز التصفح تحت يختصر الطريق عليك.</AppText>
+                <AppText weight="bold" style={styles.heroTitle}>اكتشف بقصد</AppText>
+                <AppText>هنا مساحة البحث المقصود: عناصر، إشارات، وحكايات تساعدك تختار فرصة تستاهل التفاعل.</AppText>
+                <AppText muted>الصفحة دي للعثور على القيمة المناسبة لك بسرعة، مش مجرد مرور على المحتوى.</AppText>
               </View>
             </LinearGradient>
 
             <AppCard>
               <View style={styles.worldPathsBox}>
-                <AppText weight="bold">أبواب الاكتشاف</AppText>
-                <AppText muted>تِسوى مش مجرد قائمة عناصر؛ فيها ناس، حركة، وتصفح حيّ للعناصر الجاهزة للتبديل.</AppText>
+                <AppText weight="bold">مسارات اكتشاف ذكية</AppText>
+                <AppText muted>اختر المسار اللي يخدم نيتك الآن: تعرف الناس، تقرأ الإشارات، أو تدخل على عناصر جاهزة للتبديل.</AppText>
                 <View style={styles.gateCard}>
                   <View style={styles.gateTitleRow}>
                     <Ionicons name="people-outline" size={16} color={colors.primary} />

@@ -348,11 +348,17 @@ export default function HomeScreen() {
                 <Ionicons name="home-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.heroCopy}>
-                <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
-                <AppText style={styles.heroBody}>هنا تبدأ الحكايات، تتحرك الحاجات، وتفتح المقايضات بابها بهدوء.</AppText>
-                <AppText muted style={styles.heroSupport}>تابع ما يهمك الآن، أو خذ جولة دافئة في الجديد حولك.</AppText>
+                <AppText weight="bold" style={styles.title}>تِسوى الآن.. عالمك بيتحرّك</AppText>
+                <AppText style={styles.heroBody}>من هنا تشوف الحركة اللي حواليك، وتقرر الخطوة الجاية: تعرض حاجة، تفتح حكاية، أو تقرّب من تبادل.</AppText>
+                <AppText muted style={styles.heroSupport}>ده بيتك اليومي في تِسوى: نبضك الشخصي + أقرب فرص تتحرك.</AppText>
               </View>
             </LinearGradient>
+            <AppCard>
+              <View style={styles.loopStrip}>
+                <AppText weight="bold">إزاي تِسوى بتتحرك؟</AppText>
+                <AppText muted>اكتشف قيمة حولك ← اعرض اللي عندك ← افتح تواصل إنساني ← قرّب من تبادل حقيقي.</AppText>
+              </View>
+            </AppCard>
 
             {user ? (
               <AppCard>
@@ -442,8 +448,8 @@ export default function HomeScreen() {
               <View style={styles.storiesSection}>
                 <View style={styles.storiesHeaderRow}>
                   <View style={styles.sectionHeader}>
-                    <AppText weight="bold" style={styles.sectionTitle}>القصص</AppText>
-                    <AppText muted>لقطات قريبة من عالم تِسوى الآن.</AppText>
+                    <AppText weight="bold" style={styles.sectionTitle}>حكايات تفتح تواصل</AppText>
+                    <AppText muted>كل قصة هنا ممكن تبدأ محادثة وتقرّب فرصة تبادل.</AppText>
                   </View>
                   {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
                     <View style={styles.storyCountBadge}>
@@ -549,9 +555,9 @@ export default function HomeScreen() {
             ) : null}
 
             <View style={styles.itemsHeader}>
-              <AppText weight="semibold" style={styles.itemsEyebrow}>ظهر حديثًا</AppText>
-              <AppText weight="bold" style={styles.itemsTitle}>أحدث العناصر</AppText>
-              <AppText muted>حاجات وصلت للتو، جاهزة تفتح رحلة تبادل جديدة.</AppText>
+              <AppText weight="semibold" style={styles.itemsEyebrow}>فرص جديدة</AppText>
+              <AppText weight="bold" style={styles.itemsTitle}>عناصر جاهزة تتحرك</AppText>
+              <AppText muted>مش مجرد عرض.. دي عناصر ممكن تدخل في عرض وتبديل فعلي.</AppText>
             </View>
           </View>
         }
@@ -574,6 +580,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  loopStrip: { gap: spacing.xs },
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   header: { gap: spacing.md, marginBottom: spacing.md },

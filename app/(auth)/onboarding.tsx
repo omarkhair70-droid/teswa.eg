@@ -12,9 +12,9 @@ import { setOnboardingCompleted } from '@/lib/onboarding';
 import { useAuth } from '@/lib/auth';
 
 const slides = [
-  { eyebrow: 'قيمة', icon: 'sparkles-outline', title: 'حاجتك لسه لها قيمة.', body: 'بدل ما تفضل مركونة، خلّيها تفتح باب لحاجة تناسبك.' },
-  { eyebrow: 'اختيار', icon: 'pulse-outline', title: 'قبل ما تسيبها، شوف تِسوى إيه.', body: 'اعرض حاجتك، وشوف الناس مستعدة تبدّلها بإيه.' },
-  { eyebrow: 'تبديل', icon: 'swap-horizontal-outline', title: 'بدّل ببساطة، واختار اللي يستاهل.', body: 'تجربة معمولة للموبايل من أول يوم، علشان العرض والاختيار يبقوا أوضح وأسهل.' },
+  { eyebrow: 'اكتشاف', icon: 'compass-outline', title: 'حاجتك لسه لها قيمة.', body: 'في تِسوى تقدر تكتشف حواليك إيه بيتحرّك وإيه يستاهل تبدأ به.' },
+  { eyebrow: 'عرض', icon: 'sparkles-outline', title: 'قبل ما تسيبها، شوف تِسوى إيه.', body: 'اعرض حاجتك أو احكيلها حكاية قصيرة، وخلي قيمتها تبان للي مناسب.' },
+  { eyebrow: 'تبديل', icon: 'swap-horizontal-outline', title: 'من حكاية لمحادثة.. لفرصة تبادل.', body: 'رد بسيط ممكن يفتح تواصل حقيقي، وبعده عرض واضح يوصل لتبديل فعلي.' },
 ] as const;
 
 export default function OnboardingScreen() {
