@@ -111,7 +111,9 @@
           "imageWidth": 180,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
