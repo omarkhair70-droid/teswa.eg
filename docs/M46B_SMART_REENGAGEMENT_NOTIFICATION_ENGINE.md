@@ -20,21 +20,21 @@
    - Dedupe key: `deal_confirmation:{dealId}:{userId}:{UTC-day}`.
 
 4. `reminder_unread_deal_message`
-   - Signal: unread `notifications` rows of `type='deal_message_received'`, `read_at is null`, age >=6h.
-   - Recipient: owning `notifications.user_id`.
+   - Signal: true deal thread unread state using `deal_messages` + `deal_message_reads` (recipient `last_read_at` is null or older than latest incoming message), and latest incoming message age >=6h.
+   - Recipient: deal participant with unread incoming latest message.
    - Route: `/deal/:dealId`.
    - Dedupe key: `unread_deal:{dealId}:{userId}:{UTC-day}`.
 
 5. `reminder_unread_contextual_message`
-   - Signal: unread `notifications` rows of `type='contextual_message_received'`, `read_at is null`, age >=6h.
-   - Recipient: owning `notifications.user_id`.
+   - Signal: true contextual thread unread state using `contextual_messages` + `contextual_message_reads` (recipient `last_read_at` is null or older than latest incoming message), and latest incoming message age >=6h.
+   - Recipient: deal participant with unread incoming latest message.
    - Route: `/contextual/:conversationId`.
    - Dedupe key: `unread_contextual:{conversationId}:{userId}:{UTC-day}`.
 
 6. `nudge_listing_refresh_or_media`
    - Conservative launch-safe signal: `items.status='active'`, item age >=7 days, and zero offers (`offers.requested_item_id=item.id`).
    - Recipient: item owner.
-   - Route: `/notifications` (safe fallback; direct manage deep-link can be added after route contract hardening).
+   - Route: `/item/:itemId` (notification includes `item_id`, and route resolution maps item notifications to item detail).
    - Dedupe key: `listing_refresh:{itemId}:{UTC-day}`.
 
 ## Deferred categories (exact reasons)
@@ -50,6 +50,12 @@
 - `reminder_*` and `nudge_listing_refresh_or_media` -> `reminders_enabled`.
 - `digest_local_activity_pulse` -> `discovery_digest_enabled` (deferred).
 - `nudge_return_to_teswa` -> `return_nudges_enabled` (deferred).
+
+
+## Preferences UI scope (this PR)
+- Backend preferences foundation is implemented (`notification_preferences` table + helper RPC + typed client helper).
+- Scheduler respects stored preference rows (category toggles + quiet hours).
+- User-facing settings UI for editing reminders/digest/return nudges/quiet-hours is **not** included in this PR and should be delivered in a focused follow-up UI phase before/at launch if required.
 
 ## Quiet-hours behavior
 - Preference fields used: `quiet_hours_start`, `quiet_hours_end`, `timezone`.
@@ -94,6 +100,6 @@ curl -X POST "$SUPABASE_URL/functions/v1/run-smart-reengagement-notifications" \
 | offer response | pending/thinking offer >12h | `reminder_offer_response_needed` + `offer_id` | yes | `/offer/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
 | deal coordination | coordinating deal quiet >24h | `reminder_deal_coordination_needed` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
 | deal confirmation | status `completed_pending_confirmation` + user unconfirmed | `reminder_deal_confirmation_pending` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
-| unread deal message | unread `deal_message_received` notification >6h | `reminder_unread_deal_message` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
-| unread contextual | unread `contextual_message_received` notification >6h | `reminder_unread_contextual_message` + `contextual_conversation_id` | yes | `/contextual/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
-| listing nudge | active item >7d with no offers | `nudge_listing_refresh_or_media` + `item_id` | yes | `/notifications` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| unread deal message | latest incoming deal message older than 6h and `deal_message_reads.last_read_at` is null/older than that message | `reminder_unread_deal_message` + `deal_id` | yes | `/deal/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| unread contextual | latest incoming contextual message older than 6h and `contextual_message_reads.last_read_at` is null/older than that message | `reminder_unread_contextual_message` + `contextual_conversation_id` | yes | `/contextual/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |
+| listing nudge | active item >7d with no offers | `nudge_listing_refresh_or_media` + `item_id` | yes | `/item/:id` | dedupe skip | skip when `reminders_enabled=false` | skip |

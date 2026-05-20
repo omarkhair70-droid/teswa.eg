@@ -178,16 +178,48 @@ Deno.serve(async (req) => {
 
   try {
     const iso6h = new Date(now.getTime() - 6 * 3600_000).toISOString();
-    const { data, error } = await db.from("notifications").select("id,user_id,deal_id,created_at").eq("type", "deal_message_received").is("read_at", null).not("deal_id", "is", null).lte("created_at", iso6h).limit(300);
+    const { data: deals, error } = await db.from("swap_deals").select("id,requester_id,offerer_id").in("status", ["coordinating", "completed_pending_confirmation"]).limit(300);
     if (error) throw new Error(error.message);
-    for (const n of data ?? []) await reserveAndSend({ userId: n.user_id, type: "reminder_unread_deal_message", title: "لسه في رسالة صفقة مستنياك", body: "في رسالة ما اتقرتش في دردشة الصفقة. الرد السريع بيساعد التنسيق.", prefCategory: "reminders", dedupeKey: `unread_deal:${n.deal_id}:${n.user_id}:${day}`, dealId: n.deal_id, entityType: "deal", entityId: n.deal_id, route: `/deal/${n.deal_id}` });
+    for (const d of deals ?? []) {
+      const { data: latestMessage, error: msgErr } = await db.from("deal_messages").select("id,sender_id,created_at").eq("deal_id", d.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (msgErr) throw new Error(msgErr.message);
+      if (!latestMessage?.created_at || latestMessage.created_at > iso6h) continue;
+
+      const participants = [d.requester_id, d.offerer_id];
+      const { data: reads, error: readErr } = await db.from("deal_message_reads").select("user_id,last_read_at").eq("deal_id", d.id).in("user_id", participants);
+      if (readErr) throw new Error(readErr.message);
+      const lastReadByUser = new Map((reads ?? []).map((r) => [r.user_id, r.last_read_at]));
+
+      for (const uid of participants) {
+        if (uid === latestMessage.sender_id) continue;
+        const lastRead = lastReadByUser.get(uid);
+        if (lastRead && lastRead >= latestMessage.created_at) continue;
+        await reserveAndSend({ userId: uid, type: "reminder_unread_deal_message", title: "لسه في رسالة صفقة مستنياك", body: "في رسالة ما اتقرتش في دردشة الصفقة. الرد السريع بيساعد التنسيق.", prefCategory: "reminders", dedupeKey: `unread_deal:${d.id}:${uid}:${day}`, dealId: d.id, entityType: "deal", entityId: d.id, route: `/deal/${d.id}` });
+      }
+    }
   } catch (e) { bumpFail(`reminder_unread_deal_message:${String(e)}`); }
 
   try {
     const iso6h = new Date(now.getTime() - 6 * 3600_000).toISOString();
-    const { data, error } = await db.from("notifications").select("id,user_id,contextual_conversation_id,created_at").eq("type", "contextual_message_received").is("read_at", null).not("contextual_conversation_id", "is", null).lte("created_at", iso6h).limit(300);
+    const { data: conversations, error } = await db.from("contextual_conversations").select("id,starter_id,recipient_id").eq("context_type", "story_reply").limit(300);
     if (error) throw new Error(error.message);
-    for (const n of data ?? []) await reserveAndSend({ userId: n.user_id, type: "reminder_unread_contextual_message", title: "في رد لسه مستنيك", body: "في رسالة من محادثة بدأت بقصة ولسه ما اتقرتش.", prefCategory: "reminders", dedupeKey: `unread_contextual:${n.contextual_conversation_id}:${n.user_id}:${day}`, contextualConversationId: n.contextual_conversation_id, entityType: "contextual_conversation", entityId: n.contextual_conversation_id, route: `/contextual/${n.contextual_conversation_id}` });
+    for (const c of conversations ?? []) {
+      const { data: latestMessage, error: msgErr } = await db.from("contextual_messages").select("id,sender_id,created_at").eq("conversation_id", c.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (msgErr) throw new Error(msgErr.message);
+      if (!latestMessage?.created_at || latestMessage.created_at > iso6h) continue;
+
+      const participants = [c.starter_id, c.recipient_id];
+      const { data: reads, error: readErr } = await db.from("contextual_message_reads").select("user_id,last_read_at").eq("conversation_id", c.id).in("user_id", participants);
+      if (readErr) throw new Error(readErr.message);
+      const lastReadByUser = new Map((reads ?? []).map((r) => [r.user_id, r.last_read_at]));
+
+      for (const uid of participants) {
+        if (uid === latestMessage.sender_id) continue;
+        const lastRead = lastReadByUser.get(uid);
+        if (lastRead && lastRead >= latestMessage.created_at) continue;
+        await reserveAndSend({ userId: uid, type: "reminder_unread_contextual_message", title: "في رد لسه مستنيك", body: "في رسالة من محادثة بدأت بقصة ولسه ما اتقرتش.", prefCategory: "reminders", dedupeKey: `unread_contextual:${c.id}:${uid}:${day}`, contextualConversationId: c.id, entityType: "contextual_conversation", entityId: c.id, route: `/contextual/${c.id}` });
+      }
+    }
   } catch (e) { bumpFail(`reminder_unread_contextual_message:${String(e)}`); }
 
   try {
@@ -198,7 +230,7 @@ Deno.serve(async (req) => {
       const { count, error: offerErr } = await db.from("offers").select("id", { count: "exact", head: true }).eq("requested_item_id", item.id);
       if (offerErr) throw new Error(offerErr.message);
       if ((count ?? 0) > 0) continue;
-      await reserveAndSend({ userId: item.owner_id, type: "nudge_listing_refresh_or_media", title: "حاجتك لسه لها قيمة", body: "جرّب تحدّث الصور أو تضيف فيديو بسيط عشان تزود ظهورها.", prefCategory: "reminders", dedupeKey: `listing_refresh:${item.id}:${day}`, itemId: item.id, entityType: "item", entityId: item.id, route: "/notifications" });
+      await reserveAndSend({ userId: item.owner_id, type: "nudge_listing_refresh_or_media", title: "حاجتك لسه لها قيمة", body: "جرّب تحدّث الصور أو تضيف فيديو بسيط عشان تزود ظهورها.", prefCategory: "reminders", dedupeKey: `listing_refresh:${item.id}:${day}`, itemId: item.id, entityType: "item", entityId: item.id, route: `/item/${item.id}` });
     }
   } catch (e) { bumpFail(`nudge_listing_refresh_or_media:${String(e)}`); }
 
