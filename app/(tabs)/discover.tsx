@@ -243,6 +243,7 @@ export default function DiscoverScreen() {
   }, [items]);
 
   const hasActiveFilters = Boolean(query.trim() || activeNearbyLocation || selectedCategory || selectedCondition);
+  const hasActiveSearchOrFacetFilter = Boolean(query.trim() || selectedCategory || selectedCondition);
   const activeFiltersCount = [Boolean(query.trim()), Boolean(activeNearbyLocation), Boolean(selectedCategory), Boolean(selectedCondition)].filter(Boolean).length;
   const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
 
@@ -425,7 +426,7 @@ export default function DiscoverScreen() {
                   </>
                 )}
                 {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
-                {activeNearbyLocation && filtered.length === 0 ? <AppText muted>لا توجد عناصر قريبة بدقة في هذا النطاق بعد. جرّب عرض كل العناصر أو عُد لاحقًا.</AppText> : null}
+                {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? <AppText muted>لا توجد عناصر قريبة بدقة في هذا النطاق بعد. جرّب عرض كل العناصر أو عُد لاحقًا.</AppText> : null}
               </View>
             </AppCard>
 
