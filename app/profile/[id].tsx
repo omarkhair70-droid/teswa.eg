@@ -17,6 +17,7 @@ import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { buildProfilePresence } from '@/lib/profile-presence';
 import { useAuth } from '@/lib/auth';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
+import { fetchUserFollowState, followUserFromMobile, unfollowUserFromMobile } from '@/lib/user-follows';
 import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
 import {
   deletePublicProfileCache,
@@ -48,6 +49,9 @@ export default function PublicProfileScreen() {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockError, setBlockError] = useState<string | null>(null);
   const [blockedByMe, setBlockedByMe] = useState(false);
+  const [followState, setFollowState] = useState({ followingByMe: false, followsMe: false, mutual: false, followerCount: 0, followingCount: 0 });
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followMessage, setFollowMessage] = useState<string | null>(null);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -199,6 +203,27 @@ export default function PublicProfileScreen() {
     return () => { cancelled = true; };
   }, [profile?.id, user?.id]);
 
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user?.id || !profile?.id || user.id === profile.id) return;
+      const state = await fetchUserFollowState(user.id, profile.id);
+      if (!cancelled && state.ok) setFollowState(state.state);
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, user?.id]);
+
+  const onToggleFollow = useCallback(async () => {
+    if (!user?.id || !profile?.id || followBusy) return;
+    setFollowBusy(true); setFollowMessage(null);
+    const result = followState.followingByMe ? await unfollowUserFromMobile(user.id, profile.id) : await followUserFromMobile(user.id, profile.id);
+    setFollowMessage(result.message);
+    const state = await fetchUserFollowState(user.id, profile.id);
+    if (state.ok) setFollowState(state.state);
+    setFollowBusy(false);
+  }, [followBusy, followState.followingByMe, profile?.id, user?.id]);
+
   const onToggleBlock = useCallback(async () => {
     if (!user?.id || !profile?.id || blockBusy) return;
     setBlockBusy(true); setBlockError(null);
@@ -252,6 +277,23 @@ export default function PublicProfileScreen() {
 
       <ProfilePresenceSignals presence={profilePresence} />
 
+
+
+      {!isOwnProfile ? (
+        <AppCard>
+          <View style={styles.group}>
+            <AppText weight="semibold">العلاقة</AppText>
+            <View style={{ flexDirection: 'row-reverse', gap: spacing.sm }}>
+              <Pressable onPress={() => router.push(`/profile-followers/${profile.id}`)}><AppText>المتابعون: {followState.followerCount}</AppText></Pressable>
+              <Pressable onPress={() => router.push(`/profile-following/${profile.id}`)}><AppText>يتابع: {followState.followingCount}</AppText></Pressable>
+            </View>
+            <AppButton label={followBusy ? 'جاري التنفيذ...' : (followState.followingByMe ? 'إلغاء المتابعة' : (followState.followsMe ? 'تابعه أيضًا' : 'تابع'))} onPress={onToggleFollow} disabled={followBusy || blockedByMe} />
+            {followState.followsMe && !followState.followingByMe ? <AppText muted>يتابعك</AppText> : null}
+            {followState.mutual ? <AppText muted>متابعة متبادلة</AppText> : null}
+            {followMessage ? <AppText muted>{followMessage}</AppText> : null}
+          </View>
+        </AppCard>
+      ) : null}
 
       {!isOwnProfile ? (
         <AppCard>

@@ -23,7 +23,8 @@ type NotificationType =
   | "reminder_unread_contextual_message"
   | "nudge_listing_refresh_or_media"
   | "digest_local_activity_pulse"
-  | "nudge_return_to_teswa";
+  | "nudge_return_to_teswa"
+  | "user_followed_you";
 
 const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "offer_received",
@@ -46,6 +47,7 @@ const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "nudge_listing_refresh_or_media",
   "digest_local_activity_pulse",
   "nudge_return_to_teswa",
+  "user_followed_you",
 ]);
 
 type NotificationRecord = {
@@ -58,6 +60,7 @@ type NotificationRecord = {
   offer_id: string | null;
   deal_id: string | null;
   contextual_conversation_id: string | null;
+  actor_user_id: string | null;
 };
 
 type WebhookPayload = {
@@ -213,6 +216,7 @@ Deno.serve(async (req: Request) => {
         ...(record.contextual_conversation_id
           ? { contextualConversationId: record.contextual_conversation_id }
           : {}),
+        ...(record.actor_user_id ? { actorUserId: record.actor_user_id } : {}),
       },
     }));
 
