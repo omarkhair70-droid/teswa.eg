@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
-import PagerView from 'react-native-pager-view';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEventListener } from 'expo';
 import { Image as ExpoImage } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { StoryPager } from '@/components/story/StoryPager';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAuth } from '@/lib/auth';
@@ -93,7 +93,6 @@ export default function StoryViewerScreen() {
   const { userId } = useLocalSearchParams<{ userId?: string }>();
   const normalizedUserId = userId?.trim() ?? '';
   const isViewingOwnStories = !!user?.id && normalizedUserId === user.id;
-  const pagerRef = useRef<PagerView>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const markedViewedStoryIdsRef = useRef<Set<string>>(new Set());
 
@@ -135,7 +134,6 @@ export default function StoryViewerScreen() {
   }, [router]);
 
   const goToIndex = useCallback((index: number) => {
-    pagerRef.current?.setPage(index);
     setActiveIndex(index);
   }, []);
 
@@ -495,12 +493,10 @@ const renderUnavailableState = () => {
 
   return (
     <View style={styles.container}>
-      <PagerView
-        ref={pagerRef}
-        style={styles.pager}
-        initialPage={0}
+      <StoryPager
+        activeIndex={activeIndex}
+        onIndexChange={setActiveIndex}
         scrollEnabled={!voiceReplyInteractionActive}
-        onPageSelected={(event) => setActiveIndex(event.nativeEvent.position)}
       >
         {context.stories.map((story: StoryRecord, index) => {
           const signedUrl = urlsByStoryId[story.id];
@@ -541,7 +537,7 @@ const renderUnavailableState = () => {
             </View>
           );
         })}
-      </PagerView>
+      </StoryPager>
 
       <View style={styles.topOverlay} pointerEvents="box-none">
         <View style={styles.progressRow}>
