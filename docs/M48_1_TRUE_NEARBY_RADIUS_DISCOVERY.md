@@ -12,10 +12,11 @@ Nearby discovery previously matched city/area text on the client from already-lo
 Precise coordinates are saved only when the owner taps device location fill in Add Item. Manual city/area entry remains supported without precise coordinates.
 
 ## Why manual city/area edits clear coordinates
-If user edits city or area after autofill, stored lat/lng are cleared to prevent stale mismatched GPS from being published.
+If user edits city or area after autofill in Add Item, stored lat/lng are cleared to prevent stale mismatched GPS from being published.
+The same truth-preserving rule now applies in Edit Listing: changing city/area text clears stored precise coordinates.
 
 ## 3 km query behavior
-- Input: user foreground one-time location.
+- Input: user foreground one-time location from a fresh `getCurrentPositionAsync` lookup (not stale last-known fallback for this precision flow).
 - Filters: active items, non-banned owners, non-null item coordinates.
 - Distance: Haversine kilometers.
 - Order: nearest first, then newer `created_at`.

@@ -185,10 +185,17 @@ export default function DiscoverScreen() {
     try {
       const result = await resolveCurrentDiscoveryLocation();
       if (result.ok) {
-        const page = await fetchNearbyMarketplaceItemsPage({ latitude: result.latitude, longitude: result.longitude, radiusKm: 3, offset: 0 });
-        setItems(page.items);
-        setHasMore(page.hasMore);
-        setActiveNearbyLocation({ label: result.label, latitude: result.latitude, longitude: result.longitude });
+        try {
+          const page = await fetchNearbyMarketplaceItemsPage({ latitude: result.latitude, longitude: result.longitude, radiusKm: 3, offset: 0 });
+          setItems(page.items);
+          setHasMore(page.hasMore);
+          setError(null);
+          setLoadMoreError(null);
+          setActiveNearbyLocation({ label: result.label, latitude: result.latitude, longitude: result.longitude });
+        } catch {
+          setActiveNearbyLocation(null);
+          setNearbyError('تعذر تحميل العناصر القريبة الآن. حاول مرة أخرى.');
+        }
         return;
       }
 

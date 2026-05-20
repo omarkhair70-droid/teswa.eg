@@ -3,6 +3,7 @@ import type { ItemCondition } from '@/lib/publish-item';
 
 const ADD_ITEM_DRAFT_VERSION = 2 as const;
 const ADD_ITEM_DRAFT_PREFIX = 'teswa:add_item_draft:v2';
+const LEGACY_ADD_ITEM_DRAFT_PREFIX = 'teswa:add_item_draft:v1';
 const CONDITION_VALUES: ItemCondition[] = ['almost_new', 'good_used', 'minor_issues', 'needs_repair'];
 const DESIRE_MODE_VALUES = ['specific', 'flexible', 'surprise'] as const;
 
@@ -112,13 +113,25 @@ const sanitizeAddItemDraft = (value: unknown): AddItemDraft | null => {
 };
 
 export const getAddItemDraftStorageKey = (userId?: string | null) => `${ADD_ITEM_DRAFT_PREFIX}:${userId || 'anonymous'}`;
+export const getLegacyAddItemDraftStorageKey = (userId?: string | null) => `${LEGACY_ADD_ITEM_DRAFT_PREFIX}:${userId || 'anonymous'}`;
 
 export const loadAddItemDraft = async (userId?: string | null): Promise<AddItemDraft | null> => {
   try {
-    const raw = await AsyncStorage.getItem(getAddItemDraftStorageKey(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    return sanitizeAddItemDraft(parsed);
+    const v2Raw = await AsyncStorage.getItem(getAddItemDraftStorageKey(userId));
+    if (v2Raw) {
+      const parsed = JSON.parse(v2Raw) as unknown;
+      return sanitizeAddItemDraft(parsed);
+    }
+
+    const legacyRaw = await AsyncStorage.getItem(getLegacyAddItemDraftStorageKey(userId));
+    if (!legacyRaw) return null;
+
+    const parsedLegacy = JSON.parse(legacyRaw) as unknown;
+    const sanitized = sanitizeAddItemDraft(parsedLegacy);
+    if (sanitized) {
+      await AsyncStorage.setItem(getAddItemDraftStorageKey(userId), JSON.stringify(sanitized));
+    }
+    return sanitized;
   } catch (error) {
     if (__DEV__) console.log('[add-item-draft] load failed', { message: (error as { message?: string })?.message });
     return null;
@@ -140,7 +153,7 @@ export const saveAddItemDraft = async (userId: string | null | undefined, draft:
 };
 
 export const clearAddItemDraft = async (userId?: string | null): Promise<void> => {
-  await AsyncStorage.removeItem(getAddItemDraftStorageKey(userId));
+  await AsyncStorage.multiRemove([getAddItemDraftStorageKey(userId), getLegacyAddItemDraftStorageKey(userId)]);
 };
 
 export const hasMeaningfulAddItemDraft = (draftInput: Partial<AddItemDraft> | null | undefined): boolean => {

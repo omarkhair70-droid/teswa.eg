@@ -161,8 +161,7 @@ async function resolveCurrentGeocodedAddress(): Promise<GeocodedAddressResult> {
 
   let currentPosition: Location.LocationObject | null = null;
   try {
-    const lastKnown = await Location.getLastKnownPositionAsync();
-    currentPosition = lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+    currentPosition = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
   } catch {
     return { ok: false, reason: 'location_unavailable' };
   }

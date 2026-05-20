@@ -54,7 +54,7 @@ as $$
         limit 1
       ) as cover_image_url,
       c.name_ar as category,
-      i.condition as item_condition,
+      i.condition::text as item_condition,
       i.city,
       p.display_name as owner_display_name,
       i.created_at,
