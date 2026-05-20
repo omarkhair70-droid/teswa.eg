@@ -173,6 +173,29 @@ Use this format during execution: **Pass/Fail** + screenshot/log link in Notes.
    - Final QA must run on a build that includes all merged code.
    - If OTA preview channel is used, native-incompatible changes still require a rebuilt binary.
 
+
+### Current preview OTA is stale — required refresh before QA
+
+- Last known published Android preview OTA command (owner-confirmed):
+  - `npx.cmd eas-cli@latest update --channel preview --platform android --message "M44 compliance pack operational verification"`
+- No newer OTA has been published since that M44 update.
+- Therefore, the currently installed Android preview bundle should be treated as stale versus all later merged phases (including M44E, M46A, M46B, M47.5, M48, M48.1, and M48.2 once merged).
+- **Do not start final real-device QA until a fresh Android preview OTA built from the latest merged `main` is published and loaded on-device.**
+
+Recommended local sync + preview bundle sequence:
+
+1. `git checkout main`
+2. `git pull origin main`
+3. `npm.cmd run typecheck`
+4. `npx.cmd eas-cli@latest update --channel preview --platform android --message "M48.2 pre-launch real-device verification bundle"`
+
+Operational note for step 3:
+- If `npm.cmd run typecheck` fails with the already-known baseline Expo/TypeScript environment issues, record that output and continue with OTA decisioning; do **not** misclassify it as a newly introduced M48.2 regression.
+
+Before running the manual QA matrix:
+- Open the installed Android preview app and confirm the latest preview update is actually applied on the device.
+
+
 5. **What static code review cannot verify**
    - Actual push delivery and vendor transport behavior.
    - Real push tap routing on physical device shells.
