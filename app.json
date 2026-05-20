@@ -12,7 +12,6 @@
       "supportsTablet": true
     },
     "android": {
-      "edgeToEdgeEnabled": true,
       "package": "com.teswa.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
