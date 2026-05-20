@@ -14,9 +14,9 @@ import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscov
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { radii } from '@/constants/radii';
-import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
+import { fetchMarketplaceItemsPage, fetchNearbyMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
 import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discovery';
-import { matchesDiscoveryLocation, resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
+import { resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
 import {
   readAnyMarketplaceFirstPageCache,
   readFreshMarketplaceFirstPageCache,
@@ -40,7 +40,7 @@ export default function DiscoverScreen() {
   const [itemsCacheNotice, setItemsCacheNotice] = useState<string | null>(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
-  const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; matchTerms: string[] } | null>(null);
+  const [activeNearbyLocation, setActiveNearbyLocation] = useState<{ label: string; latitude: number; longitude: number } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [videoMoments, setVideoMoments] = useState<ItemVideoDiscoveryMoment[]>([]);
@@ -137,11 +137,13 @@ export default function DiscoverScreen() {
     setRefreshing(true);
     setLoadMoreError(null);
     try {
-      const page = await fetchMarketplaceItemsPage({ offset: 0 });
+      const page = activeNearbyLocation
+        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: 0 })
+        : await fetchMarketplaceItemsPage({ offset: 0 });
       setItems(page.items);
       setHasMore(page.hasMore);
       setError(null);
-      void writeMarketplaceFirstPageCache(page);
+      if (!activeNearbyLocation) void writeMarketplaceFirstPageCache(page);
       void loadVideoMoments();
       void loadStoryHighlights();
     } catch {
@@ -149,7 +151,7 @@ export default function DiscoverScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [loadStoryHighlights, loadVideoMoments, refreshing]);
+  }, [activeNearbyLocation, loadStoryHighlights, loadVideoMoments, refreshing]);
 
   const loadMoreItems = useCallback(async () => {
     if (loading || refreshing || loadingMore || !hasMore || error) {
@@ -160,7 +162,9 @@ export default function DiscoverScreen() {
     setLoadMoreError(null);
 
     try {
-      const page = await fetchMarketplaceItemsPage({ offset: items.length });
+      const page = activeNearbyLocation
+        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: items.length })
+        : await fetchMarketplaceItemsPage({ offset: items.length });
       setItems((currentItems) => {
         const merged = [...currentItems, ...page.items];
         const uniqueById = new Map(merged.map((item) => [item.id, item]));
@@ -172,7 +176,7 @@ export default function DiscoverScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [error, hasMore, items.length, loading, loadingMore, refreshing]);
+  }, [activeNearbyLocation, error, hasMore, items.length, loading, loadingMore, refreshing]);
 
   const handleUseMyLocation = useCallback(async () => {
     setNearbyLoading(true);
@@ -181,7 +185,17 @@ export default function DiscoverScreen() {
     try {
       const result = await resolveCurrentDiscoveryLocation();
       if (result.ok) {
-        setActiveNearbyLocation({ label: result.label, matchTerms: result.matchTerms });
+        try {
+          const page = await fetchNearbyMarketplaceItemsPage({ latitude: result.latitude, longitude: result.longitude, radiusKm: 3, offset: 0 });
+          setItems(page.items);
+          setHasMore(page.hasMore);
+          setError(null);
+          setLoadMoreError(null);
+          setActiveNearbyLocation({ label: result.label, latitude: result.latitude, longitude: result.longitude });
+        } catch {
+          setActiveNearbyLocation(null);
+          setNearbyError('تعذر تحميل العناصر القريبة الآن. حاول مرة أخرى.');
+        }
         return;
       }
 
@@ -195,7 +209,8 @@ export default function DiscoverScreen() {
   const clearNearbyFilter = useCallback(() => {
     setActiveNearbyLocation(null);
     setNearbyError(null);
-  }, []);
+    void loadItems();
+  }, [loadItems]);
 
   useEffect(() => {
     loadItems();
@@ -228,6 +243,7 @@ export default function DiscoverScreen() {
   }, [items]);
 
   const hasActiveFilters = Boolean(query.trim() || activeNearbyLocation || selectedCategory || selectedCondition);
+  const hasActiveSearchOrFacetFilter = Boolean(query.trim() || selectedCategory || selectedCondition);
   const activeFiltersCount = [Boolean(query.trim()), Boolean(activeNearbyLocation), Boolean(selectedCategory), Boolean(selectedCondition)].filter(Boolean).length;
   const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
 
@@ -240,9 +256,7 @@ export default function DiscoverScreen() {
         })
       : items;
 
-    const nearbyFiltered = activeNearbyLocation
-      ? queryFiltered.filter((item) => matchesDiscoveryLocation(item.location, activeNearbyLocation.matchTerms))
-      : queryFiltered;
+    const nearbyFiltered = queryFiltered;
 
     const categoryFiltered = selectedCategory
       ? nearbyFiltered.filter((item) => item.category?.trim().toLocaleLowerCase() === selectedCategory.toLocaleLowerCase())
@@ -402,16 +416,17 @@ export default function DiscoverScreen() {
                 </View>
                 {activeNearbyLocation ? (
                   <>
-                    <AppText>نعرض العناصر الأقرب إلى: {activeNearbyLocation.label}</AppText>
+                    <AppText>نعرض العناصر داخل 3 كم تقريبًا من: {activeNearbyLocation.label}</AppText>
                     <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
                   </>
                 ) : (
                   <>
-                    <AppButton label={nearbyLoading ? 'جارٍ تحديد موقعك...' : 'اعرض الأقرب لمدينتي'} onPress={handleUseMyLocation} disabled={nearbyLoading} />
+                    <AppButton label={nearbyLoading ? 'جارٍ تحديد موقعك...' : 'اعرض الأقرب لي'} onPress={handleUseMyLocation} disabled={nearbyLoading} />
                     <AppText muted>نستخدم موقعك مرة واحدة لتقريب نتائج التصفح.</AppText>
                   </>
                 )}
                 {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
+                {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? <AppText muted>لا توجد عناصر قريبة بدقة في هذا النطاق بعد. جرّب عرض كل العناصر أو عُد لاحقًا.</AppText> : null}
               </View>
             </AppCard>
 

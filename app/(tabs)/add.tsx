@@ -16,7 +16,7 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { fetchActiveCategories, ItemCondition, publishItem, type PublishProgress } from '@/lib/publish-item';
 import { consumePendingInboundSharedMedia } from '@/lib/inbound-shared-media';
-import { clearAddItemDraft, hasMeaningfulAddItemDraft, loadAddItemDraft, saveAddItemDraft, type AddItemDraft } from '@/lib/add-item-draft';
+import { ADD_ITEM_DRAFT_VERSION, clearAddItemDraft, hasMeaningfulAddItemDraft, loadAddItemDraft, saveAddItemDraft, type AddItemDraft } from '@/lib/add-item-draft';
 import { clearAddItemDraftMedia, deleteAddItemDraftMediaAsset, persistAddItemDraftMediaAssets, restoreAddItemDraftMediaAssets, toAddItemDraftMediaAssets } from '@/lib/add-item-draft-media';
 import { useOfflineStatus } from '@/hooks/useOfflineStatus';
 import { resolveCurrentAddItemLocation } from '@/lib/discovery-location';
@@ -57,6 +57,8 @@ export default function AddScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [city, setCity] = useState('');
   const [area, setArea] = useState('');
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
   const [condition, setCondition] = useState<ItemCondition>('good_used');
   const [conditionNotes, setConditionNotes] = useState('');
   const [description, setDescription] = useState('');
@@ -96,6 +98,8 @@ export default function AddScreen() {
     setCategoryId(null);
     setCity('');
     setArea('');
+    setLocationLatitude(null);
+    setLocationLongitude(null);
     setCondition('good_used');
     setConditionNotes('');
     setDescription('');
@@ -108,13 +112,15 @@ export default function AddScreen() {
   };
 
   const currentDraft: AddItemDraft = {
-    version: 1,
+    version: ADD_ITEM_DRAFT_VERSION,
     updatedAt: new Date(0).toISOString(),
     step,
     title,
     categoryId,
     city,
     area,
+    locationLatitude,
+    locationLongitude,
     condition,
     conditionNotes,
     description,
@@ -138,6 +144,8 @@ export default function AddScreen() {
         setCategoryId(draft.categoryId);
         setCity(draft.city);
         setArea(draft.area);
+        setLocationLatitude(draft.locationLatitude);
+        setLocationLongitude(draft.locationLongitude);
         setCondition(draft.condition);
         setConditionNotes(draft.conditionNotes);
         setDescription(draft.description);
@@ -365,6 +373,8 @@ export default function AddScreen() {
       if (result.ok) {
         setCity(result.city);
         setArea(result.area ?? '');
+        setLocationLatitude(result.latitude);
+        setLocationLongitude(result.longitude);
         setLocationFillMessage(`اقترحنا موقعك: ${result.label}. يمكنك تعديله قبل النشر.`);
         return;
       }
@@ -437,6 +447,8 @@ export default function AddScreen() {
           categoryId,
           city: city.trim() || null,
           area: area.trim() || null,
+          locationLatitude,
+          locationLongitude,
           condition,
           conditionNotes: conditionNotes.trim() || null,
           description: description.trim() || null,
@@ -523,7 +535,7 @@ export default function AddScreen() {
     {step === 0 && <AppCard style={styles.studioCard}><View style={styles.gap}><View style={styles.sectionHeaderRow}><View style={styles.sectionHeaderIcon}><Ionicons name='videocam-outline' size={16} color={colors.primary} /></View><View style={styles.sectionHeader}><AppText weight='bold'>فيديو قصير للحاجة</AppText><AppText muted>اختياري — لمحة سريعة تساعد الناس يشوفوا العنصر بشكل أصدق.</AppText></View></View>{videoTeaser ? <View style={styles.videoTeaserCard}><View style={styles.videoIcon}><Ionicons name='play' size={20} color={colors.surface} /></View><View style={styles.videoTeaserMeta}><AppText weight='semibold'>تم اختيار فيديو اللمحة</AppText><AppText muted>{videoTeaserDurationLabel ? `المدة: ${videoTeaserDurationLabel}` : 'الفيديو جاهز، ولم تصلنا مدة الملف.'}</AppText>{videoTeaser.fileName ? <AppText muted numberOfLines={1}>{videoTeaser.fileName}</AppText> : null}</View><View style={styles.videoActions}><Pressable onPress={pickVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>تغيير</AppText></Pressable><Pressable onPress={removeVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></View> : <View style={styles.emptyMedia}><AppText weight='bold'>أضف لمحة فيديو اختيارية</AppText><AppText muted>فيديو واحد حتى 15 ثانية. الصور تظل مطلوبة كمعرض أساسي.</AppText><View style={styles.actions}><AppButton label='اختر فيديو' variant='neutral' onPress={pickVideoTeaser} disabled={submitting} /></View></View>}<AppText muted>لا نحفظ فيديو اللمحة ضمن المسودات حالياً؛ أضفه عند النشر النهائي.</AppText></View></AppCard>}
     {step === 1 && <AppCard style={styles.studioCard}><View style={styles.gap}><View style={styles.sectionHeaderRow}><View style={styles.sectionHeaderIcon}><Ionicons name='cube-outline' size={16} color={colors.primary} /></View><View style={styles.sectionHeader}><AppText weight='bold'>تعريف الحاجة</AppText><AppText muted>أضف الأساسيات التي تساعد على الفهم السريع.</AppText></View></View><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
-      <AppInput value={city} onChangeText={setCity} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={setArea} placeholder='المنطقة (اختياري)' />
+      <AppInput value={city} onChangeText={(value) => { setCity(value); if (locationLatitude !== null || locationLongitude !== null) { setLocationLatitude(null); setLocationLongitude(null); } }} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={(value) => { setArea(value); if (locationLatitude !== null || locationLongitude !== null) { setLocationLatitude(null); setLocationLongitude(null); } }} placeholder='المنطقة (اختياري)' />
       <View style={styles.locationAssistBlock}>
         <View style={styles.locationAssistHeader}><Ionicons name='navigate-outline' size={16} color={colors.primary} /><AppText weight='semibold'>مساعد تحديد الموقع</AppText></View>
         <AppButton
@@ -532,7 +544,7 @@ export default function AddScreen() {
           onPress={() => { void handleFillLocationFromDevice(); }}
           disabled={locationFillLoading || submitting}
         />
-        <AppText muted>نستخدم موقعك مرة واحدة لاقتراح المدينة والمنطقة، ويمكنك تعديلهما.</AppText>
+        <AppText muted>نستخدم موقعك مرة واحدة. المطابقة الدقيقة للقريب تعمل فقط عند التعبئة من موقع الجهاز.</AppText>
         {locationFillMessage && <AppText muted>{locationFillMessage}</AppText>}
         {locationFillError && <AppText style={styles.error}>{locationFillError}</AppText>}
       </View></View></AppCard>}

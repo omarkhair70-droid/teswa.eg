@@ -115,7 +115,12 @@ export async function updateListingCoreFields(input: {
   if ((swapReason?.length ?? 0) > 240) return { ok: false, reason: 'invalid_input', message: 'سبب المبادلة يجب ألا يتجاوز 240 حرف.' };
   if ((goodFor?.length ?? 0) > 240) return { ok: false, reason: 'invalid_input', message: 'مفيد لمن يجب ألا يتجاوز 240 حرف.' };
 
-  const { data: item, error: itemLookupError } = await supabase.from('items').select('id,status').eq('id', itemId).eq('owner_id', ownerId).maybeSingle();
+  const { data: item, error: itemLookupError } = await supabase
+    .from('items')
+    .select('id,status,city,area')
+    .eq('id', itemId)
+    .eq('owner_id', ownerId)
+    .maybeSingle();
 
   if (itemLookupError) return { ok: false, reason: 'unknown', message: 'تعذر التحقق من صلاحية التعديل حالياً.' };
   if (!item) return { ok: false, reason: 'not_found_or_unauthorized', message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.' };
@@ -123,13 +128,19 @@ export async function updateListingCoreFields(input: {
     return { ok: false, reason: 'not_editable', message: 'لا يمكن تعديل هذا العنصر في حالته الحالية.' };
   }
 
+  const normalizedCity = normalizeNullableText(payload.city);
+  const normalizedArea = normalizeNullableText(payload.area);
+  const currentCity = normalizeNullableText(item.city);
+  const currentArea = normalizeNullableText(item.area);
+  const hasManualLocationTextChange = normalizedCity !== currentCity || normalizedArea !== currentArea;
+
   const { error: updateError } = await supabase
     .from('items')
     .update({
       title,
       category_id: payload.categoryId,
-      city: normalizeNullableText(payload.city),
-      area: normalizeNullableText(payload.area),
+      city: normalizedCity,
+      area: normalizedArea,
       condition: payload.condition,
       condition_notes: normalizeNullableText(payload.conditionNotes),
       description: normalizeNullableText(payload.description),
@@ -138,6 +149,7 @@ export async function updateListingCoreFields(input: {
       good_for: goodFor,
       desire_mode: payload.desireMode,
       desire_text: normalizeNullableText(payload.desireText),
+      ...(hasManualLocationTextChange ? { location_latitude: null, location_longitude: null } : {}),
     })
     .eq('id', itemId)
     .eq('owner_id', ownerId);
