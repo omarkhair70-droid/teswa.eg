@@ -23,7 +23,8 @@ type NotificationType =
   | "reminder_unread_contextual_message"
   | "nudge_listing_refresh_or_media"
   | "digest_local_activity_pulse"
-  | "nudge_return_to_teswa";
+  | "nudge_return_to_teswa"
+  | "user_followed_you";
 
 const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "offer_received",
@@ -46,6 +47,7 @@ const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "nudge_listing_refresh_or_media",
   "digest_local_activity_pulse",
   "nudge_return_to_teswa",
+  "user_followed_you",
 ]);
 
 type NotificationRecord = {

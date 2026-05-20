@@ -17,6 +17,7 @@ import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { buildProfilePresence } from '@/lib/profile-presence';
 import { requestMyAccountDeletion } from '@/lib/account-deletion';
+import { fetchUserFollowState } from '@/lib/user-follows';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
 
@@ -40,6 +41,7 @@ export default function ProfileScreen() {
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [biometricMessage, setBiometricMessage] = useState<string | null>(null);
+  const [followCounts, setFollowCounts] = useState({ followerCount: 0, followingCount: 0 });
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -122,6 +124,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      if (user?.id) fetchUserFollowState(user.id, user.id).then((r) => { if (r.ok) setFollowCounts({ followerCount: r.state.followerCount, followingCount: r.state.followingCount }); });
       loadMyStoriesState();
       void loadBiometricState();
     }, [loadData, loadMyStoriesState, loadBiometricState]),
@@ -264,6 +267,7 @@ export default function ProfileScreen() {
             />
 
             <ProfilePresenceSignals presence={profilePresence} />
+            {user?.id ? <AppCard><View style={styles.group}><Pressable onPress={() => router.push(`/profile-followers/${user.id}`)}><AppText>المتابعون: {followCounts.followerCount}</AppText></Pressable><Pressable onPress={() => router.push(`/profile-following/${user.id}`)}><AppText>يتابع: {followCounts.followingCount}</AppText></Pressable></View></AppCard> : null}
 
             {user?.id ? (
               <AppCard>

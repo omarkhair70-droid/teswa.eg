@@ -24,7 +24,8 @@ export type NotificationType =
   | 'reminder_unread_contextual_message'
   | 'nudge_listing_refresh_or_media'
   | 'digest_local_activity_pulse'
-  | 'nudge_return_to_teswa';
+  | 'nudge_return_to_teswa'
+  | 'user_followed_you';
 
 export type AppNotification = {
   id: string;
@@ -154,4 +155,5 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   nudge_listing_refresh_or_media: 'اقتراح لتحسين عرضك',
   digest_local_activity_pulse: 'نبض جديد قريب منك',
   nudge_return_to_teswa: 'تحديث مهم في تِسوى',
+  user_followed_you: 'متابعة جديدة',
 };
