@@ -138,3 +138,15 @@ Implemented a platform-aware Supabase auth storage adapter:
 ### Validation
 
 Owner should validate end-to-end export locally/CI after this change. This environment may still lack the Expo CLI/runtime needed for full export execution.
+
+## Vercel clean URL requirement for Expo static routes
+
+Vercel must enable clean URLs so exported Expo static pages resolve on route pathnames (without `.html`).
+
+Required public routes:
+
+- `/legal/privacy`
+- `/account-deletion`
+- `/auth/callback`
+
+Direct `.html` access is not the intended public URL shape.
