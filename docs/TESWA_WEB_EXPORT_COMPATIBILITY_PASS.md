@@ -107,3 +107,34 @@ Web fallback behavior:
 ### Validation ownership
 
 This environment may still be unable to run full Expo export; owner local validation remains the source of truth for end-to-end `npm run export:web` confirmation after this fix.
+
+
+## Follow-up blocker: Supabase AsyncStorage on static web render
+
+After resolving PagerView and Expo SQLite blockers, the next owner-reported blocker was:
+
+- `ReferenceError: window is not defined`
+- stack traced through `@react-native-async-storage/async-storage` during Supabase auth session initialization.
+
+### Root cause
+
+`lib/supabase/client.ts` configured Supabase auth storage with React Native AsyncStorage for all platforms. During static web rendering (`expo export --platform web`), this path can evaluate in a non-browser runtime where `window` is unavailable.
+
+### Fix applied
+
+Implemented a platform-aware Supabase auth storage adapter:
+
+- `lib/supabase/auth-storage.ts` (native/default): delegates to React Native AsyncStorage (mobile behavior preserved).
+- `lib/supabase/auth-storage.web.ts` (web): SSR-safe storage adapter that:
+  - uses `localStorage` only when `typeof window !== 'undefined'`, and
+  - falls back to in-memory storage when browser storage is unavailable.
+
+`lib/supabase/client.ts` now imports the platform-resolved `supabaseAuthStorage` adapter and keeps the same auth behavior flags:
+
+- `autoRefreshToken: true`
+- `persistSession: true`
+- `detectSessionInUrl: false`
+
+### Validation
+
+Owner should validate end-to-end export locally/CI after this change. This environment may still lack the Expo CLI/runtime needed for full export execution.
