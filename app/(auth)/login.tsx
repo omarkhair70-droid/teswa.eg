@@ -25,7 +25,13 @@ export default function LoginScreen() {
     setError('');
     const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (signInError) return setError('تعذر تسجيل الدخول. تأكد من البيانات وحاول مرة تانية.');
+    if (signInError) {
+      const rawMessage = (signInError.message || '').toLowerCase();
+      if (rawMessage.includes('email not confirmed') || rawMessage.includes('confirm your email')) {
+        return setError('لا يمكن تسجيل الدخول قبل تأكيد البريد الإلكتروني. راجع البريد الوارد وSpam/Junk ثم حاول مرة أخرى.');
+      }
+      return setError('تعذر تسجيل الدخول. تأكد من البيانات وحاول مرة تانية.');
+    }
   };
 
   const handleGoogleSignIn = async () => {

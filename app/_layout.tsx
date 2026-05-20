@@ -192,7 +192,7 @@ function RootNavigator() {
 
   if (!bootstrapReady) return null;
 
-  if (user && ((loadingProfile && !profileCompleted) || (loadingPolicyAcceptance && !requiredPoliciesAccepted))) {
+  if (user && (loadingProfile || loadingPolicyAcceptance)) {
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>
@@ -207,8 +207,8 @@ function RootNavigator() {
 
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>نجهّز حسابك...</Text>
-        <Text style={styles.errorSubtitle}>لحظات ونفتح لك تِسوى.</Text>
+        <Text style={styles.errorTitle}>ندخلك إلى تِسوى...</Text>
+        <Text style={styles.errorSubtitle}>نراجع حالة حسابك بسرعة ونفتح لك التجربة.</Text>
       </View>
     );
   }
