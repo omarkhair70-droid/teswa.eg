@@ -19,6 +19,8 @@ export default function SignupScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
 
   const submit = async () => {
     if (loading || message || googleLoading) return;
@@ -33,10 +35,26 @@ export default function SignupScreen() {
     setLoading(false);
     if (signUpError) return setError('تعذر إنشاء الحساب. حاول مرة تانية.');
     if (!data.session) {
-      setMessage('تم إنشاء الحساب. راجع بريدك الإلكتروني لتأكيد الحساب، وبعدها ادخل من شاشة تسجيل الدخول.');
+      const normalizedEmail = email.trim().toLowerCase();
+      setPendingConfirmationEmail(normalizedEmail);
+      setMessage('تم إنشاء الحساب، لكن لا يمكننا تأكيد تسليم البريد من داخل التطبيق. راجع البريد الوارد وSpam/Junk ثم أكد الحساب.');
       return;
     }
     router.replace('/(auth)/profile-setup');
+  };
+
+
+  const handleResendConfirmation = async () => {
+    if (!pendingConfirmationEmail || resendLoading) return;
+    setResendLoading(true);
+    setError('');
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: pendingConfirmationEmail });
+    setResendLoading(false);
+    if (resendError) {
+      setError('تعذر إعادة إرسال رسالة التأكيد الآن. حاول مرة أخرى بعد قليل.');
+      return;
+    }
+    setMessage('أعدنا محاولة إرسال رسالة التأكيد. راجع البريد الوارد وSpam/Junk.');
   };
 
   const handleGoogleSignIn = async () => {
@@ -61,6 +79,7 @@ export default function SignupScreen() {
             <AppInput placeholder="تأكيد كلمة المرور" secureTextEntry editable={!message} value={confirmPassword} onChangeText={setConfirmPassword} />
             {Boolean(error) && <View style={styles.errorCard}><AppText style={styles.error}>{error}</AppText></View>}
             {Boolean(message) && <View style={styles.successCard}><AppText>{message}</AppText></View>}
+            {pendingConfirmationEmail ? <AppButton label={resendLoading ? 'جاري إعادة الإرسال...' : 'إعادة إرسال رسالة التأكيد'} variant="neutral" onPress={handleResendConfirmation} disabled={resendLoading || loading || googleLoading} /> : null}
             <AppButton label={loading ? 'جاري إنشاء الحساب...' : (message ? 'الانتقال لتسجيل الدخول' : 'إنشاء الحساب')} onPress={message ? (() => router.replace('/(auth)/login')) : submit} disabled={loading || googleLoading} />
           </View>
         </View>

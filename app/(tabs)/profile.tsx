@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
@@ -20,6 +22,7 @@ import { useUnreadBadges } from '@/lib/unread-badges';
 import { buildProfilePresence } from '@/lib/profile-presence';
 import { requestMyAccountDeletion } from '@/lib/account-deletion';
 import { fetchUserFollowState } from '@/lib/user-follows';
+import { removeProfileImageFromMobile, replaceProfileImageFromMobile } from '@/lib/profile-images';
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
 
@@ -44,6 +47,8 @@ export default function ProfileScreen() {
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [biometricMessage, setBiometricMessage] = useState<string | null>(null);
   const [followCounts, setFollowCounts] = useState({ followerCount: 0, followingCount: 0 });
+  const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
+  const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -245,6 +250,39 @@ export default function ProfileScreen() {
     setIsSigningOut(false);
   };
 
+  const handlePickAvatar = async (source: 'camera' | 'gallery') => {
+    if (!user?.id) return;
+    const permissionResult = source === 'camera'
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      setError('لا يمكن تحديث الصورة بدون إذن الوصول للكاميرا/المعرض.');
+      return;
+    }
+    const pickerResult = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
+    if (pickerResult.canceled || !pickerResult.assets[0]) return;
+    const result = await replaceProfileImageFromMobile({ userId: user.id, kind: 'avatar', asset: pickerResult.assets[0], previousImageUrl: profile?.avatar_url ?? null });
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setAvatarSheetOpen(false);
+    await loadData();
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user?.id) return;
+    const result = await removeProfileImageFromMobile({ userId: user.id, kind: 'avatar', currentImageUrl: profile?.avatar_url ?? null });
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setAvatarSheetOpen(false);
+    await loadData();
+  };
+
   return (
     <AppScreen scrollable>
       <View style={styles.content}>
@@ -265,6 +303,8 @@ export default function ProfileScreen() {
               memberSince={memberSince}
               activeStoriesCount={myActiveStoriesCount}
               onOpenStories={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
+              onPressAvatarRing={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
+              onPressAvatar={() => setAvatarSheetOpen(true)}
               variant="self"
             />
 
@@ -382,6 +422,22 @@ export default function ProfileScreen() {
           </View>
         </AppCard>
       </View>
+
+      <Modal visible={avatarSheetOpen} transparent animationType="fade" onRequestClose={() => setAvatarSheetOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setAvatarSheetOpen(false)}>
+          <View style={styles.sheet}>
+            {profile?.avatar_url ? <AppButton label="عرض الصورة" variant="neutral" onPress={() => { setAvatarSheetOpen(false); setAvatarViewerOpen(true); }} /> : null}
+            {profile?.avatar_url ? <AppButton label="تغيير صورة الملف" variant="neutral" onPress={() => void handlePickAvatar('gallery')} /> : <AppButton label="إضافة صورة الملف" variant="neutral" onPress={() => void handlePickAvatar('gallery')} />}
+            <AppButton label="التقاط صورة" variant="neutral" onPress={() => void handlePickAvatar('camera')} />
+            {profile?.avatar_url ? <AppButton label="حذف صورة الملف" onPress={() => void handleRemoveAvatar()} /> : null}
+          </View>
+        </Pressable>
+      </Modal>
+      <Modal visible={avatarViewerOpen} transparent animationType="fade" onRequestClose={() => setAvatarViewerOpen(false)}>
+        <Pressable style={styles.viewerBackdrop} onPress={() => setAvatarViewerOpen(false)}>
+          {profile?.avatar_url ? <ExpoImage source={{ uri: profile.avatar_url }} style={styles.viewerImage} contentFit="contain" /> : <AppText style={{ color: '#fff' }}>لا توجد صورة ملف لعرضها.</AppText>}
+        </Pressable>
+      </Modal>
     </AppScreen>
   );
 }
@@ -410,4 +466,8 @@ const styles = StyleSheet.create({
   securityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   successText: { color: '#7C2D12' },
   dangerTitle: { color: '#B00020' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end', padding: spacing.lg },
+  sheet: { backgroundColor: '#fff', borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
+  viewerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  viewerImage: { width: '100%', height: '75%' },
 });

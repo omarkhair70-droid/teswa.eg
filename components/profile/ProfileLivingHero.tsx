@@ -17,6 +17,8 @@ type ProfileLivingHeroProps = {
   memberSince?: string | null;
   activeStoriesCount?: number;
   onOpenStories?: (() => void) | null;
+  onPressAvatar?: (() => void) | null;
+  onPressAvatarRing?: (() => void) | null;
   variant?: 'self' | 'public';
 };
 
@@ -30,6 +32,8 @@ export function ProfileLivingHero({
   memberSince,
   activeStoriesCount = 0,
   onOpenStories,
+  onPressAvatar,
+  onPressAvatarRing,
   variant = 'public',
 }: ProfileLivingHeroProps) {
   const hasStories = activeStoriesCount > 0;
@@ -64,8 +68,8 @@ export function ProfileLivingHero({
 
       <View style={styles.identityPanel}>
         <View style={styles.avatarColumn}>
-          <View style={[styles.avatarAura, hasStories && styles.avatarAuraActive]}>
-            <View style={styles.avatarFrame}>
+          <Pressable disabled={!onPressAvatarRing} onPress={onPressAvatarRing ?? undefined} style={[styles.avatarAura, hasStories && styles.avatarAuraActive]}>
+            <Pressable disabled={!onPressAvatar} onPress={onPressAvatar ?? undefined} style={styles.avatarFrame}>
               {avatarUrl ? (
                 <ExpoImage source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" transition={220} cachePolicy="memory-disk" />
               ) : (
@@ -73,8 +77,8 @@ export function ProfileLivingHero({
                   <AppText weight="bold" style={styles.avatarInitial}>{initial}</AppText>
                 </LinearGradient>
               )}
-            </View>
-          </View>
+            </Pressable>
+          </Pressable>
           {hasStories ? <View style={styles.liveDot} /> : null}
         </View>
 

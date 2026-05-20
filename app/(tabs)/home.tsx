@@ -34,6 +34,7 @@ import {
   readPersonalLivingWorldLastSeen,
   writePersonalLivingWorldLastSeen,
 } from '@/lib/personal-living-world';
+import { useUnreadBadges } from '@/lib/unread-badges';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -56,6 +57,8 @@ const metricSignals: Array<{ key: 'offers' | 'messages' | 'listings'; label: str
 export default function HomeScreen() {
   const router = useRouter();
   const { user, profileCompleted } = useAuth();
+  const { notificationsUnreadCount, refreshBadges } = useUnreadBadges();
+  const [showReturnNotifCue, setShowReturnNotifCue] = useState(false);
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +190,18 @@ export default function HomeScreen() {
       void loadDashboard();
     }
   }, [loadDashboard, loadItems, loadStories, loadVideoMoments, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setShowReturnNotifCue(false);
+      return;
+    }
+    void refreshBadges();
+  }, [refreshBadges, user?.id]);
+
+  useEffect(() => {
+    setShowReturnNotifCue(notificationsUnreadCount > 0);
+  }, [notificationsUnreadCount]);
 
   useEffect(() => {
     void loadPersonalLivingWorldMarker();
@@ -348,11 +363,29 @@ export default function HomeScreen() {
                 <Ionicons name="home-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.heroCopy}>
+                <View style={styles.heroTopRow}>
+                  <Pressable style={styles.notificationsEntry} onPress={() => router.push('/notifications')}>
+                    <Ionicons name="notifications-outline" size={18} color={colors.primary} />
+                    {notificationsUnreadCount > 0 ? (
+                      <View style={styles.unreadBadge}>
+                        <AppText weight="bold" style={styles.unreadBadgeText}>{notificationsUnreadCount > 99 ? '99+' : notificationsUnreadCount}</AppText>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                </View>
                 <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
                 <AppText style={styles.heroBody}>هنا تبدأ الحكايات، تتحرك الحاجات، وتفتح المقايضات بابها بهدوء.</AppText>
                 <AppText muted style={styles.heroSupport}>تابع ما يهمك الآن، أو خذ جولة دافئة في الجديد حولك.</AppText>
               </View>
             </LinearGradient>
+            {showReturnNotifCue ? (
+              <AppCard>
+                <View style={styles.catchupRow}>
+                  <AppText weight="semibold">لديك إشعارات جديدة</AppText>
+                  <AppButton label="فتح الإشعارات" variant="neutral" onPress={() => router.push('/notifications')} />
+                </View>
+              </AppCard>
+            ) : null}
 
             {user ? (
               <AppCard>
@@ -605,6 +638,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroCopy: { gap: spacing.sm, maxWidth: '92%' },
+  heroTopRow: { alignItems: 'flex-start' },
+  notificationsEntry: {
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(255,253,248,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#B42318',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  unreadBadgeText: { color: colors.white, fontSize: 10 },
+  catchupRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   title: { fontSize: 27, lineHeight: 34 },
   heroBody: { fontSize: 16, lineHeight: 24 },
   heroSupport: { lineHeight: 22 },

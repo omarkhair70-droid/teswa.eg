@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,6 +58,7 @@ export default function PublicProfileScreen() {
   const [followState, setFollowState] = useState({ followingByMe: false, followsMe: false, mutual: false, followerCount: 0, followingCount: 0 });
   const [followBusy, setFollowBusy] = useState(false);
   const [followMessage, setFollowMessage] = useState<string | null>(null);
+  const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -272,6 +273,8 @@ export default function PublicProfileScreen() {
         memberSince={memberSince}
         activeStoriesCount={activeStoriesCount}
         onOpenStories={activeStoriesCount > 0 ? () => router.push(`/story/${profile.id}`) : null}
+        onPressAvatarRing={activeStoriesCount > 0 ? () => router.push(`/story/${profile.id}`) : null}
+        onPressAvatar={profile.avatar_url ? () => setAvatarViewerOpen(true) : null}
         variant="public"
       />
 
@@ -377,6 +380,11 @@ export default function PublicProfileScreen() {
           ) : null}
         </View>
       </AppCard>
+      <Modal visible={avatarViewerOpen} transparent animationType="fade" onRequestClose={() => setAvatarViewerOpen(false)}>
+        <Pressable style={styles.viewerBackdrop} onPress={() => setAvatarViewerOpen(false)}>
+          {profile.avatar_url ? <ExpoImage source={{ uri: profile.avatar_url }} style={styles.viewerImage} contentFit="contain" /> : null}
+        </Pressable>
+      </Modal>
     </AppScreen>
   );
 }
@@ -413,4 +421,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(184,98,63,0.18)',
   },
   listingVideoBadgeText: { color: colors.primary, fontSize: 11 },
+  viewerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  viewerImage: { width: '100%', height: '75%' },
 });

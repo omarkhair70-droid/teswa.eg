@@ -15,21 +15,30 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [enteringAccount, setEnteringAccount] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async () => {
-    if (loading || googleLoading) return;
+    if (loading || googleLoading || enteringAccount) return;
     if (!email.trim() || !password.trim()) return setError('من فضلك أدخل البريد الإلكتروني وكلمة المرور.');
     setLoading(true);
     setError('');
     const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (signInError) return setError('تعذر تسجيل الدخول. تأكد من البيانات وحاول مرة تانية.');
+    if (signInError) {
+      setEnteringAccount(false);
+      const rawMessage = (signInError.message || '').toLowerCase();
+      if (rawMessage.includes('email not confirmed') || rawMessage.includes('confirm your email')) {
+        return setError('لا يمكن تسجيل الدخول قبل تأكيد البريد الإلكتروني. راجع البريد الوارد وSpam/Junk ثم حاول مرة أخرى.');
+      }
+      return setError('تعذر تسجيل الدخول. تأكد من البيانات وحاول مرة تانية.');
+    }
+    setEnteringAccount(true);
   };
 
   const handleGoogleSignIn = async () => {
-    if (googleLoading || loading) return;
+    if (googleLoading || loading || enteringAccount) return;
     setGoogleLoading(true);
     setError('');
     const { error: googleError } = await signInWithGoogle();
@@ -46,15 +55,16 @@ export default function LoginScreen() {
             loadingLabel="جاري فتح جوجل..."
             onPress={handleGoogleSignIn}
             loading={googleLoading}
-            disabled={googleLoading || loading}
+            disabled={googleLoading || loading || enteringAccount}
           />
           <AppText style={styles.trust}>دخول آمن وسريع عبر حساب Google.</AppText>
           <View style={styles.dividerWrap}><View style={styles.divider} /><AppText style={styles.dividerText}>أو سجل الدخول بالإيميل</AppText><View style={styles.divider} /></View>
           <View style={styles.formCard}>
-            <AppInput placeholder="البريد الإلكتروني" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
-            <AppInput placeholder="كلمة المرور" secureTextEntry value={password} onChangeText={setPassword} />
+            <AppInput placeholder="البريد الإلكتروني" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} editable={!enteringAccount} />
+            <AppInput placeholder="كلمة المرور" secureTextEntry value={password} onChangeText={setPassword} editable={!enteringAccount} />
+            {enteringAccount ? <View style={styles.successCard}><AppText>ندخلك إلى تِسوى...</AppText></View> : null}
             {Boolean(error) && <View style={styles.errorCard}><AppText style={styles.error}>{error}</AppText></View>}
-            <AppButton label={loading ? 'جاري الدخول...' : 'دخول'} onPress={submit} disabled={loading || googleLoading} />
+            <AppButton label={loading ? 'جاري الدخول...' : (enteringAccount ? 'نجهّز حسابك...' : 'دخول')} onPress={submit} disabled={loading || googleLoading || enteringAccount} />
           </View>
         </View>
       </AuthExperienceShell>
@@ -72,5 +82,6 @@ const styles = StyleSheet.create({
   formCard: { gap: spacing.md, borderWidth: 1, borderColor: 'rgba(221,208,197,0.9)', borderRadius: 18, padding: spacing.md, backgroundColor: 'rgba(255,253,248,0.92)' },
   link: { textAlign: 'center', marginTop: spacing.sm },
   errorCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(179,38,30,0.25)', backgroundColor: 'rgba(255,240,239,0.9)', padding: spacing.sm },
+  successCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(62,124,115,0.3)', backgroundColor: 'rgba(232,247,241,0.9)', padding: spacing.sm },
   error: { color: '#B3261E', textAlign: 'center' },
 });
