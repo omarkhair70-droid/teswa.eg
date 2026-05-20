@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
+import { ShareIntentProvider, useShareIntentContext } from '@/lib/share-intent-compat';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import * as Notifications from 'expo-notifications';
