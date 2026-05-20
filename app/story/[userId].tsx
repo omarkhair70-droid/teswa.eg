@@ -368,14 +368,19 @@ export default function StoryViewerScreen() {
   
   const handleStartVoiceReply = useCallback(async () => {
     if (!user?.id || !currentStory) return;
-    setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceBusy(true);
+    setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceOpen(true); setVoiceBusy(true);
     try {
       voicePlayer.pause();
       try {
         await voicePlayer.seekTo(0);
       } catch {}
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) { setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.'); return; }
+      if (!perm.granted) {
+        setVoiceOpen(false);
+        setVoiceDraft(null);
+        setStoryReplyError('لا يمكن تسجيل الصوت بدون إذن الميكروفون.');
+        return;
+      }
       setVoiceDraft(null);
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await audioRecorder.prepareToRecordAsync();

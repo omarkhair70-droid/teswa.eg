@@ -246,11 +246,14 @@ export default function Screen() {
 
   const startVoiceRecording = useCallback(async () => {
     if (voiceBusy || recorderState.isRecording) return;
+    setVoiceOpen(true);
     setVoiceBusy(true);
     setError(null);
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
       if (!permission.granted) {
+        setVoiceOpen(false);
+        setVoiceDraft(null);
         setError('الرجاء تفعيل إذن الميكروفون لإرسال رسالة صوتية.');
         return;
       }
@@ -266,6 +269,8 @@ export default function Screen() {
       audioRecorder.record();
       setVoiceOpen(true);
     } catch {
+      setVoiceOpen(false);
+      setVoiceDraft(null);
       setError('تعذر بدء التسجيل الصوتي.');
     } finally {
       setVoiceBusy(false);
