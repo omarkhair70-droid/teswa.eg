@@ -35,7 +35,10 @@ export async function followUserFromMobile(currentUserId: string, targetUserId: 
   const me = currentUserId.trim(); const target = targetUserId.trim();
   if (!me || !target) return { ok: false, message: 'تعذر تحديد المستخدم المطلوب.' };
   const { data, error } = await supabase.rpc('follow_user', { p_followed_user_id: target });
-  if (error) return { ok: false, message: 'تعذر تنفيذ المتابعة حالياً.', code: error.code };
+  if (error) {
+    if (__DEV__) console.log('[follow_user] rpc failed', { code: error.code, message: error.message, details: (error as any).details, hint: (error as any).hint, me, target });
+    return { ok: false, message: 'تعذر تنفيذ المتابعة حالياً.', code: error.code };
+  }
   const row = Array.isArray(data) ? data[0] : null;
   if (!row?.ok) return { ok: false, message: row?.message ?? 'تعذر تنفيذ المتابعة حالياً.', code: row?.code ?? undefined };
   return { ok: true, message: row.message ?? 'تمت المتابعة بنجاح.' };

@@ -346,17 +346,22 @@ export default function Screen() {
           <View key={message.id} style={[styles.row, message.senderId === user.id ? styles.mine : styles.other]}>
             <View style={styles.bubble}>
               {message.messageKind === 'voice' ? (
-                <Pressable onPress={async () => {
-                  if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; }
-                  previewPlayer.pause();
-                  await previewPlayer.seekTo(0).catch(() => undefined);
-                  const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? '');
-                  if (!signed) return;
-                  await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-                  voicePlayer.replace({ uri: signed });
-                  voicePlayer.play();
-                  setActiveVoiceId(message.id);
-                }}><AppText>{activeVoiceId === message.id && voicePlayerStatus.playing ? 'إيقاف الصوت' : 'تشغيل الرسالة الصوتية'}</AppText></Pressable>
+                <View style={styles.voiceBubble}>
+                  <View style={styles.voiceHeader}>
+                    <AppText weight="semibold">رسالة صوتية</AppText>
+                    <AppButton label={activeVoiceId === message.id && voicePlayerStatus.playing ? 'إيقاف' : 'تشغيل'} variant="neutral" onPress={async () => {
+                      if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; }
+                      previewPlayer.pause();
+                      await previewPlayer.seekTo(0).catch(() => undefined);
+                      const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? '');
+                      if (!signed) return;
+                      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+                      voicePlayer.replace({ uri: signed });
+                      voicePlayer.play();
+                      setActiveVoiceId(message.id);
+                    }} />
+                  </View>
+                </View>
               ) : (<AppText>{message.body}</AppText>)}
               <AppText muted>{new Date(message.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
             </View>
@@ -438,4 +443,6 @@ const styles = StyleSheet.create({
   voicePanel: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.sm, gap: spacing.xs, backgroundColor: colors.surface },
   voiceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   previewPlay: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  voiceBubble: { gap: spacing.xs },
+  voiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.xs },
 });
