@@ -218,7 +218,7 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
 
   void notify({
     target_user_id: otherParticipantId,
-    notification_type: 'system',
+    notification_type: 'deal_message_received',
     notification_title: 'رسالة جديدة في دردشة الصفقة',
     notification_body: 'الطرف التاني بعت رسالة في دردشة الصفقة.',
     target_deal_id: input.dealId,
@@ -263,7 +263,7 @@ export async function confirmDealCompletedFromMobile(input: { dealId: string; cu
   } else {
     void notify({
       target_user_id: otherParticipantId,
-      notification_type: 'system',
+      notification_type: 'deal_completion_confirmation_needed',
       notification_title: 'الصفقة مستنية تأكيدك',
       notification_body: 'الطرف التاني أكد إن المقايضة تمت. راجع الصفقة وأكد لما تكون جاهز.',
       target_deal_id: input.dealId,
@@ -397,7 +397,7 @@ export async function sendDealVoiceMessageFromMobile(input: {
 
   void notify({
     target_user_id: otherParticipantId,
-    notification_type: 'system',
+    notification_type: 'deal_voice_message_received',
     notification_title: 'رسالة صوتية جديدة في دردشة الصفقة',
     notification_body: 'الطرف التاني بعت رسالة صوتية في دردشة الصفقة.',
     target_deal_id: input.dealId,

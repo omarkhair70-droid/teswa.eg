@@ -1,11 +1,34 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-type NotificationType = "offer_received" | "offer_accepted" | "deal_completed" | "system";
+type NotificationType =
+  | "offer_received"
+  | "offer_thinking"
+  | "offer_accepted"
+  | "offer_soft_rejected"
+  | "offer_redirected"
+  | "deal_created"
+  | "deal_message_received"
+  | "deal_voice_message_received"
+  | "deal_completion_confirmation_needed"
+  | "deal_completed"
+  | "deal_cancelled"
+  | "story_reply_received"
+  | "contextual_message_received"
+  | "report_update"
+  | "system";
 
 const ALLOWED_TYPES: ReadonlySet<NotificationType> = new Set([
   "offer_received",
   "offer_accepted",
+  "offer_soft_rejected",
+  "deal_message_received",
+  "deal_voice_message_received",
+  "deal_completion_confirmation_needed",
   "deal_completed",
+  "deal_cancelled",
+  "story_reply_received",
+  "contextual_message_received",
+  "report_update",
   "system",
 ]);
 
