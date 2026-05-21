@@ -1,2 +1,5 @@
 [functions.send-notification-push]
 verify_jwt = false
+
+[functions.run-smart-reengagement-notifications]
+verify_jwt = false
