@@ -87,4 +87,6 @@ begin
 end;
 $$;
 
+revoke all on function public.track_analytics_event(text, text, text, text, uuid, jsonb, text, text) from public;
+revoke all on function public.track_analytics_event(text, text, text, text, uuid, jsonb, text, text) from anon;
 grant execute on function public.track_analytics_event(text, text, text, text, uuid, jsonb, text, text) to authenticated;

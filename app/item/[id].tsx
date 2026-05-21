@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
@@ -99,6 +99,7 @@ export default function ItemDetailsScreen() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
+  const trackedItemDetailRef = useRef<string | null>(null);
 
   const loadItem = useCallback(async () => {
     if (!id) return;
@@ -160,6 +161,19 @@ export default function ItemDetailsScreen() {
     if (!item.images.length) return;
     void prefetchImagesMemoryDisk(item.images.map((image) => image.imageUrl));
   }, [item?.id, item?.images]);
+
+  useEffect(() => {
+    if (!item?.id) return;
+    if (trackedItemDetailRef.current === item.id) return;
+
+    trackedItemDetailRef.current = item.id;
+    void trackEvent('item_detail_viewed', {
+      route: '/item/[id]',
+      entityType: 'item',
+      entityId: item.id,
+      metadata: { source: 'detail_screen' },
+    });
+  }, [item?.id]);
 
   const handleShareItem = useCallback(async () => {
     if (!item) return;

@@ -30,9 +30,25 @@ export type TrackEventOptions = {
 
 const BLOCKED_METADATA_KEYS = new Set([
   'body', 'message', 'note', 'description', 'email', 'phone', 'token', 'secret', 'password', 'push_token',
+  'pushtoken', 'phonenumber', 'messagebody', 'itemdescription', 'accesstoken', 'refreshtoken',
 ]);
 
 let analyticsSessionId: string | null = null;
+
+const shouldBlockMetadataKey = (rawKey: string): boolean => {
+  const key = rawKey.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  if (BLOCKED_METADATA_KEYS.has(key)) return true;
+
+  if (key.includes('token') || key.includes('secret') || key.includes('password') || key.includes('email') || key.includes('phone')) {
+    return true;
+  }
+
+  if (key === 'body' || key.includes('body') || key === 'message' || key.includes('message') || key === 'note' || key.includes('note') || key === 'description' || key.includes('description')) {
+    return true;
+  }
+
+  return false;
+};
 
 const isSafeScalar = (value: unknown): value is string | number | boolean | null =>
   value == null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
@@ -41,7 +57,7 @@ const sanitizeMetadata = (metadata?: Record<string, unknown>): Record<string, un
   if (!metadata) return {};
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (BLOCKED_METADATA_KEYS.has(key.toLowerCase())) continue;
+    if (shouldBlockMetadataKey(key)) continue;
     if (Array.isArray(value)) {
       const safeArray = value.filter(isSafeScalar).slice(0, 20);
       sanitized[key] = safeArray;
