@@ -40,7 +40,6 @@ export async function requestCurrentDiscoveryLocation(): Promise<DiscoveryLocati
 
     const position = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
-      maximumAge: 60_000,
     });
 
     if (!position?.coords) {
