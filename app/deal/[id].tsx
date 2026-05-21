@@ -20,6 +20,7 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { AppText } from "@/components/ui/AppText";
 import { TeswaMomentCard } from "@/components/ui/TeswaMomentCard";
+import { DealChecklist } from "@/components/deals/DealChecklist";
 import { colors } from "@/constants/colors";
 import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
@@ -748,6 +749,16 @@ export default function Screen() {
               onPrimaryAction={() => router.push(`/review/deal/${deal.id}`)}
             />
           ) : null}
+          <DealChecklist
+            status={deal.status}
+            iConfirmed={deal.iConfirmed}
+            otherConfirmed={deal.otherConfirmed}
+            canConfirmCompletion={deal.canConfirmCompletion}
+            requestedItemTitle={deal.requestedItem?.title ?? null}
+            offeredItemTitle={deal.offeredItem?.title ?? null}
+            otherParticipantName={deal.otherParticipant?.displayName ?? null}
+            alreadyRated={deal.alreadyRated}
+          />
           <View style={styles.threadSection}>
             <View style={styles.threadTopLine}>
               <AppText weight="semibold">المحادثة</AppText>
