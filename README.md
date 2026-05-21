@@ -208,6 +208,12 @@ order by last_registered_at desc;
 
 This delivery flow is operational/backend-side and does not require mobile source changes by itself.
 
+## Badges Foundation
+
+- Profile badge UI uses only safe public fields returned by badge RPC reads (label/category/icon/date).
+- Mobile client does not read raw `user_badges` table rows directly.
+- No badge animations, missions, streaks, or leaderboards are included in this roadmap PR.
+
 ## First-party Analytics
 
 Teswa uses a first-party Supabase analytics foundation via `public.analytics_events` and the `public.track_analytics_event(...)` RPC.
@@ -230,5 +236,5 @@ Teswa now includes a safe badge data foundation for future premium gamification/
   - `reliable_swapper`
 - `early_swapper` and `founder_badge` are manual-only for now (not auto-awarded).
 - RLS and SECURITY DEFINER RPCs expose only safe public badge fields.
-- No badge UI/profile rendering is shipped in this PR.
+- Profile badge UI now consumes only safe public RPC-returned badge fields.
 - No private data is exposed by badge APIs.
