@@ -141,6 +141,8 @@ export default function HomeScreen() {
       }
     } catch {
       if (hasActiveFilters) {
+        setItems([]);
+        setItemsCacheNotice(null);
         setError('تعذر تحميل نتائج البحث حالياً. حاول مرة أخرى.');
       } else if (hasFreshCacheVisible) {
         setItemsCacheNotice('تعذر التحديث الآن، نعرض آخر نسخة محفوظة.');
