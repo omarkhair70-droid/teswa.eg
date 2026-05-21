@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ElementRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -103,7 +103,7 @@ export default function ItemDetailsScreen() {
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
   const trackedItemDetailRef = useRef<string | null>(null);
-  const itemShareCardRef = useRef<ViewShot | null>(null);
+  const itemShareCardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
 
   const loadItem = useCallback(async () => {
     if (!id) return;
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   thumbActive: { borderColor: colors.primary, borderWidth: 2 },
   thumb: { width: 74, height: 74, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
   premiumCard: { borderWidth: 1, borderColor: colors.border },
-  captureNode: { position: 'absolute', top: -3000, left: -3000, opacity: 0 },
+  captureNode: { position: 'absolute', left: -10000, top: 0, width: 1080, height: 1080 },
   sectionEyebrowRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   sectionEyebrow: { fontSize: 11 },
   videoSection: { gap: spacing.sm },
