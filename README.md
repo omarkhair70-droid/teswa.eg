@@ -219,6 +219,9 @@ This delivery flow is operational/backend-side and does not require mobile sourc
 
 ## Badges Foundation
 
+- Trust level presentation labels/icons/descriptions are centralized in `lib/trust-level-presentation.ts` for consistent Arabic-first trust language.
+- Trust and badge UI remains aggregate-only and privacy-safe on client surfaces.
+- No trust scoring logic changed in this PR; presentation-only polish.
 - Profile badge UI uses only safe public fields returned by badge RPC reads (label/category/icon/date).
 - Mobile client does not read raw `user_badges` table rows directly.
 - No badge animations, missions, streaks, or leaderboards are included in this roadmap PR.

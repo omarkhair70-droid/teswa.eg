@@ -1,37 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
+import { TrustLevelPill } from '@/components/profile/TrustLevelPill';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
-import type { TrustLevelKey, UserTrustMetrics } from '@/lib/trust-metrics';
+import { getTrustLevelPresentation } from '@/lib/trust-level-presentation';
+import type { UserTrustMetrics } from '@/lib/trust-metrics';
 
 type TrustCardProps = {
   metrics: UserTrustMetrics | null;
   loading?: boolean;
   compact?: boolean;
-};
-
-type TrustLevelCopy = { label: string; description: string };
-
-const TRUST_LEVEL_COPY: Record<TrustLevelKey, TrustLevelCopy> = {
-  new_swapper: {
-    label: 'لسه بيبدأ',
-    description: 'محتاج يكمل أول تجارب تبديل علشان يظهر مؤشر ثقة أوضح.',
-  },
-  rising_swapper: {
-    label: 'بيثبت حضوره',
-    description: 'عنده إشارات إيجابية أولية في التبديل والتواصل.',
-  },
-  reliable_swapper: {
-    label: 'موثوق في التبديل',
-    description: 'عنده تجارب مكتملة وإشارات ثقة قوية.',
-  },
-  trusted_swapper: {
-    label: 'موثوق جدًا',
-    description: 'سجل قوي في التبديل والتقييمات والتواصل.',
-  },
 };
 
 function formatPercent(value: number | null): string {
@@ -45,12 +26,19 @@ function formatRating(value: number | null): string {
   return `${value.toFixed(1)} / 5`;
 }
 
+function clampScore(value: number | null | undefined): number {
+  if (value == null || Number.isNaN(value)) return 0;
+  return Math.round(Math.max(0, Math.min(100, value)));
+}
+
 export function TrustCard({ metrics, loading = false, compact = false }: TrustCardProps) {
+  const presentation = getTrustLevelPresentation(metrics?.trustLevelKey);
+
   if (loading) {
     return (
       <AppCard>
         <View style={styles.headerRow}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+          <Ionicons name={presentation.iconName as keyof typeof Ionicons.glyphMap} size={18} color={colors.primary} />
           <AppText weight="semibold">مؤشر الثقة</AppText>
         </View>
         <AppText muted>جاري تحميل مؤشر الثقة...</AppText>
@@ -62,18 +50,20 @@ export function TrustCard({ metrics, loading = false, compact = false }: TrustCa
     return (
       <AppCard>
         <View style={styles.headerRow}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+          <Ionicons name={presentation.iconName as keyof typeof Ionicons.glyphMap} size={18} color={colors.primary} />
           <AppText weight="semibold">مؤشر الثقة</AppText>
         </View>
         <View style={styles.group}>
           <AppText weight="semibold">لسه مفيش بيانات ثقة كفاية</AppText>
           <AppText muted>مؤشر الثقة بيتكوّن مع أول التبديلات والتقييمات.</AppText>
+          <AppText muted style={styles.subtleNote}>مش بنرفع مستوى الثقة غير مع نشاط حقيقي.</AppText>
         </View>
       </AppCard>
     );
   }
 
-  const trustCopy = TRUST_LEVEL_COPY[metrics.trustLevelKey];
+  const completedSwaps = Math.max(metrics.completedDealsCount ?? 0, metrics.successfulSwapsCount ?? 0);
+  const safeScore = clampScore(metrics.trustScore);
   const trustTags = [
     metrics.clearDescriptionCount > 0 ? 'وصف واضح' : null,
     metrics.goodCommunicationCount > 0 ? 'تواصل جيد' : null,
@@ -85,23 +75,23 @@ export function TrustCard({ metrics, loading = false, compact = false }: TrustCa
     <AppCard>
       <View style={styles.group}>
         <View style={styles.headerRow}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+          <Ionicons name={presentation.iconName as keyof typeof Ionicons.glyphMap} size={18} color={colors.primary} />
           <AppText weight="semibold">مؤشر الثقة</AppText>
         </View>
 
         <View style={styles.titleRow}>
-          <AppText weight="bold" style={styles.levelLabel}>{trustCopy.label}</AppText>
-          <View style={styles.scorePill}>
-            <AppText weight="semibold" style={styles.scoreText}>{Math.round(metrics.trustScore)} / 100</AppText>
-          </View>
+          <AppText weight="bold" style={styles.levelLabel}>{presentation.labelAr}</AppText>
+          <TrustLevelPill levelKey={metrics.trustLevelKey} score={safeScore} compact={compact} />
         </View>
 
-        {!compact ? <AppText muted>{trustCopy.description}</AppText> : null}
+        <AppText weight="semibold" style={styles.scoreLine}>مؤشر {safeScore} / 100</AppText>
+
+        {!compact ? <AppText muted>{presentation.descriptionAr}</AppText> : null}
 
         <View style={styles.metricsGrid}>
           <View style={styles.metricCell}>
             <AppText muted style={styles.metricLabel}>تبديلات مكتملة</AppText>
-            <AppText weight="semibold">{metrics.completedDealsCount || metrics.successfulSwapsCount}</AppText>
+            <AppText weight="semibold">{completedSwaps}</AppText>
           </View>
           <View style={styles.metricCell}>
             <AppText muted style={styles.metricLabel}>التقييمات</AppText>
@@ -136,15 +126,8 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   titleRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   levelLabel: { fontSize: 20, color: colors.text },
-  scorePill: {
-    borderRadius: radii.round,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  scoreText: { color: colors.primary },
+  scoreLine: { color: colors.primary },
+  subtleNote: { fontSize: 12 },
   metricsGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm },
   metricCell: {
     width: '47%',
@@ -164,7 +147,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: '#F8F7F4',
+    backgroundColor: colors.card,
   },
-  tagText: { fontSize: 12 },
+  tagText: { fontSize: 12, color: colors.textMuted },
 });
