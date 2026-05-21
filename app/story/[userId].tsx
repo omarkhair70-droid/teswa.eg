@@ -168,8 +168,12 @@ export default function StoryViewerScreen() {
         }
 
         const pairs = await Promise.all(viewerContext.stories.map(async (story) => {
-          const signedUrl = await createStoryMediaSignedUrlCached(story.mediaStoragePath);
-          return [story.id, signedUrl] as const;
+          try {
+            const signedUrl = await createStoryMediaSignedUrlCached(story.mediaStoragePath);
+            return [story.id, signedUrl] as const;
+          } catch {
+            return [story.id, null] as const;
+          }
         }));
 
         if (!cancelled) {
@@ -184,7 +188,7 @@ export default function StoryViewerScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [normalizedUserId]);
 
   useEffect(() => {
     if (!context?.author.avatarUrl) return;

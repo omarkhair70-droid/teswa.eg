@@ -86,6 +86,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const activeProfileCheckTokenRef = useRef(0);
   const inFlightPolicyChecksRef = useRef<Map<string, Promise<void>>>(new Map());
   const activePolicyCheckTokenRef = useRef(0);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
 
   const checkProfileForUser = async (userId: string, reason: string) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
@@ -221,29 +222,43 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     mountedRef.current = true;
     const bootstrap = async () => {
-      const [onboardingDone, sessionResult] = await Promise.all([
-        getOnboardingCompleted(),
-        supabase.auth.getSession(),
-      ]);
-      if (!mountedRef.current) return;
-      setOnboardingCompleted(onboardingDone);
-      const currentSession = sessionResult.data.session;
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
-      if (currentSession?.user) {
-        const cachedGate = await readAccountGateCache(currentSession.user.id);
-        if (mountedRef.current && cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
-          setProfileCompleted(true);
-          setRequiredPoliciesAccepted(true);
-        }
-        if (mountedRef.current) setBootstrapReady(true);
-        await Promise.all([
-          checkProfileForUser(currentSession.user.id, 'bootstrap_session'),
-          checkPolicyAcceptanceForUser(currentSession.user.id),
+      try {
+        setBootstrapError(null);
+        const [onboardingDone, sessionResult] = await Promise.all([
+          getOnboardingCompleted(),
+          supabase.auth.getSession(),
         ]);
-      } else {
+        if (!mountedRef.current) return;
+        setOnboardingCompleted(onboardingDone);
+        const currentSession = sessionResult.data.session;
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
+        if (currentSession?.user) {
+          const cachedGate = await readAccountGateCache(currentSession.user.id);
+          if (mountedRef.current && cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
+            setProfileCompleted(true);
+            setRequiredPoliciesAccepted(true);
+          }
+          if (mountedRef.current) setBootstrapReady(true);
+          await Promise.all([
+            checkProfileForUser(currentSession.user.id, 'bootstrap_session'),
+            checkPolicyAcceptanceForUser(currentSession.user.id),
+          ]);
+        } else {
+          setProfileCheckError(null);
+          if (mountedRef.current) setBootstrapReady(true);
+        }
+      } catch (error) {
+        if (__DEV__) console.log('[Auth] bootstrap failed', error);
+        if (!mountedRef.current) return;
+        setSession(null);
+        setUser(null);
+        setProfileCompleted(false);
+        setRequiredPoliciesAccepted(false);
         setProfileCheckError(null);
+        setPolicyAcceptanceCheckError(null);
+        setBootstrapError('تعذر تهيئة تسجيل الدخول حالياً. حاول مرة أخرى.');
         if (mountedRef.current) setBootstrapReady(true);
       }
     };
@@ -251,33 +266,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
     bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      if (!nextSession?.user) {
-        const userIdToClear = lastAuthenticatedUserIdRef.current;
-        lastAuthenticatedUserIdRef.current = null;
-        activeProfileCheckTokenRef.current += 1;
-        activePolicyCheckTokenRef.current += 1;
-        setProfileCompleted(false);
-        setLoadingProfile(false);
-        setProfileCheckError(null);
-        setRequiredPoliciesAccepted(false);
-        setLoadingPolicyAcceptance(false);
-        setPolicyAcceptanceCheckError(null);
-        void clearAccountGateCache(userIdToClear);
-        return;
-      }
-      lastAuthenticatedUserIdRef.current = nextSession.user.id;
+      try {
+        setBootstrapError(null);
+        setSession(nextSession);
+        setUser(nextSession?.user ?? null);
+        if (!nextSession?.user) {
+          const userIdToClear = lastAuthenticatedUserIdRef.current;
+          lastAuthenticatedUserIdRef.current = null;
+          activeProfileCheckTokenRef.current += 1;
+          activePolicyCheckTokenRef.current += 1;
+          setProfileCompleted(false);
+          setLoadingProfile(false);
+          setProfileCheckError(null);
+          setRequiredPoliciesAccepted(false);
+          setLoadingPolicyAcceptance(false);
+          setPolicyAcceptanceCheckError(null);
+          void clearAccountGateCache(userIdToClear);
+          return;
+        }
+        lastAuthenticatedUserIdRef.current = nextSession.user.id;
 
-      const cachedGate = await readAccountGateCache(nextSession.user.id);
-      if (cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
-        setProfileCompleted(true);
-        setRequiredPoliciesAccepted(true);
+        const cachedGate = await readAccountGateCache(nextSession.user.id);
+        if (cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted) {
+          setProfileCompleted(true);
+          setRequiredPoliciesAccepted(true);
+        }
+        await Promise.all([
+          checkProfileForUser(nextSession.user.id, 'auth_state_change'),
+          checkPolicyAcceptanceForUser(nextSession.user.id),
+        ]);
+      } catch (error) {
+        if (__DEV__) console.log('[Auth] auth state sync failed', error);
+        if (!mountedRef.current) return;
+        setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       }
-      await Promise.all([
-        checkProfileForUser(nextSession.user.id, 'auth_state_change'),
-        checkPolicyAcceptanceForUser(nextSession.user.id),
-      ]);
     });
 
     return () => {
@@ -303,8 +325,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   }, [policyAcceptanceCheckError, profileCheckError, profileCompleted, requiredPoliciesAccepted, user?.id]);
   const value = useMemo(
-    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, signOut, setOnboardingCompletedState: setOnboardingCompleted }),
-    [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError],
+    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError: profileCheckError ?? bootstrapError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, signOut, setOnboardingCompletedState: setOnboardingCompleted }),
+    [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, bootstrapError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
