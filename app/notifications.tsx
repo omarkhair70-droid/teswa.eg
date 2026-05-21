@@ -16,6 +16,7 @@ export default function NotificationsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notifs, setNotifs] = useState<AppNotification[]>([]);
   const [markingAll, setMarkingAll] = useState(false);
+  const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   const { refreshBadges } = useUnreadBadges();
 
   const loadNotifications = useCallback(async () => {
@@ -37,6 +38,7 @@ export default function NotificationsScreen() {
   const unreadCount = useMemo(() => notifs.filter((n) => !n.isRead).length, [notifs]);
 
   const handleOpenNotification = async (notification: AppNotification) => {
+    setDeepLinkError(null);
     const route = resolveNotificationRoute(notification);
     if (!notification.isRead && user) {
       try {
@@ -53,6 +55,7 @@ export default function NotificationsScreen() {
     }
 
     if (route) router.push(route);
+    else setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
   };
 
   const handleMarkAllRead = async () => {
@@ -83,6 +86,17 @@ export default function NotificationsScreen() {
         {unreadCount > 0 ? <AppButton label={markingAll ? 'جاري التنفيذ...' : 'تعليم الكل كمقروء'} onPress={handleMarkAllRead} disabled={markingAll} variant="neutral" /> : null}
 
         {loading ? <AppText muted>جاري تحميل الإشعارات...</AppText> : null}
+        {deepLinkError ? (
+          <AppCard>
+            <View style={styles.group}>
+              <AppText>{deepLinkError}</AppText>
+              <View style={styles.rowBetween}>
+                <AppButton label="الرسائل" onPress={() => router.replace('/(tabs)/messages')} variant="neutral" />
+                <AppButton label="الرئيسية" onPress={() => router.replace('/(tabs)/home')} variant="neutral" />
+              </View>
+            </View>
+          </AppCard>
+        ) : null}
         {!loading && error ? (
           <AppCard>
             <View style={styles.group}>
