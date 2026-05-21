@@ -56,7 +56,7 @@ type NotificationRecord = {
   type: string;
   title: string;
   body: string | null;
-  route: string | null;
+  route?: string | null;
   item_id: string | null;
   offer_id: string | null;
   deal_id: string | null;
@@ -138,12 +138,14 @@ Deno.serve(async (req: Request) => {
     const activeDevices = (devices ?? []).filter((device) => typeof device.expo_push_token === "string" && device.expo_push_token.length > 0);
     if (activeDevices.length === 0) return jsonResponse(200, { ok: true, skipped: true, reason: "no_active_devices", attempted: 0, acceptedByExpo: 0 });
 
+    const route = typeof record.route === "string" ? record.route.trim() : "";
+
     const messages = activeDevices.map((device) => ({
       to: device.expo_push_token,
       title: record.title?.trim() || "رسالة جديدة على تِسوى",
       body: record.body?.trim() || "عندك إشعار جديد على تِسوى",
       data: {
-        route: record.route,
+        ...(route.length > 0 ? { route } : {}),
         notificationId: record.id,
         notificationType: record.type,
         ...(record.deal_id ? { dealId: record.deal_id } : {}),
