@@ -54,7 +54,7 @@ function OfferRow({ offer, label }: { offer: OfferRowSummary; label: 'عرض و�
   );
 }
 
-function DealRow({ convo }: { convo: DealConversation }) {
+function DealRow({ convo, onOpenDeal }: { convo: DealConversation; onOpenDeal: (route: string) => void }) {
   const otherName = convo.otherParticipant.displayName?.trim() || 'محادثة صفقة';
   const fallbackLetter = otherName[0] || '؟';
   const latestPreview = convo.latestMessage
@@ -62,7 +62,7 @@ function DealRow({ convo }: { convo: DealConversation }) {
     : 'لسه مفيش رسائل — افتح الشات وابدأ التنسيق.';
 
   return (
-    <Pressable onPress={() => router.push(`/deal/${convo.dealId}`)}>
+    <Pressable onPress={() => onOpenDeal(`/deal/${convo.dealId}`)}>
       <AppCard style={styles.chatCard}>
         <View style={styles.chatRow}>
           <View style={styles.avatarWrap}>
@@ -94,7 +94,7 @@ function DealRow({ convo }: { convo: DealConversation }) {
 }
 
 
-function ReplyThreadRow({ thread }: { thread: ContextualConversationSummary }) {
+function ReplyThreadRow({ thread, onOpenThread }: { thread: ContextualConversationSummary; onOpenThread: (route: string) => void }) {
   const otherName = thread.otherParticipant.displayName?.trim() || 'رد على قصة';
   const fallbackLetter = otherName[0] || '؟';
   const latestVoiceDuration = thread.latestMessage?.kind === 'voice' ? formatVoiceDuration(thread.latestMessage.durationMs) : null;
@@ -105,7 +105,7 @@ function ReplyThreadRow({ thread }: { thread: ContextualConversationSummary }) {
     : 'لسه مفيش رسائل.';
 
   return (
-    <Pressable onPress={() => router.push(`/contextual/${thread.conversationId}`)}>
+    <Pressable onPress={() => onOpenThread(`/contextual/${thread.conversationId}`)}>
       <AppCard style={styles.replyCard}>
         <View style={styles.chatRow}>
           <View style={styles.avatarWrap}>
@@ -143,6 +143,7 @@ export default function Screen() {
   const [sent, setSent] = useState<OfferRowSummary[]>([]);
   const [conversations, setConversations] = useState<DealConversation[]>([]);
   const [replyThreads, setReplyThreads] = useState<ContextualConversationSummary[]>([]);
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
   const { refreshBadges } = useUnreadBadges();
 
   const offersCount = incoming.length + sent.length;
@@ -176,6 +177,14 @@ export default function Screen() {
   );
 
   const hasIncomingActionable = useMemo(() => incoming.length > 0, [incoming.length]);
+  const safeOpenRoute = useCallback((route: string) => {
+    if (!route || navigatingTo === route) return;
+    setNavigatingTo(route);
+    router.push(route);
+    setTimeout(() => {
+      setNavigatingTo((prev) => (prev === route ? null : prev));
+    }, 700);
+  }, [navigatingTo]);
 
   if (!user?.id) return <AppScreen backgroundVariant="soft"><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك لعرض العروض والمحادثات." /></AppScreen>;
   if (loading) return <AppScreen backgroundVariant="soft"><EmptyState title="جاري التحميل" description="نحمّل الرسائل والعروض الآن." /></AppScreen>;
@@ -226,9 +235,9 @@ export default function Screen() {
         </View>
 
         {selectedSection === 'chats' ? (
-          conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة الصفقة هنا." /></AppCard>
+          conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} onOpenDeal={safeOpenRoute} />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة الصفقة هنا." /></AppCard>
         ) : selectedSection === 'replies' ? (
-          replyThreads.length ? replyThreads.map((thread) => <ReplyThreadRow key={thread.conversationId} thread={thread} />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد ردود قصص بعد" description="لما حد يرد على قصة أو ترد أنت على قصة، هتظهر المحادثات هنا." /></AppCard>
+          replyThreads.length ? replyThreads.map((thread) => <ReplyThreadRow key={thread.conversationId} thread={thread} onOpenThread={safeOpenRoute} />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد ردود قصص بعد" description="لما حد يرد على قصة أو ترد أنت على قصة، هتظهر المحادثات هنا." /></AppCard>
         ) : (
           <View style={styles.group}>
             <View style={styles.sectionGroup}>
