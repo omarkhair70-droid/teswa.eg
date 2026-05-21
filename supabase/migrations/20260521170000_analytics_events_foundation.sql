@@ -24,11 +24,7 @@ create index if not exists analytics_events_entity_idx on public.analytics_event
 
 alter table public.analytics_events enable row level security;
 
-create policy "analytics insert own"
-on public.analytics_events
-for insert
-to authenticated
-with check (user_id = auth.uid());
+drop policy if exists "analytics insert own" on public.analytics_events;
 
 create or replace function public.track_analytics_event(
   p_event_name text,
@@ -50,6 +46,7 @@ declare
   v_metadata jsonb := coalesce(p_metadata, '{}'::jsonb);
   v_blocked_keys text[] := array['body','message','note','description','email','phone','token','secret','password','push_token'];
   v_key text;
+  v_normalized_key text;
   v_allowed_events text[] := array[
     'app_opened','session_started','auth_gate_viewed','home_viewed','search_viewed','item_detail_viewed',
     'item_create_started','item_published','offer_started','offer_sent','offer_action_taken','deal_room_viewed',
@@ -75,6 +72,21 @@ begin
 
   foreach v_key in array v_blocked_keys loop
     v_metadata := v_metadata - v_key;
+  end loop;
+
+  for v_key in select jsonb_object_keys(v_metadata) loop
+    v_normalized_key := lower(v_key);
+    if v_normalized_key like '%token%'
+      or v_normalized_key like '%secret%'
+      or v_normalized_key like '%password%'
+      or v_normalized_key like '%email%'
+      or v_normalized_key like '%phone%'
+      or v_normalized_key like '%body%'
+      or v_normalized_key like '%message%'
+      or v_normalized_key like '%note%'
+      or v_normalized_key like '%description%' then
+      v_metadata := v_metadata - v_key;
+    end if;
   end loop;
 
   insert into public.analytics_events (
