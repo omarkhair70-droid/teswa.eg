@@ -224,6 +224,7 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     target_deal_id: input.dealId,
     target_offer_id: null,
     target_item_id: null,
+    target_message_id: inserted.id,
   });
   return { ok: true as const, message: toMessageRow(inserted) };
 }
@@ -402,6 +403,7 @@ export async function sendDealVoiceMessageFromMobile(input: {
     target_deal_id: input.dealId,
     target_offer_id: null,
     target_item_id: null,
+    target_message_id: inserted.id,
   });
   return { ok: true as const, message: toMessageRow(inserted) };
 }
