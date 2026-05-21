@@ -106,6 +106,36 @@ async function notifyContextualMessageFromMobile(input: {
     console.warn('[contextual-conversations] create contextual notification failed', error);
   }
 }
+
+function buildContextualNotificationBody(body: string | null | undefined): string {
+  const trimmed = body?.trim() ?? '';
+  if (!trimmed || trimmed === 'رسالة صوتية') return 'لديك رسالة جديدة.';
+  return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+}
+
+async function createContextualRecipientNotification(input: {
+  recipientUserId: string;
+  senderUserId: string;
+  conversationId: string;
+  body: string | null | undefined;
+}): Promise<void> {
+  if (input.recipientUserId === input.senderUserId) return;
+  const { error } = await supabase.from('notifications').insert({
+    user_id: input.recipientUserId,
+    actor_user_id: input.senderUserId,
+    type: 'contextual_message_received',
+    title: 'رسالة جديدة على تِسوى',
+    body: buildContextualNotificationBody(input.body),
+    contextual_conversation_id: input.conversationId,
+  });
+  if (error && __DEV__) {
+    console.warn('[contextual-conversations] insert recipient notification failed', {
+      code: error.code,
+      message: error.message,
+      conversationId: input.conversationId,
+    });
+  }
+}
 export async function markContextualThreadReadFromMobile(conversationId: string): Promise<void> {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) return;
@@ -378,6 +408,12 @@ export async function sendContextualMessageFromMobile(input: {
     messageId: data.id,
     kind: 'thread_message',
   });
+  void createContextualRecipientNotification({
+    recipientUserId: otherParticipantId,
+    senderUserId: currentUserId,
+    conversationId,
+    body: data.body,
+  });
 
   return {
     ok: true,
@@ -470,6 +506,12 @@ export async function sendContextualVoiceMessageFromMobile(input: {
   }
 
   void notifyContextualMessageFromMobile({ conversationId, messageId: data.id, kind: 'thread_message' });
+  void createContextualRecipientNotification({
+    recipientUserId: otherParticipantId,
+    senderUserId: currentUserId,
+    conversationId,
+    body: data.body,
+  });
   return { ok: true, message: { id: data.id, conversationId: data.conversation_id, senderId: data.sender_id, body: data.body, messageKind: 'voice', mediaStoragePath: data.media_storage_path ?? null, mediaDurationMs: data.media_duration_ms ?? null, createdAt: data.created_at } };
 }
 
@@ -519,5 +561,11 @@ export async function sendStoryVoiceReplyFromMobile(input: {
   }
 
   void notifyContextualMessageFromMobile({ conversationId, messageId: data.id, kind: 'story_reply_initial' });
+  void createContextualRecipientNotification({
+    recipientUserId: storyOwnerRow.user_id as string,
+    senderUserId: currentUserId,
+    conversationId,
+    body: data.body,
+  });
   return { ok: true, conversationId, message: { id: data.id, conversationId: data.conversation_id, senderId: data.sender_id, body: data.body, messageKind: 'voice', mediaStoragePath: data.media_storage_path ?? null, mediaDurationMs: data.media_duration_ms ?? null, createdAt: data.created_at } };
 }
