@@ -9,6 +9,7 @@ import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AppNotification, fetchMyNotifications, markAllNotificationsRead, markNotificationRead, notificationTypeLabel, resolveNotificationRoute } from '@/lib/notifications';
 import { useUnreadBadges } from '@/lib/unread-badges';
+import { trackEvent } from '@/lib/analytics';
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
@@ -54,7 +55,10 @@ export default function NotificationsScreen() {
       }
     }
 
-    if (route) router.push(route);
+    if (route) {
+      void trackEvent('notification_opened', { route: '/notifications', metadata: { notificationType: notification.type } });
+      router.push(route);
+    }
     else setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
   };
 

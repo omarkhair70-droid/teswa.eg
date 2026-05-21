@@ -11,6 +11,7 @@ import { TeswaMomentCard } from '@/components/ui/TeswaMomentCard';
 import { spacing } from '@/constants/spacing';
 import { acceptOfferFromMobile, fetchOfferById, getOfferStatusLabel, markOfferThinkingFromMobile, OfferDetail, softRejectOfferFromMobile } from '@/lib/offers';
 import { useAuth } from '@/lib/auth';
+import { trackEvent } from '@/lib/analytics';
 
 function ItemSummary({ title, item }: { title: string; item: OfferDetail['requestedItem'] }) {
   return <AppCard><View style={styles.group}><AppText weight="semibold">{title}</AppText>{item ? <><AppText weight="semibold">{item.title}</AppText><AppText muted>{[item.category, item.condition, item.location].filter(Boolean).join(' • ') || 'بدون تفاصيل إضافية'}</AppText></> : <AppText muted>تعذر تحميل بيانات هذا العنصر حالياً.</AppText>}</View></AppCard>;
@@ -47,16 +48,19 @@ export default function OfferDetailScreen() {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         await loadOffer();
         setActionMoment('thinking');
+        void trackEvent('offer_action_taken', { route: '/offer/[id]', entityType: 'offer', entityId: id, metadata: { action: 'thinking' } });
       } else if (action === 'reject') {
         const r = await softRejectOfferFromMobile({ offerId: id, currentUserId: user.id, note });
         if (!r.ok) return setError(r.message);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         await loadOffer();
         setActionMoment('rejected');
+        void trackEvent('offer_action_taken', { route: '/offer/[id]', entityType: 'offer', entityId: id, metadata: { action: 'reject' } });
       } else {
         const r = await acceptOfferFromMobile({ offerId: id, currentUserId: user.id });
         if (!r.ok || !r.dealId) return setError(r.ok ? 'تعذر فتح الصفقة.' : r.message);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+        void trackEvent('offer_action_taken', { route: '/offer/[id]', entityType: 'offer', entityId: id, metadata: { action: 'accept' } });
         router.replace(`/deal/${r.dealId}?moment=accepted`);
       }
     } catch (err) {

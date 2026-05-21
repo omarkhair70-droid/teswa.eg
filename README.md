@@ -200,3 +200,14 @@ order by last_registered_at desc;
 ```
 
 This delivery flow is operational/backend-side and does not require mobile source changes by itself.
+
+## First-party Analytics
+
+Teswa uses a first-party Supabase analytics foundation via `public.analytics_events` and the `public.track_analytics_event(...)` RPC.
+
+Privacy rules in this foundation:
+- Never send raw message bodies, item descriptions/titles, offer notes, names, phone/email, tokens, secrets, or push tokens.
+- Event metadata is object-only JSON and should contain safe booleans/counts/status/category-like values.
+- Mobile client tracking fails silently in local/dev if migration/RPC is missing.
+
+The current app sends a focused initial set of lifecycle/product events for authenticated users only.
