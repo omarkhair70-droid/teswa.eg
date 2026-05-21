@@ -22,6 +22,7 @@ import { useOfflineStatus } from '@/hooks/useOfflineStatus';
 import { resolveCurrentAddItemLocation } from '@/lib/discovery-location';
 import { ItemPhotoStudio } from '@/components/item/ItemPhotoStudio';
 import { ItemPhotoComposerSheet } from '@/components/item/ItemPhotoComposerSheet';
+import { trackEvent } from '@/lib/analytics';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -199,6 +200,11 @@ export default function AddScreen() {
 
     return () => clearTimeout(timer);
   }, [currentDraft, draftHydrated, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void trackEvent('item_create_started', { route: '/(tabs)/add' });
+  }, [user?.id]);
 
   const mergeAssets = (current: ImagePicker.ImagePickerAsset[], incoming: ImagePicker.ImagePickerAsset[]) => {
     const seenUris = new Set(current.map((a) => a.uri));
@@ -487,6 +493,16 @@ export default function AddScreen() {
       setHasSavedDraft(false);
       setDraftNotice(null);
       setProgress('تم نشر العنصر بنجاح.');
+      void trackEvent('item_published', {
+        route: '/(tabs)/add',
+        entityType: 'item',
+        entityId: result.itemId,
+        metadata: {
+          hasImages: assets.length > 0,
+          hasVideo: Boolean(videoTeaser),
+          categoryId: categoryId ?? null,
+        },
+      });
       router.push(`/item/${result.itemId}`);
     } catch (err) {
       if (__DEV__) console.log('[add-item] submit failed', { userId: user.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });

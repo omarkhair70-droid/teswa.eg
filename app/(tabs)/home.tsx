@@ -35,6 +35,7 @@ import {
   writePersonalLivingWorldLastSeen,
 } from '@/lib/personal-living-world';
 import { useUnreadBadges } from '@/lib/unread-badges';
+import { trackEvent } from '@/lib/analytics';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -196,6 +197,11 @@ export default function HomeScreen() {
     }
     void refreshBadges();
   }, [refreshBadges, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void trackEvent('home_viewed', { route: '/(tabs)/home' });
+  }, [user?.id]);
 
   useEffect(() => {
     void loadPersonalLivingWorldMarker();

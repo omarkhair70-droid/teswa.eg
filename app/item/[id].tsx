@@ -23,6 +23,7 @@ import {
   writeItemDetailCache,
 } from '@/lib/offline-item-detail-cache';
 import { buildCachedVideoSource, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
+import { trackEvent } from '@/lib/analytics';
 
 function formatDuration(durationMs: number | null): string | null {
   if (durationMs == null) return null;

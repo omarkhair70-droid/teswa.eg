@@ -36,6 +36,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase/client";
 import { useUnreadBadges } from "@/lib/unread-badges";
+import { trackEvent } from '@/lib/analytics';
 import {
   blockUserFromMobile,
   fetchUserBlockState,
@@ -144,6 +145,11 @@ export default function Screen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!dealId || !user?.id) return;
+    void trackEvent('deal_room_viewed', { route: '/deal/[id]', entityType: 'deal', entityId: dealId });
+  }, [dealId, user?.id]);
   useEffect(() => {
     if (!dealId || !user?.id) return;
     const channel = supabase
@@ -383,6 +389,12 @@ export default function Screen() {
           );
         }
         void markDealThreadReadFromMobile(deal.id);
+        void trackEvent('deal_message_sent', {
+          route: '/deal/[id]',
+          entityType: 'deal',
+          entityId: deal.id,
+          metadata: { messageType: 'text' },
+        });
       }
     } catch {
       setError("تعذر إرسال الرسالة حالياً.");
@@ -529,6 +541,15 @@ export default function Screen() {
           );
         }
         void markDealThreadReadFromMobile(deal.id);
+        void trackEvent('deal_message_sent', {
+          route: '/deal/[id]',
+          entityType: 'deal',
+          entityId: deal.id,
+          metadata: {
+            messageType: 'voice',
+            voiceDurationBucket: voiceDraft.durationMs < 15000 ? 'short' : voiceDraft.durationMs < 60000 ? 'medium' : 'long',
+          },
+        });
       }
     } catch {
       setError("تعذر إرسال الرسالة الصوتية حالياً.");

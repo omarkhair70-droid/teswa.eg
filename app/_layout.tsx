@@ -15,6 +15,7 @@ import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
 import { createForegroundMemoryRefreshSubscription } from '@/lib/foreground-memory-refresh';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
+import { trackEvent } from '@/lib/analytics';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -134,6 +135,11 @@ function RootNavigator() {
 
     return () => clearTimeout(stallTimer);
   }, [user, loadingProfile, loadingPolicyAcceptance]);
+  useEffect(() => {
+    if (!user?.id) return;
+    void trackEvent('session_started', { route: '/_layout' });
+  }, [user?.id]);
+
   useEffect(() => {
     if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
     void syncPushDeviceRegistrationIfPermitted(user.id).then((result) => {

@@ -13,6 +13,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { createSwapOffer, fetchOfferCreationContext, OfferCreationContextResult, OfferItemSummary } from '@/lib/offers';
+import { trackEvent } from '@/lib/analytics';
 
 function SummaryCard({ item }: { item: OfferItemSummary }) {
   return <AppCard><View style={styles.summary}><AppText weight="semibold">{item.title}</AppText><AppText muted>{[item.category, item.condition, item.location].filter(Boolean).join(' • ') || 'بدون تفاصيل إضافية'}</AppText></View></AppCard>;
@@ -48,6 +49,11 @@ export default function CreateOfferScreen() {
     loadContext();
   }, [loadContext]);
 
+  useEffect(() => {
+    if (!user?.id || !itemId) return;
+    void trackEvent('offer_started', { route: '/offer/create/[itemId]', entityType: 'item', entityId: itemId });
+  }, [itemId, user?.id]);
+
   const canSubmit = useMemo(() => Boolean(selectedOfferedItemId) && !submitting, [selectedOfferedItemId, submitting]);
 
   const onSubmit = useCallback(async () => {
@@ -60,6 +66,7 @@ export default function CreateOfferScreen() {
         setSubmitError(result.message);
         return;
       }
+      void trackEvent('offer_sent', { route: '/offer/create/[itemId]', entityType: 'offer', entityId: result.offerId, metadata: { hasMessage: Boolean(message.trim()) } });
       router.replace(`/offer/${result.offerId}?moment=sent`);
     } catch (err) {
       if (__DEV__) console.log('[offer-create] submit failed', { itemId, offeredItemId: selectedOfferedItemId, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
