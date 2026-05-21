@@ -8,7 +8,7 @@ Core lines:
 
 ## Current Product Status
 
-Teswa Mobile is now a broad Arabic-first native social swap product across marketplace, stories, motion/video discovery, personal Living World recap, lightweight discover intelligence, emotional offer/deal milestones, premium auth entry, and a native security layer. The product also includes a stronger media-performance base and expanded native capability reserve. The latest Android Preview APK has been built, installed, and validated successfully on device.
+Teswa Mobile is live/post-launch on Google Play as a broad Arabic-first native social swap product across marketplace, stories, motion/video discovery, personal Living World recap, lightweight discover intelligence, emotional offer/deal milestones, premium auth entry, and a native security layer.
 
 ## Implemented Product Systems
 
@@ -111,11 +111,9 @@ Teswa intentionally treats native Expo/React Native capabilities as product surf
 
 ## Current Track / Where We Are Now
 
+- Teswa is live/post-launch on Google Play.
 - Product expansion through M43I is merged.
-- Latest Android Preview APK validated successfully on device.
-- Native Google Sign-In and Biometric App Lock are confirmed working in the APK.
-- Immediate pre–Google Play step: **M43J — Teswa App Icon + Launch Identity Pack**.
-- After icon/launch identity completion: Production AAB build, Google Play Console setup, then Internal Testing track rollout.
+- Push notifications and core social swap flows are operational in production.
 
 ## Tech Stack
 
@@ -157,28 +155,21 @@ npx expo start --ios
 npx expo start --web
 ```
 
-## Preview APK + OTA Updates
+## Release Operations
 
-- Build and install a Preview APK for native-layer changes (dependencies/plugins/config/runtime-native behavior):
+- Build and install an Android release artifact for native-layer changes (dependencies/plugins/config/runtime-native behavior):
   ```bash
-  eas build --platform android --profile preview
+  eas build --platform android --profile production
   ```
 - Ship JS/UI/business-logic updates over OTA when native runtime compatibility is unchanged:
   ```bash
-  eas update --channel preview --message "..."
+  eas update --channel production --message "..."
   ```
 - Native dependency/plugin/config changes still require a new APK/AAB build.
-- The preview APK + OTA workflow is active and used as the current delivery path.
 
 ## Google Play Readiness
 
-Teswa is now approaching Google Play Internal Testing.
-
-Immediate flow:
-1. Finalize App Icon / Launch Identity.
-2. Build Production AAB.
-3. Configure Google Play Console.
-4. Run Internal Testing rollout.
+Teswa is already live on Google Play. Ongoing work focuses on release quality, operational reliability, and incremental product expansion.
 
 Note: after Play Console setup, Google Sign-In distribution may require adding the **Play App Signing SHA-1** to the Google Cloud Android OAuth client configuration.
 
