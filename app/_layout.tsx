@@ -210,7 +210,7 @@ function RootNavigator() {
     );
   }
 
-  if (user && (loadingProfile || loadingPolicyAcceptance)) {
+  if (user && (loadingProfile || loadingPolicyAcceptance) && (!profileCompleted || !requiredPoliciesAccepted)) {
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>
@@ -231,7 +231,7 @@ function RootNavigator() {
     );
   }
 
-  if (user && (profileCheckError || policyAcceptanceCheckError)) {
+  if (user && (profileCheckError || policyAcceptanceCheckError) && (!profileCompleted || !requiredPoliciesAccepted)) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>تعذر التحقق من حالة حسابك.</Text>
