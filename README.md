@@ -29,7 +29,11 @@ Teswa Mobile is live/post-launch on Google Play as a broad Arabic-first native s
 ### 3. Marketplace, Item Detail & Creator Studio
 - Home and Discover marketplace browsing surfaces.
 - Home feed now includes a lightweight client-side search/filter foundation (query, category, condition, city) with active-filter summaries.
-- Filtered marketplace requests bypass and do not overwrite the default offline first-page cache (location radius/saved searches/search alerts deferred).
+- Filtered marketplace requests bypass and do not overwrite the default offline first-page cache.
+- Home also supports optional nearby discovery using foreground location only ("قريب منك" + radius chips).
+- Nearby coordinates are used locally for nearby fetch requests and are never shown to other users.
+- No map UI, background location, or saved user coordinates are included in this PR.
+- Default offline first-page cache is bypassed while nearby mode is active and nearby responses are not written into it.
 - Richer premium item detail presentation.
 - Item video teaser support in discovery/detail contexts.
 - Creator/Add-Item studio visual system with image/video media surfaces.

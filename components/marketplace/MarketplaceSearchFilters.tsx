@@ -20,6 +20,8 @@ type MarketplaceSearchFiltersProps = {
   onSelectCondition: (value: string | null) => void;
   onSelectCity: (value: string | null) => void;
   onClear: () => void;
+  disabled?: boolean;
+  disabledReason?: string | null;
 };
 
 function FilterRow({
@@ -75,13 +77,15 @@ export function MarketplaceSearchFilters({
   onSelectCondition,
   onSelectCity,
   onClear,
+  disabled,
+  disabledReason,
 }: MarketplaceSearchFiltersProps) {
   return (
     <AppCard>
       <View style={styles.container}>
         <View style={styles.titleRow}>
           <AppText weight="bold" style={styles.title}>اكتشف اللي يناسبك</AppText>
-          <Pressable style={styles.clearBtn} onPress={onClear} disabled={loading}>
+          <Pressable style={styles.clearBtn} onPress={onClear} disabled={loading || disabled}>
             <Ionicons name="refresh-outline" size={15} color={colors.primary} />
             <AppText weight="semibold" style={styles.clearText}>مسح الفلاتر</AppText>
           </Pressable>
@@ -93,6 +97,7 @@ export function MarketplaceSearchFilters({
           <TextInput
             value={query}
             onChangeText={onQueryChange}
+            editable={!disabled}
             placeholder="دور على حاجة، مدينة، أو نوع..."
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
@@ -100,9 +105,12 @@ export function MarketplaceSearchFilters({
           />
         </View>
 
-        <FilterRow label="التصنيف" options={categoryOptions} selected={selectedCategory} onSelect={onSelectCategory} />
-        <FilterRow label="الحالة" options={conditionOptions} selected={selectedCondition} onSelect={onSelectCondition} />
-        <FilterRow label="المدينة" options={cityOptions} selected={selectedCity} onSelect={onSelectCity} />
+        {disabledReason ? <AppText style={styles.disabledReason}>{disabledReason}</AppText> : null}
+        <View pointerEvents={disabled ? "none" : "auto"} style={disabled ? styles.disabledBlock : undefined}>
+          <FilterRow label="التصنيف" options={categoryOptions} selected={selectedCategory} onSelect={onSelectCategory} />
+          <FilterRow label="الحالة" options={conditionOptions} selected={selectedCondition} onSelect={onSelectCondition} />
+          <FilterRow label="المدينة" options={cityOptions} selected={selectedCity} onSelect={onSelectCity} />
+        </View>
       </View>
     </AppCard>
   );
@@ -140,4 +148,6 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.primary, backgroundColor: 'rgba(184,98,63,0.12)' },
   chipText: { fontSize: 12, color: colors.textMuted },
   chipTextActive: { color: colors.primary },
+  disabledReason: { color: colors.textMuted, fontSize: 12 },
+  disabledBlock: { opacity: 0.55 },
 });
