@@ -34,7 +34,7 @@ function mapOfferRows(rows: any[], roleContext: 'incoming' | 'sent', itemsById: 
 
 async function notify(payload: Record<string, unknown>) {
   const { error } = await supabase.rpc('create_notification', payload);
-  if (error && __DEV__) console.log('[offers] create_notification failed', error);
+  if (error) console.warn('[offers] create_notification failed', { code: error.code, message: error.message });
 }
 
 async function getOfferForAction(offerId: string): Promise<any | null> {
