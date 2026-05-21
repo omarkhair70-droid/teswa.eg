@@ -144,6 +144,13 @@ Add these in `.env`:
 - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (used by native-first Google Sign-In orchestration and browser fallback compatibility)
 - `EXPO_PUBLIC_SHARE_BASE_URL` (public HTTPS base used for externally shared item links; format: `https://your-domain.com` without trailing slash. Example shape: `https://example.com`. When set, item share uses clickable HTTPS `/item/:id`; when unset, sharing falls back to app deep-link text and does not promise public web clickability)
 
+### Media Share
+
+- Visual item share cards are generated locally on-device via view capture and shared as an image when platform sharing supports it.
+- No generated share-card image is uploaded to Teswa storage or backend services.
+- Existing text/link sharing remains the fallback path when image sharing is unavailable or fails.
+- No extra permissions or native dependencies were added for item share cards.
+
 Server-side secrets (for push delivery and other backend operations) should remain in operational/runtime configuration rather than mobile client environment variables.
 
 ## Launch Options
