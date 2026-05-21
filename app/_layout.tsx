@@ -88,6 +88,21 @@ function ForegroundMemoryRefreshCoordinator() {
 
 const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 11_000;
 
+function AccountGateLoadingState({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorTitle}>{title}</Text>
+      <Text style={styles.errorSubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
 function RootNavigator() {
   const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance } = useAuth();
   const router = useRouter();
@@ -138,6 +153,11 @@ function RootNavigator() {
 
 
   useEffect(() => {
+    if (!bootstrapReady) return;
+    void SplashScreen.hideAsync();
+  }, [bootstrapReady]);
+
+  useEffect(() => {
     if (!bootstrapReady || loadingProfile || loadingPolicyAcceptance) return;
 
     const rootGroup = segments[0];
@@ -157,15 +177,8 @@ function RootNavigator() {
     const inPublicAccountDeletionRoute = rootGroup === 'account-deletion';
     const inPublicComplianceRoute = inPublicLegalRoute || inPublicAccountDeletionRoute;
 
-    if (inOAuthCallback && !user) {
-      void SplashScreen.hideAsync();
-      return;
-    }
-
-    if (inPublicComplianceRoute) {
-      void SplashScreen.hideAsync();
-      return;
-    }
+    if (inOAuthCallback && !user) return;
+    if (inPublicComplianceRoute) return;
 
     if (!user) {
       if (!onboardingCompleted && !inOnboarding) {
@@ -186,13 +199,18 @@ function RootNavigator() {
     } else if ((inAuth && !inPolicyAcceptance) || atRoot) {
       router.replace('/(tabs)/home');
     }
-
-    void SplashScreen.hideAsync();
   }, [bootstrapReady, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router]);
 
-  if (!bootstrapReady) return null;
+  if (!bootstrapReady) {
+    return (
+      <AccountGateLoadingState
+        title="أهلًا بك في تِسوى"
+        subtitle="نجهّز الجلسة الآن ونفتح لك التطبيق."
+      />
+    );
+  }
 
-  if (user && ((loadingProfile && !profileCompleted) || (loadingPolicyAcceptance && !requiredPoliciesAccepted))) {
+  if (user && (loadingProfile || loadingPolicyAcceptance)) {
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>
@@ -206,10 +224,10 @@ function RootNavigator() {
     }
 
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>ندخلك إلى تِسوى...</Text>
-        <Text style={styles.errorSubtitle}>نراجع حالة حسابك بسرعة ونفتح لك التجربة.</Text>
-      </View>
+      <AccountGateLoadingState
+        title="ندخلك إلى تِسوى..."
+        subtitle="نراجع حالة حسابك بسرعة ونفتح لك التجربة."
+      />
     );
   }
 
