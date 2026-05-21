@@ -218,3 +218,17 @@ Privacy rules in this foundation:
 - Mobile client tracking fails silently in local/dev if migration/RPC is missing.
 
 The current app sends a focused initial set of lifecycle/product events for authenticated users only.
+
+## Badges Foundation
+
+Teswa now includes a safe badge data foundation for future premium gamification/profile achievement surfaces.
+
+- Badge definitions live in `public.badge_definitions`.
+- User-awarded badge rows live in `public.user_badges`.
+- First system auto-awarded badges are:
+  - `first_swap`
+  - `reliable_swapper`
+- `early_swapper` and `founder_badge` are manual-only for now (not auto-awarded).
+- RLS and SECURITY DEFINER RPCs expose only safe public badge fields.
+- No badge UI/profile rendering is shipped in this PR.
+- No private data is exposed by badge APIs.
