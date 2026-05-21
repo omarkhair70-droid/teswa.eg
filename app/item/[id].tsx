@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ElementRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import ViewShot from 'react-native-view-shot';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -16,6 +17,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { fetchMarketplaceItemDetailById, MarketplaceItemDetail } from '@/lib/marketplace-items';
 import type { ItemVideoTeaser } from '@/lib/item-videos';
 import { shareMarketplaceItem } from '@/lib/share-item';
+import { shareMarketplaceItemCard } from '@/lib/share-item-card';
+import { ItemShareCard } from '@/components/share/ItemShareCard';
 import {
   deleteItemDetailCache,
   readAnyItemDetailCache,
@@ -100,6 +103,7 @@ export default function ItemDetailsScreen() {
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
   const trackedItemDetailRef = useRef<string | null>(null);
+  const itemShareCardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
 
   const loadItem = useCallback(async () => {
     if (!id) return;
@@ -181,6 +185,23 @@ export default function ItemDetailsScreen() {
     try { await shareMarketplaceItem({ id: item.id, title: item.title }); } catch { setShareError('تعذر فتح المشاركة حالياً. حاول مرة أخرى.'); }
   }, [item]);
 
+  const handleShareItemCard = useCallback(async () => {
+    if (!item) return;
+    setShareError(null);
+
+    const result = await shareMarketplaceItemCard({
+      item: { id: item.id, title: item.title },
+      capture: async () => {
+        const uri = await itemShareCardRef.current?.capture?.();
+        return uri ?? '';
+      },
+    });
+
+    if (!result.ok) {
+      setShareError(result.message);
+    }
+  }, [item]);
+
   const activeImage = useMemo(() => {
     if (!item?.images.length) return item?.imageUrl ?? null;
     return item.images[activeImageIndex]?.imageUrl ?? item.images[0].imageUrl;
@@ -236,7 +257,21 @@ export default function ItemDetailsScreen() {
       {(desireModeLabel || item.desireText) ? <Animated.View entering={FadeInDown.duration(220).delay(230)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="compass-outline" size={16} color={colors.primary} /><AppText weight="semibold">المقابل المطلوب</AppText></View>{desireModeLabel ? <AppText muted>النمط: {desireModeLabel}</AppText> : null}{item.desireText ? <AppText>{item.desireText}</AppText> : null}</AppCard></Animated.View> : null}
       {item.wantedTags.length ? <Animated.View entering={FadeInDown.duration(220).delay(250)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="pricetag-outline" size={16} color={colors.primary} /><AppText weight="semibold">وسوم مطلوبة</AppText></View><View style={styles.tagsWrap}>{item.wantedTags.map((tag) => <View key={tag} style={styles.tagPill}><AppText style={styles.tagText}>{tag}</AppText></View>)}</View></AppCard></Animated.View> : null}
 
-      <Animated.View entering={FadeInDown.duration(220).delay(190)} style={styles.ctaPanel}><AppText muted>لو العنصر مناسبك، افتح عرض تبديل من هنا.</AppText><AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} /><AppButton label="مشاركة العنصر" variant="neutral" onPress={handleShareItem} disabled={!item} /><AppButton label="الإبلاغ عن العنصر" variant="neutral" onPress={() => router.push(`/report/item/${item.id}`)} />{shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}</Animated.View>
+      <Animated.View entering={FadeInDown.duration(220).delay(190)} style={styles.ctaPanel}><AppText muted>لو العنصر مناسبك، افتح عرض تبديل من هنا.</AppText><AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} /><AppButton label="مشاركة العنصر" variant="neutral" onPress={handleShareItem} disabled={!item} />
+        <AppButton label="مشاركة كارت" variant="neutral" onPress={handleShareItemCard} disabled={!item} /><AppButton label="الإبلاغ عن العنصر" variant="neutral" onPress={() => router.push(`/report/item/${item.id}`)} />{shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}</Animated.View>
+      <View style={styles.captureNode} pointerEvents="none">
+        <ViewShot ref={itemShareCardRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }}>
+          <ItemShareCard
+            item={{
+              title: item.title,
+              imageUrl: activeImage,
+              category: item.category,
+              condition: item.condition,
+              location: locationText === 'غير محدد' ? null : locationText,
+            }}
+          />
+        </ViewShot>
+      </View>
     </AppScreen>
   );
 }
@@ -254,6 +289,7 @@ const styles = StyleSheet.create({
   thumbActive: { borderColor: colors.primary, borderWidth: 2 },
   thumb: { width: 74, height: 74, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
   premiumCard: { borderWidth: 1, borderColor: colors.border },
+  captureNode: { position: 'absolute', left: -10000, top: 0, width: 1080, height: 1080 },
   sectionEyebrowRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   sectionEyebrow: { fontSize: 11 },
   videoSection: { gap: spacing.sm },
