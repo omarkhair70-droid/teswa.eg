@@ -58,8 +58,9 @@ export default function Screen() {
   const { user } = useAuth();
   const router = useRouter();
   const { refreshBadges } = useUnreadBadges();
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const conversationId = id?.trim() ?? '';
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const conversationId = Array.isArray(id) ? id[0]?.trim() ?? '' : id?.trim() ?? '';
+  const loadRequestRef = useRef(0);
 
   const messageIdsRef = useRef<Set<string>>(new Set());
   const autoStopTriggeredRef = useRef(false);
@@ -86,10 +87,12 @@ export default function Screen() {
 
   const load = useCallback(async () => {
     if (!user?.id || !conversationId) return;
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
       const result = await fetchContextualThreadById({ conversationId, currentUserId: user.id });
+      if (requestId !== loadRequestRef.current) return;
       if (!result.ok) {
         setThread(null);
         setError(result.reason === 'unauthorized' ? 'غير مسموح لك بهذه المحادثة.' : 'المحادثة غير موجودة.');
@@ -101,9 +104,9 @@ export default function Screen() {
         });
       }
     } catch {
-      setError('تعذر تحميل المحادثة حالياً.');
+      if (requestId === loadRequestRef.current) setError('تعذر تحميل المحادثة حالياً.');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [conversationId, refreshBadges, user?.id]);
 
@@ -323,10 +326,10 @@ export default function Screen() {
   const recordingLabel = useMemo(() => `جاري التسجيل ${formatMs(recorderState.durationMillis ?? 0)}`,[recorderState.durationMillis]);
 
   if (!user?.id) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك للوصول للمحادثات." /></AppScreen>;
-  if (!conversationId) return <AppScreen><EmptyState title="معرّف غير صالح" description="تعذر تحديد المحادثة المطلوبة." /></AppScreen>;
+  if (!conversationId) return <AppScreen><View style={styles.group}><EmptyState title="تعذر فتح المحادثة" description="معرّف المحادثة غير صالح أو تم حذفها." /><AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} /></View></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نحمّل المحادثة الآن." /></AppScreen>;
   if (error && !thread) {
-    return <AppScreen><View style={styles.group}><EmptyState title="تعذر فتح المحادثة" description={error} /><AppButton label="إعادة المحاولة" onPress={() => void load()} /></View></AppScreen>;
+    return <AppScreen><View style={styles.group}><EmptyState title="تعذر فتح المحادثة" description={error} /><AppButton label="إعادة المحاولة" onPress={() => void load()} /><AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} /></View></AppScreen>;
   }
 
   return (
@@ -354,7 +357,10 @@ export default function Screen() {
                       previewPlayer.pause();
                       await previewPlayer.seekTo(0).catch(() => undefined);
                       const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? '');
-                      if (!signed) return;
+                      if (!signed) {
+                        setError('تعذر تشغيل الرسالة الصوتية حالياً. حاول مرة أخرى.');
+                        return;
+                      }
                       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
                       voicePlayer.replace({ uri: signed });
                       voicePlayer.play();

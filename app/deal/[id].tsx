@@ -60,7 +60,9 @@ const formatResponseRate = (responseRate: number | null) =>
 export default function Screen() {
   const { user } = useAuth();
   const router = useRouter();
-  const { id, moment } = useLocalSearchParams<{ id: string; moment?: string }>();
+  const { id, moment } = useLocalSearchParams<{ id?: string | string[]; moment?: string }>();
+  const dealId = Array.isArray(id) ? id[0]?.trim() ?? "" : id?.trim() ?? "";
+  const loadRequestRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deal, setDeal] = useState<any>(null);
@@ -110,11 +112,13 @@ export default function Screen() {
   );
 
   const load = useCallback(async () => {
-    if (!id || !user?.id) return;
+    if (!dealId || !user?.id) return;
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchDealRoomById(id, user.id);
+      const result = await fetchDealRoomById(dealId, user.id);
+      if (requestId !== loadRequestRef.current) return;
       if (!result.ok) {
         setDeal(null);
         setError(
@@ -127,30 +131,30 @@ export default function Screen() {
         messageIdsRef.current = new Set(
           result.deal.messages.map((m: any) => m.id),
         );
-        void markDealThreadReadFromMobile(id).finally(() => {
+        void markDealThreadReadFromMobile(dealId).finally(() => {
           void refreshBadges();
         });
       }
     } catch {
-      setError("تعذر تحميل بيانات الصفقة.");
+      if (requestId === loadRequestRef.current) setError("تعذر تحميل بيانات الصفقة.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
-  }, [id, user?.id, refreshBadges]);
+  }, [dealId, user?.id, refreshBadges]);
   useEffect(() => {
     load();
   }, [load]);
   useEffect(() => {
-    if (!id || !user?.id) return;
+    if (!dealId || !user?.id) return;
     const channel = supabase
-      .channel(`deal_messages_${id}`)
+      .channel(`deal_messages_${dealId}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "deal_messages",
-          filter: `deal_id=eq.${id}`,
+          filter: `deal_id=eq.${dealId}`,
         },
         (payload) => {
           const row = payload.new as any;
@@ -167,7 +171,6 @@ export default function Screen() {
                       dealId: row.deal_id,
                       senderId: row.sender_id,
                       body: row.body,
-                      createdAt: row.created_at,
                       messageType:
                         row.message_type === "voice" ? "voice" : "text",
                       audioStoragePath: row.audio_storage_path,
@@ -180,7 +183,7 @@ export default function Screen() {
               : prev,
           );
           if ((row.sender_id as string) !== user.id) {
-            void markDealThreadReadFromMobile(id).finally(() => {
+            void markDealThreadReadFromMobile(dealId).finally(() => {
               void refreshBadges();
             });
           }
@@ -198,7 +201,7 @@ export default function Screen() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [id, refreshBadges, user?.id]);
+  }, [dealId, refreshBadges, user?.id]);
 
   const toggleVoicePlayback = useCallback(
     async (msg: any) => {
@@ -599,10 +602,13 @@ export default function Screen() {
         />
       </AppScreen>
     );
-  if (!id)
+  if (!dealId)
     return (
       <AppScreen>
-        <EmptyState title="رابط غير صالح" description="تعذر تحديد الصفقة." />
+        <View style={styles.group}>
+          <EmptyState title="تعذر عرض الصفقة" description="معرّف الصفقة غير صالح أو المحادثة محذوفة." />
+          <AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} />
+        </View>
       </AppScreen>
     );
   if (loading)
@@ -617,6 +623,7 @@ export default function Screen() {
         <View style={styles.group}>
           <EmptyState title="تعذر عرض الصفقة" description={error} />
           <AppButton label="إعادة المحاولة" onPress={load} />
+          <AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} />
         </View>
       </AppScreen>
     );
