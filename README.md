@@ -238,3 +238,10 @@ Teswa now includes a safe badge data foundation for future premium gamification/
 - RLS and SECURITY DEFINER RPCs expose only safe public badge fields.
 - Profile badge UI now consumes only safe public RPC-returned badge fields.
 - No private data is exposed by badge APIs.
+
+## Notification Preferences Foundation
+
+- Notification preferences UI/foundation is now available for logged-in users from profile settings (`إعدادات الإشعارات`).
+- Stored fields include category toggles and quiet-hours style values (`quiet_hours_enabled`, `quiet_hours_start`, `quiet_hours_end`).
+- Delivery enforcement for every category/quiet hours can be wired in later Edge Function/RPC patches.
+- This update does not claim full backend suppression unless explicitly wired in backend delivery logic.

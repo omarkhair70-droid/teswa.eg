@@ -375,6 +375,15 @@ export default function ProfileScreen() {
               </View>
             </AppCard>
 
+            <Pressable onPress={() => router.push('/settings/notifications')}>
+              <AppCard>
+                <View style={styles.group}>
+                  <AppText weight="semibold">إعدادات الإشعارات</AppText>
+                  <AppText muted>تحكم في أنواع الإشعارات ووضع الهدوء كما يناسبك.</AppText>
+                </View>
+              </AppCard>
+            </Pressable>
+
             <Pressable onPress={() => router.push('/notifications')}>
               <AppCard>
                 <View style={styles.group}>
