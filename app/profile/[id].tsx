@@ -10,6 +10,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
 import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
 import { TrustCard } from '@/components/profile/TrustCard';
+import { ProfileBadges } from '@/components/profile/ProfileBadges';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
@@ -18,6 +19,7 @@ import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { buildProfilePresence } from '@/lib/profile-presence';
 import { fetchUserTrustMetrics, UserTrustMetrics } from '@/lib/trust-metrics';
 import { useAuth } from '@/lib/auth';
+import { fetchUserBadges, refreshMyBadges, UserBadge } from '@/lib/badges';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { fetchUserFollowState, followUserFromMobile, unfollowUserFromMobile } from '@/lib/user-follows';
 import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
@@ -63,6 +65,8 @@ export default function PublicProfileScreen() {
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [trustMetrics, setTrustMetrics] = useState<UserTrustMetrics | null>(null);
   const [trustLoading, setTrustLoading] = useState(false);
+  const [badges, setBadges] = useState<UserBadge[]>([]);
+  const [badgesLoading, setBadgesLoading] = useState(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -199,6 +203,35 @@ export default function PublicProfileScreen() {
   useEffect(() => {
     loadPresence();
   }, [loadPresence]);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBadges = async () => {
+      if (!profile?.id) {
+        setBadges([]);
+        setBadgesLoading(false);
+        return;
+      }
+
+      setBadgesLoading(true);
+
+      if (user?.id && user.id === profile.id) {
+        await refreshMyBadges();
+      }
+
+      const data = await fetchUserBadges(profile.id);
+      if (!cancelled) setBadges(data);
+      if (!cancelled) setBadgesLoading(false);
+    };
+
+    void loadBadges();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -351,6 +384,7 @@ export default function PublicProfileScreen() {
       </AppCard>
 
       <TrustCard metrics={trustMetrics} loading={trustLoading} />
+      <ProfileBadges badges={badges} loading={badgesLoading} />
 
       <AppCard>
         <View style={styles.group}>
