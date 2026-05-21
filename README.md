@@ -191,10 +191,21 @@ Required Edge Function secret:
 
 Required operational setup:
 1. Deploy the Edge Function: `supabase/functions/send-notification-push`.
-2. Set the Edge Function secret `TESWA_PUSH_WEBHOOK_SECRET`.
+2. Set Edge Function secrets:
+   - `TESWA_PUSH_WEBHOOK_SECRET`
+   - `SUPABASE_SERVICE_ROLE_KEY` (already present in Supabase Edge runtime for most projects; verify before testing)
 3. Create a Supabase Database Webhook on `public.notifications` for `INSERT` events.
 4. Point the webhook URL to the deployed `send-notification-push` function URL.
 5. Configure webhook request headers with:
    - `x-teswa-push-webhook-secret: <same secret>`
+6. Verify webhook status is **Active** and capture failed deliveries from webhook logs if pushes are not arriving.
+
+Validation query (SQL editor) for recipient device registration:
+```sql
+select user_id, expo_push_token, notifications_enabled, disabled_at, last_registered_at
+from public.push_devices
+where user_id = '<RECIPIENT_USER_ID>'
+order by last_registered_at desc;
+```
 
 This delivery flow is operational/backend-side and does not require mobile source changes by itself.
