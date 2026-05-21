@@ -35,6 +35,13 @@ export type MarketplaceItemsPage = {
   hasMore: boolean;
 };
 
+export type MarketplaceItemFilters = {
+  query?: string;
+  category?: string | null;
+  condition?: string | null;
+  city?: string | null;
+};
+
 export type MarketplaceItemDetailImage = {
   imageUrl: string;
   isPrimary: boolean;
@@ -94,13 +101,36 @@ const itemSelect = `
   created_at
 `;
 
-export async function fetchMarketplaceItemsPage(options?: { offset?: number; limit?: number }): Promise<MarketplaceItemsPage> {
+export async function fetchMarketplaceItemsPage(options?: { offset?: number; limit?: number; filters?: MarketplaceItemFilters }): Promise<MarketplaceItemsPage> {
   const offset = options?.offset ?? 0;
   const limit = options?.limit ?? MARKETPLACE_PAGE_SIZE;
+  const query = options?.filters?.query?.trim();
+  const category = options?.filters?.category?.trim();
+  const condition = options?.filters?.condition?.trim();
+  const city = options?.filters?.city?.trim();
 
-  const { data, error } = await supabase
-    .from('marketplace_items')
-    .select(itemSelect)
+  let queryBuilder = supabase.from('marketplace_items').select(itemSelect);
+
+  if (query) {
+    const safeQuery = query.replace(/[%_,]/g, '').trim();
+    if (safeQuery) {
+      queryBuilder = queryBuilder.or(`title.ilike.%${safeQuery}%,description.ilike.%${safeQuery}%,city.ilike.%${safeQuery}%,category.ilike.%${safeQuery}%`);
+    }
+  }
+
+  if (category) {
+    queryBuilder = queryBuilder.eq('category', category);
+  }
+
+  if (condition) {
+    queryBuilder = queryBuilder.eq('item_condition', condition);
+  }
+
+  if (city) {
+    queryBuilder = queryBuilder.eq('city', city);
+  }
+
+  const { data, error } = await queryBuilder
     .order('created_at', { ascending: false })
     .range(offset, offset + limit);
 

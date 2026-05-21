@@ -12,6 +12,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
+import { MarketplaceSearchFilters } from '@/components/marketplace/MarketplaceSearchFilters';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -63,6 +64,11 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [itemsCacheNotice, setItemsCacheNotice] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
@@ -79,29 +85,66 @@ export default function HomeScreen() {
   const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
   const personalWorldSeenCommittedRef = useRef(false);
 
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(debouncedSearchQuery.trim()) || Boolean(selectedCategory) || Boolean(selectedCondition) || Boolean(selectedCity),
+    [debouncedSearchQuery, selectedCategory, selectedCondition, selectedCity],
+  );
+
+  const filterOptions = useMemo(() => {
+    const categories = new Set<string>();
+    const conditions = new Set<string>();
+    const cities = new Set<string>();
+    items.forEach((item) => {
+      if (item.category?.trim()) categories.add(item.category.trim());
+      if (item.condition?.trim()) conditions.add(item.condition.trim());
+      if (item.location?.trim()) cities.add(item.location.trim());
+    });
+    return {
+      categories: [...categories],
+      conditions: [...conditions],
+      cities: [...cities],
+    };
+  }, [items]);
+
   const loadItems = useCallback(async () => {
     setLoading(true);
     setError(null);
     setItemsCacheNotice(null);
 
+    const filters = {
+      query: debouncedSearchQuery.trim() || undefined,
+      category: selectedCategory,
+      condition: selectedCondition,
+      city: selectedCity,
+    };
+
     let hasFreshCacheVisible = false;
 
-    const cached = await readFreshMarketplaceFirstPageCache();
-    if (cached) {
-      hasFreshCacheVisible = true;
-      setItems(cached.page.items);
-      setLoading(false);
-      setItemsCacheNotice('نستعرض آخر عناصر محفوظة بينما نتحقق من الجديد.');
+    if (!hasActiveFilters) {
+      const cached = await readFreshMarketplaceFirstPageCache();
+      if (cached) {
+        hasFreshCacheVisible = true;
+        setItems(cached.page.items);
+        setLoading(false);
+        setItemsCacheNotice('نستعرض آخر عناصر محفوظة بينما نتحقق من الجديد.');
+      }
     }
 
     try {
-      const page = await fetchMarketplaceItemsPage({ offset: 0 });
+      const page = await fetchMarketplaceItemsPage({ offset: 0, filters });
       setItems(page.items);
       setError(null);
       setItemsCacheNotice(null);
-      void writeMarketplaceFirstPageCache(page);
+      if (!hasActiveFilters) {
+        void writeMarketplaceFirstPageCache(page);
+      }
     } catch {
-      if (hasFreshCacheVisible) {
+      if (hasActiveFilters) {
+        setItems([]);
+        setItemsCacheNotice(null);
+        setError('تعذر تحميل نتائج البحث حالياً. حاول مرة أخرى.');
+      } else if (hasFreshCacheVisible) {
         setItemsCacheNotice('تعذر التحديث الآن، نعرض آخر نسخة محفوظة.');
       } else {
         const stale = await readAnyMarketplaceFirstPageCache();
@@ -116,7 +159,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [debouncedSearchQuery, hasActiveFilters, selectedCategory, selectedCity, selectedCondition]);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -181,6 +224,14 @@ export default function HomeScreen() {
     setPersonalWorldNewItemsCount(newItemsCount);
     setPersonalWorldLoading(false);
   }, [user?.id]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
 
   useEffect(() => {
     loadItems();
@@ -572,6 +623,46 @@ export default function HomeScreen() {
               </AppCard>
             ) : null}
 
+            <MarketplaceSearchFilters
+              query={searchQuery}
+              selectedCategory={selectedCategory}
+              selectedCondition={selectedCondition}
+              selectedCity={selectedCity}
+              categoryOptions={filterOptions.categories}
+              conditionOptions={filterOptions.conditions}
+              cityOptions={filterOptions.cities}
+              loading={loading}
+              onQueryChange={setSearchQuery}
+              onSelectCategory={setSelectedCategory}
+              onSelectCondition={setSelectedCondition}
+              onSelectCity={setSelectedCity}
+              onClear={() => {
+                setSearchQuery('');
+                setDebouncedSearchQuery('');
+                setSelectedCategory(null);
+                setSelectedCondition(null);
+                setSelectedCity(null);
+              }}
+            />
+
+            {hasActiveFilters ? (
+              <AppCard>
+                <View style={styles.filteredSummaryRow}>
+                  <View style={styles.sectionHeader}>
+                    <AppText weight="bold">نتائج مفلترة</AppText>
+                    <AppText muted>{`عدد النتائج الحالية: ${items.length}`}</AppText>
+                  </View>
+                  <AppButton label="مسح الفلاتر" variant="neutral" onPress={() => {
+                    setSearchQuery('');
+                    setDebouncedSearchQuery('');
+                    setSelectedCategory(null);
+                    setSelectedCondition(null);
+                    setSelectedCity(null);
+                  }} />
+                </View>
+              </AppCard>
+            ) : null}
+
             <View style={styles.itemsHeader}>
               <AppText weight="semibold" style={styles.itemsEyebrow}>ظهر حديثًا</AppText>
               <AppText weight="bold" style={styles.itemsTitle}>أحدث العناصر</AppText>
@@ -588,6 +679,8 @@ export default function HomeScreen() {
               <EmptyState title="حدث خطأ" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
             </View>
+          ) : hasActiveFilters ? (
+            <EmptyState title="مفيش نتائج مطابقة" description="جرّب تغير كلمة البحث أو تمسح بعض الفلاتر." />
           ) : (
             <EmptyState title="لا توجد عناصر حالياً" description="الواجهة هادئة الآن، وستظهر العناصر هنا فور توفرها." />
           )
@@ -818,6 +911,12 @@ const styles = StyleSheet.create({
   },
   cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   cacheNoticeText: { flex: 1 },
+  filteredSummaryRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   itemsHeader: {
     gap: spacing.xs,
     marginTop: spacing.xs,

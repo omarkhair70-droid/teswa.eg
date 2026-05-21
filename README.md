@@ -28,6 +28,8 @@ Teswa Mobile is live/post-launch on Google Play as a broad Arabic-first native s
 
 ### 3. Marketplace, Item Detail & Creator Studio
 - Home and Discover marketplace browsing surfaces.
+- Home feed now includes a lightweight client-side search/filter foundation (query, category, condition, city) with active-filter summaries.
+- Filtered marketplace requests bypass and do not overwrite the default offline first-page cache (location radius/saved searches/search alerts deferred).
 - Richer premium item detail presentation.
 - Item video teaser support in discovery/detail contexts.
 - Creator/Add-Item studio visual system with image/video media surfaces.
