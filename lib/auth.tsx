@@ -85,7 +85,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [usingCachedAccountGate, setUsingCachedAccountGate] = useState(false);
 
-  const checkProfileForUser = async (userId: string, reason: string, options?: { background?: boolean }) => {
+  const checkProfileForUser = async (userId: string, reason: string, options?: { background?: boolean; suppressErrors?: boolean }) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
     if (existingCheck) {
       await existingCheck;
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } catch (error) {
         if (__DEV__) console.log('[Auth] profile check failed', { userId, error });
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
-        setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
+        if (!options?.suppressErrors) setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       } finally {
         if (!options?.background && mountedRef.current && activeProfileCheckTokenRef.current === checkToken) {
           setLoadingProfile(false);
@@ -140,7 +140,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
 
-  const checkPolicyAcceptanceForUser = async (userId: string, options?: { background?: boolean }) => {
+  const checkPolicyAcceptanceForUser = async (userId: string, options?: { background?: boolean; suppressErrors?: boolean }) => {
     const existingCheck = inFlightPolicyChecksRef.current.get(userId);
     if (existingCheck) {
       await existingCheck;
@@ -158,7 +158,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
         if (!state.ok) {
           setRequiredPoliciesAccepted(false);
-          setPolicyAcceptanceCheckError(state.message || POLICY_CHECK_ERROR_MESSAGE);
+          if (!options?.suppressErrors) setPolicyAcceptanceCheckError(state.message || POLICY_CHECK_ERROR_MESSAGE);
           return;
         }
 
@@ -167,8 +167,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } catch (error) {
         if (__DEV__) console.log('[Auth] policy acceptance check failed', { userId, error });
         if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
-        setRequiredPoliciesAccepted(false);
-        setPolicyAcceptanceCheckError(POLICY_CHECK_ERROR_MESSAGE);
+        if (!options?.suppressErrors) {
+          setRequiredPoliciesAccepted(false);
+          setPolicyAcceptanceCheckError(POLICY_CHECK_ERROR_MESSAGE);
+        }
       } finally {
         if (!options?.background && mountedRef.current && activePolicyCheckTokenRef.current === checkToken) {
           setLoadingPolicyAcceptance(false);
@@ -204,6 +206,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    // Keep per-user account-gate cache across sign-out so returning users can re-enter quickly;
+    // safety is preserved because cache lookup is scoped by userId + policy fingerprint.
     await disableRegisteredPushDeviceIfPossible();
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -239,8 +243,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
           }
           if (mountedRef.current) setBootstrapReady(true);
           await Promise.all([
-            checkProfileForUser(currentSession.user.id, 'bootstrap_session', { background: canUseCachedGate }),
-            checkPolicyAcceptanceForUser(currentSession.user.id, { background: canUseCachedGate }),
+            checkProfileForUser(currentSession.user.id, 'bootstrap_session', { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
+            checkPolicyAcceptanceForUser(currentSession.user.id, { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
           ]);
           if (mountedRef.current) setUsingCachedAccountGate(false);
         } else {
@@ -292,8 +296,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setUsingCachedAccountGate(true);
         }
         await Promise.all([
-          checkProfileForUser(nextSession.user.id, 'auth_state_change', { background: canUseCachedGate }),
-          checkPolicyAcceptanceForUser(nextSession.user.id, { background: canUseCachedGate }),
+          checkProfileForUser(nextSession.user.id, 'auth_state_change', { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
+          checkPolicyAcceptanceForUser(nextSession.user.id, { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
         ]);
         if (mountedRef.current) setUsingCachedAccountGate(false);
       } catch (error) {
