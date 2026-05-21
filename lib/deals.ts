@@ -71,33 +71,7 @@ export type DealRoomResult =
 
 async function notify(payload: Record<string, unknown>) {
   const { error } = await supabase.rpc('create_notification', payload);
-  if (error && __DEV__) console.log('[deals] create_notification failed', error);
-}
-
-function buildDealNotificationBody(body: string | null | undefined, isVoice: boolean): string {
-  if (isVoice) return 'لديك رسالة صوتية جديدة.';
-  const trimmed = body?.trim() ?? '';
-  if (!trimmed) return 'لديك رسالة جديدة.';
-  return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
-}
-
-async function createDealRecipientNotification(input: {
-  recipientUserId: string;
-  senderUserId: string;
-  dealId: string;
-  type: 'deal_message_received' | 'deal_voice_message_received';
-  body: string | null | undefined;
-}): Promise<void> {
-  if (input.recipientUserId === input.senderUserId) return;
-  const { error } = await supabase.from('notifications').insert({
-    user_id: input.recipientUserId,
-    actor_user_id: input.senderUserId,
-    type: input.type,
-    title: 'رسالة جديدة على تِسوى',
-    body: buildDealNotificationBody(input.body, input.type === 'deal_voice_message_received'),
-    deal_id: input.dealId,
-  });
-  if (error && __DEV__) console.log('[deals] insert recipient notification failed', { code: error.code, message: error.message, dealId: input.dealId });
+  if (error) console.warn('[deals] create_notification failed', { code: error.code, message: error.message });
 }
 
 async function getDealParticipantProfiles(participantIds: string[]) {
@@ -251,14 +225,6 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     target_offer_id: null,
     target_item_id: null,
   });
-  void createDealRecipientNotification({
-    recipientUserId: otherParticipantId,
-    senderUserId: input.currentUserId,
-    dealId: input.dealId,
-    type: 'deal_message_received',
-    body: inserted.body as string,
-  });
-
   return { ok: true as const, message: toMessageRow(inserted) };
 }
 
@@ -437,13 +403,5 @@ export async function sendDealVoiceMessageFromMobile(input: {
     target_offer_id: null,
     target_item_id: null,
   });
-  void createDealRecipientNotification({
-    recipientUserId: otherParticipantId,
-    senderUserId: input.currentUserId,
-    dealId: input.dealId,
-    type: 'deal_voice_message_received',
-    body: inserted.body as string,
-  });
-
   return { ok: true as const, message: toMessageRow(inserted) };
 }
