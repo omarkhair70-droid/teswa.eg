@@ -23,6 +23,7 @@ import { resolveCurrentAddItemLocation } from '@/lib/discovery-location';
 import { ItemPhotoStudio } from '@/components/item/ItemPhotoStudio';
 import { ItemPhotoComposerSheet } from '@/components/item/ItemPhotoComposerSheet';
 import { trackEvent } from '@/lib/analytics';
+import { isSupportedImageAsset, prepareImageForUpload, validateVideoTeaserAsset } from '@/lib/media/upload-quality';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -37,7 +38,6 @@ const desireOptions = [
   { key: 'surprise', label: 'مفاجأة' },
 ] as const;
 const MAX_ASSETS = 4;
-const MAX_VIDEO_DURATION_MS = 15_000;
 
 export default function AddScreen() {
   const { user } = useAuth();
@@ -235,7 +235,24 @@ export default function AddScreen() {
 
     if (!incomingUniqueByUri.length) return;
 
-    const persisted = await persistAddItemDraftMediaAssets(user?.id, incomingUniqueByUri);
+    const preparedAssets: ImagePicker.ImagePickerAsset[] = [];
+    let hadRejected = false;
+
+    for (const asset of incomingUniqueByUri) {
+      const prepared = await prepareImageForUpload(asset, { enableOptimization: false });
+      if (!prepared.ok) {
+        hadRejected = true;
+        continue;
+      }
+      preparedAssets.push(prepared.asset);
+    }
+
+    if (!preparedAssets.length) {
+      if (hadRejected) setError('تم تجاهل بعض الملفات غير المدعومة.');
+      return;
+    }
+
+    const persisted = await persistAddItemDraftMediaAssets(user?.id, preparedAssets);
     if (!persisted.length) return;
 
     setMediaState((prev) => {
@@ -246,11 +263,13 @@ export default function AddScreen() {
         rejectedPersistedCleanupQueueRef.current.push(...rejectedPersisted);
       }
 
+      const feedbackMessages: string[] = [];
+      if (hadRejected) feedbackMessages.push('تم تجاهل بعض الملفات غير المدعومة.');
+      if (wasTrimmed && source !== 'pending') feedbackMessages.push(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
+
       return {
         assets: next,
-        feedback: wasTrimmed && source !== 'pending'
-          ? `يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`
-          : null,
+        feedback: feedbackMessages.length ? feedbackMessages.join(' ') : null,
       };
     });
   };
@@ -331,17 +350,13 @@ export default function AddScreen() {
     const selected = result.assets?.[0];
     if (!selected?.uri) return;
 
-    if (selected.type !== 'video' && !selected.mimeType?.startsWith('video/')) {
-      setError('اختر ملف فيديو فقط للمحة الحاجة.');
+    const validation = await validateVideoTeaserAsset(selected);
+    if (!validation.ok) {
+      setError(validation.message);
       return;
     }
 
-    if (selected.duration != null && selected.duration > MAX_VIDEO_DURATION_MS) {
-      setError('فيديو اللمحة يجب ألا يتجاوز 15 ثانية. اختر فيديو أقصر.');
-      return;
-    }
-
-    setVideoTeaser(selected);
+    setVideoTeaser(validation.asset);
     setError(null);
   };
 
@@ -395,11 +410,11 @@ export default function AddScreen() {
       if (!assets.length) return 'اختر صورة واحدة على الأقل.';
       if (assets.length > 4) return 'الحد الأقصى 4 صور.';
       for (const a of assets) {
-        if (a.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(a.mimeType)) return 'نوع الصورة غير مدعوم.';
+        if (!isSupportedImageAsset(a)) return 'نوع الملف غير مدعوم. استخدم JPG أو PNG أو WebP للصور.';
       }
       if (videoTeaser) {
         if (videoTeaser.type !== 'video' && !videoTeaser.mimeType?.startsWith('video/')) return 'فيديو اللمحة يجب أن يكون ملف فيديو.';
-        if (videoTeaser.duration != null && videoTeaser.duration > MAX_VIDEO_DURATION_MS) return 'فيديو اللمحة يجب ألا يتجاوز 15 ثانية.';
+        if (videoTeaser.duration != null && videoTeaser.duration > 15_000) return 'فيديو اللمحة يجب ألا يتجاوز 15 ثانية.';
       }
     }
     if (step === 1) {
