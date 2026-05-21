@@ -6,35 +6,13 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { UserBadge } from '@/lib/badges';
+import { getBadgePresentation } from '@/lib/badge-presentation';
 
 type ProfileBadgesProps = {
   badges: UserBadge[];
   loading?: boolean;
   compact?: boolean;
 };
-
-const CATEGORY_LABELS: Record<string, string> = {
-  trust: 'ثقة',
-  early: 'بداية',
-  swap: 'تبديل',
-  community: 'مجتمع',
-  profile: 'ملف',
-  special: 'خاص',
-};
-
-const BADGE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  trust: 'shield-checkmark-outline',
-  early: 'sparkles-outline',
-  swap: 'swap-horizontal-outline',
-  community: 'people-outline',
-  profile: 'person-circle-outline',
-  special: 'star-outline',
-};
-
-function normalizeIconName(iconName: string | null | undefined, category: string): keyof typeof Ionicons.glyphMap {
-  if (iconName && iconName in Ionicons.glyphMap) return iconName as keyof typeof Ionicons.glyphMap;
-  return BADGE_ICONS[category] ?? 'ribbon-outline';
-}
 
 function formatAwardedAt(value: string): string | null {
   if (!value) return null;
@@ -83,19 +61,19 @@ export function ProfileBadges({ badges, loading = false, compact = false }: Prof
 
         <View style={styles.badgesWrap}>
           {badges.map((badge) => {
-            const categoryLabel = CATEGORY_LABELS[badge.category] ?? 'عام';
             const awardedAt = formatAwardedAt(badge.awardedAt);
-            const icon = normalizeIconName(badge.iconName, badge.category);
+            const presentation = getBadgePresentation(badge);
 
             return (
               <View key={badge.badgeKey} style={styles.badgeCard}>
                 <View style={styles.badgeHeader}>
-                  <Ionicons name={icon} size={15} color={colors.primary} />
+                  <Ionicons name={presentation.iconName} size={15} color={colors.primary} />
                   <AppText numberOfLines={1} weight="semibold" style={styles.badgeLabel}>{badge.labelAr}</AppText>
                 </View>
+                {!compact ? <AppText muted style={styles.hintText}>{presentation.shortHintAr}</AppText> : null}
                 <View style={styles.badgeMetaRow}>
                   <View style={styles.categoryPill}>
-                    <AppText style={styles.categoryText}>{categoryLabel}</AppText>
+                    <AppText style={styles.categoryText}>{presentation.categoryLabelAr}</AppText>
                   </View>
                   {awardedAt && !compact ? <AppText muted style={styles.dateText}>{awardedAt}</AppText> : null}
                 </View>
@@ -135,5 +113,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
   categoryText: { color: colors.primary, fontSize: 11 },
+  hintText: { fontSize: 12 },
   dateText: { fontSize: 11 },
 });

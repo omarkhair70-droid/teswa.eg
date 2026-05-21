@@ -225,6 +225,10 @@ This delivery flow is operational/backend-side and does not require mobile sourc
 - Profile badge UI uses only safe public fields returned by badge RPC reads (label/category/icon/date).
 - Mobile client does not read raw `user_badges` table rows directly.
 - No badge animations, missions, streaks, or leaderboards are included in this roadmap PR.
+- Core badge definitions were polished for `first_swap` and `reliable_swapper`.
+- Badge presentation is centralized in `lib/badge-presentation.ts`.
+- No badge award rules or trust scoring changed in this PR.
+- Raw `user_badges` rows remain inaccessible directly to the mobile client.
 
 ## First-party Analytics
 
