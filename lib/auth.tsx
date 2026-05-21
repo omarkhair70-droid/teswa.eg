@@ -26,6 +26,7 @@ type AuthContextValue = {
   policyAcceptanceCheckError: string | null;
   refreshProfile: () => Promise<void>;
   refreshPolicyAcceptance: () => Promise<void>;
+  markPolicyAcceptanceConfirmed: () => void;
   signOut: () => Promise<{ ok: true } | { ok: false; message: string }>;
   setOnboardingCompletedState: (value: boolean) => void;
   usingCachedAccountGate: boolean;
@@ -205,6 +206,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await checkPolicyAcceptanceForUser(user.id);
   };
 
+  const markPolicyAcceptanceConfirmed = () => {
+    if (!user?.id) return;
+    setRequiredPoliciesAccepted(true);
+    setPolicyAcceptanceCheckError(null);
+    void writeAccountGateCache({
+      userId: user.id,
+      profileCompleted: true,
+      requiredPoliciesAccepted: true,
+      policyFingerprint: policyFingerprint(),
+      verifiedAt: new Date().toISOString(),
+    });
+  };
+
   const signOut = async (): Promise<{ ok: true } | { ok: false; message: string }> => {
     // Keep per-user account-gate cache across sign-out so returning users can re-enter quickly;
     // safety is preserved because cache lookup is scoped by userId + policy fingerprint.
@@ -330,7 +344,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   }, [policyAcceptanceCheckError, profileCheckError, profileCompleted, requiredPoliciesAccepted, user?.id]);
   const value = useMemo(
-    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError: profileCheckError ?? bootstrapError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, signOut, setOnboardingCompletedState: setOnboardingCompleted, usingCachedAccountGate }),
+    () => ({ bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError: profileCheckError ?? bootstrapError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, markPolicyAcceptanceConfirmed, signOut, setOnboardingCompletedState: setOnboardingCompleted, usingCachedAccountGate }),
     [bootstrapReady, loadingProfile, session, user, onboardingCompleted, profileCompleted, profileCheckError, bootstrapError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, usingCachedAccountGate],
   );
 

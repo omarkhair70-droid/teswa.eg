@@ -136,7 +136,9 @@ function RootNavigator() {
   }, [user, loadingProfile, loadingPolicyAcceptance]);
   useEffect(() => {
     if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
-    void syncPushDeviceRegistrationIfPermitted(user.id);
+    void syncPushDeviceRegistrationIfPermitted(user.id).then((result) => {
+      if (__DEV__) console.log('[Push] post-login sync result', { userId: user.id, ...result });
+    });
   }, [bootstrapReady, loadingProfile, profileCompleted, user]);
 
   useEffect(() => {
