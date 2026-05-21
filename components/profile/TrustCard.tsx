@@ -84,8 +84,6 @@ export function TrustCard({ metrics, loading = false, compact = false }: TrustCa
           <TrustLevelPill levelKey={metrics.trustLevelKey} score={safeScore} compact={compact} />
         </View>
 
-        <AppText weight="semibold" style={styles.scoreLine}>مؤشر {safeScore} / 100</AppText>
-
         {!compact ? <AppText muted>{presentation.descriptionAr}</AppText> : null}
 
         <View style={styles.metricsGrid}>
@@ -126,7 +124,6 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   titleRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   levelLabel: { fontSize: 20, color: colors.text },
-  scoreLine: { color: colors.primary },
   subtleNote: { fontSize: 12 },
   metricsGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm },
   metricCell: {
@@ -147,7 +144,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
   },
   tagText: { fontSize: 12, color: colors.textMuted },
 });
