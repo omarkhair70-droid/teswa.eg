@@ -72,6 +72,7 @@ export default function OfferDetailScreen() {
   if (!offer) return <AppScreen><EmptyState title="العرض غير موجود" description="قد يكون تم حذفه أو لم يعد متاحاً." /></AppScreen>;
 
   const receiverCanRespond = offer.viewerRole === 'receiver' && (offer.status === 'pending' || offer.status === 'thinking');
+  const showReceiverNoActionCard = offer.viewerRole === 'receiver' && !receiverCanRespond;
 
   const showSentMoment = moment === 'sent';
 
@@ -87,7 +88,7 @@ export default function OfferDetailScreen() {
     {offer.status === 'accepted' && offer.dealId ? <AppCard><View style={styles.group}><AppText weight="semibold">العرض اتقبل</AppText><AppText muted>اتفتحت دردشة الصفقة علشان تكملوا تنسيق التبديل.</AppText><AppButton label="افتح دردشة الصفقة" onPress={() => router.push(`/deal/${offer.dealId}`)} /></View></AppCard> : null}
     {offer.status === 'accepted' && !offer.dealId ? <AppText muted>العرض مقبول، لكن تعذر تحديد دردشة الصفقة حالياً.</AppText> : null}
     {receiverCanRespond ? <AppCard><View style={styles.group}><AppText weight="semibold">الرد على العرض</AppText><TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="ملاحظة اختيارية" textAlign="right" /><AppButton label={actionLoading === 'thinking' ? 'جارٍ التنفيذ...' : 'محتاج أفكر'} disabled={Boolean(actionLoading)} onPress={() => doAction('thinking')} /><AppButton label={actionLoading === 'reject' ? 'جارٍ التنفيذ...' : 'رفض بلطف'} disabled={Boolean(actionLoading)} onPress={() => doAction('reject')} /><AppButton label={actionLoading === 'accept' ? 'جارٍ التنفيذ...' : 'قبول العرض'} disabled={Boolean(actionLoading)} onPress={() => doAction('accept')} /></View></AppCard> : null}
-    {!receiverCanRespond ? <AppCard><View style={styles.group}><AppText weight="semibold">لا يوجد إجراء متاح الآن</AppText><AppText muted>تم اتخاذ قرار على هذا العرض بالفعل أو أن العرض لم يعد في حالة تسمح بالرد.</AppText></View></AppCard> : null}
+    {showReceiverNoActionCard ? <AppCard><View style={styles.group}><AppText weight="semibold">لا يوجد إجراء متاح الآن</AppText><AppText muted>تم اتخاذ قرار على هذا العرض بالفعل أو أن العرض لم يعد في حالة تسمح بالرد.</AppText></View></AppCard> : null}
     {error ? <AppText style={styles.error}>{error}</AppText> : null}
   </AppScreen>;
 }

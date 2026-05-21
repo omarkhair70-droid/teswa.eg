@@ -134,7 +134,14 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
 
   if (confirmationsRes.error) throw confirmationsRes.error;
   if (messagesRes.error) throw messagesRes.error;
-  if (myReviewRes.error) throw myReviewRes.error;
+  if (myReviewRes.error && __DEV__) {
+    console.log('[deals] alreadyRated lookup failed, fallback to false', {
+      dealId,
+      currentUserId,
+      code: myReviewRes.error.code,
+      message: myReviewRes.error.message,
+    });
+  }
 
   const confirmerIds = new Set((confirmationsRes.data ?? []).map((r) => r.user_id as string));
   const iConfirmed = confirmerIds.has(currentUserId);
@@ -161,7 +168,7 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
       otherConfirmed,
       canSendMessage: canCoordinate,
       canConfirmCompletion: canCoordinate && !iConfirmed,
-      alreadyRated: (myReviewRes.count ?? 0) > 0,
+      alreadyRated: myReviewRes.error ? false : (myReviewRes.count ?? 0) > 0,
       messages: (messagesRes.data ?? []).map(toMessageRow),
     },
   };
