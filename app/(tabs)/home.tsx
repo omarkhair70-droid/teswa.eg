@@ -58,7 +58,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, profileCompleted } = useAuth();
   const { notificationsUnreadCount, refreshBadges } = useUnreadBadges();
-  const [showReturnNotifCue, setShowReturnNotifCue] = useState(false);
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,15 +192,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!user?.id) {
-      setShowReturnNotifCue(false);
       return;
     }
     void refreshBadges();
   }, [refreshBadges, user?.id]);
-
-  useEffect(() => {
-    setShowReturnNotifCue(notificationsUnreadCount > 0);
-  }, [notificationsUnreadCount]);
 
   useEffect(() => {
     void loadPersonalLivingWorldMarker();
@@ -378,15 +372,6 @@ export default function HomeScreen() {
                 <AppText muted style={styles.heroSupport}>تابع ما يهمك الآن، أو خذ جولة دافئة في الجديد حولك.</AppText>
               </View>
             </LinearGradient>
-            {showReturnNotifCue ? (
-              <AppCard>
-                <View style={styles.catchupRow}>
-                  <AppText weight="semibold">لديك إشعارات جديدة</AppText>
-                  <AppButton label="فتح الإشعارات" variant="neutral" onPress={() => router.push('/notifications')} />
-                </View>
-              </AppCard>
-            ) : null}
-
             {user ? (
               <AppCard>
                 <View style={styles.dashboardSection}>
@@ -662,7 +647,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   unreadBadgeText: { color: colors.white, fontSize: 10 },
-  catchupRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
   title: { fontSize: 27, lineHeight: 34 },
   heroBody: { fontSize: 16, lineHeight: 24 },
   heroSupport: { lineHeight: 22 },
