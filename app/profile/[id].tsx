@@ -9,12 +9,14 @@ import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
 import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
+import { TrustCard } from '@/components/profile/TrustCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchActiveStoriesByUserId } from '@/lib/stories';
 import { buildProfilePresence } from '@/lib/profile-presence';
+import { fetchUserTrustMetrics, UserTrustMetrics } from '@/lib/trust-metrics';
 import { useAuth } from '@/lib/auth';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { fetchUserFollowState, followUserFromMobile, unfollowUserFromMobile } from '@/lib/user-follows';
@@ -59,6 +61,8 @@ export default function PublicProfileScreen() {
   const [followBusy, setFollowBusy] = useState(false);
   const [followMessage, setFollowMessage] = useState<string | null>(null);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
+  const [trustMetrics, setTrustMetrics] = useState<UserTrustMetrics | null>(null);
+  const [trustLoading, setTrustLoading] = useState(false);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -196,6 +200,29 @@ export default function PublicProfileScreen() {
     loadPresence();
   }, [loadPresence]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTrustMetrics = async () => {
+      if (!profile?.id) {
+        setTrustMetrics(null);
+        setTrustLoading(false);
+        return;
+      }
+
+      setTrustLoading(true);
+      const metrics = await fetchUserTrustMetrics(profile.id);
+      if (!cancelled) setTrustMetrics(metrics);
+      if (!cancelled) setTrustLoading(false);
+    };
+
+    void loadTrustMetrics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id]);
+
   const profileId = profile?.id ?? '';
   const isOwnProfile = !!user?.id && !!profileId && user.id === profileId;
 
@@ -323,13 +350,7 @@ export default function PublicProfileScreen() {
         </View>
       </AppCard>
 
-      <AppCard>
-        <View style={styles.group}>
-          <AppText weight="semibold">الثقة والإحصائيات</AppText>
-          <AppText>المقايضات الناجحة: {profile.successful_swaps_count ?? 0}</AppText>
-          <AppText>معدل الرد: {profile.response_rate != null ? `${profile.response_rate}%` : 'غير متاح بعد'}</AppText>
-        </View>
-      </AppCard>
+      <TrustCard metrics={trustMetrics} loading={trustLoading} />
 
       <AppCard>
         <View style={styles.group}>
