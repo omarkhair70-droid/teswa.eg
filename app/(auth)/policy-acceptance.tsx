@@ -12,7 +12,7 @@ import { fetchRequiredPolicyAcceptanceState, recordRequiredPolicyAcceptances } f
 
 export default function PolicyAcceptanceScreen() {
   const router = useRouter();
-  const { user, refreshPolicyAcceptance } = useAuth();
+  const { user, refreshPolicyAcceptance, markPolicyAcceptanceConfirmed } = useAuth();
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptGuidelines, setAcceptGuidelines] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +40,7 @@ export default function PolicyAcceptanceScreen() {
       return;
     }
 
+    markPolicyAcceptanceConfirmed();
     setSubmitting(false);
     router.replace('/(tabs)/home');
   };

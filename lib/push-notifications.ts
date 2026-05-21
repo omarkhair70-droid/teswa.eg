@@ -58,13 +58,14 @@ export async function requestAndRegisterPushDevice(userId: string) {
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     const { data, error } = await supabase.rpc('register_push_device', { p_expo_push_token: token, p_platform: Platform.OS });
     if (error) {
-      if (__DEV__) console.log('[Push] register RPC failed', { code: error.code, message: error.message });
+      if (__DEV__) console.log('[Push] register RPC failed', { userId, code: error.code, message: error.message });
       return { ok: false as const, reason: 'rpc_failed' as const };
     }
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+    if (__DEV__) console.log('[Push] register success', { userId, platform: Platform.OS, deviceId: data as string, tokenPreview: `${token.slice(0, 12)}...` });
     return { ok: true as const, token, deviceId: data as string };
   } catch (error) {
-    if (__DEV__) console.log('[Push] register failed', { message: (error as { message?: string })?.message });
+    if (__DEV__) console.log('[Push] register failed', { userId, message: (error as { message?: string })?.message });
     return { ok: false as const, reason: 'register_failed' as const };
   }
 }
@@ -86,13 +87,14 @@ export async function syncPushDeviceRegistrationIfPermitted(userId: string) {
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     const { error } = await supabase.rpc('register_push_device', { p_expo_push_token: token, p_platform: Platform.OS });
     if (error) {
-      if (__DEV__) console.log('[Push] passive register RPC failed', { code: error.code, message: error.message });
+      if (__DEV__) console.log('[Push] passive register RPC failed', { userId, code: error.code, message: error.message });
       return { ok: false as const, reason: 'rpc_failed' as const };
     }
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
+    if (__DEV__) console.log('[Push] passive register success', { userId, platform: Platform.OS, tokenPreview: `${token.slice(0, 12)}...` });
     return { ok: true as const };
   } catch (error) {
-    if (__DEV__) console.log('[Push] passive register failed', { message: (error as { message?: string })?.message });
+    if (__DEV__) console.log('[Push] passive register failed', { userId, message: (error as { message?: string })?.message });
     return { ok: false as const, reason: 'register_failed' as const };
   }
 }

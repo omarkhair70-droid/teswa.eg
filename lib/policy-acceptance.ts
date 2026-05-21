@@ -108,6 +108,7 @@ export async function fetchRequiredPolicyAcceptanceState(
 
 
   if (error) {
+    if (__DEV__) console.log('[Policy] fetch acceptance failed', { userId: trimmedUserId, message: error.message });
     return {
       ok: false,
       requiredPoliciesAccepted: false,
@@ -161,6 +162,8 @@ export async function recordRequiredPolicyAcceptances(userId: string): Promise<{
     });
 
   if (error) {
+    if (__DEV__) console.log('[Policy] record acceptance failed', { userId: trimmedUserId, code: error.code, message: error.message, details: error.details });
+    if (error.code === '42501') return { ok: false, message: 'ليس لديك صلاحية لحفظ الموافقات حالياً. حاول تسجيل الدخول مرة ثانية.' };
     return { ok: false, message: 'تعذر حفظ موافقات السياسات حالياً. حاول مرة ثانية.' };
   }
 
