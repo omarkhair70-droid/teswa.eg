@@ -9,6 +9,10 @@ alter table if exists public.notification_preferences
   add column if not exists quiet_hours_enabled boolean not null default false;
 
 alter table if exists public.notification_preferences
+  drop constraint if exists notification_preferences_quiet_hours_start_check,
+  drop constraint if exists notification_preferences_quiet_hours_end_check;
+
+alter table if exists public.notification_preferences
   alter column quiet_hours_start type text using (
     case
       when quiet_hours_start is null then '23:00'
@@ -25,10 +29,6 @@ alter table if exists public.notification_preferences
   ),
   alter column quiet_hours_end set default '08:00',
   alter column quiet_hours_end set not null;
-
-alter table if exists public.notification_preferences
-  drop constraint if exists notification_preferences_quiet_hours_start_check,
-  drop constraint if exists notification_preferences_quiet_hours_end_check;
 
 alter table if exists public.notification_preferences
   add constraint notification_preferences_quiet_hours_start_check check (quiet_hours_start ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
