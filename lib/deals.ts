@@ -65,6 +65,7 @@ export type DealRoomResult =
     otherConfirmed: boolean;
     canSendMessage: boolean;
     canConfirmCompletion: boolean;
+    alreadyRated: boolean;
     messages: DealRoomMessage[];
   }}
   | { ok: false; reason: 'not_found' | 'unauthorized' };
@@ -122,16 +123,25 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
   const viewerRole: DealViewerRole = currentUserId === requesterId ? 'requester' : 'offerer';
   const otherParticipantId = viewerRole === 'requester' ? offererId : requesterId;
 
-  const [requestedItem, offeredItem, confirmationsRes, messagesRes, profilesById] = await Promise.all([
+  const [requestedItem, offeredItem, confirmationsRes, messagesRes, profilesById, myReviewRes] = await Promise.all([
     fetchExchangeItemSummariesByIds([deal.requested_item_id as string]).then((r) => r[0] ?? null),
     fetchExchangeItemSummariesByIds([deal.offered_item_id as string]).then((r) => r[0] ?? null),
     supabase.from('deal_confirmations').select('user_id').eq('deal_id', dealId),
     supabase.from('deal_messages').select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at').eq('deal_id', dealId).order('created_at', { ascending: true }).limit(100),
     getDealParticipantProfiles([requesterId, offererId]),
+    supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('deal_id', dealId).eq('reviewer_id', currentUserId),
   ]);
 
   if (confirmationsRes.error) throw confirmationsRes.error;
   if (messagesRes.error) throw messagesRes.error;
+  if (myReviewRes.error && __DEV__) {
+    console.log('[deals] alreadyRated lookup failed, fallback to false', {
+      dealId,
+      currentUserId,
+      code: myReviewRes.error.code,
+      message: myReviewRes.error.message,
+    });
+  }
 
   const confirmerIds = new Set((confirmationsRes.data ?? []).map((r) => r.user_id as string));
   const iConfirmed = confirmerIds.has(currentUserId);
@@ -158,6 +168,7 @@ export async function fetchDealRoomById(dealId: string, currentUserId: string): 
       otherConfirmed,
       canSendMessage: canCoordinate,
       canConfirmCompletion: canCoordinate && !iConfirmed,
+      alreadyRated: myReviewRes.error ? false : (myReviewRes.count ?? 0) > 0,
       messages: (messagesRes.data ?? []).map(toMessageRow),
     },
   };

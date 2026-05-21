@@ -869,14 +869,20 @@ export default function Screen() {
               <AppCard>
                 <View style={styles.group}>
                   <AppText weight="semibold">المقايضة تمت بنجاح</AppText>
-                  <AppText muted>
-                    تقدر تقيّم الطرف التاني بعد إتمام المقايضة.
-                  </AppText>
-                  <AppButton
-                    label="قيّم التجربة"
-                    onPress={() => router.push(`/review/deal/${deal.id}`)}
-                    variant="neutral"
-                  />
+                  {deal.alreadyRated ? (
+                    <AppText muted>تم تسجيل تقييمك لهذه الصفقة بالفعل.</AppText>
+                  ) : (
+                    <>
+                      <AppText muted>
+                        تقدر تقيّم الطرف التاني بعد إتمام المقايضة.
+                      </AppText>
+                      <AppButton
+                        label="قيّم التجربة"
+                        onPress={() => router.push(`/review/deal/${deal.id}`)}
+                        variant="neutral"
+                      />
+                    </>
+                  )}
                 </View>
               </AppCard>
             ) : null}
