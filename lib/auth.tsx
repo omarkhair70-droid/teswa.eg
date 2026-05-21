@@ -210,9 +210,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!user?.id) return;
     setRequiredPoliciesAccepted(true);
     setPolicyAcceptanceCheckError(null);
+    if (!profileCompleted) return;
     void writeAccountGateCache({
       userId: user.id,
-      profileCompleted: true,
+      profileCompleted,
       requiredPoliciesAccepted: true,
       policyFingerprint: policyFingerprint(),
       verifiedAt: new Date().toISOString(),
