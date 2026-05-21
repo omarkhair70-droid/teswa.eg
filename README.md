@@ -229,6 +229,9 @@ This delivery flow is operational/backend-side and does not require mobile sourc
 - Badge presentation is centralized in `lib/badge-presentation.ts`.
 - No badge award rules or trust scoring changed in this PR.
 - Raw `user_badges` rows remain inaccessible directly to the mobile client.
+- Profile Achievement Summary combines safe aggregate trust metrics and public badge fields.
+- No scoring or award rules changed for this summary.
+- No raw badge rows or private data are exposed by this summary surface.
 
 ## First-party Analytics
 

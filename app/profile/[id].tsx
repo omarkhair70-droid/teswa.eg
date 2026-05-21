@@ -9,6 +9,7 @@ import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { ProfileLivingHero } from '@/components/profile/ProfileLivingHero';
 import { ProfilePresenceSignals } from '@/components/profile/ProfilePresenceSignals';
+import { ProfileAchievementSummary } from '@/components/profile/ProfileAchievementSummary';
 import { TrustCard } from '@/components/profile/TrustCard';
 import { ProfileBadges } from '@/components/profile/ProfileBadges';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -346,7 +347,11 @@ export default function PublicProfileScreen() {
 
       <ProfilePresenceSignals presence={profilePresence} />
 
-
+      <ProfileAchievementSummary
+        trustMetrics={trustMetrics}
+        badges={badges}
+        loading={trustLoading || badgesLoading}
+      />
 
       {!isOwnProfile ? (
         <AppCard>
