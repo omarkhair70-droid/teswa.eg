@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { navigateFromNotificationResponse, syncPushDeviceRegistrationIfPermitted } from '@/lib/push-notifications';
+import { getRouteFromNotificationResponse, syncPushDeviceRegistrationIfPermitted } from '@/lib/push-notifications';
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
@@ -19,6 +19,15 @@ import { trackEvent } from '@/lib/analytics';
 
 void SplashScreen.preventAutoHideAsync();
 
+const SPLASH_FAILSAFE_TIMEOUT_MS = 1_200;
+
+async function hideSplashSafely(_reason: string) {
+  try {
+    await SplashScreen.hideAsync();
+  } catch {
+    // noop
+  }
+}
 
 
 function ShareIntentCoordinator() {
@@ -111,6 +120,7 @@ function RootNavigator() {
 
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
   const [accountStateCheckStalled, setAccountStateCheckStalled] = useState(false);
+  const [pendingNotificationRoute, setPendingNotificationRoute] = useState<string | null>(null);
 
   const retryAccountStateChecks = async () => {
     const shouldRefreshProfile = loadingProfile || profileCheckError;
@@ -148,22 +158,59 @@ function RootNavigator() {
   }, [bootstrapReady, loadingProfile, profileCompleted, user]);
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      void hideSplashSafely('startup_failsafe');
+    }, SPLASH_FAILSAFE_TIMEOUT_MS);
+
+    return () => clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    const queueNotificationRoute = (response: Notifications.NotificationResponse | null | undefined) => {
+      const resolved = getRouteFromNotificationResponse(response);
+      if (!resolved) return;
+      if (handledNotificationIdsRef.current.has(resolved.id)) return;
+      handledNotificationIdsRef.current.add(resolved.id);
+      setPendingNotificationRoute(resolved.route);
+    };
+
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      navigateFromNotificationResponse(response, handledNotificationIdsRef.current);
+      queueNotificationRoute(response);
     });
 
     Notifications.getLastNotificationResponseAsync().then((response) => {
-      navigateFromNotificationResponse(response, handledNotificationIdsRef.current);
+      queueNotificationRoute(response);
     }).catch(() => undefined);
 
     return () => sub.remove();
   }, []);
 
-
   useEffect(() => {
     if (!bootstrapReady) return;
-    void SplashScreen.hideAsync();
+    void hideSplashSafely('bootstrap_ready');
   }, [bootstrapReady]);
+
+  useEffect(() => {
+    if (!pendingNotificationRoute) return;
+    if (!bootstrapReady || !user || loadingProfile || loadingPolicyAcceptance || !profileCompleted || !requiredPoliciesAccepted) return;
+
+    try {
+      router.push(pendingNotificationRoute as never);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[push] navigation failed, falling back to /notifications', {
+          message: (error as { message?: string })?.message,
+        });
+      }
+      try {
+        router.push('/notifications' as never);
+      } catch {
+        // noop
+      }
+    } finally {
+      setPendingNotificationRoute(null);
+    }
+  }, [bootstrapReady, loadingPolicyAcceptance, loadingProfile, pendingNotificationRoute, profileCompleted, requiredPoliciesAccepted, router, user]);
 
   useEffect(() => {
     if (!bootstrapReady || loadingProfile || loadingPolicyAcceptance) return;
@@ -212,8 +259,8 @@ function RootNavigator() {
   if (!bootstrapReady) {
     return (
       <AccountGateLoadingState
-        title="أهلًا بك في تِسوى"
-        subtitle="نجهّز الجلسة الآن ونفتح لك التطبيق."
+        title="بنفتح تِسوى..."
+        subtitle="ثواني ونجهز تجربتك."
       />
     );
   }

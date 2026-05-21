@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase/client';
 
@@ -136,11 +135,10 @@ export function resolvePushNotificationRoute(data: unknown): string | null {
   return null;
 }
 
-export function navigateFromNotificationResponse(response: Notifications.NotificationResponse | null | undefined, seen: Set<string>) {
-  if (!response) return;
+export function getRouteFromNotificationResponse(response: Notifications.NotificationResponse | null | undefined): { id: string; route: string } | null {
+  if (!response) return null;
   const id = response.notification.request.identifier;
-  if (seen.has(id)) return;
-  seen.add(id);
   const route = resolvePushNotificationRoute(response.notification.request.content.data);
-  if (route) router.push(route as never);
+  if (!route) return null;
+  return { id, route };
 }
