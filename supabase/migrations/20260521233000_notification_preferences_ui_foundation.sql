@@ -151,6 +151,8 @@ end;
 $$;
 
 revoke all on function public.get_my_notification_preferences() from public;
+revoke all on function public.get_my_notification_preferences() from anon;
 revoke all on function public.update_my_notification_preferences(boolean, boolean, boolean, boolean, boolean, boolean, boolean, text, text) from public;
+revoke all on function public.update_my_notification_preferences(boolean, boolean, boolean, boolean, boolean, boolean, boolean, text, text) from anon;
 grant execute on function public.get_my_notification_preferences() to authenticated;
 grant execute on function public.update_my_notification_preferences(boolean, boolean, boolean, boolean, boolean, boolean, boolean, text, text) to authenticated;
