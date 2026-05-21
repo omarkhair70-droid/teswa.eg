@@ -1,5 +1,5 @@
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 /**
@@ -41,10 +41,10 @@ const looksLikeImageUri = (uri?: string | null) => Boolean(uri && /\.(jpe?g|png|
 
 export async function getMediaFileInfo(uri: string): Promise<{ exists: boolean; sizeBytes: number | null }> {
   try {
-    const file = await FileSystem.getInfoAsync(uri, { size: true });
-    if (!file.exists) return { exists: false, sizeBytes: null };
-    const maybeSize = 'size' in file ? file.size : null;
-    return { exists: true, sizeBytes: typeof maybeSize === 'number' ? maybeSize : null };
+    const file = new File(uri);
+    const info = file.info();
+    if (!info.exists) return { exists: false, sizeBytes: null };
+    return { exists: true, sizeBytes: typeof info.size === 'number' ? info.size : null };
   } catch {
     return { exists: false, sizeBytes: null };
   }
@@ -78,12 +78,12 @@ export function validateImageAsset(asset: ImagePickerAsset): UploadQualityResult
 
 export async function prepareImageForUpload(
   asset: ImagePickerAsset,
-  options?: { maxWidth?: number; compress?: number; skipOptimization?: boolean },
+  options?: { maxWidth?: number; compress?: number; enableOptimization?: boolean },
 ): Promise<UploadQualityResult<ImagePickerAsset>> {
   const validated = validateImageAsset(asset);
   if (!validated.ok) return validated;
 
-  if (options?.skipOptimization) {
+  if (!options?.enableOptimization) {
     return { ...validated, warnings: [] };
   }
 
@@ -109,6 +109,10 @@ export async function prepareImageForUpload(
       },
     );
 
+    const nextFileName = asset.fileName
+      ? asset.fileName.replace(/\.[^.]+$/, '.jpg')
+      : null;
+
     const prepared: ImagePickerAsset = {
       ...asset,
       uri: manipulated.uri,
@@ -116,6 +120,7 @@ export async function prepareImageForUpload(
       height: manipulated.height,
       mimeType: 'image/jpeg',
       type: 'image',
+      fileName: nextFileName ?? asset.fileName ?? null,
     };
 
     return {

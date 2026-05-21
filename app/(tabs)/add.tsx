@@ -237,16 +237,13 @@ export default function AddScreen() {
 
     const preparedAssets: ImagePicker.ImagePickerAsset[] = [];
     let hadRejected = false;
-    let hadOptimized = false;
 
     for (const asset of incomingUniqueByUri) {
-      const shouldSkipOptimization = source === 'pending' || source === 'shareIntent';
-      const prepared = await prepareImageForUpload(asset, { skipOptimization: shouldSkipOptimization });
+      const prepared = await prepareImageForUpload(asset, { enableOptimization: false });
       if (!prepared.ok) {
         hadRejected = true;
         continue;
       }
-      if (prepared.info?.transformed) hadOptimized = true;
       preparedAssets.push(prepared.asset);
     }
 
@@ -267,7 +264,6 @@ export default function AddScreen() {
       }
 
       const feedbackMessages: string[] = [];
-      if (hadOptimized) feedbackMessages.push('تم تحسين الصور لتكون أخف وأوضح قبل النشر.');
       if (hadRejected) feedbackMessages.push('تم تجاهل بعض الملفات غير المدعومة.');
       if (wasTrimmed && source !== 'pending') feedbackMessages.push(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
 
