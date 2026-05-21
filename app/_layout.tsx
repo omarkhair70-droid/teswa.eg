@@ -19,7 +19,7 @@ import { trackEvent } from '@/lib/analytics';
 
 void SplashScreen.preventAutoHideAsync();
 
-const SPLASH_FAILSAFE_TIMEOUT_MS = 4_500;
+const SPLASH_FAILSAFE_TIMEOUT_MS = 1_200;
 
 async function hideSplashSafely(_reason: string) {
   try {
@@ -259,8 +259,8 @@ function RootNavigator() {
   if (!bootstrapReady) {
     return (
       <AccountGateLoadingState
-        title="أهلًا بك في تِسوى"
-        subtitle="الفتح استغرق وقت أطول من المتوقع. اقفل التطبيق وافتحه أو حاول مرة تانية."
+        title="بنفتح تِسوى..."
+        subtitle="ثواني ونجهز تجربتك."
       />
     );
   }
