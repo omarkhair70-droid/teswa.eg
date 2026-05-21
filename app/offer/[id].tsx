@@ -8,6 +8,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { TeswaMomentCard } from '@/components/ui/TeswaMomentCard';
+import { OfferTimeline } from '@/components/offers/OfferTimeline';
 import { spacing } from '@/constants/spacing';
 import { acceptOfferFromMobile, fetchOfferById, getOfferStatusLabel, markOfferThinkingFromMobile, OfferDetail, softRejectOfferFromMobile } from '@/lib/offers';
 import { useAuth } from '@/lib/auth';
@@ -86,6 +87,7 @@ export default function OfferDetailScreen() {
     {actionMoment === 'rejected' ? <TeswaMomentCard eyebrow="ردك وصل" title="تم رفض العرض بلطف" body="قفلنا هذا العرض بهدوء، ويمكن لصاحبه متابعة فرص أخرى." icon="heart-dislike-outline" tone="calm" /> : null}
     {showSentMoment ? <TeswaMomentCard eyebrow="لحظة جديدة" title="عرضك وصل" body="أرسلنا عرض التبديل لصاحب العنصر. تابع حالته من هنا." icon="paper-plane-outline" tone="warm" /> : null}
     <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>تفاصيل العرض</AppText><AppText muted>حالة العرض: {getOfferStatusLabel(offer.status)}</AppText>{!!offer.createdAt && <AppText muted>تاريخ الإرسال: {new Date(offer.createdAt).toLocaleString('ar-EG')}</AppText>}</View></AppCard>
+    <OfferTimeline status={offer.status} viewerRole={offer.viewerRole} createdAt={offer.createdAt} dealId={offer.dealId} />
     <ItemSummary title="العنصر المطلوب" item={offer.requestedItem} />
     <ItemSummary title="العنصر المعروض" item={offer.offeredItem} />
     {offer.message ? <AppCard><View style={styles.group}><AppText weight="semibold">الرسالة</AppText><AppText>{offer.message}</AppText></View></AppCard> : null}
