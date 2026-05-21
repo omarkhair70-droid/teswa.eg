@@ -150,6 +150,9 @@ Add these in `.env`:
 - No generated share-card image is uploaded to Teswa storage or backend services.
 - Existing text/link sharing remains the fallback path when image sharing is unavailable or fails.
 - No extra permissions or native dependencies were added for item share cards.
+- Add item flow also includes an optional video teaser UX for listings.
+- Video teaser maximum duration remains 15 seconds.
+- Full video compression pipeline is intentionally deferred to a later roadmap PR.
 
 Server-side secrets (for push delivery and other backend operations) should remain in operational/runtime configuration rather than mobile client environment variables.
 

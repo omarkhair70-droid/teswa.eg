@@ -45,6 +45,7 @@ export default function AddScreen() {
   const [step, setStep] = useState(0);
   const [mediaState, setMediaState] = useState<{ assets: ImagePicker.ImagePickerAsset[]; feedback: string | null }>({ assets: [], feedback: null });
   const [videoTeaser, setVideoTeaser] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [videoTeaserSizeLabel, setVideoTeaserSizeLabel] = useState<string | null>(null);
   const [categories, setCategories] = useState<{ id: string; name_ar: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -81,6 +82,10 @@ export default function AddScreen() {
     const seconds = Math.max(0, Math.round(videoTeaser.duration / 1000));
     return `${seconds} ثانية`;
   }, [videoTeaser]);
+  const formatVideoSizeLabel = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  };
   const { isDefinitelyOffline } = useOfflineStatus();
   const rejectedPersistedCleanupQueueRef = useRef<ImagePicker.ImagePickerAsset[]>([]);
 
@@ -352,16 +357,27 @@ export default function AddScreen() {
 
     const validation = await validateVideoTeaserAsset(selected);
     if (!validation.ok) {
-      setError(validation.message);
+      const mappedMessage = validation.message.includes('15 ثانية')
+        ? 'فيديو اللمحة لازم يكون 15 ثانية أو أقل.'
+        : validation.message.includes('كبير')
+          ? 'فيديو اللمحة كبير جدًا. اختار فيديو أقصر أو أخف.'
+          : validation.message.includes('فيديو')
+            ? 'نوع الفيديو غير مدعوم.'
+            : validation.message;
+      setError(mappedMessage);
       return;
     }
 
     setVideoTeaser(validation.asset);
+    const sizeBytes = validation.info?.sizeBytes
+      ?? (typeof validation.asset.fileSize === 'number' ? validation.asset.fileSize : null);
+    setVideoTeaserSizeLabel(sizeBytes != null ? formatVideoSizeLabel(sizeBytes) : null);
     setError(null);
   };
 
   const removeVideoTeaser = () => {
     setVideoTeaser(null);
+    setVideoTeaserSizeLabel(null);
     setError(null);
   };
 
@@ -413,8 +429,8 @@ export default function AddScreen() {
         if (!isSupportedImageAsset(a)) return 'نوع الملف غير مدعوم. استخدم JPG أو PNG أو WebP للصور.';
       }
       if (videoTeaser) {
-        if (videoTeaser.type !== 'video' && !videoTeaser.mimeType?.startsWith('video/')) return 'فيديو اللمحة يجب أن يكون ملف فيديو.';
-        if (videoTeaser.duration != null && videoTeaser.duration > 15_000) return 'فيديو اللمحة يجب ألا يتجاوز 15 ثانية.';
+        if (videoTeaser.type !== 'video' && !videoTeaser.mimeType?.startsWith('video/')) return 'نوع الفيديو غير مدعوم.';
+        if (videoTeaser.duration != null && videoTeaser.duration > 15_000) return 'فيديو اللمحة لازم يكون 15 ثانية أو أقل.';
       }
     }
     if (step === 1) {
@@ -563,7 +579,7 @@ export default function AddScreen() {
     {error && <AppCard style={styles.noticeCard}><View style={styles.noticeRow}><Ionicons name='alert-circle-outline' size={18} color={colors.primary} /><AppText style={styles.error}>{error}</AppText></View></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard style={styles.studioCard}><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
     {step === 0 && <AppCard style={styles.studioCard}><View style={styles.gap}><View style={styles.sectionHeaderRow}><View style={styles.sectionHeaderIcon}><Ionicons name='images-outline' size={16} color={colors.primary} /></View><View style={styles.sectionHeader}><AppText weight='bold'>صور العنصر</AppText><AppText muted>{assets.length} من 4 صور</AppText></View></View>{!assets.length ? <View style={styles.emptyMedia}><AppText weight='bold'>ابدأ بصورة واضحة لعنصرك</AppText><AppText muted>أضف حتى 4 صور، والصورة الأولى ستظهر كغلاف.</AppText><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting} /></View></View> : <View style={styles.gap}><View style={styles.coverCard}><Image source={{ uri: assets[0]?.uri }} style={styles.coverPreview} /><View style={styles.coverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View><View style={styles.mediaActionRow}><Pressable onPress={() => openItemPhotoComposer(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>تهيئة</AppText></Pressable><Pressable onPress={() => removeAssetAt(0)} disabled={submitting} style={styles.mediaPill}><AppText muted>حذف</AppText></Pressable></View></View><AppText muted>اضغط مطولًا واسحب لإعادة ترتيب الصور.</AppText><DraggableFlatList data={assets} keyExtractor={(item) => item.uri} horizontal containerStyle={styles.draggableList} contentContainerStyle={styles.draggableContent} onDragBegin={handleDragBegin} onDragEnd={handleDragEnd} renderItem={({ item, getIndex, drag, isActive }: RenderItemParams<ImagePicker.ImagePickerAsset>) => { const index = getIndex() ?? 0; return <Pressable onLongPress={drag} disabled={submitting} style={[styles.thumbCard, index === 0 && styles.coverThumbCard, isActive && styles.thumbCardActive]}><Image source={{ uri: item.uri }} style={styles.thumbImage} /><View style={styles.thumbMetaRow}><AppText muted>#{index + 1}</AppText>{index === 0 && <View style={styles.thumbCoverBadge}><AppText style={styles.coverBadgeText}>الغلاف</AppText></View>}</View><View style={styles.mediaActionRow}><Pressable onPress={() => openItemPhotoComposer(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>تهيئة</AppText></Pressable><Pressable onPress={() => removeAssetAt(index)} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></Pressable>; }} /><View style={styles.actions}><AppButton label='التقط صورة' onPress={openItemPhotoStudio} disabled={submitting || assets.length >= 4} /><AppButton label='اختر من المعرض' variant='neutral' onPress={pickFromGallery} disabled={submitting || assets.length >= 4} /></View></View>}<AppText muted>اختر من 1 إلى 4 صور.</AppText></View></AppCard>}
-    {step === 0 && <AppCard style={styles.studioCard}><View style={styles.gap}><View style={styles.sectionHeaderRow}><View style={styles.sectionHeaderIcon}><Ionicons name='videocam-outline' size={16} color={colors.primary} /></View><View style={styles.sectionHeader}><AppText weight='bold'>فيديو قصير للحاجة</AppText><AppText muted>اختياري — لمحة سريعة تساعد الناس يشوفوا العنصر بشكل أصدق.</AppText></View></View>{videoTeaser ? <View style={styles.videoTeaserCard}><View style={styles.videoIcon}><Ionicons name='play' size={20} color={colors.surface} /></View><View style={styles.videoTeaserMeta}><AppText weight='semibold'>تم اختيار فيديو اللمحة</AppText><AppText muted>{videoTeaserDurationLabel ? `المدة: ${videoTeaserDurationLabel}` : 'الفيديو جاهز، ولم تصلنا مدة الملف.'}</AppText>{videoTeaser.fileName ? <AppText muted numberOfLines={1}>{videoTeaser.fileName}</AppText> : null}</View><View style={styles.videoActions}><Pressable onPress={pickVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>تغيير</AppText></Pressable><Pressable onPress={removeVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف</AppText></Pressable></View></View> : <View style={styles.emptyMedia}><AppText weight='bold'>أضف لمحة فيديو اختيارية</AppText><AppText muted>فيديو واحد حتى 15 ثانية. الصور تظل مطلوبة كمعرض أساسي.</AppText><View style={styles.actions}><AppButton label='اختر فيديو' variant='neutral' onPress={pickVideoTeaser} disabled={submitting} /></View></View>}<AppText muted>لا نحفظ فيديو اللمحة ضمن المسودات حالياً؛ أضفه عند النشر النهائي.</AppText></View></AppCard>}
+    {step === 0 && <AppCard style={styles.studioCard}><View style={styles.gap}><View style={styles.sectionHeaderRow}><View style={styles.sectionHeaderIcon}><Ionicons name='videocam-outline' size={16} color={colors.primary} /></View><View style={styles.sectionHeader}><AppText weight='bold'>لمحة فيديو</AppText><AppText muted>اختياري — فيديو قصير يساعد الناس تفهم حالة الحاجة بسرعة.</AppText></View></View><View style={styles.videoHints}><AppText muted>• حد أقصى 15 ثانية</AppText><AppText muted>• اختار فيديو واضح وخفيف</AppText><AppText muted>• الفيديو اختياري وممكن تنشر من غيره</AppText></View>{videoTeaser ? <View style={styles.videoTeaserCard}><View style={styles.videoIcon}><Ionicons name='checkmark' size={20} color={colors.surface} /></View><View style={styles.videoTeaserMeta}><AppText weight='semibold'>فيديو اللمحة جاهز</AppText>{videoTeaserDurationLabel ? <AppText muted>المدة: {videoTeaserDurationLabel}</AppText> : null}{videoTeaserSizeLabel ? <AppText muted>الحجم: {videoTeaserSizeLabel}</AppText> : null}<AppText muted>هنرفعه مع صور العنصر عند النشر.</AppText></View><View style={styles.videoActions}><Pressable onPress={removeVideoTeaser} disabled={submitting} style={[styles.mediaPill, submitting && styles.pillDisabled]}><AppText muted>حذف الفيديو</AppText></Pressable></View></View> : <View style={styles.emptyMedia}><AppText weight='bold'>مفيش فيديو مضاف</AppText><AppText muted>ممكن تضيف لمحة قصيرة، أو تكمل بصور فقط.</AppText></View>}<View style={styles.actions}><AppButton label={videoTeaser ? 'تغيير الفيديو' : 'اختار فيديو'} variant='neutral' onPress={pickVideoTeaser} disabled={submitting} /></View><AppText muted>لا نحفظ فيديو اللمحة ضمن المسودات حالياً؛ أضفه عند النشر النهائي.</AppText></View></AppCard>}
     {step === 1 && <AppCard style={styles.studioCard}><View style={styles.gap}><View style={styles.sectionHeaderRow}><View style={styles.sectionHeaderIcon}><Ionicons name='cube-outline' size={16} color={colors.primary} /></View><View style={styles.sectionHeader}><AppText weight='bold'>تعريف الحاجة</AppText><AppText muted>أضف الأساسيات التي تساعد على الفهم السريع.</AppText></View></View><AppInput value={title} onChangeText={setTitle} placeholder='عنوان العنصر *' />
       <View style={styles.rowWrap}>{categories.map((c) => <Pressable key={c.id} onPress={() => setCategoryId(c.id)} style={[styles.chip, categoryId === c.id && styles.chipSelected]}><AppText>{c.name_ar}</AppText></Pressable>)}</View>
       <AppInput value={city} onChangeText={(value) => { setCity(value); if (locationLatitude !== null || locationLongitude !== null) { setLocationLatitude(null); setLocationLongitude(null); } }} placeholder='المدينة (اختياري)' /><AppInput value={area} onChangeText={(value) => { setArea(value); if (locationLatitude !== null || locationLongitude !== null) { setLocationLatitude(null); setLocationLongitude(null); } }} placeholder='المنطقة (اختياري)' />
@@ -666,6 +682,7 @@ const styles = StyleSheet.create({
   sectionHeader: { gap: 2 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   sectionHeaderIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  videoHints: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.sm, gap: 4, backgroundColor: colors.background },
   emptyMedia: { borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', borderRadius: 14, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.primarySoft },
   coverCard: { position: 'relative', gap: spacing.xs },
   coverPreview: { width: '100%', aspectRatio: 4 / 3, borderRadius: 14, backgroundColor: colors.border },
