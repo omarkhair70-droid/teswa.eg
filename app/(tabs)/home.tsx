@@ -13,12 +13,13 @@ import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
 import { MarketplaceSearchFilters } from '@/components/marketplace/MarketplaceSearchFilters';
+import { LocationRadiusFilter } from '@/components/marketplace/LocationRadiusFilter';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { fetchHomeDashboardSummary, HomeDashboardSummary } from '@/lib/home-dashboard';
-import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
+import { fetchMarketplaceItemsPage, fetchNearbyMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
 import {
   readAnyMarketplaceFirstPageCache,
   readFreshMarketplaceFirstPageCache,
@@ -37,6 +38,7 @@ import {
 } from '@/lib/personal-living-world';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { trackEvent } from '@/lib/analytics';
+import { formatRadiusLabel, requestCurrentDiscoveryLocation } from '@/lib/location-discovery';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -69,6 +71,12 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [nearbyEnabled, setNearbyEnabled] = useState(false);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState<string | null>(null);
+  const [discoveryLocation, setDiscoveryLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [selectedRadiusKm, setSelectedRadiusKm] = useState(5);
+  const radiusOptions = useMemo(() => [3, 5, 10, 25], []);
 
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
@@ -111,6 +119,25 @@ export default function HomeScreen() {
     setLoading(true);
     setError(null);
     setItemsCacheNotice(null);
+
+    if (nearbyEnabled && discoveryLocation) {
+      try {
+        const page = await fetchNearbyMarketplaceItemsPage({
+          latitude: discoveryLocation.latitude,
+          longitude: discoveryLocation.longitude,
+          radiusKm: selectedRadiusKm,
+          offset: 0,
+        });
+        setItems(page.items);
+        setError(null);
+      } catch {
+        setItems([]);
+        setError('تعذر تحميل العناصر القريبة حالياً. جرّب تاني أو اقفل القريب مني.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const filters = {
       query: debouncedSearchQuery.trim() || undefined,
@@ -159,7 +186,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearchQuery, hasActiveFilters, selectedCategory, selectedCity, selectedCondition]);
+  }, [debouncedSearchQuery, discoveryLocation, hasActiveFilters, nearbyEnabled, selectedCategory, selectedCity, selectedCondition, selectedRadiusKm]);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -304,6 +331,36 @@ export default function HomeScreen() {
       }),
     [dashboard, newActiveStoriesCount, newVideoMomentsCount, personalWorldLastSeenAtMs, personalWorldNewItemsCount],
   );
+
+  const handleNearbyToggle = useCallback(async (enabled: boolean) => {
+    if (!enabled) {
+      setNearbyEnabled(false);
+      setNearbyLoading(false);
+      setNearbyError(null);
+      setDiscoveryLocation(null);
+      return;
+    }
+
+    setNearbyLoading(true);
+    setNearbyError(null);
+    const result = await requestCurrentDiscoveryLocation();
+    if (!result.ok) {
+      setNearbyEnabled(false);
+      setDiscoveryLocation(null);
+      setNearbyError(result.message);
+      setNearbyLoading(false);
+      return;
+    }
+
+    setDiscoveryLocation({ latitude: result.latitude, longitude: result.longitude });
+    setNearbyEnabled(true);
+    setNearbyError(null);
+    setNearbyLoading(false);
+  }, []);
+
+  const nearbyFilterNotice = nearbyEnabled
+    ? 'الفلاتر التفصيلية هتشتغل مع القريب منك في تحديث لاحق.'
+    : null;
 
   const nextAction = useMemo(() => {
     if (!dashboard) {
@@ -623,6 +680,31 @@ export default function HomeScreen() {
               </AppCard>
             ) : null}
 
+
+            <LocationRadiusFilter
+              enabled={nearbyEnabled}
+              loading={nearbyLoading}
+              errorMessage={nearbyError}
+              selectedRadiusKm={selectedRadiusKm}
+              radiusOptions={radiusOptions}
+              disabledReason={nearbyFilterNotice}
+              onToggle={handleNearbyToggle}
+              onSelectRadius={setSelectedRadiusKm}
+              onRetry={() => handleNearbyToggle(true)}
+            />
+
+            {nearbyEnabled ? (
+              <AppCard>
+                <View style={styles.filteredSummaryRow}>
+                  <View style={styles.sectionHeader}>
+                    <AppText weight="bold">نتائج قريبة منك</AppText>
+                    <AppText muted>{`النطاق: ${formatRadiusLabel(selectedRadiusKm)}`}</AppText>
+                  </View>
+                  <AppButton label="عرض كل العناصر" variant="neutral" onPress={() => void handleNearbyToggle(false)} />
+                </View>
+              </AppCard>
+            ) : null}
+
             <MarketplaceSearchFilters
               query={searchQuery}
               selectedCategory={selectedCategory}
@@ -631,11 +713,13 @@ export default function HomeScreen() {
               categoryOptions={filterOptions.categories}
               conditionOptions={filterOptions.conditions}
               cityOptions={filterOptions.cities}
-              loading={loading}
+              loading={loading || nearbyEnabled}
               onQueryChange={setSearchQuery}
               onSelectCategory={setSelectedCategory}
               onSelectCondition={setSelectedCondition}
               onSelectCity={setSelectedCity}
+              disabled={nearbyEnabled}
+              disabledReason={nearbyFilterNotice}
               onClear={() => {
                 setSearchQuery('');
                 setDebouncedSearchQuery('');
@@ -645,7 +729,7 @@ export default function HomeScreen() {
               }}
             />
 
-            {hasActiveFilters ? (
+            {hasActiveFilters && !nearbyEnabled ? (
               <AppCard>
                 <View style={styles.filteredSummaryRow}>
                   <View style={styles.sectionHeader}>
@@ -679,6 +763,8 @@ export default function HomeScreen() {
               <EmptyState title="حدث خطأ" description={error} />
               <AppButton label="إعادة المحاولة" onPress={loadItems} />
             </View>
+          ) : nearbyEnabled ? (
+            <EmptyState title="مفيش حاجات قريبة دلوقتي" description="جرّب توسّع النطاق أو ارجع لأحدث العناصر." />
           ) : hasActiveFilters ? (
             <EmptyState title="مفيش نتائج مطابقة" description="جرّب تغير كلمة البحث أو تمسح بعض الفلاتر." />
           ) : (
