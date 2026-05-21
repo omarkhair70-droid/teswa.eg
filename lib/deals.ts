@@ -71,7 +71,7 @@ export type DealRoomResult =
 
 async function notify(payload: Record<string, unknown>) {
   const { error } = await supabase.rpc('create_notification', payload);
-  if (error && __DEV__) console.log('[deals] create_notification failed', error);
+  if (error) console.warn('[deals] create_notification failed', { code: error.code, message: error.message });
 }
 
 async function getDealParticipantProfiles(participantIds: string[]) {
@@ -225,7 +225,6 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     target_offer_id: null,
     target_item_id: null,
   });
-
   return { ok: true as const, message: toMessageRow(inserted) };
 }
 
@@ -404,6 +403,5 @@ export async function sendDealVoiceMessageFromMobile(input: {
     target_offer_id: null,
     target_item_id: null,
   });
-
   return { ok: true as const, message: toMessageRow(inserted) };
 }

@@ -102,10 +102,9 @@ async function notifyContextualMessageFromMobile(input: {
     p_kind: input.kind,
   });
 
-  if (error && __DEV__) {
-    console.warn('[contextual-conversations] create contextual notification failed', error);
-  }
+  if (error) console.warn('[contextual-conversations] create contextual notification failed', { code: error.code, message: error.message, conversationId, messageId });
 }
+
 export async function markContextualThreadReadFromMobile(conversationId: string): Promise<void> {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) return;
@@ -378,7 +377,6 @@ export async function sendContextualMessageFromMobile(input: {
     messageId: data.id,
     kind: 'thread_message',
   });
-
   return {
     ok: true,
     message: {
