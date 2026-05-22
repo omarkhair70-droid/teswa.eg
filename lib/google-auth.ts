@@ -118,5 +118,9 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
     return { error: nativeResult.error ?? GOOGLE_AUTH_ERROR };
   }
 
+  if (__DEV__) {
+    console.log('[GoogleSignIn]', { flow: 'browser_fallback', reason: nativeResult.reason });
+  }
+
   return signInWithGoogleBrowserOAuth();
 }
