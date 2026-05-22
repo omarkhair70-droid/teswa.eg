@@ -10,6 +10,11 @@ where c.status = 'requested'
   )
   and exists (
     select 1
+    from public.user_follows f
+    where (f.follower_id = c.participant_a and f.followed_id = c.participant_b)
+       or (f.follower_id = c.participant_b and f.followed_id = c.participant_a)
+    union all
+    select 1
     from public.swap_deals d
     where d.status in ('coordinating', 'completed_pending_confirmation', 'completed')
       and ((d.requester_id = c.participant_a and d.offerer_id = c.participant_b)
@@ -53,6 +58,7 @@ begin
     if v_row.status = 'requested' then
       v_open_allowed :=
         exists (select 1 from public.user_follows f where f.follower_id = p_target_user_id and f.followed_id = v_user_id)
+        or exists (select 1 from public.user_follows f where f.follower_id = v_user_id and f.followed_id = p_target_user_id)
         or exists (
           select 1
           from public.user_follows f1
@@ -78,6 +84,7 @@ begin
 
   v_open_allowed :=
     exists (select 1 from public.user_follows f where f.follower_id = p_target_user_id and f.followed_id = v_user_id)
+    or exists (select 1 from public.user_follows f where f.follower_id = v_user_id and f.followed_id = p_target_user_id)
     or exists (
       select 1
       from public.user_follows f1
