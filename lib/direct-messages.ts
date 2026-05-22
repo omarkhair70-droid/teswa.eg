@@ -31,7 +31,11 @@ export async function sendDirectMessage(conversationId: string, body: string): P
   const trimmed = body.trim();
   if (!trimmed) return { ok: false, message: 'اكتب رسالة الأول.', messageId: null, conversationId: conversationId ?? null, createdAt: null };
   const { data, error } = await supabase.rpc('send_direct_message', { p_conversation_id: conversationId, p_body: trimmed });
-  if (error) return { ok: false, message: 'تعذر إرسال الرسالة حالياً.', messageId: null, conversationId: null, createdAt: null };
+  if (error) {
+    if (__DEV__) console.warn('[direct] send_direct_message rpc failed', { code: error.code, message: error.message });
+    const friendly = error.code === '42501' ? 'غير مسموح بإرسال الرسائل في هذه المحادثة حالياً.' : 'تعذر إرسال الرسالة حالياً. حاول تاني بعد لحظات.';
+    return { ok: false, message: friendly, messageId: null, conversationId: null, createdAt: null };
+  }
   const row = Array.isArray(data) ? data[0] : null;
   return { ok: !!row?.ok, message: row?.message ?? 'تعذر إرسال الرسالة حالياً.', messageId: row?.message_id ?? null, conversationId: row?.conversation_id ?? null, createdAt: row?.created_at ?? null };
 }
