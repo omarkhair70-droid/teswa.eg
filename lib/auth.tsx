@@ -308,8 +308,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     bootstrap();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       startupTrace.mark('auth_state_change_start', { hasSession: Boolean(nextSession?.user) });
+      if (__DEV__) {
+        const nextUserId = nextSession?.user?.id ?? null;
+        console.log('[Auth] onAuthStateChange', {
+          event,
+          hasSession: Boolean(nextSession),
+          hasUser: Boolean(nextUserId),
+          sameUser: Boolean(nextUserId && lastAuthenticatedUserIdRef.current && nextUserId === lastAuthenticatedUserIdRef.current),
+        });
+      }
       try {
         setBootstrapError(null);
         setSession(nextSession);
