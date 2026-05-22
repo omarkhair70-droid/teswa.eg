@@ -6,9 +6,17 @@ export type NativeGoogleSignInResult = {
 export type GoogleNativeDiagnosticsEvent = {
   flow: 'native_step';
   step: string;
+  reason?: string;
+  resultType?: string;
+  configured?: boolean;
+  hasError?: boolean;
+  code?: string;
+  platform?: string;
 };
 
-export function setGoogleNativeDiagnosticsListener() {
+export function setGoogleNativeDiagnosticsListener(
+  _listener: ((event: GoogleNativeDiagnosticsEvent) => void) | null
+) {
   return;
 }
 
