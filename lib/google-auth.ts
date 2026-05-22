@@ -154,6 +154,12 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
     return signInWithGoogleBrowserOAuth();
   }
 
+  const nativeGoogleEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED === 'true';
+  if (!nativeGoogleEnabled) {
+    console.log('[GoogleSignIn]', { flow: 'browser_default', reason: 'native_disabled' });
+    return signInWithGoogleBrowserOAuth();
+  }
+
   const nativeResult = await signInWithGoogleNative();
   if (!nativeResult.fallbackToBrowser) {
     return { error: nativeResult.error ?? GOOGLE_AUTH_ERROR };
