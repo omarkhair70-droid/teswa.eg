@@ -9,6 +9,7 @@ export type DirectConversationSummary = {
 export type DirectMessage = { id: string; senderId: string; body: string; createdAt: string; readAt: string | null };
 export type StartDirectConversationResult = { ok: boolean; conversationId: string | null; status: DirectConversationStatus | null; requiresRequest: boolean; message: string };
 export type SendDirectMessageResult = { ok: boolean; message: string; messageId: string | null; conversationId: string | null; createdAt: string | null };
+export type DirectRequestActionResult = { ok: boolean; message: string };
 
 export async function startOrGetDirectConversation(targetUserId: string): Promise<StartDirectConversationResult> {
   const { data, error } = await supabase.rpc('start_or_get_direct_conversation', { p_target_user_id: targetUserId });
@@ -23,14 +24,24 @@ export async function fetchMyDirectConversations(): Promise<DirectConversationSu
 }
 export async function fetchDirectConversationMessages(conversationId: string): Promise<DirectMessage[]> {
   const { data, error } = await supabase.rpc('get_direct_conversation_messages', { p_conversation_id: conversationId });
-  if (error) return [];
+  if (error) { if (__DEV__) console.warn('[direct] failed to fetch conversation messages'); return []; }
   return (data ?? []).map((r: any) => ({ id: r.id, senderId: r.sender_id, body: r.body, createdAt: r.created_at, readAt: r.read_at ?? null }));
 }
 export async function sendDirectMessage(conversationId: string, body: string): Promise<SendDirectMessageResult> {
-  const { data, error } = await supabase.rpc('send_direct_message', { p_conversation_id: conversationId, p_body: body });
+  const trimmed = body.trim();
+  if (!trimmed) return { ok: false, message: 'اكتب رسالة الأول.', messageId: null, conversationId: conversationId ?? null, createdAt: null };
+  const { data, error } = await supabase.rpc('send_direct_message', { p_conversation_id: conversationId, p_body: trimmed });
   if (error) return { ok: false, message: 'تعذر إرسال الرسالة حالياً.', messageId: null, conversationId: null, createdAt: null };
   const row = Array.isArray(data) ? data[0] : null;
   return { ok: !!row?.ok, message: row?.message ?? 'تعذر إرسال الرسالة حالياً.', messageId: row?.message_id ?? null, conversationId: row?.conversation_id ?? null, createdAt: row?.created_at ?? null };
 }
-export async function acceptDirectMessageRequest(conversationId: string) { return supabase.rpc('accept_direct_message_request', { p_conversation_id: conversationId }); }
-export async function ignoreDirectMessageRequest(conversationId: string) { return supabase.rpc('ignore_direct_message_request', { p_conversation_id: conversationId }); }
+
+async function runRequestAction(rpc: 'accept_direct_message_request' | 'ignore_direct_message_request', conversationId: string): Promise<DirectRequestActionResult> {
+  const { data, error } = await supabase.rpc(rpc, { p_conversation_id: conversationId });
+  if (error) return { ok: false, message: 'تعذر تنفيذ الطلب حالياً.' };
+  const row = Array.isArray(data) ? data[0] : null;
+  return { ok: !!row?.ok, message: row?.message ?? 'تم تحديث حالة الطلب.' };
+}
+
+export async function acceptDirectMessageRequest(conversationId: string): Promise<DirectRequestActionResult> { return runRequestAction('accept_direct_message_request', conversationId); }
+export async function ignoreDirectMessageRequest(conversationId: string): Promise<DirectRequestActionResult> { return runRequestAction('ignore_direct_message_request', conversationId); }

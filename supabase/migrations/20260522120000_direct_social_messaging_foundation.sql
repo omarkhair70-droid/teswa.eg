@@ -109,8 +109,13 @@ begin
     return query select false,'لا يمكن إرسال الرسائل حالياً.',null::uuid,null::uuid,null::timestamptz; return;
   end if;
   if v_convo.status='blocked' or v_convo.status='ignored' then return query select false,'المحادثة غير متاحة حالياً.',null::uuid,null::uuid,null::timestamptz; return; end if;
+  if v_convo.status='requested' and v_user_id = v_convo.requested_by then
+    if exists (select 1 from public.direct_messages dm where dm.conversation_id=v_convo.id and dm.sender_id=v_user_id) then
+      return query select false,'طلب المراسلة اتبعت. تقدر تكملوا الكلام بعد القبول.',null::uuid,null::uuid,null::timestamptz; return;
+    end if;
+  end if;
   if v_convo.status='requested' and v_user_id <> v_convo.requested_by then
-    update public.direct_conversations set status='accepted', accepted_at=coalesce(accepted_at,now()), updated_at=now() where id=v_convo.id returning * into v_convo;
+    return query select false,'اقبل طلب المراسلة الأول.',null::uuid,null::uuid,null::timestamptz; return;
   end if;
   insert into public.direct_messages (conversation_id,sender_id,body) values (v_convo.id,v_user_id,v_text) returning id,created_at into v_mid,v_created;
   update public.direct_conversations set last_message_at=v_created, updated_at=now() where id=v_convo.id;
