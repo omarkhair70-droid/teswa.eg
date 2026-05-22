@@ -22,9 +22,11 @@ export default function PolicyAcceptanceScreen() {
 
   const submit = async () => {
     if (!user || !canSubmit) return;
+    const initialUserId = user.id;
+    if (__DEV__) console.log('[Policy] submit start', { hasUser: Boolean(initialUserId) });
     setSubmitting(true);
     setError('');
-    const result = await recordRequiredPolicyAcceptances(user.id);
+    const result = await recordRequiredPolicyAcceptances(initialUserId);
     if (!result.ok) {
       setSubmitting(false);
       setError(result.message);
@@ -32,7 +34,15 @@ export default function PolicyAcceptanceScreen() {
     }
 
     await refreshPolicyAcceptance();
-    const state = await fetchRequiredPolicyAcceptanceState(user.id);
+    if (__DEV__) console.log('[Policy] refreshPolicyAcceptance done', { sameUserIdAfterRefresh: user.id === initialUserId });
+    const state = await fetchRequiredPolicyAcceptanceState(initialUserId);
+    if (__DEV__) {
+      console.log('[Policy] post-write fetch done', {
+        fetchOk: state.ok,
+        requiredPoliciesAccepted: state.requiredPoliciesAccepted,
+        missingCount: state.missingKeys.length,
+      });
+    }
 
     if (!state.ok || !state.requiredPoliciesAccepted) {
       setSubmitting(false);

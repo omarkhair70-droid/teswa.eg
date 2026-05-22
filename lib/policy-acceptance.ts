@@ -83,11 +83,7 @@ export async function fetchRequiredPolicyAcceptanceState(
         .from('user_policy_acceptances')
         .select('user_id, policy_key, policy_version, accepted_at')
         .eq('user_id', trimmedUserId)
-        .or(
-          REQUIRED_POLICIES
-            .map((policy) => `and(policy_key.eq.${policy.key},policy_version.eq.${policy.version})`)
-            .join(','),
-        ),
+        .in('policy_key', REQUIRED_POLICIES.map((policy) => policy.key)),
       POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS,
       POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE,
     );
@@ -119,7 +115,11 @@ export async function fetchRequiredPolicyAcceptanceState(
   }
 
   data?.forEach((row) => {
-    if (row.policy_key in acceptancesByKey) acceptancesByKey[row.policy_key] = true;
+    if (!(row.policy_key in acceptancesByKey)) return;
+    const requiredPolicy = REQUIRED_POLICIES.find((policy) => policy.key === row.policy_key);
+    if (!requiredPolicy) return;
+    if (row.policy_version !== requiredPolicy.version) return;
+    acceptancesByKey[row.policy_key] = true;
   });
 
   const missingKeys = REQUIRED_POLICIES
