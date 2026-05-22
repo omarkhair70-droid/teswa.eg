@@ -38,6 +38,7 @@ Teswa Mobile is live/post-launch on Google Play as a broad Arabic-first native s
 - Multi-step add-item flow remains intact (capture/import/compose/publish).
 
 ### 4. Offers, Deals, Messages & Emotional Utility
+- Recent copy pass keeps inbox/direct/profile surfaces warm and social while preserving the simplified UI and backend behavior.
 - Offer/deal lifecycle flows and decision support remain intact.
 - Warmer communication hub across deal messaging contexts.
 - Deal chat and voice-enabled messaging behavior.

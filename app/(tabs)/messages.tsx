@@ -77,7 +77,7 @@ export default function Screen() {
   return (
     <AppScreen scrollable backgroundVariant="soft">
       <View style={styles.group}>
-        <View style={styles.hero}><AppText weight="bold" style={styles.title}>الرسائل</AppText><AppText muted>كل محادثاتك في مكان واحد، والعروض بشكل منفصل.</AppText></View>
+        <View style={styles.hero}><AppText weight="bold" style={styles.title}>الرسائل</AppText><AppText muted>هنا بتكمل الحكايات بين الناس، من عرض بسيط لصفقة بتتحرك بهدوء.</AppText></View>
         <View style={styles.segments}>
           <Pressable style={[styles.segment, selected === 'conversations' && styles.segmentActive]} onPress={() => setSelected('conversations')}><AppText weight="semibold" style={selected === 'conversations' ? styles.segmentActiveText : undefined}>المحادثات</AppText></Pressable>
           <Pressable style={[styles.segment, selected === 'offers' && styles.segmentActive]} onPress={() => setSelected('offers')}><AppText weight="semibold" style={selected === 'offers' ? styles.segmentActiveText : undefined}>العروض</AppText></Pressable>
@@ -88,11 +88,11 @@ export default function Screen() {
             <Pressable key={row.id} onPress={() => router.push(row.route)}>
               <AppCard style={styles.card}><View style={styles.row}><View style={styles.avatarWrap}>{row.avatarUrl ? <Image source={{ uri: row.avatarUrl }} style={styles.avatar} /> : <Ionicons name="person" size={16} color={colors.textMuted} />}</View><View style={styles.main}><AppText weight="semibold" numberOfLines={1}>{row.title}</AppText><AppText muted numberOfLines={1}>{row.preview}</AppText>{row.swapContext ? <AppText muted numberOfLines={1} style={styles.swapContext}>{row.swapContext}</AppText> : null}<View style={styles.kind}><AppText muted>{typeLabel(row.type)}</AppText></View></View><View style={styles.meta}>{row.at ? <AppText muted>{new Date(row.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText> : null}{row.unreadCount > 0 ? <View style={styles.badge}><AppText weight="semibold" style={styles.badgeText}>{row.unreadCount}</AppText></View> : null}{row.requestBadge ? <AppText muted>طلب</AppText> : null}</View></View></AppCard>
             </Pressable>
-          )) : <AppCard style={styles.emptyCard}><EmptyState title="مفيش محادثات بعد" description="ابدأ برسالة من أي بروفايل، أو كمل من صفقة مفتوحة." /></AppCard>
+          )) : <AppCard style={styles.emptyCard}><EmptyState title="لسه مفيش محادثات" description="ابدأ من بروفايل أو صفقة، وأول رسالة تفتح باب التبادل." /></AppCard>
         ) : (
           <View style={styles.group}>
-            <View style={styles.group}><AppText weight="semibold">عروض تحتاج ردك</AppText>{incoming.length ? incoming.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض وارد" />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد عروض واردة" description="أي عرض جديد هيظهر هنا." /></AppCard>}</View>
-            <View style={styles.group}><AppText weight="semibold">العروض التي أرسلتها</AppText>{sent.length ? sent.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض مرسل" />) : <AppCard style={styles.emptyCard}><EmptyState title="لم ترسل عروضًا بعد" description="أرسل عرض من صفحة أي عنصر." /></AppCard>}</View>
+            <View style={styles.group}><AppText weight="semibold">فرص تبادل مستنية ردك</AppText>{incoming.length ? incoming.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض وارد" />) : <AppCard style={styles.emptyCard}><EmptyState title="لسه مفيش عروض واردة" description="أول فرصة تبادل جديدة هتظهر هنا." /></AppCard>}</View>
+            <View style={styles.group}><AppText weight="semibold">العروض اللي بدأت بيها التبادل</AppText>{sent.length ? sent.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض مرسل" />) : <AppCard style={styles.emptyCard}><EmptyState title="لسه ما بدأتش عروض" description="ابدأ بعرض بسيط من صفحة أي عنصر، ويمكن منها تبدأ صفقة حلوة." /></AppCard>}</View>
           </View>
         )}
       </View>
