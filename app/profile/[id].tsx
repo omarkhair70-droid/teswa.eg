@@ -359,7 +359,7 @@ export default function PublicProfileScreen() {
       {!isOwnProfile ? (
         <AppCard>
           <View style={styles.group}>
-            <AppText weight="semibold">العلاقة</AppText>
+            <AppText weight="semibold">تواصل بثقة</AppText>
             <View style={{ flexDirection: 'row-reverse', gap: spacing.sm }}>
               <Pressable onPress={() => router.push(`/profile-followers/${profile.id}`)}><AppText>المتابعون: {followState.followerCount}</AppText></Pressable>
               <Pressable onPress={() => router.push(`/profile-following/${profile.id}`)}><AppText>يتابع: {followState.followingCount}</AppText></Pressable>
@@ -377,8 +377,8 @@ export default function PublicProfileScreen() {
       {!isOwnProfile ? (
         <AppCard>
           <View style={styles.group}>
-            <AppText weight="semibold">الأمان</AppText>
-            <AppText muted>لو احتجت، تقدر تبلغ عن المستخدم أو تتحكم في الحظر.</AppText>
+            <AppText weight="semibold">الأمان والراحة</AppText>
+            <AppText muted>لو في حاجة مش مريحة، تقدر تبلغ أو تتحكم في الحظر.</AppText>
             <AppButton label="الإبلاغ عن المستخدم" variant="neutral" onPress={() => router.push(`/report/user/${profile.id}`)} />
             <AppButton label={blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم')} onPress={onToggleBlock} disabled={blockBusy} variant="neutral" />
             {blockError ? <AppText muted>{blockError}</AppText> : null}
