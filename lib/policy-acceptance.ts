@@ -1,10 +1,12 @@
 import { supabase } from '@/lib/supabase/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const CURRENT_TERMS_POLICY_VERSION = '2026-05';
 export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-05';
 
 const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS = 12_000;
 const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE = 'استغرق التحقق من موافقات السياسات وقتًا أطول من المتوقع. حاول مرة ثانية.';
+const POLICY_CACHE_PREFIX = 'teswa:policy-acceptance:v1';
 
 const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -23,6 +25,11 @@ export const REQUIRED_POLICIES = [
   { key: 'terms_of_use', version: CURRENT_TERMS_POLICY_VERSION },
   { key: 'community_guidelines', version: CURRENT_COMMUNITY_GUIDELINES_VERSION },
 ] as const;
+const policyCacheKey = (userId: string, fingerprint: string) => `${POLICY_CACHE_PREFIX}:${userId}:${fingerprint}`;
+const currentPolicyFingerprint = () => REQUIRED_POLICIES.map((p) => `${p.key}:${p.version}`).join('|');
+const policyLog = (event: string, data?: Record<string, unknown>) => {
+  console.log('[PolicyConsent]', event, data ?? {});
+};
 
 export type RequiredPolicyKey = typeof REQUIRED_POLICIES[number]['key'];
 
@@ -62,7 +69,13 @@ export async function fetchRequiredPolicyAcceptanceState(
   userId: string,
 ): Promise<RequiredPolicyAcceptanceState> {
   const trimmedUserId = userId.trim();
+  const fingerprint = currentPolicyFingerprint();
   const acceptancesByKey = emptyAcceptanceMap();
+  policyLog('check_start', {
+    hasAuthUser: Boolean(trimmedUserId),
+    hasUserId: Boolean(trimmedUserId),
+    policyVersionFingerprint: fingerprint,
+  });
 
   if (!trimmedUserId) {
     return {
@@ -77,6 +90,17 @@ export async function fetchRequiredPolicyAcceptanceState(
   let data: PolicyAcceptanceRow[] | null = null;
   let error: { message?: string } | null = null;
 
+  let localCacheAccepted = false;
+  try {
+    const localRaw = await AsyncStorage.getItem(policyCacheKey(trimmedUserId, fingerprint));
+    localCacheAccepted = localRaw === '1';
+    policyLog('local_cache', { localCacheAccepted });
+  } catch {
+    policyLog('local_cache', { localCacheAccepted: false });
+  }
+
+  const fetchStart = Date.now();
+  policyLog('server_fetch_start', { hasUserId: true });
   try {
     const result = await withTimeout<{ data: PolicyAcceptanceRow[] | null; error: { message?: string } | null }>(
       supabase
@@ -91,7 +115,17 @@ export async function fetchRequiredPolicyAcceptanceState(
     data = (result.data as PolicyAcceptanceRow[] | null) ?? null;
     error = result.error;
   } catch (requestError) {
+    policyLog('server_fetch_end', { ok: false, dtMs: Date.now() - fetchStart });
     const timeoutMessage = requestError instanceof Error ? requestError.message : POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE;
+    if (localCacheAccepted) {
+      return {
+        ok: true,
+        requiredPoliciesAccepted: true,
+        acceptancesByKey: { terms_of_use: true, community_guidelines: true },
+        missingKeys: [],
+        message: 'تم اعتماد الموافقة المحلية مؤقتًا لحين إعادة التحقق من الخادم.',
+      };
+    }
     return {
       ok: false,
       requiredPoliciesAccepted: false,
@@ -104,7 +138,17 @@ export async function fetchRequiredPolicyAcceptanceState(
 
 
   if (error) {
+    policyLog('server_fetch_end', { ok: false, dtMs: Date.now() - fetchStart });
     if (__DEV__) console.log('[Policy] fetch acceptance failed', { userId: trimmedUserId, message: error.message });
+    if (localCacheAccepted) {
+      return {
+        ok: true,
+        requiredPoliciesAccepted: true,
+        acceptancesByKey: { terms_of_use: true, community_guidelines: true },
+        missingKeys: [],
+        message: 'تم اعتماد الموافقة المحلية مؤقتًا لحين إعادة التحقق من الخادم.',
+      };
+    }
     return {
       ok: false,
       requiredPoliciesAccepted: false,
@@ -113,6 +157,7 @@ export async function fetchRequiredPolicyAcceptanceState(
       message: 'تعذر التحقق من موافقات السياسات حالياً. حاول مرة ثانية.',
     };
   }
+  policyLog('server_fetch_end', { ok: true, dtMs: Date.now() - fetchStart, rowCount: data?.length ?? 0 });
 
   data?.forEach((row) => {
     if (!(row.policy_key in acceptancesByKey)) return;
@@ -127,6 +172,22 @@ export async function fetchRequiredPolicyAcceptanceState(
     .filter((key) => !acceptancesByKey[key]);
 
   const accepted = missingKeys.length === 0;
+  policyLog('server_result', { serverAccepted: accepted, missingKeys, rowCount: data?.length ?? 0 });
+  if (!accepted && (data?.length ?? 0) === 0 && localCacheAccepted) {
+    policyLog('server_empty_but_local_cache_accepted', { localCacheAccepted: true, rowCount: 0 });
+    return {
+      ok: true,
+      requiredPoliciesAccepted: true,
+      acceptancesByKey: { terms_of_use: true, community_guidelines: true },
+      missingKeys: [],
+      message: 'تم اعتماد الموافقة المحلية مؤقتًا لحين إعادة التحقق من الخادم.',
+    };
+  }
+  if (accepted) {
+    try {
+      await AsyncStorage.setItem(policyCacheKey(trimmedUserId, fingerprint), '1');
+    } catch {}
+  }
   return {
     ok: true,
     requiredPoliciesAccepted: accepted,
@@ -144,6 +205,7 @@ export async function recordRequiredPolicyAcceptances(userId: string): Promise<{
   message: string;
 }> {
   const trimmedUserId = userId.trim();
+  const fingerprint = currentPolicyFingerprint();
   if (!trimmedUserId) {
     return { ok: false, message: 'لا يمكن حفظ الموافقات بدون تسجيل الدخول.' };
   }
@@ -154,6 +216,7 @@ export async function recordRequiredPolicyAcceptances(userId: string): Promise<{
     policy_version: policy.version,
   }));
 
+  policyLog('write_start', { hasAuthUser: Boolean(trimmedUserId), hasUserId: Boolean(trimmedUserId), policyVersionFingerprint: fingerprint });
   const { error } = await supabase
     .from('user_policy_acceptances')
     .upsert(payload, {
@@ -162,10 +225,15 @@ export async function recordRequiredPolicyAcceptances(userId: string): Promise<{
     });
 
   if (error) {
+    policyLog('write_end', { ok: false, code: error.code ?? null, message: error.message ?? null });
     if (__DEV__) console.log('[Policy] record acceptance failed', { userId: trimmedUserId, code: error.code, message: error.message, details: error.details });
     if (error.code === '42501') return { ok: false, message: 'ليس لديك صلاحية لحفظ الموافقات حالياً. حاول تسجيل الدخول مرة ثانية.' };
     return { ok: false, message: 'تعذر حفظ موافقات السياسات حالياً. حاول مرة ثانية.' };
   }
+  try {
+    await AsyncStorage.setItem(policyCacheKey(trimmedUserId, fingerprint), '1');
+  } catch {}
+  policyLog('write_end', { ok: true });
 
   return { ok: true, message: 'تم حفظ موافقات السياسات بنجاح.' };
 }

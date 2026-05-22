@@ -18,6 +18,15 @@ import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppL
 import { trackEvent } from '@/lib/analytics';
 import { startupTrace } from '@/lib/startup-trace';
 
+const rootStartedAt = Date.now();
+const startupLog = (event: string, data?: Record<string, unknown>) => {
+  console.log('[StartupTiming]', event, { dtMs: Date.now() - rootStartedAt, ...data });
+};
+const policyRouteLog = (decision: 'show_policy' | 'skip_policy' | 'wait_for_session') => {
+  console.log('[PolicyConsent]', 'route_decision', { decision });
+};
+
+startupLog('js_root_layout_started');
 void SplashScreen.preventAutoHideAsync();
 
 const SPLASH_FAILSAFE_TIMEOUT_MS = 1_200;
@@ -25,6 +34,7 @@ const SPLASH_FAILSAFE_TIMEOUT_MS = 1_200;
 async function hideSplashSafely(_reason: string) {
   try {
     await SplashScreen.hideAsync();
+    startupLog('splash_hidden', { reason: _reason });
   } catch {
     // noop
   }
@@ -216,6 +226,7 @@ function RootNavigator() {
 
   useEffect(() => {
     if (!bootstrapReady) return;
+    startupLog('initial_route_decision_ready', { hasUser: Boolean(user), profileCompleted, requiredPoliciesAccepted });
     void hideSplashSafely('bootstrap_ready');
   }, [bootstrapReady]);
 
@@ -244,6 +255,7 @@ function RootNavigator() {
 
   useEffect(() => {
     if (!bootstrapReady) {
+      policyRouteLog('wait_for_session');
       startupTrace.markRouteGuardWaitingReason('bootstrap_not_ready');
       return;
     }
@@ -296,8 +308,10 @@ function RootNavigator() {
       void SplashScreen.hideAsync();
       return;
     } else if (!requiredPoliciesAccepted) {
+      policyRouteLog('show_policy');
       if (!inPolicyAcceptance) router.replace('/(auth)/policy-acceptance');
     } else if ((inAuth && !inPolicyAcceptance) || atRoot) {
+      policyRouteLog('skip_policy');
       router.replace('/(tabs)/home');
     }
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router, usingCachedAccountGate]);

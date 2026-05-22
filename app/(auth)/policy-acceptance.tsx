@@ -8,7 +8,7 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { fetchRequiredPolicyAcceptanceState, recordRequiredPolicyAcceptances } from '@/lib/policy-acceptance';
+import { recordRequiredPolicyAcceptances } from '@/lib/policy-acceptance';
 
 export default function PolicyAcceptanceScreen() {
   const router = useRouter();
@@ -33,26 +33,10 @@ export default function PolicyAcceptanceScreen() {
       return;
     }
 
-    await refreshPolicyAcceptance();
-    if (__DEV__) console.log('[Policy] refreshPolicyAcceptance done', { sameUserIdAfterRefresh: user.id === initialUserId });
-    const state = await fetchRequiredPolicyAcceptanceState(initialUserId);
-    if (__DEV__) {
-      console.log('[Policy] post-write fetch done', {
-        fetchOk: state.ok,
-        requiredPoliciesAccepted: state.requiredPoliciesAccepted,
-        missingCount: state.missingKeys.length,
-      });
-    }
-
-    if (!state.ok || !state.requiredPoliciesAccepted) {
-      setSubmitting(false);
-      setError(state.message || 'تعذر تأكيد الموافقة على السياسات. حاول مرة ثانية.');
-      return;
-    }
-
     markPolicyAcceptanceConfirmed();
     setSubmitting(false);
     router.replace('/(tabs)/home');
+    void refreshPolicyAcceptance();
   };
 
   return (
