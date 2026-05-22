@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View, Image } from "react-native";
+import { Pressable, StyleSheet, TextInput, View, Image, Modal } from "react-native";
 import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -20,7 +20,6 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { AppText } from "@/components/ui/AppText";
 import { TeswaMomentCard } from "@/components/ui/TeswaMomentCard";
-import { DealChecklist } from "@/components/deals/DealChecklist";
 import { colors } from "@/constants/colors";
 import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
@@ -29,7 +28,6 @@ import {
   createDealVoiceMessageSignedUrl,
   fetchDealRoomById,
   getDealStatusLabel,
-  getDealStatusNextStep,
   markDealThreadReadFromMobile,
   sendDealMessageFromMobile,
   sendDealVoiceMessageFromMobile,
@@ -74,6 +72,7 @@ export default function Screen() {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [blockError, setBlockError] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
   const [completionMoment, setCompletionMoment] = useState<"confirmed_waiting" | "completed" | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "live" | "unavailable"
@@ -655,54 +654,61 @@ export default function Screen() {
     <AppScreen>
       <View style={styles.screen}>
         <View style={styles.chatHeaderWrap}>
-          <Pressable
-            style={styles.chatHeader}
-            onPress={() => router.push(`/profile/${deal.otherParticipant.id}`)}
-          >
-            {deal.otherParticipant.avatarUrl ? (
-              <Image
-                source={{ uri: deal.otherParticipant.avatarUrl }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <AppText weight="bold">
-                  {(
-                    deal.otherParticipant.displayName?.trim()?.[0] ?? "؟"
-                  ).toUpperCase()}
+          <View style={styles.chatHeaderRow}>
+            <Pressable
+              style={styles.chatHeader}
+              onPress={() => router.push(`/profile/${deal.otherParticipant.id}`)}
+            >
+              {deal.otherParticipant.avatarUrl ? (
+                <Image
+                  source={{ uri: deal.otherParticipant.avatarUrl }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <AppText weight="bold">
+                    {(
+                      deal.otherParticipant.displayName?.trim()?.[0] ?? "؟"
+                    ).toUpperCase()}
+                  </AppText>
+                </View>
+              )}
+              <View style={styles.chatIdentity}>
+                <AppText weight="semibold" style={styles.chatName}>
+                  {deal.otherParticipant.displayName ?? "مستخدم"}
+                </AppText>
+                {deal.otherParticipant.username ? (
+                  <AppText muted style={styles.chatUsername}>
+                    @{deal.otherParticipant.username}
+                  </AppText>
+                ) : null}
+                <AppText muted style={styles.chatTrust}>
+                  مقايضات ناجحة: {deal.otherParticipant.successfulSwapsCount ?? 0}{" "}
+                  • معدل الرد:{" "}
+                  {formatResponseRate(deal.otherParticipant.responseRate)}
+                </AppText>
+                <AppText muted style={styles.chatStatusLine}>
+                  {realtimeLabel}
                 </AppText>
               </View>
-            )}
-            <View style={styles.chatIdentity}>
-              <AppText weight="semibold" style={styles.chatName}>
-                {deal.otherParticipant.displayName ?? "مستخدم"}
-              </AppText>
-              {deal.otherParticipant.username ? (
-                <AppText muted style={styles.chatUsername}>
-                  @{deal.otherParticipant.username}
-                </AppText>
-              ) : null}
-              <AppText muted style={styles.chatTrust}>
-                مقايضات ناجحة: {deal.otherParticipant.successfulSwapsCount ?? 0}{" "}
-                • معدل الرد:{" "}
-                {formatResponseRate(deal.otherParticipant.responseRate)}
-              </AppText>
-              <AppText muted style={styles.chatStatusLine}>
-                {getDealStatusLabel(deal.status)} • {realtimeLabel}
-              </AppText>
-            </View>
-          </Pressable>
-          <AppCard>
-            <View style={styles.compactContext}>
-              <AppText weight="semibold">
-                {deal.requestedItem?.title ?? "غير متاح"} ↔{" "}
-                {deal.offeredItem?.title ?? "غير متاح"}
-              </AppText>
-              <AppText muted style={styles.contextHint}>
-                {getDealStatusNextStep(deal.status)}
-              </AppText>
-            </View>
-          </AppCard>
+            </Pressable>
+            <Pressable
+              style={styles.menuTrigger}
+              onPress={() => setMenuVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="فتح إجراءات الصفقة"
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
+            </Pressable>
+          </View>
+          <View style={styles.contextPill}>
+            <AppText weight="semibold" style={styles.contextTitle} numberOfLines={1}>
+              {deal.requestedItem?.title ?? "غير متاح"} ↔ {deal.offeredItem?.title ?? "غير متاح"}
+            </AppText>
+            <AppText muted style={styles.contextHint}>
+              {getDealStatusLabel(deal.status)}
+            </AppText>
+          </View>
         </View>
 
         <KeyboardAwareScrollView
@@ -724,7 +730,7 @@ export default function Screen() {
             <TeswaMomentCard
               eyebrow="الصفقة بدأت"
               title="العرض اتقبل"
-              body="اتفتحت دردشة الصفقة. ابدأوا تنسيق تفاصيل التبديل من هنا."
+              body="اتفتحت دردشة الصفقة. اتفقوا براحتكم."
               icon="chatbubble-ellipses-outline"
               tone="success"
             />
@@ -733,7 +739,7 @@ export default function Screen() {
             <TeswaMomentCard
               eyebrow="تأكيدك اتسجل"
               title="مستنيين الطرف التاني"
-              body="أنت أكدت إن المقايضة تمت. أول ما الطرف الآخر يؤكد، هنقفل الصفقة بنجاح."
+              body="تأكيدك اتسجل. مستنيين الطرف التاني."
               icon="hourglass-outline"
               tone="waiting"
             />
@@ -742,23 +748,13 @@ export default function Screen() {
             <TeswaMomentCard
               eyebrow="لحظة مكتملة"
               title="المقايضة تمت"
-              body="الطرفين أكدوا الإتمام. تقدر الآن تقيّم التجربة."
+              body="المقايضة تمت. تقدر تقيّم التجربة."
               icon="checkmark-circle-outline"
               tone="success"
               primaryActionLabel="قيّم التجربة"
               onPrimaryAction={() => router.push(`/review/deal/${deal.id}`)}
             />
           ) : null}
-          <DealChecklist
-            status={deal.status}
-            iConfirmed={deal.iConfirmed}
-            otherConfirmed={deal.otherConfirmed}
-            canConfirmCompletion={deal.canConfirmCompletion}
-            requestedItemTitle={deal.requestedItem?.title ?? null}
-            offeredItemTitle={deal.offeredItem?.title ?? null}
-            otherParticipantName={deal.otherParticipant?.displayName ?? null}
-            alreadyRated={deal.alreadyRated}
-          />
           <View style={styles.threadSection}>
             <View style={styles.threadTopLine}>
               <AppText weight="semibold">المحادثة</AppText>
@@ -876,69 +872,64 @@ export default function Screen() {
             ) : null}
           </View>
 
-          <View style={styles.actionsWrap}>
-            {["coordinating", "completed_pending_confirmation"].includes(
-              deal.status,
-            ) ? (
-              <AppCard>
-                <View style={styles.compactActionGroup}>
-                  <AppText weight="semibold">تأكيد إتمام المقايضة</AppText>
-                  <AppText muted style={styles.compactStatusRow}>أنت: {deal.iConfirmed ? "✅" : "⏳"} • الطرف التاني: {deal.otherConfirmed ? "✅" : "⏳"}</AppText>
-                  <AppText muted>ما تضغطش تأكيد الإتمام غير بعد ما المقايضة تحصل فعلًا.</AppText>
-                  {deal.canConfirmCompletion ? (
-                    <AppButton
-                      label={
-                        confirming ? "جاري التأكيد..." : "أكد إن المقايضة تمت"
-                      }
-                      onPress={confirmCompletion}
-                      disabled={confirming}
-                    />
-                  ) : null}
-                </View>
-              </AppCard>
-            ) : null}
-            {deal.status === "completed" ? (
-              <AppCard>
-                <View style={styles.group}>
-                  <AppText weight="semibold">المقايضة تمت بنجاح</AppText>
-                  {deal.alreadyRated ? (
-                    <AppText muted>تم تسجيل تقييمك لهذه الصفقة بالفعل.</AppText>
-                  ) : (
-                    <>
-                      <AppText muted>
-                        تقدر تقيّم الطرف التاني بعد إتمام المقايضة.
-                      </AppText>
-                      <AppButton
-                        label="قيّم التجربة"
-                        onPress={() => router.push(`/review/deal/${deal.id}`)}
-                        variant="neutral"
-                      />
-                    </>
-                  )}
-                </View>
-              </AppCard>
-            ) : null}
-            <AppCard>
-              <View style={styles.compactActionGroup}>
-                <AppText weight="semibold">الأمان</AppText>
-                <AppText muted>إبلاغ سريع أو حظر/إلغاء الحظر.</AppText>
-                <View style={styles.safetyRow}><AppButton
-                  label="إبلاغ"
-                  onPress={() => router.push(`/report/deal/${deal.id}`)}
-                  variant="neutral"
-                />
-
-                <AppButton
-                  label={blockBusy ? "جاري التنفيذ..." : (blockedByMe ? "إلغاء الحظر" : "حظر هذا المستخدم")}
-                  onPress={onToggleBlock}
-                  disabled={blockBusy}
-                  variant="neutral"
-                /></View>
-                {blockError ? <AppText muted>{blockError}</AppText> : null}
-              </View>
-            </AppCard>
-          </View>
         </KeyboardAwareScrollView>
+        <Modal
+          visible={menuVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMenuVisible(false)}
+        >
+          <Pressable style={styles.menuBackdrop} onPress={() => setMenuVisible(false)}>
+            <Pressable style={styles.menuSheet} onPress={(event) => event.stopPropagation()}>
+              {["coordinating", "completed_pending_confirmation"].includes(deal.status) ? (
+                <View style={styles.menuSection}>
+                  <AppText weight="semibold">تأكيد إتمام المقايضة</AppText>
+                  <AppText muted style={styles.compactStatusRow}>
+                    {deal.iConfirmed ? "أنت أكدت" : "لسه ما أكدتش"} •{" "}
+                    {deal.otherConfirmed ? "الطرف التاني أكد" : "مستني الطرف التاني"}
+                  </AppText>
+                  <AppButton
+                    label={confirming ? "جاري التأكيد..." : "أكد إن المقايضة تمت"}
+                    onPress={() => {
+                      void confirmCompletion();
+                    }}
+                    disabled={!deal.canConfirmCompletion || confirming}
+                  />
+                </View>
+              ) : null}
+              {deal.status === "completed" && !deal.alreadyRated ? (
+                <AppButton
+                  label="قيّم التجربة"
+                  variant="neutral"
+                  onPress={() => {
+                    setMenuVisible(false);
+                    router.push(`/review/deal/${deal.id}`);
+                  }}
+                />
+              ) : null}
+              <AppButton
+                label="الإبلاغ عن الصفقة"
+                variant="neutral"
+                onPress={() => {
+                  setMenuVisible(false);
+                  router.push(`/report/deal/${deal.id}`);
+                }}
+              />
+              <AppButton
+                label={blockBusy ? "جاري التنفيذ..." : blockedByMe ? "إلغاء الحظر" : "حظر المستخدم"}
+                variant="neutral"
+                disabled={blockBusy}
+                onPress={() => {
+                  void onToggleBlock();
+                }}
+              />
+              <AppText muted style={styles.menuSafetyHint}>
+                لو في حاجة مش مريحة، تقدر تبلغ أو تتحكم في الحظر.
+              </AppText>
+              {blockError ? <AppText muted>{blockError}</AppText> : null}
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {deal.canSendMessage ? (
           <KeyboardStickyView
@@ -1068,7 +1059,27 @@ const styles = StyleSheet.create({
   chatUsername: { fontSize: 12 },
   chatTrust: { fontSize: 12 },
   chatStatusLine: { fontSize: 12 },
-  compactContext: { gap: 4 },
+  chatHeaderRow: { flexDirection: "row", gap: spacing.xs, alignItems: "center" },
+  menuTrigger: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+  },
+  contextPill: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.round,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    gap: 2,
+  },
+  contextTitle: { color: colors.text },
   contextHint: { fontSize: 12 },
   scrollContent: {
     paddingHorizontal: spacing.md,
@@ -1105,7 +1116,6 @@ const styles = StyleSheet.create({
   voiceBubble: { gap: spacing.xs },
   compactActionGroup: { gap: spacing.xs },
   compactStatusRow: { fontSize: 13 },
-  safetyRow: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
   voiceBubbleHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
@@ -1121,7 +1131,22 @@ const styles = StyleSheet.create({
   },
   voiceProgressFill: { height: "100%", backgroundColor: colors.primary },
   voiceErrorText: { fontSize: 11, color: "#B42318" },
-  actionsWrap: { marginTop: spacing.md, gap: spacing.sm },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(16,24,40,0.35)",
+    justifyContent: "flex-end",
+    padding: spacing.md,
+  },
+  menuSheet: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  menuSection: { gap: spacing.xs },
+  menuSafetyHint: { fontSize: 12 },
   composerSticky: { paddingTop: spacing.xs },
   composerShell: {
     backgroundColor: colors.surface,
