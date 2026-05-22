@@ -41,6 +41,7 @@ Teswa Mobile is live/post-launch on Google Play as a broad Arabic-first native s
 - Offer/deal lifecycle flows and decision support remain intact.
 - Warmer communication hub across deal messaging contexts.
 - Deal chat and voice-enabled messaging behavior.
+- Deal chat surface simplified to a cleaner social conversation flow, with completion/report/block actions moved into a lightweight menu (no backend/business-logic changes).
 - Emotional milestone cards for key moments, including offer sent, accepted-deal start, and confirmation/waiting/completed states.
 
 ### 5. Stories & Story Creation
