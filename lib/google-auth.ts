@@ -3,7 +3,7 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
-import { signInWithGoogleNative } from '@/lib/google-native-auth';
+import { logGoogleSignInDiagnostic, signInWithGoogleNative } from '@/lib/google-native-auth';
 import { supabase } from '@/lib/supabase/client';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -118,8 +118,8 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
     return { error: nativeResult.error ?? GOOGLE_AUTH_ERROR };
   }
 
-  if (__DEV__) {
-    console.log('[GoogleSignIn]', { flow: 'browser_fallback', reason: nativeResult.reason });
+  if (nativeResult.reason) {
+    logGoogleSignInDiagnostic('browser_fallback', nativeResult.reason);
   }
 
   return signInWithGoogleBrowserOAuth();
