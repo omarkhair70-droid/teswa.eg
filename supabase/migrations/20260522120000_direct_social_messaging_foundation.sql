@@ -130,8 +130,12 @@ begin
   select * into v_convo from public.direct_conversations where id=p_conversation_id;
   if not found then return query select false,'المحادثة غير موجودة.'; return; end if;
   if v_user_id not in (v_convo.participant_a, v_convo.participant_b) or v_user_id = v_convo.requested_by then return query select false,'غير مسموح.'; return; end if;
+  if v_convo.status <> 'requested' then return query select false,'حالة الطلب غير قابلة للقبول الآن.'; return; end if;
+  if exists (select 1 from public.user_blocks b where (b.blocker_id=v_convo.participant_a and b.blocked_user_id=v_convo.participant_b) or (b.blocker_id=v_convo.participant_b and b.blocked_user_id=v_convo.participant_a)) then
+    return query select false,'لا يمكن تحديث الطلب حالياً.'; return;
+  end if;
   update public.direct_conversations set status='accepted', accepted_at=coalesce(accepted_at,now()), updated_at=now() where id=v_convo.id and status='requested';
-  return query select true,'تم قبول طلب المراسلة.';
+  if found then return query select true,'تم قبول طلب المراسلة.'; else return query select false,'تعذر تحديث حالة الطلب.'; end if;
 end; $$;
 create or replace function public.ignore_direct_message_request(p_conversation_id uuid)
 returns table (ok boolean, message text)
@@ -141,8 +145,12 @@ begin
   select * into v_convo from public.direct_conversations where id=p_conversation_id;
   if not found then return query select false,'المحادثة غير موجودة.'; return; end if;
   if v_user_id not in (v_convo.participant_a, v_convo.participant_b) or v_user_id = v_convo.requested_by then return query select false,'غير مسموح.'; return; end if;
+  if v_convo.status <> 'requested' then return query select false,'حالة الطلب غير قابلة للتجاهل الآن.'; return; end if;
+  if exists (select 1 from public.user_blocks b where (b.blocker_id=v_convo.participant_a and b.blocked_user_id=v_convo.participant_b) or (b.blocker_id=v_convo.participant_b and b.blocked_user_id=v_convo.participant_a)) then
+    return query select false,'لا يمكن تحديث الطلب حالياً.'; return;
+  end if;
   update public.direct_conversations set status='ignored', updated_at=now() where id=v_convo.id and status='requested';
-  return query select true,'تم تجاهل الطلب.';
+  if found then return query select true,'تم تجاهل الطلب.'; else return query select false,'تعذر تحديث حالة الطلب.'; end if;
 end; $$;
 
 create or replace function public.get_my_direct_conversations()
