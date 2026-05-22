@@ -31,7 +31,10 @@ export function UnreadBadgesProvider({ children }: PropsWithChildren) {
       setMessagesUnreadCount(0);
       return;
     }
-    void refreshBadges();
+    const timer = setTimeout(() => {
+      void refreshBadges();
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [refreshBadges, user?.id]);
 
   useEffect(() => {

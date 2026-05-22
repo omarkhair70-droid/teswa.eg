@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { ShareIntentProvider, useShareIntentContext } from '@/lib/share-intent-compat';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,7 +13,7 @@ import { getRouteFromNotificationResponse, syncPushDeviceRegistrationIfPermitted
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
-import { createForegroundMemoryRefreshSubscription } from '@/lib/foreground-memory-refresh';
+import { createForegroundMemoryRefreshSubscription, runForegroundMemoryRefreshIfAllowed } from '@/lib/foreground-memory-refresh';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 import { trackEvent } from '@/lib/analytics';
 import { startupTrace } from '@/lib/startup-trace';
@@ -98,6 +98,8 @@ function ForegroundMemoryRefreshCoordinator() {
 }
 
 const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 11_000;
+const DEFERRED_PUSH_SYNC_DELAY_MS = 7_000;
+const DEFERRED_FOREGROUND_MEMORY_REFRESH_DELAY_MS = 8_000;
 
 function AccountGateLoadingState({
   title,
@@ -159,11 +161,29 @@ function RootNavigator() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!bootstrapReady || loadingProfile || !user || !profileCompleted) return;
-    void syncPushDeviceRegistrationIfPermitted(user.id).then((result) => {
-      if (__DEV__) console.log('[Push] post-login sync result', { userId: user.id, ...result });
-    });
-  }, [bootstrapReady, loadingProfile, profileCompleted, user]);
+    if (!bootstrapReady || !hasSatisfiedAccountGate || !user?.id) return;
+    const userIdAtSchedule = user.id;
+    const timer = setTimeout(() => {
+      if (!user?.id || user.id !== userIdAtSchedule) return;
+      void syncPushDeviceRegistrationIfPermitted(user.id).then((result) => {
+        if (__DEV__) console.log('[Push] deferred post-login sync result', { userId: user.id, ...result });
+      });
+    }, DEFERRED_PUSH_SYNC_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [bootstrapReady, hasSatisfiedAccountGate, user?.id]);
+
+  useEffect(() => {
+    if (!bootstrapReady || !hasSatisfiedAccountGate || !user?.id) return;
+    const userIdAtSchedule = user.id;
+    const timer = setTimeout(() => {
+      if (AppState.currentState !== 'active') return;
+      if (!user?.id || user.id !== userIdAtSchedule) return;
+      void runForegroundMemoryRefreshIfAllowed('manual_bootstrap');
+    }, DEFERRED_FOREGROUND_MEMORY_REFRESH_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [bootstrapReady, hasSatisfiedAccountGate, user?.id]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
