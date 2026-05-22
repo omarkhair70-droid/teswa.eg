@@ -17,14 +17,13 @@ function configureGoogleSignin() {
   if (configured) return;
 
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 
-  if (!webClientId && !androidClientId) {
+  if (!webClientId) {
     return;
   }
 
   GoogleSignin.configure({
-    webClientId: webClientId ?? androidClientId,
+    webClientId,
   });
 
   configured = true;
@@ -46,6 +45,15 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
     await GoogleSignin.signOut().catch(() => undefined);
 
     const userInfo = await GoogleSignin.signIn();
+
+    if (userInfo.type === 'cancelled') {
+      return { error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false };
+    }
+
+    if (userInfo.type !== 'success') {
+      return { error: GOOGLE_NATIVE_GENERIC_ERROR, fallbackToBrowser: false };
+    }
+
     const idToken = userInfo.data?.idToken;
 
     if (!idToken) {
