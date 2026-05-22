@@ -12,6 +12,7 @@ import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase/client';
 
 export default function LoginScreen() {
+  const nativeGoogleTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,13 @@ export default function LoginScreen() {
         </View>
       </AuthExperienceShell>
       <Link href="/(auth)/signup" asChild><Pressable><AppText style={styles.link}>ليس لديك حساب؟ أنشئ حساب</AppText></Pressable></Link>
+      {nativeGoogleTestModeEnabled ? (
+        <Link href="/(auth)/native-google-diagnostics" asChild>
+          <Pressable>
+            <AppText style={styles.testLink}>اختبار Native Google</AppText>
+          </Pressable>
+        </Link>
+      ) : null}
     </AppScreen>
   );
 }
@@ -81,6 +89,7 @@ const styles = StyleSheet.create({
   dividerText: { opacity: 0.7, fontSize: 12 },
   formCard: { gap: spacing.md, borderWidth: 1, borderColor: 'rgba(221,208,197,0.9)', borderRadius: 18, padding: spacing.md, backgroundColor: 'rgba(255,253,248,0.92)' },
   link: { textAlign: 'center', marginTop: spacing.sm },
+  testLink: { textAlign: 'center', marginTop: spacing.xs, opacity: 0.6, fontSize: 12 },
   errorCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(179,38,30,0.25)', backgroundColor: 'rgba(255,240,239,0.9)', padding: spacing.sm },
   successCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(62,124,115,0.3)', backgroundColor: 'rgba(232,247,241,0.9)', padding: spacing.sm },
   error: { color: '#B3261E', textAlign: 'center' },
