@@ -274,7 +274,8 @@ Teswa now includes a safe badge data foundation for future premium gamification/
 
 ## Direct Social Messaging Foundation
 - Direct profile messages added with request gate.
-- Receiver-following-sender or completed-deal relationship can open conversation directly.
+- Relationship gate now treats active/coordinating deal states (`coordinating`, `completed_pending_confirmation`, `completed`) as trusted and opens direct chat as accepted.
+- Messages tab is simplified visually: conversations (direct/deal/story) appear as one social inbox, while offers stay separate.
 - Deal chats and story reply threads remain separate.
 - Writes go through RPCs; no broad direct client table writes.
 - Push notifications for direct messages deferred.

@@ -39,8 +39,8 @@ export default function DirectScreen() {
 
   const composerState = useMemo(() => {
     if (convo?.status === 'ignored') return { disabled: true, note: 'تم تجاهل طلب المراسلة.' };
-    if (isReceiverOnRequest) return { disabled: true, note: 'اقبل طلب المراسلة أولاً.' };
-    if (isRequesterOnRequest && hasRequesterAlreadySent) return { disabled: true, note: 'تقدر تكملوا الكلام بعد ما الطلب يتقبل.' };
+    if (isReceiverOnRequest) return { disabled: true, note: null as string | null };
+    if (isRequesterOnRequest && hasRequesterAlreadySent) return { disabled: true, note: 'هتكملوا الكلام لما الطلب يتقبل.' };
     return { disabled: false, note: null as string | null };
   }, [convo?.status, hasRequesterAlreadySent, isReceiverOnRequest, isRequesterOnRequest]);
 
@@ -59,7 +59,7 @@ export default function DirectScreen() {
       </View>
 
       {isReceiverOnRequest ? <View style={styles.requestBar}><AppText weight="semibold">طلب مراسلة</AppText><View style={styles.requestActions}><Pressable disabled={busy} style={styles.acceptBtn} onPress={async()=>{setBusy(true); const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load(); setBusy(false);}}><AppText weight="semibold" style={styles.btnText}>قبول</AppText></Pressable><Pressable disabled={busy} style={styles.ignoreBtn} onPress={async()=>{setBusy(true); const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load(); setBusy(false);}}><AppText muted>تجاهل</AppText></Pressable></View></View> : null}
-      {isRequesterOnRequest ? <AppText muted style={styles.info}>تم إرسال طلب المراسلة.</AppText> : null}
+      {isRequesterOnRequest ? <AppText muted style={styles.info}>طلب المراسلة اتبعت.</AppText> : null}
       {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
       <KeyboardAwareScrollView bottomOffset={96} contentContainerStyle={styles.messagesWrap}>
