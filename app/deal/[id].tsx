@@ -1036,6 +1036,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   chatHeader: {
+    flex: 1,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
