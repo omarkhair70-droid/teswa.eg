@@ -90,6 +90,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const activePolicyCheckTokenRef = useRef(0);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [usingCachedAccountGate, setUsingCachedAccountGate] = useState(false);
+  const hasLoggedFirstAuthStateEventRef = useRef(false);
 
   const checkProfileForUser = async (userId: string, reason: string, options?: { background?: boolean; suppressErrors?: boolean }) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
@@ -324,7 +325,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      startupLog('on_auth_state_change_first_event', { event, hasSession: Boolean(nextSession) });
+      if (!hasLoggedFirstAuthStateEventRef.current) {
+        hasLoggedFirstAuthStateEventRef.current = true;
+        startupLog('on_auth_state_change_first_event', { event, hasSession: Boolean(nextSession) });
+      }
       startupTrace.mark('auth_state_change_start', { hasSession: Boolean(nextSession?.user) });
       if (__DEV__) {
         const nextUserId = nextSession?.user?.id ?? null;

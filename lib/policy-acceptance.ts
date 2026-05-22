@@ -94,9 +94,9 @@ export async function fetchRequiredPolicyAcceptanceState(
   try {
     const localRaw = await AsyncStorage.getItem(policyCacheKey(trimmedUserId, fingerprint));
     localCacheAccepted = localRaw === '1';
-    policyLog('local_cache', { hit: localCacheAccepted ? 'hit' : 'miss' });
+    policyLog('local_cache', { localCacheAccepted });
   } catch {
-    policyLog('local_cache', { hit: 'miss' });
+    policyLog('local_cache', { localCacheAccepted: false });
   }
 
   const fetchStart = Date.now();
@@ -157,7 +157,7 @@ export async function fetchRequiredPolicyAcceptanceState(
       message: 'تعذر التحقق من موافقات السياسات حالياً. حاول مرة ثانية.',
     };
   }
-  policyLog('server_fetch_end', { ok: true, dtMs: Date.now() - fetchStart });
+  policyLog('server_fetch_end', { ok: true, dtMs: Date.now() - fetchStart, rowCount: data?.length ?? 0 });
 
   data?.forEach((row) => {
     if (!(row.policy_key in acceptancesByKey)) return;
@@ -172,7 +172,17 @@ export async function fetchRequiredPolicyAcceptanceState(
     .filter((key) => !acceptancesByKey[key]);
 
   const accepted = missingKeys.length === 0;
-  policyLog('server_result', { accepted: accepted ? true : false, missingCount: missingKeys.length });
+  policyLog('server_result', { serverAccepted: accepted, missingKeys, rowCount: data?.length ?? 0 });
+  if (!accepted && (data?.length ?? 0) === 0 && localCacheAccepted) {
+    policyLog('server_empty_but_local_cache_accepted', { localCacheAccepted: true, rowCount: 0 });
+    return {
+      ok: true,
+      requiredPoliciesAccepted: true,
+      acceptancesByKey: { terms_of_use: true, community_guidelines: true },
+      missingKeys: [],
+      message: 'تم اعتماد الموافقة المحلية مؤقتًا لحين إعادة التحقق من الخادم.',
+    };
+  }
   if (accepted) {
     try {
       await AsyncStorage.setItem(policyCacheKey(trimmedUserId, fingerprint), '1');
