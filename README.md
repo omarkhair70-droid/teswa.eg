@@ -279,3 +279,7 @@ Teswa now includes a safe badge data foundation for future premium gamification/
 - Deal chats and story reply threads remain separate.
 - Writes go through RPCs; no broad direct client table writes.
 - Push notifications for direct messages deferred.
+
+- Direct messaging text core was stabilized ahead of premium voice work.
+- Failed message refresh no longer clears already visible chat messages.
+- Direct chat now supports safer single-conversation loading via dedicated RPC.
