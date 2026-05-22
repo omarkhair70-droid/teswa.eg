@@ -48,14 +48,14 @@ export default function DirectScreen() {
       setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message);
     }
 
-    if (directConvo) setConvo(directConvo);
-    else if (!convo) setInitialLoadFailed(true);
+    setConvo((prev: any) => directConvo ?? prev);
+    if (!directConvo) setInitialLoadFailed((prev) => (background ? prev : true));
 
     if (!background) {
       setInitialLoadFailed(!directConvo);
       setLoading(false);
     }
-  }, [conversationId, convo, mergeById]);
+  }, [conversationId, mergeById]);
   useEffect(() => { void load(); }, [load]);
 
   const isReceiverOnRequest = convo?.status === 'requested' && convo?.requestedBy !== user?.id;
