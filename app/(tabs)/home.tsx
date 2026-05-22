@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { FlatList, InteractionManager, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -78,6 +78,7 @@ export default function HomeScreen() {
   const [personalWorldNewItemsCount, setPersonalWorldNewItemsCount] = useState<number | null>(null);
   const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
   const personalWorldSeenCommittedRef = useRef(false);
+  const skipFirstFocusRefreshRef = useRef(true);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -183,20 +184,28 @@ export default function HomeScreen() {
 
 
   useEffect(() => {
-    loadItems();
-    loadStories();
-    void loadVideoMoments();
+    void loadItems();
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      void loadStories();
+      void loadVideoMoments();
+      if (user?.id) {
+        void loadDashboard();
+      }
+      void loadPersonalLivingWorldMarker();
+    });
     if (user?.id) {
-      void loadDashboard();
+      const delayedBadgeRefresh = setTimeout(() => {
+        void refreshBadges();
+      }, 1500);
+      return () => {
+        interactionTask.cancel();
+        clearTimeout(delayedBadgeRefresh);
+      };
     }
-  }, [loadDashboard, loadItems, loadStories, loadVideoMoments, user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) {
-      return;
-    }
-    void refreshBadges();
-  }, [refreshBadges, user?.id]);
+    return () => {
+      interactionTask.cancel();
+    };
+  }, [loadDashboard, loadItems, loadPersonalLivingWorldMarker, loadStories, loadVideoMoments, refreshBadges, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -204,11 +213,8 @@ export default function HomeScreen() {
   }, [user?.id]);
 
   useEffect(() => {
-    void loadPersonalLivingWorldMarker();
-  }, [loadPersonalLivingWorldMarker]);
-
-  useEffect(() => {
     personalWorldSeenCommittedRef.current = false;
+    skipFirstFocusRefreshRef.current = true;
   }, [user?.id]);
 
   useEffect(() => {
@@ -221,6 +227,10 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (skipFirstFocusRefreshRef.current) {
+        skipFirstFocusRefreshRef.current = false;
+        return;
+      }
       void loadStories();
       if (user?.id) {
         void loadDashboard();

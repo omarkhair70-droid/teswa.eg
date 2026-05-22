@@ -92,7 +92,6 @@ export function createForegroundMemoryRefreshSubscription(): {
     })();
   }, NETWORK_POLL_INTERVAL_MS);
 
-  void runForegroundMemoryRefreshIfAllowed('manual_bootstrap');
 
   return {
     remove: () => {
