@@ -75,22 +75,24 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
 
     console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signin_start' });
     const userInfo = await GoogleSignin.signIn();
-    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signin_resolved', resultType: userInfo?.type });
+    const resultType = typeof userInfo === 'object' && userInfo !== null && 'type' in userInfo ? String(userInfo.type) : 'unknown';
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signin_resolved', resultType });
 
-    if (userInfo.type === 'cancelled') {
+    if (resultType === 'cancelled') {
       console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_cancelled' });
       logGoogleSignInDiagnostic('native', 'cancelled');
       return { error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled' };
     }
 
-    if (userInfo.type !== 'success') {
-      console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_non_success', resultType: userInfo.type });
+    if (resultType !== 'success') {
+      console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_non_success', resultType });
       logGoogleSignInDiagnostic('browser_fallback', 'native_exception');
       return { error: null, fallbackToBrowser: true, reason: 'native_exception' };
     }
 
     console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_success' });
-    const idToken = userInfo.data?.idToken;
+    const successResult = userInfo as { data?: { idToken?: string | null } };
+    const idToken = successResult.data?.idToken;
 
     if (!idToken) {
       console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_missing_id_token' });
