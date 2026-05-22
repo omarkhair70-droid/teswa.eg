@@ -46,37 +46,54 @@ function configureGoogleSignin() {
 }
 
 export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult> {
+  console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_start', platform: Platform.OS });
+
   if (Platform.OS !== 'android') {
     logGoogleSignInDiagnostic('browser_fallback', 'non_android');
     return { error: null, fallbackToBrowser: true, reason: 'non_android' };
   }
 
   try {
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'config_check_start' });
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'google_configure_start' });
     configureGoogleSignin();
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'google_configure_done', configured });
 
     if (!configured) {
+      console.log('[GoogleSignIn]', { flow: 'native_step', step: 'config_missing_web_client_id' });
       logGoogleSignInDiagnostic('browser_fallback', 'missing_web_client_id');
       return { error: null, fallbackToBrowser: true, reason: 'missing_web_client_id' };
     }
 
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'play_services_check_start' });
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    await GoogleSignin.signOut().catch(() => undefined);
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'play_services_check_done' });
 
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signout_start' });
+    await GoogleSignin.signOut().catch(() => undefined);
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signout_done' });
+
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signin_start' });
     const userInfo = await GoogleSignin.signIn();
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_signin_resolved', resultType: userInfo?.type });
 
     if (userInfo.type === 'cancelled') {
+      console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_cancelled' });
       logGoogleSignInDiagnostic('native', 'cancelled');
       return { error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled' };
     }
 
     if (userInfo.type !== 'success') {
+      console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_non_success', resultType: userInfo.type });
       logGoogleSignInDiagnostic('browser_fallback', 'native_exception');
       return { error: null, fallbackToBrowser: true, reason: 'native_exception' };
     }
 
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_result_success' });
     const idToken = userInfo.data?.idToken;
 
     if (!idToken) {
+      console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_missing_id_token' });
       logGoogleSignInDiagnostic('native', 'missing_id_token');
       return {
         error: 'تعذر الحصول على بيانات تسجيل الدخول من جوجل. حاول مرة تانية.',
@@ -85,10 +102,13 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
       };
     }
 
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'supabase_id_token_start' });
     const { error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
     });
+
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'supabase_id_token_result', hasError: Boolean(error) });
 
     if (error) {
       logGoogleSignInDiagnostic('native', 'supabase_session_failed');
@@ -99,10 +119,13 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
       };
     }
 
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_success' });
     logGoogleSignInDiagnostic('native', 'native_success');
     return { error: null, fallbackToBrowser: false, reason: 'native_success' };
   } catch (err: unknown) {
     const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as { code?: unknown }).code) : undefined;
+
+    console.log('[GoogleSignIn]', { flow: 'native_step', step: 'native_catch', code });
 
     if (code === statusCodes.SIGN_IN_CANCELLED) {
       logGoogleSignInDiagnostic('native', 'cancelled');
