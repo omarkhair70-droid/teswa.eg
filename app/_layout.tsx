@@ -122,7 +122,13 @@ function RootNavigator() {
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
   const [accountStateCheckStalled, setAccountStateCheckStalled] = useState(false);
   const [pendingNotificationRoute, setPendingNotificationRoute] = useState<string | null>(null);
-  const hasTrustedFastEntry = Boolean(user?.id && usingCachedAccountGate && profileCompleted && requiredPoliciesAccepted);
+  const hasSatisfiedAccountGate = Boolean(
+    user?.id
+    && profileCompleted
+    && requiredPoliciesAccepted
+    && !profileCheckError
+    && !policyAcceptanceCheckError,
+  );
 
   const retryAccountStateChecks = async () => {
     const shouldRefreshProfile = loadingProfile || profileCheckError;
@@ -195,7 +201,7 @@ function RootNavigator() {
   useEffect(() => {
     if (!pendingNotificationRoute) return;
     if (!bootstrapReady || !user || !profileCompleted || !requiredPoliciesAccepted) return;
-    if ((loadingProfile || loadingPolicyAcceptance) && !hasTrustedFastEntry) return;
+    if ((loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate) return;
 
     try {
       router.push(pendingNotificationRoute as never);
@@ -213,15 +219,18 @@ function RootNavigator() {
     } finally {
       setPendingNotificationRoute(null);
     }
-  }, [bootstrapReady, hasTrustedFastEntry, loadingPolicyAcceptance, loadingProfile, pendingNotificationRoute, profileCompleted, requiredPoliciesAccepted, router, user]);
+  }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, pendingNotificationRoute, profileCompleted, requiredPoliciesAccepted, router, user]);
 
   useEffect(() => {
     if (!bootstrapReady) {
       startupTrace.markRouteGuardWaitingReason('bootstrap_not_ready');
       return;
     }
-    if ((loadingProfile || loadingPolicyAcceptance) && !hasTrustedFastEntry) {
-      startupTrace.markRouteGuardWaitingReason('account_checks_loading_without_trusted_gate');
+    if ((loadingProfile || loadingPolicyAcceptance) && hasSatisfiedAccountGate && usingCachedAccountGate) {
+      startupTrace.markRouteGuardWaitingReason('background_revalidation_with_cached_gate');
+    }
+    if ((loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate) {
+      startupTrace.markRouteGuardWaitingReason('account_checks_loading_without_satisfied_gate');
       return;
     }
 
@@ -264,7 +273,7 @@ function RootNavigator() {
     } else if ((inAuth && !inPolicyAcceptance) || atRoot) {
       router.replace('/(tabs)/home');
     }
-  }, [bootstrapReady, hasTrustedFastEntry, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router]);
+  }, [bootstrapReady, hasSatisfiedAccountGate, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router, usingCachedAccountGate]);
 
   if (!bootstrapReady) {
     return (
@@ -275,7 +284,7 @@ function RootNavigator() {
     );
   }
 
-  if (user && (loadingProfile || loadingPolicyAcceptance) && (!profileCompleted || !requiredPoliciesAccepted) && !hasTrustedFastEntry) {
+  if (user && (loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate) {
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>

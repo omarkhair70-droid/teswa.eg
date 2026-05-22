@@ -244,12 +244,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         startupTrace.mark('bootstrap_start');
         setBootstrapError(null);
+        const onboardingPromise = getOnboardingCompleted().then((value) => {
+          startupTrace.mark('onboarding_read_done');
+          return value;
+        });
+        const sessionPromise = supabase.auth.getSession().then((value) => {
+          startupTrace.mark('get_session_done', { hasSession: Boolean(value.data.session) });
+          return value;
+        });
         const [onboardingDone, sessionResult] = await Promise.all([
-          getOnboardingCompleted(),
-          supabase.auth.getSession(),
+          onboardingPromise,
+          sessionPromise,
         ]);
-        startupTrace.mark('onboarding_read_done');
-        startupTrace.mark('get_session_done', { hasSession: Boolean(sessionResult.data.session) });
         if (!mountedRef.current) return;
         setOnboardingCompleted(onboardingDone);
         const currentSession = sessionResult.data.session;
