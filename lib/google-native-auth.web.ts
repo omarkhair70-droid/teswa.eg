@@ -14,12 +14,24 @@ export type GoogleNativeDiagnosticsEvent = {
   platform?: string;
 };
 
+type GoogleNativeSignInOptions = {
+  onStep?: (event: GoogleNativeDiagnosticsEvent) => void;
+};
+
 export function setGoogleNativeDiagnosticsListener(
   _listener: ((event: GoogleNativeDiagnosticsEvent) => void) | null
 ) {
   return;
 }
 
-export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult> {
+export async function signInWithGoogleNative(
+  options?: GoogleNativeSignInOptions
+): Promise<NativeGoogleSignInResult> {
+  options?.onStep?.({
+    flow: 'native_step',
+    step: 'native_start',
+    reason: 'non_android',
+    platform: 'web',
+  });
   return { error: null, fallbackToBrowser: true };
 }
