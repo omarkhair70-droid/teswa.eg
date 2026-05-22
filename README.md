@@ -120,6 +120,13 @@ Teswa intentionally treats native Expo/React Native capabilities as product surf
 - Product expansion through M43I is merged.
 - Push notifications and core social swap flows are operational in production.
 
+## Startup Fast Re-entry Note
+
+- Trusted cached account gate now enables fast app re-entry without blocking UI routing on profile/policy network revalidation.
+- Profile and policy checks are still preserved and continue in the background.
+- No security/policy validation paths were removed.
+- A local/dev-only startup timing trace is available to diagnose bootstrap and gate timing.
+
 ## Tech Stack
 
 - Expo SDK 55 + React Native + TypeScript

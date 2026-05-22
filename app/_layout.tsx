@@ -16,6 +16,7 @@ import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-m
 import { createForegroundMemoryRefreshSubscription } from '@/lib/foreground-memory-refresh';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 import { trackEvent } from '@/lib/analytics';
+import { startupTrace } from '@/lib/startup-trace';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -114,13 +115,14 @@ function AccountGateLoadingState({
 }
 
 function RootNavigator() {
-  const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance } = useAuth();
+  const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, usingCachedAccountGate } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
   const [accountStateCheckStalled, setAccountStateCheckStalled] = useState(false);
   const [pendingNotificationRoute, setPendingNotificationRoute] = useState<string | null>(null);
+  const hasTrustedFastEntry = Boolean(user?.id && usingCachedAccountGate && profileCompleted && requiredPoliciesAccepted);
 
   const retryAccountStateChecks = async () => {
     const shouldRefreshProfile = loadingProfile || profileCheckError;
@@ -192,7 +194,8 @@ function RootNavigator() {
 
   useEffect(() => {
     if (!pendingNotificationRoute) return;
-    if (!bootstrapReady || !user || loadingProfile || loadingPolicyAcceptance || !profileCompleted || !requiredPoliciesAccepted) return;
+    if (!bootstrapReady || !user || !profileCompleted || !requiredPoliciesAccepted) return;
+    if ((loadingProfile || loadingPolicyAcceptance) && !hasTrustedFastEntry) return;
 
     try {
       router.push(pendingNotificationRoute as never);
@@ -210,10 +213,17 @@ function RootNavigator() {
     } finally {
       setPendingNotificationRoute(null);
     }
-  }, [bootstrapReady, loadingPolicyAcceptance, loadingProfile, pendingNotificationRoute, profileCompleted, requiredPoliciesAccepted, router, user]);
+  }, [bootstrapReady, hasTrustedFastEntry, loadingPolicyAcceptance, loadingProfile, pendingNotificationRoute, profileCompleted, requiredPoliciesAccepted, router, user]);
 
   useEffect(() => {
-    if (!bootstrapReady || loadingProfile || loadingPolicyAcceptance) return;
+    if (!bootstrapReady) {
+      startupTrace.markRouteGuardWaitingReason('bootstrap_not_ready');
+      return;
+    }
+    if ((loadingProfile || loadingPolicyAcceptance) && !hasTrustedFastEntry) {
+      startupTrace.markRouteGuardWaitingReason('account_checks_loading_without_trusted_gate');
+      return;
+    }
 
     const rootGroup = segments[0];
     const leaf = segments.at(1);
@@ -254,7 +264,7 @@ function RootNavigator() {
     } else if ((inAuth && !inPolicyAcceptance) || atRoot) {
       router.replace('/(tabs)/home');
     }
-  }, [bootstrapReady, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router]);
+  }, [bootstrapReady, hasTrustedFastEntry, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router]);
 
   if (!bootstrapReady) {
     return (
@@ -265,7 +275,7 @@ function RootNavigator() {
     );
   }
 
-  if (user && (loadingProfile || loadingPolicyAcceptance) && (!profileCompleted || !requiredPoliciesAccepted)) {
+  if (user && (loadingProfile || loadingPolicyAcceptance) && (!profileCompleted || !requiredPoliciesAccepted) && !hasTrustedFastEntry) {
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>

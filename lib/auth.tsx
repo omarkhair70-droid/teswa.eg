@@ -6,6 +6,7 @@ import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
 import { REQUIRED_POLICIES, fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
 import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
+import { startupTrace } from '@/lib/startup-trace';
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setProfileCheckError(null);
 
     const checkPromise = (async () => {
+      startupTrace.mark('profile_check_start', { reason });
       try {
         const shouldRetrySignedInBootstrap =
           reason === 'auth_state_change' || reason === 'bootstrap_session';
@@ -123,6 +125,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
         if (!options?.suppressErrors) setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       } finally {
+        startupTrace.mark('profile_check_end', { reason });
         if (!options?.background && mountedRef.current && activeProfileCheckTokenRef.current === checkToken) {
           setLoadingProfile(false);
         }
@@ -154,6 +157,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setPolicyAcceptanceCheckError(null);
 
     const checkPromise = (async () => {
+      startupTrace.mark('policy_check_start');
       try {
         const state = await fetchRequiredPolicyAcceptanceState(userId);
         if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
@@ -173,6 +177,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setPolicyAcceptanceCheckError(POLICY_CHECK_ERROR_MESSAGE);
         }
       } finally {
+        startupTrace.mark('policy_check_end');
         if (!options?.background && mountedRef.current && activePolicyCheckTokenRef.current === checkToken) {
           setLoadingPolicyAcceptance(false);
         }
@@ -237,11 +242,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     mountedRef.current = true;
     const bootstrap = async () => {
       try {
+        startupTrace.mark('bootstrap_start');
         setBootstrapError(null);
         const [onboardingDone, sessionResult] = await Promise.all([
           getOnboardingCompleted(),
           supabase.auth.getSession(),
         ]);
+        startupTrace.mark('onboarding_read_done');
+        startupTrace.mark('get_session_done', { hasSession: Boolean(sessionResult.data.session) });
         if (!mountedRef.current) return;
         setOnboardingCompleted(onboardingDone);
         const currentSession = sessionResult.data.session;
@@ -251,21 +259,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (currentSession?.user) {
           const cachedGate = await readAccountGateCache(currentSession.user.id);
           const canUseCachedGate = Boolean(cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted);
+          startupTrace.mark('account_gate_cache_read_done', { hasCachedGate: canUseCachedGate, hasSession: true });
           if (mountedRef.current && canUseCachedGate) {
             setProfileCompleted(true);
             setRequiredPoliciesAccepted(true);
             setUsingCachedAccountGate(true);
           }
-          if (mountedRef.current) setBootstrapReady(true);
+          if (mountedRef.current) {
+            setBootstrapReady(true);
+            startupTrace.mark('bootstrap_ready_set', { hasSession: true, usedCachedGate: canUseCachedGate });
+          }
           await Promise.all([
             checkProfileForUser(currentSession.user.id, 'bootstrap_session', { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
             checkPolicyAcceptanceForUser(currentSession.user.id, { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
           ]);
           if (mountedRef.current) setUsingCachedAccountGate(false);
         } else {
+          startupTrace.mark('account_gate_cache_read_done', { hasCachedGate: false, hasSession: false });
           setProfileCheckError(null);
           setUsingCachedAccountGate(false);
-          if (mountedRef.current) setBootstrapReady(true);
+          if (mountedRef.current) {
+            setBootstrapReady(true);
+            startupTrace.mark('bootstrap_ready_set', { hasSession: false, usedCachedGate: false });
+          }
         }
       } catch (error) {
         if (__DEV__) console.log('[Auth] bootstrap failed', error);
@@ -277,13 +293,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setProfileCheckError(null);
         setPolicyAcceptanceCheckError(null);
         setBootstrapError('تعذر تهيئة تسجيل الدخول حالياً. حاول مرة أخرى.');
-        if (mountedRef.current) setBootstrapReady(true);
+        if (mountedRef.current) {
+          setBootstrapReady(true);
+          startupTrace.mark('bootstrap_ready_set', { outcome: 'error' });
+        }
       }
     };
 
     bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      startupTrace.mark('auth_state_change_start', { hasSession: Boolean(nextSession?.user) });
       try {
         setBootstrapError(null);
         setSession(nextSession);
@@ -305,6 +325,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         const cachedGate = await readAccountGateCache(nextSession.user.id);
         const canUseCachedGate = Boolean(cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted);
+        startupTrace.mark('account_gate_cache_read_done', { hasCachedGate: canUseCachedGate, hasSession: true });
         if (canUseCachedGate) {
           setProfileCompleted(true);
           setRequiredPoliciesAccepted(true);
@@ -315,10 +336,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
           checkPolicyAcceptanceForUser(nextSession.user.id, { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
         ]);
         if (mountedRef.current) setUsingCachedAccountGate(false);
+        startupTrace.mark('auth_state_change_end', { outcome: 'ok', usedCachedGate: canUseCachedGate });
       } catch (error) {
         if (__DEV__) console.log('[Auth] auth state sync failed', error);
         if (!mountedRef.current) return;
         setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
+        startupTrace.mark('auth_state_change_end', { outcome: 'error' });
       }
     });
 
