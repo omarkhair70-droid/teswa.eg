@@ -275,7 +275,8 @@ function RootNavigator() {
 
     if (inOAuthCallback && !user) return;
     if (inPublicComplianceRoute) return;
-    if (inNativeGoogleDiagnostics && !nativeGoogleTestModeEnabled) {
+    if (inNativeGoogleDiagnostics) {
+      if (nativeGoogleTestModeEnabled) return;
       router.replace('/(auth)/login');
       return;
     }
