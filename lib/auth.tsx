@@ -13,6 +13,10 @@ const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مر�
 const SIGNED_IN_PROFILE_RETRY_DELAY_MS = 650;
 const POLICY_CHECK_ERROR_MESSAGE = 'تعذر التحقق من موافقات السياسات. حاول مرة تانية.';
 const ACCOUNT_GATE_CACHE_PREFIX = 'teswa:account-gate:v1';
+const startupAt = Date.now();
+const startupLog = (event: string, data?: Record<string, unknown>) => {
+  console.log('[StartupTiming]', event, { dtMs: Date.now() - startupAt, ...data });
+};
 
 type AuthContextValue = {
   bootstrapReady: boolean;
@@ -100,6 +104,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setProfileCheckError(null);
 
     const checkPromise = (async () => {
+      const startedAt = Date.now();
+      startupLog('profile_fetch_started', { reason, hasUserId: Boolean(userId), background: Boolean(options?.background) });
       startupTrace.mark('profile_check_start', { reason });
       try {
         const shouldRetrySignedInBootstrap =
@@ -125,6 +131,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
         if (!options?.suppressErrors) setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       } finally {
+        startupLog('profile_fetch_finished', { reason, dtMs: Date.now() - startedAt });
         startupTrace.mark('profile_check_end', { reason });
         if (!options?.background && mountedRef.current && activeProfileCheckTokenRef.current === checkToken) {
           setLoadingProfile(false);
@@ -157,6 +164,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setPolicyAcceptanceCheckError(null);
 
     const checkPromise = (async () => {
+      const startedAt = Date.now();
+      startupLog('policy_fetch_started', { hasUserId: Boolean(userId), background: Boolean(options?.background) });
       startupTrace.mark('policy_check_start');
       try {
         const state = await fetchRequiredPolicyAcceptanceState(userId);
@@ -177,6 +186,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setPolicyAcceptanceCheckError(POLICY_CHECK_ERROR_MESSAGE);
         }
       } finally {
+        startupLog('policy_fetch_finished', { dtMs: Date.now() - startedAt });
         startupTrace.mark('policy_check_end');
         if (!options?.background && mountedRef.current && activePolicyCheckTokenRef.current === checkToken) {
           setLoadingPolicyAcceptance(false);
@@ -242,6 +252,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     mountedRef.current = true;
     const bootstrap = async () => {
       try {
+        startupLog('auth_hydration_started');
         startupTrace.mark('bootstrap_start');
         setBootstrapError(null);
         const onboardingPromise = getOnboardingCompleted().then((value) => {
@@ -249,6 +260,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return value;
         });
         const sessionPromise = supabase.auth.getSession().then((value) => {
+          startupLog('get_session_finished', { hasSession: Boolean(value.data.session) });
           startupTrace.mark('get_session_done', { hasSession: Boolean(value.data.session) });
           return value;
         });
@@ -273,6 +285,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           }
           if (mountedRef.current) {
             setBootstrapReady(true);
+            startupLog('bootstrap_ready_set', { hasSession: true, usedCachedGate: canUseCachedGate });
             startupTrace.mark('bootstrap_ready_set', { hasSession: true, usedCachedGate: canUseCachedGate });
           }
           await Promise.all([
@@ -286,6 +299,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setUsingCachedAccountGate(false);
           if (mountedRef.current) {
             setBootstrapReady(true);
+            startupLog('bootstrap_ready_set', { hasSession: false });
             startupTrace.mark('bootstrap_ready_set', { hasSession: false, usedCachedGate: false });
           }
         }
@@ -301,6 +315,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setBootstrapError('تعذر تهيئة تسجيل الدخول حالياً. حاول مرة أخرى.');
         if (mountedRef.current) {
           setBootstrapReady(true);
+          startupLog('bootstrap_ready_set', { hasSession: false, outcome: 'error' });
           startupTrace.mark('bootstrap_ready_set', { outcome: 'error' });
         }
       }
@@ -309,6 +324,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+      startupLog('on_auth_state_change_first_event', { event, hasSession: Boolean(nextSession) });
       startupTrace.mark('auth_state_change_start', { hasSession: Boolean(nextSession?.user) });
       if (__DEV__) {
         const nextUserId = nextSession?.user?.id ?? null;
