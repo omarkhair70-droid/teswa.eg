@@ -12,12 +12,15 @@ import { signInWithGoogle } from '@/lib/google-auth';
 import { supabase } from '@/lib/supabase/client';
 
 export default function LoginScreen() {
+  const nativeTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [enteringAccount, setEnteringAccount] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [, setDiagnosticsTapCount] = useState(0);
+  const [showDiagnosticsEntry, setShowDiagnosticsEntry] = useState(false);
 
   const submit = async () => {
     if (loading || googleLoading || enteringAccount) return;
@@ -46,6 +49,15 @@ export default function LoginScreen() {
     if (googleError) setError(googleError);
   };
 
+  const handleDiagnosticsUnlockTap = () => {
+    if (!nativeTestModeEnabled || showDiagnosticsEntry) return;
+    setDiagnosticsTapCount((prev) => {
+      const next = prev + 1;
+      if (next >= 7) setShowDiagnosticsEntry(true);
+      return next;
+    });
+  };
+
   return (
     <AppScreen backgroundVariant="alive" scrollable>
       <AuthExperienceShell icon="log-in-outline" title="تسجيل الدخول" body="ارجع لعالم تِسوى، وكمّل من آخر حركة.">
@@ -57,7 +69,16 @@ export default function LoginScreen() {
             loading={googleLoading}
             disabled={googleLoading || loading || enteringAccount}
           />
-          <AppText style={styles.trust}>دخول آمن وسريع عبر حساب Google.</AppText>
+          <Pressable onPress={handleDiagnosticsUnlockTap}>
+            <AppText style={styles.trust}>دخول آمن وسريع عبر حساب Google.</AppText>
+          </Pressable>
+          {nativeTestModeEnabled && showDiagnosticsEntry ? (
+            <Link href="/(auth)/native-google-diagnostics" asChild>
+              <Pressable style={styles.diagnosticsLinkWrap}>
+                <AppText style={styles.diagnosticsLink}>اختبار Native Google</AppText>
+              </Pressable>
+            </Link>
+          ) : null}
           <View style={styles.dividerWrap}><View style={styles.divider} /><AppText style={styles.dividerText}>أو سجل الدخول بالإيميل</AppText><View style={styles.divider} /></View>
           <View style={styles.formCard}>
             <AppInput placeholder="البريد الإلكتروني" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} editable={!enteringAccount} />
@@ -84,4 +105,6 @@ const styles = StyleSheet.create({
   errorCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(179,38,30,0.25)', backgroundColor: 'rgba(255,240,239,0.9)', padding: spacing.sm },
   successCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(62,124,115,0.3)', backgroundColor: 'rgba(232,247,241,0.9)', padding: spacing.sm },
   error: { color: '#B3261E', textAlign: 'center' },
+  diagnosticsLinkWrap: { alignSelf: 'center', paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  diagnosticsLink: { fontSize: 12, opacity: 0.8, textDecorationLine: 'underline' },
 });

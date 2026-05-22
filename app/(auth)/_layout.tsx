@@ -12,6 +12,7 @@ export default function AuthLayout() {
       <Stack.Screen name="onboarding" options={{ title: 'مرحبًا بك' }} />
       <Stack.Screen name="profile-setup" options={{ title: 'إكمال الملف' }} />
       <Stack.Screen name="policy-acceptance" options={{ title: 'الموافقة على السياسات' }} />
+      <Stack.Screen name="native-google-diagnostics" options={{ title: 'تشخيص Native Google' }} />
       <Stack.Screen name="splash" options={{ headerShown: false }} />
     </Stack>
   );

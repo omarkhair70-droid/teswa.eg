@@ -100,6 +100,7 @@ function ForegroundMemoryRefreshCoordinator() {
 const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 11_000;
 const DEFERRED_PUSH_SYNC_DELAY_MS = 7_000;
 const DEFERRED_FOREGROUND_MEMORY_REFRESH_DELAY_MS = 8_000;
+const nativeGoogleTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
 
 function AccountGateLoadingState({
   title,
@@ -262,6 +263,7 @@ function RootNavigator() {
     const inPolicyAcceptance = inAuth && leaf === 'policy-acceptance';
     const inOnboarding = inAuth && leaf === 'onboarding';
     const inLoginOrSignup = inAuth && (leaf === 'login' || leaf === 'signup');
+    const inNativeGoogleDiagnostics = inAuth && leaf === 'native-google-diagnostics';
     const inOAuthCallback = rootGroup === 'auth' && leaf === 'callback';
     const inPublicLegalRoute = rootGroup === 'legal' && (
       leaf === 'privacy'
@@ -273,6 +275,11 @@ function RootNavigator() {
 
     if (inOAuthCallback && !user) return;
     if (inPublicComplianceRoute) return;
+    if (inNativeGoogleDiagnostics) {
+      if (nativeGoogleTestModeEnabled) return;
+      router.replace('/(auth)/login');
+      return;
+    }
 
     if (!user) {
       if (!onboardingCompleted && !inOnboarding) {

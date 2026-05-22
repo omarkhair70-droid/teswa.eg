@@ -5,8 +5,8 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
+import type { GoogleNativeDiagnosticsEvent } from '@/lib/google-native-auth';
 import {
-  GoogleNativeDiagnosticsEvent,
   setGoogleNativeDiagnosticsListener,
   signInWithGoogleNative,
 } from '@/lib/google-native-auth';
@@ -17,9 +17,14 @@ export default function NativeGoogleDiagnosticsScreen() {
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<GoogleNativeDiagnosticsEvent[]>([]);
   const [result, setResult] = useState<{ error: string | null; fallbackToBrowser?: boolean; reason?: string } | null>(null);
+  const [listenerUnavailableError, setListenerUnavailableError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!nativeTestModeEnabled) return;
+    if (typeof setGoogleNativeDiagnosticsListener !== 'function') {
+      setListenerUnavailableError('تعذر تفعيل مستمع التشخيص بأمان. حاول تحديث التطبيق أو أعد المحاولة لاحقًا.');
+      return;
+    }
 
     setGoogleNativeDiagnosticsListener((event) => {
       setEvents((prev) => [...prev, event]);
@@ -39,8 +44,12 @@ export default function NativeGoogleDiagnosticsScreen() {
     setRunning(true);
     setEvents([]);
     setResult(null);
-    const nextResult = await signInWithGoogleNative();
-    setResult(nextResult);
+    try {
+      const nextResult = await signInWithGoogleNative();
+      setResult(nextResult);
+    } catch {
+      setResult({ error: 'حدث خطأ غير متوقع أثناء اختبار Native Google.' });
+    }
     setRunning(false);
   };
 
@@ -60,6 +69,11 @@ export default function NativeGoogleDiagnosticsScreen() {
       <View style={styles.wrap}>
         <AppText style={styles.title}>تشخيص Native Google</AppText>
         <AppButton label={running ? 'جاري الاختبار...' : 'اختبار Native Google'} onPress={runNativeTest} disabled={running} />
+        {listenerUnavailableError ? (
+          <View style={styles.errorCard}>
+            <AppText style={styles.errorText}>{listenerUnavailableError}</AppText>
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <AppText style={styles.subhead}>النتيجة النهائية</AppText>
@@ -88,4 +102,6 @@ const styles = StyleSheet.create({
   subhead: { fontSize: 16, fontWeight: '700', marginBottom: spacing.xs },
   card: { gap: spacing.xs, borderWidth: 1, borderColor: 'rgba(221,208,197,0.9)', borderRadius: 12, padding: spacing.md },
   eventLine: { fontSize: 13 },
+  errorCard: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(179,38,30,0.25)', backgroundColor: 'rgba(255,240,239,0.9)', padding: spacing.sm },
+  errorText: { color: '#B3261E' },
 });
