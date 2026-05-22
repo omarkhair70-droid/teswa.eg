@@ -263,3 +263,11 @@ Teswa now includes a safe badge data foundation for future premium gamification/
 - Stored fields include category toggles and quiet-hours style values (`quiet_hours_enabled`, `quiet_hours_start`, `quiet_hours_end`).
 - Delivery enforcement for every category/quiet hours can be wired in later Edge Function/RPC patches.
 - This update does not claim full backend suppression unless explicitly wired in backend delivery logic.
+
+
+## Direct Social Messaging Foundation
+- Direct profile messages added with request gate.
+- Receiver-following-sender or completed-deal relationship can open conversation directly.
+- Deal chats and story reply threads remain separate.
+- Writes go through RPCs; no broad direct client table writes.
+- Push notifications for direct messages deferred.

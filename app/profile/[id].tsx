@@ -23,6 +23,7 @@ import { useAuth } from '@/lib/auth';
 import { fetchUserBadges, refreshMyBadges, UserBadge } from '@/lib/badges';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { fetchUserFollowState, followUserFromMobile, unfollowUserFromMobile } from '@/lib/user-follows';
+import { startOrGetDirectConversation } from '@/lib/direct-messages';
 import { fetchPublicProfileActiveListings, fetchPublicProfileById, PublicProfile, PublicProfileListing } from '@/lib/profiles';
 import {
   deletePublicProfileCache,
@@ -63,6 +64,8 @@ export default function PublicProfileScreen() {
   const [followState, setFollowState] = useState({ followingByMe: false, followsMe: false, mutual: false, followerCount: 0, followingCount: 0 });
   const [followBusy, setFollowBusy] = useState(false);
   const [followMessage, setFollowMessage] = useState<string | null>(null);
+  const [directMessageError, setDirectMessageError] = useState<string | null>(null);
+  const [directMessageLoading, setDirectMessageLoading] = useState(false);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [trustMetrics, setTrustMetrics] = useState<UserTrustMetrics | null>(null);
   const [trustLoading, setTrustLoading] = useState(false);
@@ -365,6 +368,8 @@ export default function PublicProfileScreen() {
             {followState.followsMe && !followState.followingByMe ? <AppText muted>يتابعك</AppText> : null}
             {followState.mutual ? <AppText muted>متابعة متبادلة</AppText> : null}
             {followMessage ? <AppText muted>{followMessage}</AppText> : null}
+            <AppButton label={directMessageLoading ? 'جاري الفتح...' : 'رسالة'} variant="neutral" disabled={blockedByMe || directMessageLoading} onPress={async () => { if (!profile?.id || directMessageLoading) return; setDirectMessageLoading(true); const res = await startOrGetDirectConversation(profile.id); if (!res.ok || !res.conversationId) { setDirectMessageError(res.message); setDirectMessageLoading(false); return; } setDirectMessageError(null); setDirectMessageLoading(false); router.push(`/direct/${res.conversationId}`); }} />
+            {directMessageError ? <AppText muted>{directMessageError}</AppText> : null}
           </View>
         </AppCard>
       ) : null}

@@ -16,8 +16,9 @@ import { DealConversation, fetchDealConversationsForUser } from '@/lib/messages'
 import { getDealStatusLabel } from '@/lib/deals';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { ContextualConversationSummary, fetchContextualConversationSummariesForUser } from '@/lib/contextual-conversations';
+import { DirectConversationSummary, fetchMyDirectConversations } from '@/lib/direct-messages';
 
-type MessagesSection = 'chats' | 'replies' | 'offers';
+type MessagesSection = 'direct' | 'chats' | 'replies' | 'offers';
 
 
 function formatVoiceDuration(durationMs: number | null): string | null {
@@ -136,13 +137,14 @@ function ReplyThreadRow({ thread, onOpenThread }: { thread: ContextualConversati
 
 export default function Screen() {
   const { user } = useAuth();
-  const [selectedSection, setSelectedSection] = useState<MessagesSection>('chats');
+  const [selectedSection, setSelectedSection] = useState<MessagesSection>('direct');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [incoming, setIncoming] = useState<OfferRowSummary[]>([]);
   const [sent, setSent] = useState<OfferRowSummary[]>([]);
   const [conversations, setConversations] = useState<DealConversation[]>([]);
   const [replyThreads, setReplyThreads] = useState<ContextualConversationSummary[]>([]);
+  const [directConversations, setDirectConversations] = useState<DirectConversationSummary[]>([]);
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
   const { refreshBadges } = useUnreadBadges();
 
@@ -153,15 +155,17 @@ export default function Screen() {
     setLoading(true);
     setError(null);
     try {
-      const [offersData, convosData, repliesData] = await Promise.all([
+      const [offersData, convosData, repliesData, directData] = await Promise.all([
         fetchOffersInbox(user.id),
         fetchDealConversationsForUser(user.id),
         fetchContextualConversationSummariesForUser(user.id),
+        fetchMyDirectConversations(),
       ]);
       setIncoming(offersData.incomingActionableOffers);
       setSent(offersData.sentOffers);
       setConversations(convosData);
       setReplyThreads(repliesData);
+      setDirectConversations(directData);
       void refreshBadges();
     } catch {
       setError('تعذر تحميل الرسائل والعروض حالياً.');
@@ -199,11 +203,12 @@ export default function Screen() {
           <View style={styles.heroContent}>
             <View style={styles.heroIconShell}><Ionicons name="chatbubbles-outline" size={20} color={colors.primary} /></View>
             <AppText weight="bold" style={styles.title}>الرسائل</AppText>
-            <AppText muted>دردشات الصفقات، ردود القصص، والعروض التي تنتظر قرارك — كلها في مكان واحد.</AppText>
+            <AppText muted>رسائلك المباشرة، دردشات الصفقات، ردود القصص، والعروض في مكان واحد.</AppText>
             <AppText muted>{incoming.length > 0 ? `عندك ${incoming.length} عرضًا يحتاج ردك.` : 'تابع الحركة بهدوء، وكل جديد سيظهر هنا.'}</AppText>
           </View>
         </View>
         <View style={styles.pulseRow}>
+          <View style={styles.pulseCard}><Ionicons name="mail-outline" size={16} color={colors.primary} /><AppText muted>الرسائل</AppText><AppText weight="semibold">{directConversations.length}</AppText></View>
           <View style={styles.pulseCard}><Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primary} /><AppText muted>دردشات الصفقات</AppText><AppText weight="semibold">{conversations.length}</AppText></View>
           <View style={styles.pulseCard}><Ionicons name="sparkles-outline" size={16} color={colors.primary} /><AppText muted>ردود القصص</AppText><AppText weight="semibold">{replyThreads.length}</AppText></View>
           <View style={styles.pulseCard}><Ionicons name="swap-horizontal-outline" size={16} color={colors.primary} /><AppText muted>العروض</AppText><AppText weight="semibold">{offersCount}</AppText></View>
@@ -211,6 +216,12 @@ export default function Screen() {
         </View>
 
         <View style={styles.segmentedWrap}>
+          <Pressable
+            style={[styles.segmentButton, selectedSection === 'direct' && styles.segmentButtonActive]}
+            onPress={() => setSelectedSection('direct')}
+          >
+            <View style={styles.segmentTextWrap}><Ionicons name="mail-outline" size={14} color={selectedSection === 'direct' ? colors.background : colors.textMuted} /><AppText weight="semibold" style={selectedSection === 'direct' ? styles.segmentTextActive : undefined}>الرسائل ({directConversations.length})</AppText></View>
+          </Pressable>
           <Pressable
             style={[styles.segmentButton, selectedSection === 'chats' && styles.segmentButtonActive]}
             onPress={() => setSelectedSection('chats')}
@@ -234,7 +245,9 @@ export default function Screen() {
           </Pressable>
         </View>
 
-        {selectedSection === 'chats' ? (
+        {selectedSection === 'direct' ? (
+          directConversations.length ? directConversations.map((c) => <Pressable key={c.conversationId} onPress={() => safeOpenRoute(`/direct/${c.conversationId}`)}><AppCard style={styles.chatCard}><View style={styles.chatRow}><View style={styles.avatarWrap}>{c.otherAvatarUrl ? <Image source={{ uri: c.otherAvatarUrl }} style={styles.avatarImage} /> : <View style={styles.avatarFallback}><AppText>🙂</AppText></View>}</View><View style={styles.chatMain}><AppText weight="semibold">{c.otherDisplayName ?? 'محادثة مباشرة'}</AppText><AppText muted numberOfLines={1}>{c.lastMessageBody ?? 'ابدأ من أي بروفايل برسالة بسيطة.'}</AppText></View><View style={styles.chatMeta}>{c.lastMessageAt ? <AppText muted>{new Date(c.lastMessageAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText> : null}{c.unreadCount > 0 ? <View style={styles.unreadBadge}><AppText weight="semibold" style={styles.unreadText}>{c.unreadCount}</AppText></View> : null}{c.requiresAction ? <View style={styles.storyChip}><AppText muted>طلب مراسلة</AppText></View> : null}</View></View></AppCard></Pressable>) : <AppCard style={styles.emptyCard}><EmptyState title="مفيش رسائل مباشرة بعد" description="ابدأ من أي بروفايل برسالة بسيطة." /></AppCard>
+        ) : selectedSection === 'chats' ? (
           conversations.length ? conversations.map((convo) => <DealRow key={convo.dealId} convo={convo} onOpenDeal={safeOpenRoute} />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد دردشات صفقات بعد" description="عند قبول أي عرض، ستظهر دردشة الصفقة هنا." /></AppCard>
         ) : selectedSection === 'replies' ? (
           replyThreads.length ? replyThreads.map((thread) => <ReplyThreadRow key={thread.conversationId} thread={thread} onOpenThread={safeOpenRoute} />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد ردود قصص بعد" description="لما حد يرد على قصة أو ترد أنت على قصة، هتظهر المحادثات هنا." /></AppCard>
