@@ -10,7 +10,7 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { radii } from '@/constants/radii';
 import { useAuth } from '@/lib/auth';
-import { acceptDirectMessageRequest, fetchDirectConversationMessages, fetchMyDirectConversations, ignoreDirectMessageRequest, sendDirectMessage } from '@/lib/direct-messages';
+import { acceptDirectMessageRequest, fetchDirectConversation, fetchDirectConversationMessages, ignoreDirectMessageRequest, sendDirectMessage } from '@/lib/direct-messages';
 
 export default function DirectScreen() {
   const { user } = useAuth();
@@ -21,16 +21,41 @@ export default function DirectScreen() {
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadFailed, setInitialLoadFailed] = useState(false);
 
-  const load = useCallback(async () => {
+  const mergeById = useCallback((prev: any[], next: any[]) => {
+    const map = new Map<string, any>();
+    [...prev, ...next].forEach((m) => map.set(m.id, m));
+    return Array.from(map.values()).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+  }, []);
+
+  const load = useCallback(async (opts?: { background?: boolean }) => {
     if (!conversationId) return;
-    setLoading(true);
-    const [rows, summaries] = await Promise.all([fetchDirectConversationMessages(conversationId), fetchMyDirectConversations()]);
-    setMessages(rows);
-    setConvo(summaries.find((c) => c.conversationId === conversationId) ?? null);
-    setLoading(false);
-  }, [conversationId]);
+    const background = !!opts?.background;
+    if (!background) setLoading(true);
+
+    const [messageResult, directConvo] = await Promise.all([
+      fetchDirectConversationMessages(conversationId),
+      fetchDirectConversation(conversationId),
+    ]);
+
+    if (messageResult.ok) {
+      setMessages((prev) => mergeById(prev, messageResult.messages));
+      if (background) setError(null);
+    } else {
+      setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message);
+    }
+
+    if (directConvo) setConvo(directConvo);
+    else if (!convo) setInitialLoadFailed(true);
+
+    if (!background) {
+      setInitialLoadFailed(!directConvo);
+      setLoading(false);
+    }
+  }, [conversationId, convo, mergeById]);
   useEffect(() => { void load(); }, [load]);
 
   const isReceiverOnRequest = convo?.status === 'requested' && convo?.requestedBy !== user?.id;
@@ -45,7 +70,10 @@ export default function DirectScreen() {
   }, [convo?.status, hasRequesterAlreadySent, isReceiverOnRequest, isRequesterOnRequest]);
 
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
-  if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نحضر المحادثة الآن." /></AppScreen>;
+  if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
+  if (!convo && initialLoadFailed) {
+    return <AppScreen><EmptyState title="تعذر تجهيز المحادثة." description="" actionLabel="إعادة المحاولة" onAction={() => { void load(); }} /></AppScreen>;
+  }
 
   return (
     <AppScreen>
@@ -58,7 +86,7 @@ export default function DirectScreen() {
         {convo?.status === 'requested' ? <View style={styles.pill}><AppText muted>طلب مراسلة</AppText></View> : null}
       </View>
 
-      {isReceiverOnRequest ? <View style={styles.requestBar}><AppText weight="semibold">طلب مراسلة</AppText><View style={styles.requestActions}><Pressable disabled={busy} style={styles.acceptBtn} onPress={async()=>{setBusy(true); const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load(); setBusy(false);}}><AppText weight="semibold" style={styles.btnText}>قبول</AppText></Pressable><Pressable disabled={busy} style={styles.ignoreBtn} onPress={async()=>{setBusy(true); const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load(); setBusy(false);}}><AppText muted>تجاهل</AppText></Pressable></View></View> : null}
+      {isReceiverOnRequest ? <View style={styles.requestBar}><AppText weight="semibold">طلب مراسلة</AppText><View style={styles.requestActions}><Pressable disabled={busy} style={styles.acceptBtn} onPress={async()=>{setBusy(true); const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); setBusy(false);}}><AppText weight="semibold" style={styles.btnText}>قبول</AppText></Pressable><Pressable disabled={busy} style={styles.ignoreBtn} onPress={async()=>{setBusy(true); const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); setBusy(false);}}><AppText muted>تجاهل</AppText></Pressable></View></View> : null}
       {isRequesterOnRequest ? <AppText muted style={styles.info}>طلب المراسلة اتبعت.</AppText> : null}
       {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
@@ -70,7 +98,31 @@ export default function DirectScreen() {
       </KeyboardAwareScrollView>
 
       <KeyboardStickyView offset={{ opened: 6, closed: 0 }}>
-        <View style={styles.composer}><TextInput value={body} onChangeText={setBody} placeholder="اكتب رسالة..." placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerState.disabled && !busy} multiline /><Pressable disabled={composerState.disabled || busy} style={[styles.send, (composerState.disabled || busy) && styles.sendDisabled]} onPress={async()=>{setBusy(true); const res=await sendDirectMessage(conversationId, body); if(!res.ok){setError(res.message);} else {setBody(''); setError(null); await load();} setBusy(false);}}><Ionicons name="send" size={16} color={colors.background} /></Pressable></View>
+        <View style={styles.composer}><TextInput value={body} onChangeText={setBody} placeholder="اكتب رسالة..." placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerState.disabled && !sending} multiline /><Pressable disabled={composerState.disabled || sending} style={[styles.send, (composerState.disabled || sending) && styles.sendDisabled]} onPress={async()=>{
+          const trimmed = body.trim();
+          if (!trimmed) return;
+          setSending(true);
+          const res = await sendDirectMessage(conversationId, trimmed);
+          if (!res.ok) {
+            setError(res.message);
+            setSending(false);
+            return;
+          }
+
+          const optimisticMessage = {
+            id: res.messageId ?? `local-${Date.now()}`,
+            senderId: user?.id,
+            body: trimmed,
+            createdAt: res.createdAt ?? new Date().toISOString(),
+            readAt: null,
+          };
+
+          setMessages((prev) => mergeById(prev, [optimisticMessage]));
+          setBody('');
+          setError(null);
+          setSending(false);
+          void load({ background: true });
+        }}><Ionicons name="send" size={16} color={colors.background} /></Pressable></View>
       </KeyboardStickyView>
       {error ? <AppText muted style={styles.info}>{error}</AppText> : null}
     </AppScreen>
