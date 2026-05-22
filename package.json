@@ -9,8 +9,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit",
-    "export:web": "expo export --platform web"
+    "typecheck": "npm run typecheck:env && npm run typecheck:app",
+    "export:web": "expo export --platform web",
+    "typecheck:env": "node ./scripts/typecheck-env.cjs",
+    "typecheck:app": "tsc --noEmit"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
