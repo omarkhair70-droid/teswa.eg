@@ -5,6 +5,7 @@ import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboa
 import { useLocalSearchParams } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
+import { AppButton } from '@/components/ui/AppButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
@@ -72,7 +73,14 @@ export default function DirectScreen() {
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) {
-    return <AppScreen><EmptyState title="تعذر تجهيز المحادثة." description="" actionLabel="إعادة المحاولة" onAction={() => { void load(); }} /></AppScreen>;
+    return (
+      <AppScreen>
+        <View style={styles.retryState}>
+          <EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." />
+          <AppButton label="إعادة المحاولة" onPress={() => { void load(); }} />
+        </View>
+      </AppScreen>
+    );
   }
 
   return (
@@ -102,26 +110,30 @@ export default function DirectScreen() {
           const trimmed = body.trim();
           if (!trimmed) return;
           setSending(true);
-          const res = await sendDirectMessage(conversationId, trimmed);
-          if (!res.ok) {
-            setError(res.message);
+          try {
+            const res = await sendDirectMessage(conversationId, trimmed);
+            if (!res.ok) {
+              setError(res.message);
+              return;
+            }
+
+            const optimisticMessage = {
+              id: res.messageId ?? `local-${Date.now()}`,
+              senderId: user?.id,
+              body: trimmed,
+              createdAt: res.createdAt ?? new Date().toISOString(),
+              readAt: null,
+            };
+
+            setMessages((prev) => mergeById(prev, [optimisticMessage]));
+            setBody('');
+            setError(null);
+            void load({ background: true });
+          } catch {
+            setError('تعذر إرسال الرسالة حالياً.');
+          } finally {
             setSending(false);
-            return;
           }
-
-          const optimisticMessage = {
-            id: res.messageId ?? `local-${Date.now()}`,
-            senderId: user?.id,
-            body: trimmed,
-            createdAt: res.createdAt ?? new Date().toISOString(),
-            readAt: null,
-          };
-
-          setMessages((prev) => mergeById(prev, [optimisticMessage]));
-          setBody('');
-          setError(null);
-          setSending(false);
-          void load({ background: true });
         }}><Ionicons name="send" size={16} color={colors.background} /></Pressable></View>
       </KeyboardStickyView>
       {error ? <AppText muted style={styles.info}>{error}</AppText> : null}
@@ -139,6 +151,7 @@ const styles = StyleSheet.create({
   acceptBtn: { backgroundColor: colors.primary, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6 },
   ignoreBtn: { backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6 },
   btnText: { color: colors.background },
+  retryState: { padding: spacing.md, gap: spacing.sm },
   info: { paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
   messagesWrap: { padding: spacing.md, gap: spacing.sm },
   bubble: { maxWidth: '80%', borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: 4 },
