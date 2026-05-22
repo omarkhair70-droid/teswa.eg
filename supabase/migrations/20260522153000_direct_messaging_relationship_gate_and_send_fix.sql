@@ -1,3 +1,21 @@
+update public.direct_conversations c
+set status = 'accepted',
+    accepted_at = coalesce(c.accepted_at, now()),
+    updated_at = now()
+where c.status = 'requested'
+  and not exists (
+    select 1 from public.user_blocks b
+    where (b.blocker_id = c.participant_a and b.blocked_user_id = c.participant_b)
+       or (b.blocker_id = c.participant_b and b.blocked_user_id = c.participant_a)
+  )
+  and exists (
+    select 1
+    from public.swap_deals d
+    where d.status in ('coordinating', 'completed_pending_confirmation', 'completed')
+      and ((d.requester_id = c.participant_a and d.offerer_id = c.participant_b)
+        or (d.requester_id = c.participant_b and d.offerer_id = c.participant_a))
+  );
+
 create or replace function public.start_or_get_direct_conversation(p_target_user_id uuid)
 returns table (ok boolean, conversation_id uuid, status text, requires_request boolean, message text)
 language plpgsql security definer set search_path = public as $$
@@ -8,22 +26,6 @@ declare
   v_row public.direct_conversations%rowtype;
   v_open_allowed boolean := false;
 begin
-  update public.direct_conversations c
-  set status = 'accepted', accepted_at = coalesce(c.accepted_at, now()), updated_at = now()
-  where c.status = 'requested'
-    and not exists (
-      select 1 from public.user_blocks b
-      where (b.blocker_id = c.participant_a and b.blocked_user_id = c.participant_b)
-         or (b.blocker_id = c.participant_b and b.blocked_user_id = c.participant_a)
-    )
-    and exists (
-      select 1
-      from public.swap_deals d
-      where d.status in ('coordinating', 'completed_pending_confirmation', 'completed')
-        and ((d.requester_id = c.participant_a and d.offerer_id = c.participant_b)
-          or (d.requester_id = c.participant_b and d.offerer_id = c.participant_a))
-    );
-
   if v_user_id is null then return query select false, null::uuid, null::text, false, 'تسجيل الدخول مطلوب.'; return; end if;
   if p_target_user_id is null then return query select false, null::uuid, null::text, false, 'تعذر تحديد المستخدم.'; return; end if;
   if v_user_id = p_target_user_id then return query select false, null::uuid, null::text, false, 'لا يمكنك مراسلة نفسك.'; return; end if;
