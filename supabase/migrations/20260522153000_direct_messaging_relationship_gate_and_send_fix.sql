@@ -8,6 +8,22 @@ declare
   v_row public.direct_conversations%rowtype;
   v_open_allowed boolean := false;
 begin
+  update public.direct_conversations c
+  set status = 'accepted', accepted_at = coalesce(c.accepted_at, now()), updated_at = now()
+  where c.status = 'requested'
+    and not exists (
+      select 1 from public.user_blocks b
+      where (b.blocker_id = c.participant_a and b.blocked_user_id = c.participant_b)
+         or (b.blocker_id = c.participant_b and b.blocked_user_id = c.participant_a)
+    )
+    and exists (
+      select 1
+      from public.swap_deals d
+      where d.status in ('coordinating', 'completed_pending_confirmation', 'completed')
+        and ((d.requester_id = c.participant_a and d.offerer_id = c.participant_b)
+          or (d.requester_id = c.participant_b and d.offerer_id = c.participant_a))
+    );
+
   if v_user_id is null then return query select false, null::uuid, null::text, false, 'تسجيل الدخول مطلوب.'; return; end if;
   if p_target_user_id is null then return query select false, null::uuid, null::text, false, 'تعذر تحديد المستخدم.'; return; end if;
   if v_user_id = p_target_user_id then return query select false, null::uuid, null::text, false, 'لا يمكنك مراسلة نفسك.'; return; end if;
@@ -31,6 +47,29 @@ begin
       set status = 'requested', requested_by = v_user_id, updated_at = now()
       where id = v_row.id
       returning * into v_row;
+    end if;
+    if v_row.status = 'requested' then
+      v_open_allowed :=
+        exists (select 1 from public.user_follows f where f.follower_id = p_target_user_id and f.followed_id = v_user_id)
+        or exists (
+          select 1
+          from public.user_follows f1
+          join public.user_follows f2 on f2.follower_id = p_target_user_id and f2.followed_id = v_user_id
+          where f1.follower_id = v_user_id and f1.followed_id = p_target_user_id
+        )
+        or exists (
+          select 1
+          from public.swap_deals d
+          where d.status in ('coordinating', 'completed_pending_confirmation', 'completed')
+            and ((d.requester_id = v_user_id and d.offerer_id = p_target_user_id)
+              or (d.requester_id = p_target_user_id and d.offerer_id = v_user_id))
+        );
+      if v_open_allowed then
+        update public.direct_conversations
+        set status = 'accepted', accepted_at = coalesce(accepted_at, now()), updated_at = now()
+        where id = v_row.id
+        returning * into v_row;
+      end if;
     end if;
     return query select true, v_row.id, v_row.status, v_row.status <> 'accepted', 'تم فتح المحادثة.'; return;
   end if;

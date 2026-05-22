@@ -15,12 +15,22 @@ import { fetchOffersInbox, getOfferStatusLabel, OfferRowSummary } from '@/lib/of
 import { DealConversation, fetchDealConversationsForUser } from '@/lib/messages';
 import { ContextualConversationSummary, fetchContextualConversationSummariesForUser } from '@/lib/contextual-conversations';
 import { DirectConversationSummary, fetchMyDirectConversations } from '@/lib/direct-messages';
+import { useUnreadBadges } from '@/lib/unread-badges';
 
 type TopSection = 'conversations' | 'offers';
-type UnifiedRow = { id: string; type: 'direct' | 'deal' | 'story'; title: string; preview: string; at: string | null; route: string; avatarUrl?: string | null; unreadCount: number; requestBadge?: boolean };
+type UnifiedRow = { id: string; type: 'direct' | 'deal' | 'story'; title: string; preview: string; at: string | null; route: string; avatarUrl?: string | null; unreadCount: number; requestBadge?: boolean; swapContext?: string | null };
 
 function OfferRow({ offer, label }: { offer: OfferRowSummary; label: 'عرض وارد' | 'عرض مرسل' }) {
-  return <AppCard style={styles.card}><Pressable onPress={() => router.push(`/offer/${offer.id}`)}><View style={styles.offerRow}><AppText weight="semibold">{label}</AppText><AppText muted>{getOfferStatusLabel(offer.status)}</AppText></View><AppText numberOfLines={1}>{offer.requestedItem?.title ?? 'عنصر غير متاح'} ↔ {offer.offeredItem?.title ?? 'عنصر غير متاح'}</AppText></Pressable></AppCard>;
+  const hasDealChat = offer.status === 'accepted' && !!offer.dealId;
+  return (
+    <AppCard style={styles.card}>
+      <Pressable onPress={() => router.push(`/offer/${offer.id}`)}>
+        <View style={styles.offerRow}><AppText weight="semibold">{label}</AppText><AppText muted>{getOfferStatusLabel(offer.status)}</AppText></View>
+        <AppText numberOfLines={1}>{offer.requestedItem?.title ?? 'عنصر غير متاح'} ↔ {offer.offeredItem?.title ?? 'عنصر غير متاح'}</AppText>
+      </Pressable>
+      {hasDealChat ? <Pressable style={styles.openChatCta} onPress={() => router.push(`/deal/${offer.dealId}`)}><AppText muted>افتح الدردشة</AppText></Pressable> : null}
+    </AppCard>
+  );
 }
 
 export default function Screen() {
@@ -33,6 +43,7 @@ export default function Screen() {
   const [dealConversations, setDealConversations] = useState<DealConversation[]>([]);
   const [storyReplies, setStoryReplies] = useState<ContextualConversationSummary[]>([]);
   const [directConversations, setDirectConversations] = useState<DirectConversationSummary[]>([]);
+  const { refreshBadges } = useUnreadBadges();
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -43,16 +54,17 @@ export default function Screen() {
       ]);
       setIncoming(offersData.incomingActionableOffers); setSent(offersData.sentOffers);
       setDealConversations(convosData); setStoryReplies(repliesData); setDirectConversations(directData);
+      void refreshBadges();
     } catch { setError('تعذر تحميل الرسائل حالياً.'); }
     finally { setLoading(false); }
-  }, [user?.id]);
+  }, [refreshBadges, user?.id]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const unified = useMemo<UnifiedRow[]>(() => {
-    const directRows = directConversations.map((c) => ({ id: `direct-${c.conversationId}`, type: 'direct' as const, title: c.otherDisplayName ?? 'رسالة مباشرة', preview: c.lastMessageBody ?? 'ابدأ برسالة من البروفايل.', at: c.lastMessageAt, route: `/direct/${c.conversationId}`, avatarUrl: c.otherAvatarUrl, unreadCount: c.unreadCount, requestBadge: c.requiresAction }));
-    const dealRows = dealConversations.map((d) => ({ id: `deal-${d.dealId}`, type: 'deal' as const, title: d.otherParticipant.displayName?.trim() || 'دردشة صفقة', preview: d.latestMessage?.body ?? 'افتح الدردشة للتنسيق.', at: d.lastActivityAt, route: `/deal/${d.dealId}`, avatarUrl: d.otherParticipant.avatarUrl, unreadCount: d.unreadCount }));
-    const storyRows = storyReplies.map((s) => ({ id: `story-${s.conversationId}`, type: 'story' as const, title: s.otherParticipant.displayName?.trim() || 'رد قصة', preview: s.latestMessage?.kind === 'voice' ? 'رسالة صوتية' : (s.latestMessage?.body ?? 'افتح الرد.'), at: s.lastActivityAt, route: `/contextual/${s.conversationId}`, avatarUrl: s.otherParticipant.avatarUrl, unreadCount: s.unreadCount }));
+    const directRows = directConversations.map((c) => ({ id: `direct-${c.conversationId}`, type: 'direct' as const, title: c.otherDisplayName ?? 'رسالة مباشرة', preview: c.lastMessageBody ?? 'ابدأ برسالة من البروفايل.', at: c.lastMessageAt, route: `/direct/${c.conversationId}`, avatarUrl: c.otherAvatarUrl, unreadCount: c.unreadCount, requestBadge: c.requiresAction, swapContext: null }));
+    const dealRows = dealConversations.map((d) => ({ id: `deal-${d.dealId}`, type: 'deal' as const, title: d.otherParticipant.displayName?.trim() || 'دردشة صفقة', preview: d.latestMessage?.messageType === 'voice' ? 'رسالة صوتية' : (d.latestMessage?.body ?? 'افتح الدردشة للتنسيق.'), at: d.lastActivityAt, route: `/deal/${d.dealId}`, avatarUrl: d.otherParticipant.avatarUrl, unreadCount: d.unreadCount, swapContext: `${d.requestedItemTitle} ↔ ${d.offeredItemTitle}` }));
+    const storyRows = storyReplies.map((s) => ({ id: `story-${s.conversationId}`, type: 'story' as const, title: s.otherParticipant.displayName?.trim() || 'رد قصة', preview: s.latestMessage?.kind === 'voice' ? 'رسالة صوتية' : (s.latestMessage?.body ?? 'افتح الرد.'), at: s.lastActivityAt, route: `/contextual/${s.conversationId}`, avatarUrl: s.otherParticipant.avatarUrl, unreadCount: s.unreadCount, swapContext: null }));
     return [...directRows, ...dealRows, ...storyRows].sort((a, b) => (new Date(b.at ?? 0).getTime() - new Date(a.at ?? 0).getTime()));
   }, [dealConversations, directConversations, storyReplies]);
 
@@ -74,13 +86,13 @@ export default function Screen() {
         {selected === 'conversations' ? (
           unified.length ? unified.map((row) => (
             <Pressable key={row.id} onPress={() => router.push(row.route)}>
-              <AppCard style={styles.card}><View style={styles.row}><View style={styles.avatarWrap}>{row.avatarUrl ? <Image source={{ uri: row.avatarUrl }} style={styles.avatar} /> : <Ionicons name="person" size={16} color={colors.textMuted} />}</View><View style={styles.main}><AppText weight="semibold" numberOfLines={1}>{row.title}</AppText><AppText muted numberOfLines={1}>{row.preview}</AppText><View style={styles.kind}><AppText muted>{typeLabel(row.type)}</AppText></View></View><View style={styles.meta}>{row.at ? <AppText muted>{new Date(row.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText> : null}{row.unreadCount > 0 ? <View style={styles.badge}><AppText weight="semibold" style={styles.badgeText}>{row.unreadCount}</AppText></View> : null}{row.requestBadge ? <AppText muted>طلب</AppText> : null}</View></View></AppCard>
+              <AppCard style={styles.card}><View style={styles.row}><View style={styles.avatarWrap}>{row.avatarUrl ? <Image source={{ uri: row.avatarUrl }} style={styles.avatar} /> : <Ionicons name="person" size={16} color={colors.textMuted} />}</View><View style={styles.main}><AppText weight="semibold" numberOfLines={1}>{row.title}</AppText><AppText muted numberOfLines={1}>{row.preview}</AppText>{row.swapContext ? <AppText muted numberOfLines={1} style={styles.swapContext}>{row.swapContext}</AppText> : null}<View style={styles.kind}><AppText muted>{typeLabel(row.type)}</AppText></View></View><View style={styles.meta}>{row.at ? <AppText muted>{new Date(row.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText> : null}{row.unreadCount > 0 ? <View style={styles.badge}><AppText weight="semibold" style={styles.badgeText}>{row.unreadCount}</AppText></View> : null}{row.requestBadge ? <AppText muted>طلب</AppText> : null}</View></View></AppCard>
             </Pressable>
           )) : <AppCard style={styles.emptyCard}><EmptyState title="مفيش محادثات بعد" description="ابدأ برسالة من أي بروفايل، أو كمل من صفقة مفتوحة." /></AppCard>
         ) : (
           <View style={styles.group}>
-            {incoming.length ? incoming.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض وارد" />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد عروض واردة" description="أي عرض جديد هيظهر هنا." /></AppCard>}
-            {sent.length ? sent.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض مرسل" />) : null}
+            <View style={styles.group}><AppText weight="semibold">عروض تحتاج ردك</AppText>{incoming.length ? incoming.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض وارد" />) : <AppCard style={styles.emptyCard}><EmptyState title="لا توجد عروض واردة" description="أي عرض جديد هيظهر هنا." /></AppCard>}</View>
+            <View style={styles.group}><AppText weight="semibold">العروض التي أرسلتها</AppText>{sent.length ? sent.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض مرسل" />) : <AppCard style={styles.emptyCard}><EmptyState title="لم ترسل عروضًا بعد" description="أرسل عرض من صفحة أي عنصر." /></AppCard>}</View>
           </View>
         )}
       </View>
@@ -98,7 +110,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   avatarWrap: { width: 42, height: 42, borderRadius: 999, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatar: { width: '100%', height: '100%' },
   main: { flex: 1, gap: 4 }, kind: { alignSelf: 'flex-end', backgroundColor: colors.surface, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 2, borderWidth: 1, borderColor: colors.border },
+  swapContext: { fontSize: 12 },
   meta: { alignItems: 'flex-start', minHeight: 40, justifyContent: 'space-between' },
   badge: { minWidth: 20, height: 20, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, paddingHorizontal: 6 }, badgeText: { color: colors.background, fontSize: 12 },
   offerRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: spacing.xs },
+  openChatCta: { marginTop: spacing.xs, alignSelf: 'flex-end', borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 4 },
 });
