@@ -70,7 +70,8 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
     }
 
     if (userInfo.type !== 'success') {
-      return { error: GOOGLE_NATIVE_GENERIC_ERROR, fallbackToBrowser: false };
+      logGoogleSignInDiagnostic('browser_fallback', 'native_exception');
+      return { error: null, fallbackToBrowser: true, reason: 'native_exception' };
     }
 
     const idToken = userInfo.data?.idToken;
@@ -79,7 +80,7 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
       logGoogleSignInDiagnostic('native', 'missing_id_token');
       return {
         error: 'تعذر الحصول على بيانات تسجيل الدخول من جوجل. حاول مرة تانية.',
-        fallbackToBrowser: false,
+        fallbackToBrowser: true,
         reason: 'missing_id_token',
       };
     }
@@ -93,7 +94,7 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
       logGoogleSignInDiagnostic('native', 'supabase_session_failed');
       return {
         error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.',
-        fallbackToBrowser: false,
+        fallbackToBrowser: true,
         reason: 'supabase_session_failed',
       };
     }
@@ -118,7 +119,7 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
       return { error: null, fallbackToBrowser: true, reason: 'in_progress' };
     }
 
-    logGoogleSignInDiagnostic('native', 'native_exception');
-    return { error: GOOGLE_NATIVE_GENERIC_ERROR, fallbackToBrowser: false, reason: 'native_exception' };
+    logGoogleSignInDiagnostic('browser_fallback', 'native_exception');
+    return { error: null, fallbackToBrowser: true, reason: 'native_exception' };
   }
 }
