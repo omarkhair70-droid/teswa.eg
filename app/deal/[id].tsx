@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View, Image, Modal } from "react-native";
+import type { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { Pressable, StyleSheet, TextInput, View, Image } from "react-native";
 import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -15,6 +16,7 @@ import {
 } from "expo-audio";
 import { Ionicons } from "@expo/vector-icons";
 import { AppScreen } from "@/components/ui/AppScreen";
+import { AppActionSheet } from "@/components/sheets/AppActionSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
@@ -72,7 +74,6 @@ export default function Screen() {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [blockError, setBlockError] = useState<string | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
   const [completionMoment, setCompletionMoment] = useState<"confirmed_waiting" | "completed" | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "live" | "unavailable"
@@ -92,6 +93,7 @@ export default function Screen() {
     message: string;
   } | null>(null);
   const voicePlaybackRequestRef = useRef(0);
+  const dealActionsSheetRef = useRef<BottomSheetModal>(null);
   const audioModeQueueRef = useRef<Promise<void>>(Promise.resolve());
   const messageIdsRef = useRef<Set<string>>(new Set());
   const autoStopTriggeredRef = useRef(false);
@@ -348,23 +350,25 @@ export default function Screen() {
     if (!user?.id || !deal?.otherParticipant?.id || blockBusy) return;
     setBlockBusy(true);
     setBlockError(null);
-    const result = blockedByMe
-      ? await unblockUserFromMobile(user.id, deal.otherParticipant.id)
-      : await blockUserFromMobile(user.id, deal.otherParticipant.id);
-
-    if (!result.ok) {
-      setBlockError(result.message);
+    try {
+      const result = blockedByMe
+        ? await unblockUserFromMobile(user.id, deal.otherParticipant.id)
+        : await blockUserFromMobile(user.id, deal.otherParticipant.id);
+      if (!result.ok) {
+        setBlockError(result.message);
+        return;
+      }
+      const refreshed = await fetchUserBlockState(user.id, deal.otherParticipant.id);
+      if (refreshed.ok) {
+        setBlockedByMe(refreshed.state.blockedByMe);
+      } else {
+        setBlockError(refreshed.message);
+      }
+    } catch {
+      setBlockError("تعذر تحديث حالة الحظر حالياً.");
+    } finally {
       setBlockBusy(false);
-      return;
     }
-
-    const refreshed = await fetchUserBlockState(user.id, deal.otherParticipant.id);
-    if (refreshed.ok) {
-      setBlockedByMe(refreshed.state.blockedByMe);
-    } else {
-      setBlockError(refreshed.message);
-    }
-    setBlockBusy(false);
   }, [blockBusy, blockedByMe, deal?.otherParticipant?.id, user?.id]);
 
   const sendMessage = useCallback(async () => {
@@ -694,7 +698,7 @@ export default function Screen() {
             </Pressable>
             <Pressable
               style={styles.menuTrigger}
-              onPress={() => setMenuVisible(true)}
+              onPress={() => dealActionsSheetRef.current?.present()}
               accessibilityRole="button"
               accessibilityLabel="فتح إجراءات الصفقة"
             >
@@ -754,6 +758,27 @@ export default function Screen() {
               primaryActionLabel="قيّم التجربة"
               onPrimaryAction={() => router.push(`/review/deal/${deal.id}`)}
             />
+          ) : null}
+          {["coordinating", "completed_pending_confirmation"].includes(deal.status) ? (
+            <AppCard style={styles.compactActionGroup}>
+              <AppText weight="semibold">تأكيد إتمام المقايضة</AppText>
+              <AppText muted style={styles.compactStatusRow}>
+                {deal.iConfirmed ? "أنت أكدت" : "لسه ما أكدتش"} •{" "}
+                {deal.otherConfirmed ? "الطرف التاني أكد" : "مستني الطرف التاني"}
+              </AppText>
+              <AppButton
+                label={confirming ? "جاري التأكيد..." : "أكد إن المقايضة تمت"}
+                onPress={() => {
+                  void confirmCompletion();
+                }}
+                disabled={!deal.canConfirmCompletion || confirming}
+              />
+            </AppCard>
+          ) : null}
+          {blockError ? (
+            <AppCard style={styles.blockErrorCard}>
+              <AppText muted>{blockError}</AppText>
+            </AppCard>
           ) : null}
           <View style={styles.threadSection}>
             <View style={styles.threadTopLine}>
@@ -873,63 +898,48 @@ export default function Screen() {
           </View>
 
         </KeyboardAwareScrollView>
-        <Modal
-          visible={menuVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMenuVisible(false)}
-        >
-          <Pressable style={styles.menuBackdrop} onPress={() => setMenuVisible(false)}>
-            <Pressable style={styles.menuSheet} onPress={(event) => event.stopPropagation()}>
-              {["coordinating", "completed_pending_confirmation"].includes(deal.status) ? (
-                <View style={styles.menuSection}>
-                  <AppText weight="semibold">تأكيد إتمام المقايضة</AppText>
-                  <AppText muted style={styles.compactStatusRow}>
-                    {deal.iConfirmed ? "أنت أكدت" : "لسه ما أكدتش"} •{" "}
-                    {deal.otherConfirmed ? "الطرف التاني أكد" : "مستني الطرف التاني"}
-                  </AppText>
-                  <AppButton
-                    label={confirming ? "جاري التأكيد..." : "أكد إن المقايضة تمت"}
-                    onPress={() => {
-                      void confirmCompletion();
-                    }}
-                    disabled={!deal.canConfirmCompletion || confirming}
-                  />
-                </View>
-              ) : null}
-              {deal.status === "completed" && !deal.alreadyRated ? (
-                <AppButton
-                  label="قيّم التجربة"
-                  variant="neutral"
-                  onPress={() => {
-                    setMenuVisible(false);
-                    router.push(`/review/deal/${deal.id}`);
-                  }}
-                />
-              ) : null}
-              <AppButton
-                label="الإبلاغ عن الصفقة"
-                variant="neutral"
-                onPress={() => {
-                  setMenuVisible(false);
-                  router.push(`/report/deal/${deal.id}`);
-                }}
-              />
-              <AppButton
-                label={blockBusy ? "جاري التنفيذ..." : blockedByMe ? "إلغاء الحظر" : "حظر المستخدم"}
-                variant="neutral"
-                disabled={blockBusy}
-                onPress={() => {
-                  void onToggleBlock();
-                }}
-              />
-              <AppText muted style={styles.menuSafetyHint}>
-                لو في حاجة مش مريحة، تقدر تبلغ أو تتحكم في الحظر.
-              </AppText>
-              {blockError ? <AppText muted>{blockError}</AppText> : null}
-            </Pressable>
-          </Pressable>
-        </Modal>
+        <AppActionSheet
+          ref={dealActionsSheetRef}
+          title="خيارات الصفقة"
+          description="إدارة المحادثة والصفقة بأمان."
+          actions={[
+            {
+              label: "عرض بروفايل الطرف الآخر",
+              onPress: () => {
+                dealActionsSheetRef.current?.dismiss();
+                router.push(`/profile/${deal.otherParticipant.id}`);
+              },
+            },
+            ...(deal.status === "completed" && !deal.alreadyRated
+              ? [
+                  {
+                    label: "قيّم التجربة",
+                    onPress: () => {
+                      dealActionsSheetRef.current?.dismiss();
+                      router.push(`/review/deal/${deal.id}`);
+                    },
+                  },
+                ]
+              : []),
+            {
+              label: "الإبلاغ عن الصفقة",
+              tone: "danger",
+              onPress: () => {
+                dealActionsSheetRef.current?.dismiss();
+                router.push(`/report/deal/${deal.id}`);
+              },
+            },
+            {
+              label: blockBusy ? "جاري التنفيذ..." : blockedByMe ? "إلغاء الحظر" : "حظر المستخدم",
+              tone: "danger",
+              disabled: blockBusy,
+              onPress: () => {
+                dealActionsSheetRef.current?.dismiss();
+                void onToggleBlock();
+              },
+            },
+          ]}
+        />
 
         {deal.canSendMessage ? (
           <KeyboardStickyView
@@ -1117,6 +1127,7 @@ const styles = StyleSheet.create({
   voiceBubble: { gap: spacing.xs },
   compactActionGroup: { gap: spacing.xs },
   compactStatusRow: { fontSize: 13 },
+  blockErrorCard: { gap: spacing.xs },
   voiceBubbleHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
@@ -1132,22 +1143,6 @@ const styles = StyleSheet.create({
   },
   voiceProgressFill: { height: "100%", backgroundColor: colors.primary },
   voiceErrorText: { fontSize: 11, color: "#B42318" },
-  menuBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(16,24,40,0.35)",
-    justifyContent: "flex-end",
-    padding: spacing.md,
-  },
-  menuSheet: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  menuSection: { gap: spacing.xs },
-  menuSafetyHint: { fontSize: 12 },
   composerSticky: { paddingTop: spacing.xs },
   composerShell: {
     backgroundColor: colors.surface,
