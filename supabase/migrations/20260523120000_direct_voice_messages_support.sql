@@ -39,6 +39,7 @@ set public = excluded.public,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
 
+drop policy if exists "direct_voice_messages_select_participants" on storage.objects;
 create policy "direct_voice_messages_select_participants"
 on storage.objects for select to authenticated
 using (
@@ -50,6 +51,7 @@ using (
   )
 );
 
+drop policy if exists "direct_voice_messages_insert_sender" on storage.objects;
 create policy "direct_voice_messages_insert_sender"
 on storage.objects for insert to authenticated
 with check (
@@ -63,6 +65,7 @@ with check (
   )
 );
 
+drop policy if exists "direct_voice_messages_delete_sender" on storage.objects;
 create policy "direct_voice_messages_delete_sender"
 on storage.objects for delete to authenticated
 using (
