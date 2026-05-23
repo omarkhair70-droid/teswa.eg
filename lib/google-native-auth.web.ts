@@ -1,7 +1,15 @@
 import { Platform } from 'react-native';
 
 export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth.web.ts.v1';
-export const GOOGLE_NATIVE_AUTH_IMPLEMENTATION = 'web-shim';
+export type GoogleNativeAuthImplementation = 'android-native' | 'web-shim' | 'unknown';
+export const GOOGLE_NATIVE_AUTH_IMPLEMENTATION: GoogleNativeAuthImplementation = 'web-shim';
+
+export type GoogleNativeAuthModuleInfo = {
+  moduleVersion: string;
+  implementation: GoogleNativeAuthImplementation;
+  platform: string;
+  hasSignInFunction: boolean;
+};
 
 export type NativeGoogleSignInResult = {
   status: 'success' | 'cancelled' | 'fallback' | 'error' | 'empty';
@@ -11,7 +19,7 @@ export type NativeGoogleSignInResult = {
   reason?: string;
   resultType?: string;
   fallbackToBrowser?: boolean;
-  implementation?: 'android-native' | 'web-shim' | 'unknown';
+  implementation?: GoogleNativeAuthImplementation;
   moduleVersion?: string;
 };
 
@@ -31,7 +39,7 @@ export type GoogleNativeDiagnosticsEvent = {
   hasIdToken?: boolean;
   hasUser?: boolean;
   platform?: string;
-  implementation?: 'android-native' | 'web-shim' | 'unknown';
+  implementation?: GoogleNativeAuthImplementation;
   moduleVersion?: string;
 };
 
@@ -39,7 +47,7 @@ type GoogleNativeSignInOptions = {
   onStep?: (event: GoogleNativeDiagnosticsEvent) => void;
 };
 
-export function getGoogleNativeAuthModuleInfo() {
+export function getGoogleNativeAuthModuleInfo(): GoogleNativeAuthModuleInfo {
   return {
     moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION,
     implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,

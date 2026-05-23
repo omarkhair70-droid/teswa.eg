@@ -4,12 +4,20 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { supabase } from '@/lib/supabase/client';
 
 export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth.android.ts.v1';
-export const GOOGLE_NATIVE_AUTH_IMPLEMENTATION = 'android-native';
+export type GoogleNativeAuthImplementation = 'android-native' | 'web-shim' | 'unknown';
+export const GOOGLE_NATIVE_AUTH_IMPLEMENTATION: GoogleNativeAuthImplementation = 'android-native';
+
+export type GoogleNativeAuthModuleInfo = {
+  moduleVersion: string;
+  implementation: GoogleNativeAuthImplementation;
+  platform: string;
+  hasSignInFunction: boolean;
+};
 
 export type NativeGoogleSignInResult = {
   status: 'success' | 'cancelled' | 'fallback' | 'error' | 'empty';
   error: string | null;
-  implementation?: 'android-native' | 'web-shim' | 'unknown';
+  implementation?: GoogleNativeAuthImplementation;
   moduleVersion?: string;
   code?: string;
   message?: string;
@@ -75,12 +83,12 @@ export type GoogleNativeDiagnosticsEvent = {
   hasUser?: boolean;
   code?: string;
   platform?: string;
-  implementation?: 'android-native' | 'web-shim' | 'unknown';
+  implementation?: GoogleNativeAuthImplementation;
   moduleVersion?: string;
 };
 
 
-export function getGoogleNativeAuthModuleInfo() {
+export function getGoogleNativeAuthModuleInfo(): GoogleNativeAuthModuleInfo {
   return {
     moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION,
     implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
