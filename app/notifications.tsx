@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ export default function NotificationsScreen() {
   const { user } = useAuth();
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   const [openingNotificationId, setOpeningNotificationId] = useState<string | null>(null);
+  const openingNotificationRef = useRef<string | null>(null);
   const openingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { refreshBadges } = useUnreadBadges();
   const queryClient = useQueryClient();
@@ -48,12 +49,27 @@ export default function NotificationsScreen() {
     },
   });
 
-  const handleOpenNotification = async (notification: AppNotification) => {
-    if (openingNotificationId) return;
-
-    setOpeningNotificationId(notification.id);
+  const clearOpeningNotificationSoon = (delayMs = 0) => {
     if (openingTimeoutRef.current) clearTimeout(openingTimeoutRef.current);
-    openingTimeoutRef.current = setTimeout(() => setOpeningNotificationId(null), 1200);
+    openingTimeoutRef.current = setTimeout(() => {
+      openingNotificationRef.current = null;
+      setOpeningNotificationId(null);
+    }, delayMs);
+  };
+
+  useEffect(() => () => {
+    if (openingTimeoutRef.current) clearTimeout(openingTimeoutRef.current);
+    openingNotificationRef.current = null;
+  }, []);
+
+  const handleOpenNotification = async (notification: AppNotification) => {
+    if (openingNotificationRef.current) {
+      if (__DEV__) console.log('[NotificationsNav] open_ignored_busy');
+      return;
+    }
+    openingNotificationRef.current = notification.id;
+    setOpeningNotificationId(notification.id);
+    clearOpeningNotificationSoon(1200);
 
     setDeepLinkError(null);
     if (__DEV__) console.log('[NotificationsNav] open_start', { notificationType: notification.type });
@@ -62,6 +78,7 @@ export default function NotificationsScreen() {
     if (!route) {
       if (__DEV__) console.log('[NotificationsNav] route_missing', { notificationType: notification.type });
       setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
+      clearOpeningNotificationSoon(300);
       return;
     }
 
@@ -94,8 +111,7 @@ export default function NotificationsScreen() {
       }
       setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
     } finally {
-      if (openingTimeoutRef.current) clearTimeout(openingTimeoutRef.current);
-      openingTimeoutRef.current = setTimeout(() => setOpeningNotificationId(null), 500);
+      clearOpeningNotificationSoon(500);
     }
   };
 
