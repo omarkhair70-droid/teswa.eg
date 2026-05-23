@@ -5,7 +5,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEventListener } from 'expo';
 import { Image as ExpoImage } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { Ionicons } from '@expo/vector-icons';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { StoryPager } from '@/components/story/StoryPager';
+import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAuth } from '@/lib/auth';
@@ -95,6 +98,7 @@ export default function StoryViewerScreen() {
   const isViewingOwnStories = !!user?.id && normalizedUserId === user.id;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const markedViewedStoryIdsRef = useRef<Set<string>>(new Set());
+  const storyActionsSheetRef = useRef<BottomSheetModal>(null);
 
   const [loading, setLoading] = useState(true);
   const [context, setContext] = useState<StoryViewerContext | null>(null);
@@ -459,6 +463,27 @@ export default function StoryViewerScreen() {
     }
   }, [audioRecorder, recorderState.isRecording, voicePlayer]);
 
+  const handleSafetyToggle = useCallback(async () => {
+    if (!user?.id || !context?.author.id || safetyBusy) return;
+    setSafetyBusy(true);
+    const result = blockedByMe
+      ? await unblockUserFromMobile(user.id, context.author.id)
+      : await blockUserFromMobile(user.id, context.author.id);
+    if (result.ok) {
+      const state = await fetchUserBlockState(user.id, context.author.id);
+      if (state.ok) setBlockedByMe(state.state.blockedByMe);
+    }
+    setSafetyBusy(false);
+  }, [blockedByMe, context?.author.id, safetyBusy, user?.id]);
+
+  const openStoryActionsSheet = useCallback(() => {
+    if (isViewingOwnStories) {
+      router.push('/story/manage');
+      return;
+    }
+    storyActionsSheetRef.current?.present();
+  }, [isViewingOwnStories, router]);
+
 const renderUnavailableState = () => {
     if (isViewingOwnStories) {
       return (
@@ -559,7 +584,13 @@ const renderUnavailableState = () => {
         </View>
 
         <View style={styles.headerRow}>
-          <View style={styles.authorRow}>
+          <Pressable
+            style={styles.authorRow}
+            onPress={() => {
+              if (!context.author.id) return;
+              router.push(`/profile/${context.author.id}`);
+            }}
+          >
             <View style={styles.authorAvatar}>
               {context.author.avatarUrl ? (
                 <ExpoImage source={{ uri: context.author.avatarUrl }} style={styles.authorAvatarImage} contentFit="cover" cachePolicy="memory-disk" transition={100} />
@@ -575,28 +606,17 @@ const renderUnavailableState = () => {
                 </AppText>
               ) : null}
             </View>
-          </View>
+          </Pressable>
           <View style={styles.headerActions}>
-            {!isViewingOwnStories ? (
-              <Pressable onPress={() => void handleToggleStoryLike()} disabled={currentStoryLikeBusy} style={currentStoryLikeBusy ? styles.likeDisabled : undefined}>
-                <AppText style={[styles.likeText, currentStoryLiked && styles.likeTextActive]}>{currentStoryLiked ? '♥' : '♡'}</AppText>
-              </Pressable>
-            ) : null}
-            {isViewingOwnStories ? (
-              <Pressable onPress={() => router.push('/story/manage')}>
-                <AppText style={styles.manageText}>إدارة</AppText>
-              </Pressable>
-            ) : null}
-            <View style={styles.safetyRow}>
-              {!isViewingOwnStories && currentStory ? <Pressable onPress={() => router.push(`/report/story/${currentStory.id}`)}><AppText style={styles.closeText}>الإبلاغ عن القصة</AppText></Pressable> : null}
-              {!isViewingOwnStories ? <Pressable disabled={safetyBusy} onPress={async () => { if (!user?.id || !context?.author.id || safetyBusy) return; setSafetyBusy(true); const r = blockedByMe ? await unblockUserFromMobile(user.id, context.author.id) : await blockUserFromMobile(user.id, context.author.id); if (r.ok) { const s = await fetchUserBlockState(user.id, context.author.id); if (s.ok) setBlockedByMe(s.state.blockedByMe); } setSafetyBusy(false); }}><AppText style={styles.closeText}>{safetyBusy ? '...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم')}</AppText></Pressable> : null}
-              <Pressable onPress={closeViewer}><AppText style={styles.closeText}>إغلاق</AppText></Pressable>
-            </View>
+            <Pressable style={styles.headerCircleButton} onPress={openStoryActionsSheet}>
+              {isViewingOwnStories ? <AppText style={styles.manageText}>إدارة</AppText> : <Ionicons name="ellipsis-horizontal" size={18} color="#fff" />}
+            </Pressable>
+            <Pressable style={styles.headerCircleButton} onPress={closeViewer}><Ionicons name="close" size={18} color="#fff" /></Pressable>
           </View>
         </View>
       </View>
 
-      {likeActionError ? (
+      {likeActionError && !replyComposerVisible ? (
         <View style={styles.likeErrorBox}>
           <AppText style={styles.likeErrorText}>{likeActionError}</AppText>
         </View>
@@ -610,8 +630,24 @@ const renderUnavailableState = () => {
 
       {replyComposerVisible ? (
         <View style={styles.replyComposerOverlay}>
+          {likeActionError ? (
+            <View style={styles.likeErrorBoxBottom}>
+              <AppText style={styles.likeErrorText}>{likeActionError}</AppText>
+            </View>
+          ) : null}
           {storyReplyError ? <AppText style={styles.replyErrorText}>{storyReplyError}</AppText> : null}
           {!storyReplyError && storyReplyFeedback ? <AppText style={styles.replyFeedbackText}>{storyReplyFeedback}</AppText> : null}
+          <View style={styles.bottomActionsRow}>
+            {!isViewingOwnStories ? (
+              <Pressable
+                style={[styles.headerCircleButton, currentStoryLikeBusy && styles.likeDisabled]}
+                onPress={() => void handleToggleStoryLike()}
+                disabled={currentStoryLikeBusy}
+              >
+                <Ionicons name={currentStoryLiked ? 'heart' : 'heart-outline'} size={18} color="#fff" />
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.replyComposerRow}>
             <Pressable style={[styles.replySendButton, (storyReplySending || !storyReplyBody.trim()) && styles.replySendButtonDisabled]} onPress={() => void handleSendStoryReply()} disabled={storyReplySending || !storyReplyBody.trim()}>
               <AppText style={styles.replySendButtonText}>{storyReplySending ? '...' : 'إرسال'}</AppText>
@@ -629,6 +665,34 @@ const renderUnavailableState = () => {
 
       {currentStory?.caption ? (
         <View style={[styles.captionBox, replyComposerVisible && styles.captionBoxWithReplyComposer]}><AppText style={styles.captionText}>{currentStory.caption}</AppText></View>
+      ) : null}
+      {!isViewingOwnStories ? (
+        <AppActionSheet
+          ref={storyActionsSheetRef}
+          title="خيارات القصة"
+          actions={[
+            {
+              label: 'الإبلاغ عن القصة',
+              tone: 'danger',
+              iconName: 'flag-outline',
+              onPress: () => {
+                storyActionsSheetRef.current?.dismiss();
+                if (!currentStory) return;
+                router.push(`/report/story/${currentStory.id}`);
+              },
+            },
+            {
+              label: blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم',
+              tone: 'danger',
+              iconName: blockedByMe ? 'lock-open-outline' : 'ban-outline',
+              disabled: safetyBusy,
+              onPress: () => {
+                storyActionsSheetRef.current?.dismiss();
+                void handleSafetyToggle();
+              },
+            },
+          ]}
+        />
       ) : null}
     </View>
   );
@@ -649,12 +713,10 @@ const styles = StyleSheet.create({
   authorFallback: { color: '#fff' },
   authorName: { color: '#fff' },
   authorUsername: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
-  closeText: { color: '#fff', fontSize: 14 },
   manageText: { color: '#fff', fontSize: 14 },
-  likeText: { color: '#fff', fontSize: 18, lineHeight: 20 },
-  likeTextActive: { color: '#fff' },
   likeDisabled: { opacity: 0.6 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerCircleButton: { width: 34, height: 34, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.42)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)' },
   navLayer: {
     position: 'absolute',
     left: 0,
@@ -679,11 +741,12 @@ const styles = StyleSheet.create({
   },
   topOverlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 56, paddingHorizontal: 12, gap: 12, zIndex: 3 },
   likeErrorBox: { position: 'absolute', top: 118, left: 12, right: 12, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
+  likeErrorBoxBottom: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.35)' },
   likeErrorText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, textAlign: 'right' },
   captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
   captionBoxWithReplyComposer: { bottom: 76 },
-  safetyRow: { flexDirection: 'row-reverse', gap: 12, alignItems: 'center' },
   replyComposerOverlay: { position: 'absolute', left: 12, right: 12, bottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 12, padding: 8, gap: 6, zIndex: 4 },
+  bottomActionsRow: { flexDirection: 'row', justifyContent: 'flex-end' },
   replyComposerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   replyInput: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 10, color: '#fff', backgroundColor: 'rgba(255,255,255,0.08)' },
   replySendButton: { minWidth: 64, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)' },
