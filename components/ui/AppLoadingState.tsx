@@ -1,9 +1,10 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { AppText } from './AppText';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { spacing } from '@/constants/spacing';
 
 export function AppLoadingState({ label = 'جاري التحميل...' }: { label?: string }) {
-  return <View style={styles.wrap}><AppText muted>{label}</AppText></View>;
+  return <AppFadeIn style={styles.wrap}><AppText muted>{label}</AppText></AppFadeIn>;
 }
 
 const styles = StyleSheet.create({ wrap: { paddingVertical: spacing.lg, alignItems: 'center', justifyContent: 'center' } });
