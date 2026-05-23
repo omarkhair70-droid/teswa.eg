@@ -95,12 +95,6 @@ export default function DirectScreen() {
   }, [convo?.otherUserId, user?.id]);
 
   useEffect(() => {
-    if (!recorderState.isRecording) return;
-    if ((recorderState.durationMillis ?? 0) < MAX_VOICE_DURATION_MS) return;
-    void stopVoiceRecording();
-  }, [recorderState.durationMillis, recorderState.isRecording]);
-
-  useEffect(() => {
     if (!voicePlayerStatus.didJustFinish) return;
     voicePlayer.pause();
     void voicePlayer.seekTo(0).catch(() => undefined);
@@ -161,6 +155,25 @@ export default function DirectScreen() {
     }
   }, [audioRecorder, recorderState.durationMillis, recorderState.isRecording, voiceBusy]);
 
+  const cancelVoiceRecording = useCallback(async () => {
+    if (recorderState.isRecording) {
+      setVoiceBusy(true);
+      try {
+        await audioRecorder.stop();
+      } catch {}
+      finally {
+        setVoiceBusy(false);
+      }
+    }
+    setVoiceDraft(null);
+  }, [audioRecorder, recorderState.isRecording]);
+
+  useEffect(() => {
+    if (!recorderState.isRecording) return;
+    if ((recorderState.durationMillis ?? 0) < MAX_VOICE_DURATION_MS) return;
+    void stopVoiceRecording();
+  }, [recorderState.durationMillis, recorderState.isRecording, stopVoiceRecording]);
+
   const sendVoiceDraft = useCallback(async () => {
     if (!voiceDraft || !user?.id || composerState.disabled || voiceSending) return;
     setError(null);
@@ -180,6 +193,16 @@ export default function DirectScreen() {
 
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
+  if (!convo && initialLoadFailed) {
+    return (
+      <AppScreen>
+        <View style={styles.retryState}>
+          <EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." />
+          <AppButton label="إعادة المحاولة" onPress={() => { void load(); }} />
+        </View>
+      </AppScreen>
+    );
+  }
 
   return (
     <AppScreen>
@@ -191,8 +214,11 @@ export default function DirectScreen() {
         </Pressable>
         <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
       </View>
+      {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
+      {isRequesterOnRequest ? <AppCard style={styles.infoCard}><AppText muted>طلب المراسلة اتبعت. هتكملوا الكلام لما الطرف التاني يقبل.</AppText></AppCard> : null}
       {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
       <KeyboardAwareScrollView bottomOffset={96} contentContainerStyle={styles.messagesWrap}>
+        {messages.length === 0 ? <EmptyState title="ابدأوا الكلام" description="اكتب أول رسالة وافتح مساحة للتواصل بهدوء." /> : null}
         {messages.map((m) => {
           const mine = m.senderId === user?.id;
           const isVoice = m.messageType === 'voice';
@@ -206,19 +232,25 @@ export default function DirectScreen() {
                 if (!m.audioStoragePath) return;
                 if (isActive) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; }
                 setVoicePlaybackLoadingId(m.id);
-                const signed = await createDirectVoiceMessageSignedUrl(m.audioStoragePath);
-                setVoicePlaybackLoadingId(null);
-                if (!signed) { setError('تعذر تشغيل الرسالة الصوتية حالياً.'); return; }
-                voicePlayer.replace(signed);
-                setActiveVoiceId(m.id);
-                voicePlayer.play();
+                try {
+                  const signed = await createDirectVoiceMessageSignedUrl(m.audioStoragePath);
+                  if (!signed) { setError('تعذر تشغيل الرسالة الصوتية حالياً.'); return; }
+                  voicePlayer.replace(signed);
+                  setActiveVoiceId(m.id);
+                  voicePlayer.play();
+                } catch {
+                  setError('تعذر تشغيل الرسالة الصوتية حالياً.');
+                } finally {
+                  setVoicePlaybackLoadingId(null);
+                }
               }}><AppText>{voicePlaybackLoadingId === m.id ? 'جاري التحميل...' : (isActive && voicePlayerStatus.playing ? 'إيقاف' : 'تشغيل')}</AppText></Pressable><View style={styles.voiceTrack}><View style={[styles.voiceFill, { width: `${Math.round(progress * 100)}%` }]} /></View><AppText muted>{formatMs(totalDuration)}</AppText></View> : <AppText>{m.body}</AppText>}
               <AppText muted style={styles.time}>{new Date(m.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
             </View>
           );
         })}
       </KeyboardAwareScrollView>
-      {voiceDraft ? <AppCard style={styles.voiceDraftCard}><AppText muted>معاينة: {formatMs(voiceDraft.durationMs)}</AppText><View style={styles.voiceActions}><AppButton label={voiceSending ? 'جاري الإرسال...' : 'إرسال الرسالة الصوتية'} onPress={() => void sendVoiceDraft()} disabled={voiceSending || sending || voiceBusy || composerState.disabled} /><AppButton label="إلغاء" variant="neutral" onPress={() => setVoiceDraft(null)} disabled={voiceSending || voiceBusy} /></View></AppCard> : null}
+      {recorderState.isRecording ? <AppCard style={styles.voiceDraftCard}><AppText muted>جارٍ التسجيل... {formatMs(recorderState.durationMillis ?? 0)}</AppText><View style={styles.voiceActions}><AppButton label="إيقاف" onPress={() => void stopVoiceRecording()} disabled={voiceBusy} /><AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceRecording()} disabled={voiceBusy} /></View></AppCard> : null}
+      {voiceDraft && !recorderState.isRecording ? <AppCard style={styles.voiceDraftCard}><AppText muted>معاينة: {formatMs(voiceDraft.durationMs)}</AppText><View style={styles.voiceActions}><AppButton label={voiceSending ? 'جاري الإرسال...' : 'إرسال الرسالة الصوتية'} onPress={() => void sendVoiceDraft()} disabled={voiceSending || sending || voiceBusy || composerState.disabled} /><AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceRecording()} disabled={voiceSending || voiceBusy} /></View></AppCard> : null}
       <KeyboardStickyView offset={{ opened: 6, closed: 0 }}>
         <View style={styles.composer}><TextInput value={body} onChangeText={setBody} placeholder="اكتب رسالة بسيطة..." placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerState.disabled && !sending && !voiceSending} multiline /><Pressable disabled={composerState.disabled || sending || voiceSending || voiceBusy} style={[styles.send, (composerState.disabled || sending || voiceSending || voiceBusy) && styles.sendDisabled]} onPress={async () => {
           const trimmed = body.trim();
@@ -251,6 +283,11 @@ const styles = StyleSheet.create({
   avatarWrap: { width: 42, height: 42, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatar: { width: '100%', height: '100%' },
   pill: { backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 4 },
+  requestCard: { margin: spacing.sm, gap: spacing.sm },
+  requestHead: { gap: spacing.xs },
+  requestActions: { flexDirection: 'row-reverse', gap: spacing.xs },
+  retryState: { padding: spacing.md, gap: spacing.sm },
+  infoCard: { marginHorizontal: spacing.sm, marginBottom: spacing.xs },
   info: { paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
   messagesWrap: { padding: spacing.md, gap: spacing.sm },
   bubble: { maxWidth: '80%', borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: 4 },
