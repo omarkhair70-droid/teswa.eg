@@ -13,7 +13,14 @@ const nativeTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE ==
 export default function NativeGoogleDiagnosticsScreen() {
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<GoogleNativeDiagnosticsEvent[]>([]);
-  const [result, setResult] = useState<{ error: string | null; fallbackToBrowser?: boolean; reason?: string } | null>(null);
+  const [result, setResult] = useState<{
+    status: 'success' | 'cancelled' | 'fallback' | 'error' | 'empty' | 'timeout';
+    error: string | null;
+    reason?: string;
+    fallbackToBrowser?: boolean;
+    code?: string;
+    message?: string;
+  } | null>(null);
 
   const safeErrorText = useMemo(() => {
     if (!result) return '—';
@@ -26,15 +33,48 @@ export default function NativeGoogleDiagnosticsScreen() {
     setRunning(true);
     setEvents([]);
     setResult(null);
+    setEvents((prev) => [...prev, { flow: 'native_step', step: 'diagnostics_button_pressed' }]);
+    setEvents((prev) => [...prev, { flow: 'native_step', step: 'calling_native_helper' }]);
+    let didTimeout = false;
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_timeout_no_result' }]);
+      setResult({
+        status: 'timeout',
+        error: 'انتهت مهلة انتظار نتيجة Native Google.',
+        reason: 'native_timeout_no_result',
+        fallbackToBrowser: true,
+      });
+      setRunning(false);
+    }, 10_000);
     try {
       const nextResult = await signInWithGoogleNative({
         onStep: (event) => setEvents((prev) => [...prev, event]),
       });
-      setResult(nextResult);
-    } catch {
-      setResult({ error: 'حدث خطأ غير متوقع أثناء اختبار Native Google.' });
+      if (didTimeout) return;
+      setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_helper_returned' }]);
+      if (!nextResult || typeof nextResult.status !== 'string') {
+        setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_helper_returned_empty' }]);
+        setResult({
+          status: 'empty',
+          error: 'لم يتم استلام نتيجة صالحة من Native Google.',
+          reason: 'native_helper_returned_empty',
+          fallbackToBrowser: true,
+        });
+      } else {
+        setResult(nextResult);
+      }
+    } catch (error: unknown) {
+      if (didTimeout) return;
+      const message = typeof error === 'object' && error !== null && 'message' in error ? String((error as { message?: unknown }).message) : undefined;
+      setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_helper_threw', message }]);
+      setResult({ status: 'error', error: 'حدث خطأ غير متوقع أثناء اختبار Native Google.', reason: 'native_helper_threw', message });
+    } finally {
+      clearTimeout(timeoutId);
+      if (!didTimeout) {
+        setRunning(false);
+      }
     }
-    setRunning(false);
   };
 
   if (!nativeTestModeEnabled) {
@@ -55,9 +95,12 @@ export default function NativeGoogleDiagnosticsScreen() {
         <AppButton label={running ? 'جاري الاختبار...' : 'اختبار Native Google'} onPress={runNativeTest} disabled={running} />
         <View style={styles.card}>
           <AppText style={styles.subhead}>النتيجة النهائية</AppText>
+          <AppText>status: {result?.status ?? '—'}</AppText>
           <AppText>error: {safeErrorText}</AppText>
           <AppText>fallbackToBrowser: {result ? String(Boolean(result.fallbackToBrowser)) : '—'}</AppText>
           <AppText>reason: {result?.reason ?? '—'}</AppText>
+          <AppText>code: {result?.code ?? '—'}</AppText>
+          <AppText>message: {result?.message ?? '—'}</AppText>
         </View>
 
         <View style={styles.card}>
@@ -66,6 +109,11 @@ export default function NativeGoogleDiagnosticsScreen() {
           {events.map((event, index) => (
             <AppText key={`${event.step}-${index}`} style={styles.eventLine}>
               {index + 1}. {event.step}
+              {event.platform ? ` | platform=${event.platform}` : ''}
+              {typeof event.configured === 'boolean' ? ` | configured=${String(event.configured)}` : ''}
+              {event.resultType ? ` | resultType=${event.resultType}` : ''}
+              {event.code ? ` | code=${event.code}` : ''}
+              {event.message ? ` | message=${event.message}` : ''}
             </AppText>
           ))}
         </View>
