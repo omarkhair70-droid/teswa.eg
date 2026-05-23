@@ -1,3 +1,4 @@
+import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,27 +14,39 @@ import type { MarketplaceItem } from '@/lib/marketplace-items';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function ItemCard({ item }: { item: MarketplaceItem }) {
+function ItemCardComponent({ item }: { item: MarketplaceItem }) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
-  const metadata = [
-    item.category ? { key: 'category', label: item.category, icon: 'pricetag-outline' as const, color: colors.primary } : null,
-    item.condition ? { key: 'condition', label: item.condition, icon: 'shield-checkmark-outline' as const, color: colors.accent } : null,
-    item.location ? { key: 'location', label: item.location, icon: 'location-outline' as const, color: '#8A5A2D' } : null,
-  ].filter(Boolean) as Array<{ key: string; label: string; icon: ComponentProps<typeof Ionicons>['name']; color: string }>;
+  const metadata = useMemo(
+    () =>
+      [
+        item.category ? { key: 'category', label: item.category, icon: 'pricetag-outline' as const, color: colors.primary } : null,
+        item.condition ? { key: 'condition', label: item.condition, icon: 'shield-checkmark-outline' as const, color: colors.accent } : null,
+        item.location ? { key: 'location', label: item.location, icon: 'location-outline' as const, color: '#8A5A2D' } : null,
+      ].filter(Boolean) as Array<{ key: string; label: string; icon: ComponentProps<typeof Ionicons>['name']; color: string }>,
+    [item.category, item.condition, item.location],
+  );
+
+  const handlePress = useCallback(() => {
+    router.push(`/item/${item.id}`);
+  }, [item.id]);
+
+  const handlePressIn = useCallback(() => {
+    scale.value = withTiming(0.988, { duration: 90 });
+  }, [scale]);
+
+  const handlePressOut = useCallback(() => {
+    scale.value = withSpring(1, { damping: 16, stiffness: 250, mass: 0.75 });
+  }, [scale]);
 
   return (
     <AnimatedPressable
-      onPress={() => router.push(`/item/${item.id}`)}
-      onPressIn={() => {
-        scale.value = withTiming(0.988, { duration: 90 });
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, { damping: 16, stiffness: 250, mass: 0.75 });
-      }}
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       style={[styles.pressable, animatedStyle]}
     >
       <LinearGradient
@@ -91,6 +104,21 @@ export function ItemCard({ item }: { item: MarketplaceItem }) {
     </AnimatedPressable>
   );
 }
+
+function areItemCardPropsEqual(prev: { item: MarketplaceItem }, next: { item: MarketplaceItem }) {
+  return (
+    prev.item.id === next.item.id &&
+    prev.item.title === next.item.title &&
+    prev.item.imageUrl === next.item.imageUrl &&
+    prev.item.category === next.item.category &&
+    prev.item.condition === next.item.condition &&
+    prev.item.location === next.item.location &&
+    prev.item.ownerDisplayName === next.item.ownerDisplayName &&
+    prev.item.hasVideoTeaser === next.item.hasVideoTeaser
+  );
+}
+
+export const ItemCard = memo(ItemCardComponent, areItemCardPropsEqual);
 
 const styles = StyleSheet.create({
   pressable: { marginBottom: spacing.md },
