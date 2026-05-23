@@ -328,7 +328,8 @@ export default function HomeScreen() {
       : 'الإشعارات';
 
   return (
-    <AppScreen backgroundVariant="alive" style={styles.screen}>
+    <>
+      <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
         data={homeFeedQuery.data?.items ?? []}
         keyExtractor={keyExtractor}
@@ -600,13 +601,13 @@ export default function HomeScreen() {
           )
         }
       />
-    </AppScreen>
-    <AppActionSheet
-      ref={homeHubSheetRef}
-      title="مركز تسوى"
-      description="اختار وجهتك بسرعة من عالم تِسوى."
-      titleIconName="compass-outline"
-      actions={[
+      </AppScreen>
+      <AppActionSheet
+        ref={homeHubSheetRef}
+        title="مركز تسوى"
+        description="اختار وجهتك بسرعة من عالم تِسوى."
+        titleIconName="compass-outline"
+        actions={[
         {
           label: 'الرسائل',
           description: 'افتح محادثاتك وردود القصص والصفقات.',
@@ -666,8 +667,9 @@ export default function HomeScreen() {
             router.push('/(auth)/login');
           },
         },
-      ]}
-    />
+        ]}
+      />
+    </>
   );
 }
 
