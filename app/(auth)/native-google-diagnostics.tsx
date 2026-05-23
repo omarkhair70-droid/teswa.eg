@@ -5,8 +5,8 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
-import * as GoogleNativeAuth from '@/lib/google-native-auth';
-import type { GoogleNativeDiagnosticsEvent } from '@/lib/google-native-auth';
+import * as GoogleNativeAuth from '@/lib/google-native-auth-v2';
+import type { GoogleNativeDiagnosticsEvent } from '@/lib/google-native-auth-v2';
 
 const nativeTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
 
