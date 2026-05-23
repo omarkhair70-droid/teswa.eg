@@ -75,7 +75,7 @@ const policyRouteLog = (decision: 'show_policy' | 'skip_policy' | 'wait_for_sess
 startupLog('js_root_layout_started');
 void SplashScreen.preventAutoHideAsync();
 
-const SPLASH_FAILSAFE_TIMEOUT_MS = 1_200;
+const SPLASH_FAILSAFE_TIMEOUT_MS = 3_000;
 
 async function hideSplashSafely(_reason: string) {
   try {
@@ -190,6 +190,8 @@ function RootNavigator() {
   );
   const markedInitialRouteRef = useRef(false);
   const markedFirstScreenReadyRef = useRef(false);
+  const loggedStartupHoldingScreenRef = useRef(false);
+  const loggedAccountGateHoldingScreenRef = useRef(false);
 
   const retryAccountStateChecks = async () => {
     const shouldRefreshProfile = loadingProfile || profileCheckError;
@@ -248,7 +250,7 @@ function RootNavigator() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      void hideSplashSafely('startup_failsafe');
+      void hideSplashSafely('hard_timeout_failsafe');
     }, SPLASH_FAILSAFE_TIMEOUT_MS);
 
     return () => clearTimeout(timeout);
@@ -294,6 +296,7 @@ function RootNavigator() {
       profileCompleted,
       requiredPoliciesAccepted,
     });
+    void hideSplashSafely('first_screen_ready');
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, profileCompleted, requiredPoliciesAccepted, user]);
 
   useEffect(() => {
@@ -383,15 +386,23 @@ function RootNavigator() {
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router, usingCachedAccountGate]);
 
   if (!bootstrapReady) {
+    if (!loggedStartupHoldingScreenRef.current) {
+      loggedStartupHoldingScreenRef.current = true;
+      startupLog('startup_holding_screen_shown', { stage: 'bootstrap_not_ready' });
+    }
     return (
       <AccountGateLoadingState
-        title="بنفتح تِسوى..."
-        subtitle="ثواني ونجهز تجربتك."
+        title="تِسوى"
+        subtitle=""
       />
     );
   }
 
-  if (user && (loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate) {
+  if (user && (loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate && !usingCachedAccountGate) {
+    if (!loggedAccountGateHoldingScreenRef.current) {
+      loggedAccountGateHoldingScreenRef.current = true;
+      startupLog('startup_holding_screen_shown', { stage: 'account_gate_loading' });
+    }
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>
