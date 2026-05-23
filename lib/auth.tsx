@@ -367,15 +367,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
           startupTrace.mark('onboarding_read_done');
           return value;
         });
-        const onboardingDone = await onboardingPromise;
-        if (!mountedRef.current) return;
-        setOnboardingCompleted(onboardingDone);
-        const sessionResult = await supabase.auth.getSession().then((value) => {
+        const sessionPromise = supabase.auth.getSession().then((value) => {
           startupLog('get_session_finished', { hasSession: Boolean(value.data.session) });
           startupTrace.mark('get_session_done', { hasSession: Boolean(value.data.session) });
           return value;
         });
+        const [onboardingDone, sessionResult] = await Promise.all([
+          onboardingPromise,
+          sessionPromise,
+        ]);
         if (!mountedRef.current) return;
+        setOnboardingCompleted(onboardingDone);
         const currentSession = sessionResult.data.session;
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
