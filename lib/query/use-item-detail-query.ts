@@ -17,7 +17,8 @@ export type ItemDetailQueryResult = {
 export function useItemDetailQuery(itemId: string | undefined, viewerId?: string | null) {
   const queryClient = useQueryClient();
   const hydrationKeyRef = useRef<string | null>(null);
-  const queryKey = queryKeys.itemDetail.byId(itemId ?? '');
+  const viewerCacheKey = viewerId?.trim() || 'anon';
+  const queryKey = [...queryKeys.itemDetail.byId(itemId ?? ''), viewerCacheKey] as const;
 
   useEffect(() => {
     if (!itemId) {
@@ -59,7 +60,7 @@ export function useItemDetailQuery(itemId: string | undefined, viewerId?: string
         const result = await fetchMarketplaceItemDetailById(itemId, viewerId);
 
         if (result) {
-          void writeItemDetailCache(itemId, result);
+          if (!viewerId) void writeItemDetailCache(itemId, result);
           return { item: result, notice: null };
         }
 

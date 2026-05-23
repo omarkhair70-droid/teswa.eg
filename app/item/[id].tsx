@@ -145,11 +145,16 @@ export default function ItemDetailsScreen() {
     }
 
     setLikePending(true);
-    const result = await setItemLiked({ itemId: item.id, userId: user.id, liked: !item.likedByMe });
-    if (result.ok) {
-      await itemDetailQuery.refetch();
+    try {
+      const result = await setItemLiked({ itemId: item.id, userId: user.id, liked: !item.likedByMe });
+      if (result.ok) {
+        await itemDetailQuery.refetch();
+      }
+    } catch {
+      // ignore and keep current UI state
+    } finally {
+      setLikePending(false);
     }
-    setLikePending(false);
   }, [item, likePending, user?.id, router, itemDetailQuery]);
 
   const handleShareItem = useCallback(async () => {
