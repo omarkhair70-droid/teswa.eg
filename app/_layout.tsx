@@ -76,8 +76,6 @@ const policyRouteLog = (decision: 'show_policy' | 'skip_policy' | 'wait_for_sess
 startupLog('js_root_layout_started');
 void SplashScreen.preventAutoHideAsync();
 
-const SPLASH_FAILSAFE_TIMEOUT_MS = 3_000;
-
 async function hideSplashSafely(_reason: string) {
   try {
     await SplashScreen.hideAsync();
@@ -224,8 +222,8 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      void hideSplashSafely('hard_timeout_failsafe');
-    }, SPLASH_FAILSAFE_TIMEOUT_MS);
+      startupLog('splash_watchdog_elapsed_without_forced_hide');
+    }, 3_000);
 
     return () => clearTimeout(timeout);
   }, []);

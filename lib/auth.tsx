@@ -439,8 +439,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     };
 
-    bootstrap();
-
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (!hasLoggedFirstAuthStateEventRef.current) {
         hasLoggedFirstAuthStateEventRef.current = true;
@@ -510,6 +508,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         startupTrace.mark('auth_state_change_end', { outcome: 'error' });
       }
     });
+    bootstrap();
 
     return () => {
       mountedRef.current = false;
