@@ -16,7 +16,10 @@ export async function getOnboardingCompleted(): Promise<boolean> {
 export async function setOnboardingCompleted(completed = true): Promise<void> {
   await migrateSafeAsyncStorageKeysToMmkv();
   const value = completed ? 'true' : 'false';
-  if (!setString(ONBOARDING_STORAGE_KEY, value)) {
+  setString(ONBOARDING_STORAGE_KEY, value);
+  try {
     await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, value);
+  } catch {
+    // Keep non-throwing behavior if MMKV already persisted the value.
   }
 }

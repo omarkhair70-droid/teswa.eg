@@ -95,7 +95,6 @@ export async function migrateSafeAsyncStorageKeysToMmkv(): Promise<void> {
           continue;
         }
         storage.set(key, value);
-        await AsyncStorage.removeItem(key);
         devLog('migrated_key', true);
       } catch {
         devLog('migrated_key', false);
