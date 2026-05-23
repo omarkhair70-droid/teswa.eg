@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   filterChip: { borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.surface },
   filterChipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   filterChipText: { color: colors.textMuted }, filterChipActiveText: { color: colors.primary },
-  card: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated },
+  card: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   emptyCard: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   avatarWrap: { width: 44, height: 44, borderRadius: 999, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatar: { width: '100%', height: '100%' },
