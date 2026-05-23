@@ -455,6 +455,7 @@ export default function PublicProfileScreen() {
           {
             label: 'الإبلاغ عن المستخدم',
             tone: 'danger',
+            disabled: blockBusy,
             onPress: () => {
               profileActionsSheetRef.current?.dismiss();
               router.push(`/report/user/${profile.id}`);
@@ -463,6 +464,7 @@ export default function PublicProfileScreen() {
           {
             label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'),
             tone: 'danger',
+            disabled: blockBusy,
             onPress: () => {
               profileActionsSheetRef.current?.dismiss();
               void onToggleBlock();
