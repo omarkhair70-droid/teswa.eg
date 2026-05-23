@@ -5,6 +5,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { AppCard } from '@/components/ui/AppCard';
@@ -21,6 +22,7 @@ import { ItemShareCard } from '@/components/share/ItemShareCard';
 import { buildCachedVideoSource, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 import { trackEvent } from '@/lib/analytics';
 import { useItemDetailQuery } from '@/lib/query/use-item-detail-query';
+import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 
 function formatDuration(durationMs: number | null): string | null {
   if (durationMs == null) return null;
@@ -95,6 +97,7 @@ export default function ItemDetailsScreen() {
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
   const trackedItemDetailRef = useRef<string | null>(null);
   const itemShareCardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
+  const itemActionsSheetRef = useRef<BottomSheetModal>(null);
   const itemDetailQuery = useItemDetailQuery(id);
   const item = itemDetailQuery.data?.item ?? null;
   const loading = itemDetailQuery.isLoading;
@@ -208,8 +211,36 @@ export default function ItemDetailsScreen() {
       {(desireModeLabel || item.desireText) ? <Animated.View entering={FadeInDown.duration(220).delay(230)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="compass-outline" size={16} color={colors.primary} /><AppText weight="semibold">المقابل المطلوب</AppText></View>{desireModeLabel ? <AppText muted>النمط: {desireModeLabel}</AppText> : null}{item.desireText ? <AppText>{item.desireText}</AppText> : null}</AppCard></Animated.View> : null}
       {item.wantedTags.length ? <Animated.View entering={FadeInDown.duration(220).delay(250)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="pricetag-outline" size={16} color={colors.primary} /><AppText weight="semibold">وسوم مطلوبة</AppText></View><View style={styles.tagsWrap}>{item.wantedTags.map((tag) => <View key={tag} style={styles.tagPill}><AppText style={styles.tagText}>{tag}</AppText></View>)}</View></AppCard></Animated.View> : null}
 
-      <Animated.View entering={FadeInDown.duration(220).delay(190)} style={styles.ctaPanel}><AppText muted>لو العنصر مناسبك، افتح عرض تبديل من هنا.</AppText><AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} /><AppButton label="مشاركة العنصر" variant="neutral" onPress={handleShareItem} disabled={!item} />
-        <AppButton label="مشاركة كارت" variant="neutral" onPress={handleShareItemCard} disabled={!item} /><AppButton label="الإبلاغ عن العنصر" variant="neutral" onPress={() => router.push(`/report/item/${item.id}`)} />{shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}</Animated.View>
+      <Animated.View entering={FadeInDown.duration(220).delay(190)} style={styles.ctaPanel}><AppText muted>لو العنصر مناسبك، افتح عرض تبديل من هنا.</AppText><AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} /><AppButton label="خيارات العنصر" variant="neutral" onPress={() => itemActionsSheetRef.current?.present()} />{shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}</Animated.View>
+      <AppActionSheet
+        ref={itemActionsSheetRef}
+        title="خيارات العنصر"
+        description="اختار إجراء مناسب لهذا العنصر."
+        actions={[
+          {
+            label: 'مشاركة العنصر',
+            onPress: () => {
+              itemActionsSheetRef.current?.dismiss();
+              void handleShareItem();
+            },
+          },
+          {
+            label: 'مشاركة كارت',
+            onPress: () => {
+              itemActionsSheetRef.current?.dismiss();
+              void handleShareItemCard();
+            },
+          },
+          {
+            label: 'الإبلاغ عن العنصر',
+            tone: 'danger',
+            onPress: () => {
+              itemActionsSheetRef.current?.dismiss();
+              router.push(`/report/item/${item.id}`);
+            },
+          },
+        ]}
+      />
       <View style={styles.captureNode} pointerEvents="none">
         <ViewShot ref={itemShareCardRef} options={{ format: 'png', quality: 1, result: 'tmpfile' }}>
           <ItemShareCard
