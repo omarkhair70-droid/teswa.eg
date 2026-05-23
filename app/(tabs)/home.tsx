@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
@@ -332,7 +333,8 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
-            <LinearGradient
+            <AppFadeIn delay={0} duration={200} fromY={8}>
+              <LinearGradient
               colors={['#FFFDF8', '#F4DDCC', '#FFF6E8']}
               start={{ x: 0.08, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -358,9 +360,11 @@ export default function HomeScreen() {
                 <AppText style={styles.heroBody}>هنا تبدأ الحكايات، تتحرك الحاجات، وتفتح المقايضات بابها بهدوء.</AppText>
                 <AppText muted style={styles.heroSupport}>تابع ما يهمك الآن، أو خذ جولة دافئة في الجديد حولك.</AppText>
               </View>
-            </LinearGradient>
+              </LinearGradient>
+            </AppFadeIn>
             {user ? (
-              <AppCard>
+              <AppFadeIn delay={40} duration={210} fromY={8}>
+                <AppCard>
                 <View style={styles.dashboardSection}>
                   <View style={styles.sectionHeader}>
                     <AppText weight="bold" style={styles.sectionTitle}>يهمك الآن</AppText>
@@ -428,11 +432,13 @@ export default function HomeScreen() {
                     </View>
                   ) : null}
                 </View>
-              </AppCard>
+                </AppCard>
+              </AppFadeIn>
             ) : null}
 
             {user ? (
-              <PersonalLivingWorldCard
+              <AppFadeIn delay={80} duration={220} fromY={8}>
+                <PersonalLivingWorldCard
                 state={personalLivingWorldState}
                 loading={personalWorldLoading}
                 onPrimaryAction={() => {
@@ -440,10 +446,12 @@ export default function HomeScreen() {
                     router.push(personalLivingWorldState.primaryActionRoute as any);
                   }
                 }}
-              />
+                />
+              </AppFadeIn>
             ) : null}
 
-            <AppCard>
+            <AppFadeIn delay={120} duration={220} fromY={8}>
+              <AppCard>
               <View style={styles.storiesSection}>
                 <View style={styles.storiesHeaderRow}>
                   <View style={styles.sectionHeader}>
@@ -526,11 +534,13 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
               </View>
-            </AppCard>
+              </AppCard>
+            </AppFadeIn>
 
             {shouldShowVideoMomentsRail ? (
-              <AppCard>
-                <ItemVideoDiscoveryRail
+              <AppFadeIn delay={120} duration={220} fromY={8}>
+                <AppCard>
+                  <ItemVideoDiscoveryRail
             onOpenViewer={() => router.push('/motion/viewer')}
             viewerCtaLabel='شوف المشاهد'
                   eyebrow="لمحات مرئية"
@@ -540,8 +550,9 @@ export default function HomeScreen() {
                   loading={videoMomentsLoading}
                   errorMessage={videoMomentsError}
                   onRetry={loadVideoMoments}
-                />
-              </AppCard>
+                  />
+                </AppCard>
+              </AppFadeIn>
             ) : null}
 
             {homeFeedQuery.data?.notice ? (

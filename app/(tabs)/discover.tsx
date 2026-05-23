@@ -10,6 +10,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
 import { colors } from '@/constants/colors';
@@ -341,7 +342,8 @@ export default function DiscoverScreen() {
         onEndReachedThreshold={0.35}
         ListHeaderComponent={
           <View style={styles.header}>
-            <LinearGradient colors={['#FFF6E8', '#FFE7C8', 'rgba(62,124,115,0.24)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+            <AppFadeIn delay={0} duration={200} fromY={8}>
+              <LinearGradient colors={['#FFF6E8', '#FFE7C8', 'rgba(62,124,115,0.24)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
               <View style={styles.heroOrbOne} />
               <View style={styles.heroOrbTwo} />
               <View style={styles.heroIconShell}>
@@ -352,9 +354,11 @@ export default function DiscoverScreen() {
                 <AppText>ناس، حركة، وحاجات بتدور على رحلة جديدة. اختار الباب اللي تحب تبدأ منه.</AppText>
                 <AppText muted>لو هدفك عنصر معيّن، مركز التصفح تحت يختصر الطريق عليك.</AppText>
               </View>
-            </LinearGradient>
+              </LinearGradient>
+            </AppFadeIn>
 
-            <AppCard>
+            <AppFadeIn delay={40} duration={210} fromY={8}>
+              <AppCard>
               <View style={styles.worldPathsBox}>
                 <AppText weight="bold">أبواب الاكتشاف</AppText>
                 <AppText muted>تِسوى مش مجرد قائمة عناصر؛ فيها ناس، حركة، وتصفح حيّ للعناصر الجاهزة للتبديل.</AppText>
@@ -386,11 +390,13 @@ export default function DiscoverScreen() {
                   </View>
                 </View>
               </View>
-            </AppCard>
+              </AppCard>
+            </AppFadeIn>
 
             {shouldShowVideoMomentsRail ? (
-              <AppCard>
-                <ItemVideoDiscoveryRail
+              <AppFadeIn delay={80} duration={220} fromY={8}>
+                <AppCard>
+                  <ItemVideoDiscoveryRail
             onOpenViewer={() => router.push('/motion/viewer')}
             viewerCtaLabel='افتح الريل المرئي'
                   eyebrow="اكتشاف مرئي"
@@ -400,8 +406,9 @@ export default function DiscoverScreen() {
                   loading={videoMomentsLoading}
                   errorMessage={videoMomentsError}
                   onRetry={loadVideoMoments}
-                />
-              </AppCard>
+                  />
+                </AppCard>
+              </AppFadeIn>
             ) : null}
             {storyHighlightsLoading || Boolean(storyHighlightsError) || storyHighlights.length > 0 ? (
               <AppCard>
@@ -410,14 +417,16 @@ export default function DiscoverScreen() {
             ) : null}
             <DiscoverIntelligencePanel state={discoverIntelligenceState} />
 
-            <AppCard>
-              <View style={styles.browseBox}>
-                <AppText style={styles.eyebrow}>تصفح مباشر</AppText>
-                <AppText weight="bold" style={styles.browseTitle}>مركز استكشاف العناصر</AppText>
-                <AppText muted>ابحث بسرعة، فعّل الموقع القريب، واضبط الفلاتر عشان توصل للعنصر المناسب بثقة.</AppText>
-                <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
-              </View>
-            </AppCard>
+            <AppFadeIn delay={120} duration={220} fromY={8}>
+              <AppCard>
+                <View style={styles.browseBox}>
+                  <AppText style={styles.eyebrow}>تصفح مباشر</AppText>
+                  <AppText weight="bold" style={styles.browseTitle}>مركز استكشاف العناصر</AppText>
+                  <AppText muted>ابحث بسرعة، فعّل الموقع القريب، واضبط الفلاتر عشان توصل للعنصر المناسب بثقة.</AppText>
+                  <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
+                </View>
+              </AppCard>
+            </AppFadeIn>
 
             {itemsCacheNotice ? (
               <AppCard>
@@ -428,22 +437,26 @@ export default function DiscoverScreen() {
               </AppCard>
             ) : null}
 
-            <AppCard>
-              <View style={styles.filterTriggerBox}>
-                <AppButton label="ضبط الفلاتر" variant="neutral" iconName="options-outline" onPress={openFilterSheet} />
-                {activeFiltersCount > 0 ? <AppText muted>مفعّل: {activeFiltersCount}</AppText> : null}
-              </View>
-            </AppCard>
-            {!loading && !error ? (
+            <AppFadeIn delay={120} duration={220} fromY={8}>
               <AppCard>
-                <View style={styles.resultsRow}>
-                  <View style={styles.resultsLabelRow}>
-                    <Ionicons name="search-outline" size={15} color={colors.primary} />
-                    <AppText>{hasActiveFilters ? `وجدنا ${filtered.length} عنصرًا قريبًا من اختيارك` : `المشهد يضم ${filtered.length} عنصرًا للتصفح الآن`}</AppText>
-                  </View>
-                  {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
+                <View style={styles.filterTriggerBox}>
+                  <AppButton label="ضبط الفلاتر" variant="neutral" iconName="options-outline" onPress={openFilterSheet} />
+                  {activeFiltersCount > 0 ? <AppText muted>مفعّل: {activeFiltersCount}</AppText> : null}
                 </View>
               </AppCard>
+            </AppFadeIn>
+            {!loading && !error ? (
+              <AppFadeIn delay={120} duration={220} fromY={8}>
+                <AppCard>
+                  <View style={styles.resultsRow}>
+                    <View style={styles.resultsLabelRow}>
+                      <Ionicons name="search-outline" size={15} color={colors.primary} />
+                      <AppText>{hasActiveFilters ? `وجدنا ${filtered.length} عنصرًا قريبًا من اختيارك` : `المشهد يضم ${filtered.length} عنصرًا للتصفح الآن`}</AppText>
+                    </View>
+                    {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
+                  </View>
+                </AppCard>
+              </AppFadeIn>
             ) : null}
             {spotlightItems.length > 0 ? (
               <AppCard>
