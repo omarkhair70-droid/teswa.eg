@@ -14,19 +14,13 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { fetchMarketplaceItemDetailById, MarketplaceItemDetail } from '@/lib/marketplace-items';
 import type { ItemVideoTeaser } from '@/lib/item-videos';
 import { shareMarketplaceItem } from '@/lib/share-item';
 import { shareMarketplaceItemCard } from '@/lib/share-item-card';
 import { ItemShareCard } from '@/components/share/ItemShareCard';
-import {
-  deleteItemDetailCache,
-  readAnyItemDetailCache,
-  readFreshItemDetailCache,
-  writeItemDetailCache,
-} from '@/lib/offline-item-detail-cache';
 import { buildCachedVideoSource, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 import { trackEvent } from '@/lib/analytics';
+import { useItemDetailQuery } from '@/lib/query/use-item-detail-query';
 
 function formatDuration(durationMs: number | null): string | null {
   if (durationMs == null) return null;
@@ -95,71 +89,28 @@ function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoT
 
 export default function ItemDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [item, setItem] = useState<MarketplaceItemDetail | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
   const trackedItemDetailRef = useRef<string | null>(null);
   const itemShareCardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
+  const itemDetailQuery = useItemDetailQuery(id);
+  const item = itemDetailQuery.data?.item ?? null;
+  const loading = itemDetailQuery.isLoading;
+  const error = itemDetailQuery.error instanceof Error ? itemDetailQuery.error.message : null;
 
-  const loadItem = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
-    setItemCacheNotice(null);
-    let hasFreshCachedItem = false;
-    try {
-      const cached = await readFreshItemDetailCache(id);
-      if (cached) {
-        hasFreshCachedItem = true;
-        setItem(cached.item);
-        setActiveImageIndex(0);
-        setVideoTeaserActive(false);
-        setLoading(false);
-        setItemCacheNotice('نستعرض تفاصيل محفوظة بينما نتحقق من الأحدث.');
-      }
-    } catch {}
-    try {
-      const result = await fetchMarketplaceItemDetailById(id);
-      if (result) {
-        setItem(result);
-        setActiveImageIndex(0);
-        setVideoTeaserActive(false);
-        setError(null);
-        setItemCacheNotice(null);
-        void writeItemDetailCache(id, result);
-        return;
-      }
-      setItem(null);
-      setItemCacheNotice(null);
-      void deleteItemDetailCache(id);
-    } catch {
-      if (hasFreshCachedItem) {
-        setError(null);
-        setItemCacheNotice('تعذر تحديث التفاصيل الآن، نعرض آخر نسخة محفوظة.');
-        return;
-      }
-      try {
-        const stale = await readAnyItemDetailCache(id);
-        if (stale) {
-          setItem(stale.item);
-          setActiveImageIndex(0);
-          setVideoTeaserActive(false);
-          setError(null);
-          setItemCacheNotice('أنت ترى نسخة محفوظة من تفاصيل العنصر. سنحدّثها عندما يتحسن الاتصال.');
-          return;
-        }
-      } catch {}
-      setError('تعذر تحميل تفاصيل العنصر. حاول مرة أخرى.');
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
 
-  useEffect(() => { loadItem(); }, [loadItem]);
+
+  useEffect(() => {
+    setItemCacheNotice(itemDetailQuery.data?.notice ?? null);
+  }, [itemDetailQuery.data?.notice]);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+    setVideoTeaserActive(false);
+  }, [item?.id]);
+
   useEffect(() => {
     if (!item?.id) return;
     if (!item.images.length) return;
@@ -218,7 +169,7 @@ export default function ItemDetailsScreen() {
 
   if (!id) return <AppScreen backgroundVariant="soft"><EmptyState title="معرّف غير صالح" description="تعذر تحديد العنصر المطلوب." /></AppScreen>;
   if (loading) return <AppScreen backgroundVariant="soft"><EmptyState title="جاري التحميل" description="نقوم بتحضير تفاصيل العنصر." /></AppScreen>;
-  if (error) return <AppScreen backgroundVariant="soft"><View style={styles.stateBox}><EmptyState title="خطأ في التحميل" description={error} /><AppButton label="إعادة المحاولة" onPress={loadItem} /></View></AppScreen>;
+  if (error) return <AppScreen backgroundVariant="soft"><View style={styles.stateBox}><EmptyState title="خطأ في التحميل" description={error} /><AppButton label="إعادة المحاولة" onPress={() => { void itemDetailQuery.refetch(); }} /></View></AppScreen>;
   if (!item) return <AppScreen backgroundVariant="soft"><EmptyState title="العنصر غير موجود" description="قد يكون تم حذفه أو لم يعد متاحاً." /></AppScreen>;
 
   return (
