@@ -99,6 +99,8 @@ export default function StoryViewerScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const markedViewedStoryIdsRef = useRef<Set<string>>(new Set());
   const storyActionsSheetRef = useRef<BottomSheetModal>(null);
+  const touchStartAtRef = useRef<number | null>(null);
+  const suppressTapNavigationRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [context, setContext] = useState<StoryViewerContext | null>(null);
@@ -164,6 +166,36 @@ export default function StoryViewerScreen() {
     if (activeIndex <= 0) return goToIndex(0);
     goToIndex(activeIndex - 1);
   }, [activeIndex, goToIndex]);
+
+  const handleStoryPressIn = useCallback(() => {
+    touchStartAtRef.current = Date.now();
+    suppressTapNavigationRef.current = false;
+    setTouchPaused(true);
+  }, []);
+
+  const handleStoryPressOut = useCallback(() => {
+    const startedAt = touchStartAtRef.current;
+    const elapsedMs = startedAt ? Date.now() - startedAt : 0;
+    if (elapsedMs > 280) suppressTapNavigationRef.current = true;
+    touchStartAtRef.current = null;
+    setTouchPaused(false);
+  }, []);
+
+  const handleLeftZonePress = useCallback(() => {
+    if (suppressTapNavigationRef.current) {
+      suppressTapNavigationRef.current = false;
+      return;
+    }
+    goPrevious();
+  }, [goPrevious]);
+
+  const handleRightZonePress = useCallback(() => {
+    if (suppressTapNavigationRef.current) {
+      suppressTapNavigationRef.current = false;
+      return;
+    }
+    goNext();
+  }, [goNext]);
 
   useEffect(() => {
     if (!normalizedUserId) {
@@ -526,7 +558,7 @@ export default function StoryViewerScreen() {
     if (isViewingOwnStories) {
       setNavigatingAwayFromViewer(true);
       progressAnim.stopAnimation();
-      router.push('/story/manage');
+      router.replace('/story/manage');
       return;
     }
     storyActionsSheetRef.current?.present();
@@ -671,8 +703,8 @@ const renderUnavailableState = () => {
       ) : null}
 
       <View style={styles.navLayer} pointerEvents={voiceReplyInteractionActive ? 'none' : 'box-none'}>
-        <Pressable style={styles.leftZone} onPressIn={() => setTouchPaused(true)} onPressOut={() => setTouchPaused(false)} onPress={goPrevious} />
-        <Pressable style={styles.rightZone} onPressIn={() => setTouchPaused(true)} onPressOut={() => setTouchPaused(false)} onPress={goNext} />
+        <Pressable style={styles.leftZone} onPressIn={handleStoryPressIn} onPressOut={handleStoryPressOut} onPress={handleLeftZonePress} />
+        <Pressable style={styles.rightZone} onPressIn={handleStoryPressIn} onPressOut={handleStoryPressOut} onPress={handleRightZonePress} />
       </View>
 
 
