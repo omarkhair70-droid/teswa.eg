@@ -17,12 +17,6 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { fetchHomeDashboardSummary, HomeDashboardSummary } from '@/lib/home-dashboard';
-import { fetchMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
-import {
-  readAnyMarketplaceFirstPageCache,
-  readFreshMarketplaceFirstPageCache,
-  writeMarketplaceFirstPageCache,
-} from '@/lib/offline-marketplace-cache';
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
 import { PersonalLivingWorldCard } from '@/components/home/PersonalLivingWorldCard';
@@ -36,6 +30,7 @@ import {
 } from '@/lib/personal-living-world';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { trackEvent } from '@/lib/analytics';
+import { useHomeFeedQuery } from '@/lib/query/use-home-feed-query';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -59,11 +54,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, profileCompleted } = useAuth();
   const { notificationsUnreadCount, refreshBadges } = useUnreadBadges();
-  const [items, setItems] = useState<MarketplaceItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [itemsCacheNotice, setItemsCacheNotice] = useState<string | null>(null);
-
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
   const [storiesError, setStoriesError] = useState<string | null>(null);
@@ -80,43 +70,8 @@ export default function HomeScreen() {
   const personalWorldSeenCommittedRef = useRef(false);
   const skipFirstFocusRefreshRef = useRef(true);
 
-  const loadItems = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setItemsCacheNotice(null);
 
-    let hasFreshCacheVisible = false;
-    const cached = await readFreshMarketplaceFirstPageCache();
-    if (cached) {
-      hasFreshCacheVisible = true;
-      setItems(cached.page.items);
-      setLoading(false);
-      setItemsCacheNotice('نستعرض آخر عناصر محفوظة بينما نتحقق من الجديد.');
-    }
-
-    try {
-      const page = await fetchMarketplaceItemsPage({ offset: 0 });
-      setItems(page.items);
-      setError(null);
-      setItemsCacheNotice(null);
-      void writeMarketplaceFirstPageCache(page);
-    } catch {
-      if (hasFreshCacheVisible) {
-        setItemsCacheNotice('تعذر التحديث الآن، نعرض آخر نسخة محفوظة.');
-      } else {
-        const stale = await readAnyMarketplaceFirstPageCache();
-        if (stale) {
-          setItems(stale.page.items);
-          setError(null);
-          setItemsCacheNotice('أنت ترى نسخة محفوظة من أحدث العناصر. سنحدّثها عندما يتحسن الاتصال.');
-        } else {
-          setError('تعذر تحميل العناصر حالياً. حاول مرة أخرى.');
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const homeFeedQuery = useHomeFeedQuery();
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -184,7 +139,6 @@ export default function HomeScreen() {
 
 
   useEffect(() => {
-    void loadItems();
     const interactionTask = InteractionManager.runAfterInteractions(() => {
       void loadStories();
       void loadVideoMoments();
@@ -205,7 +159,7 @@ export default function HomeScreen() {
     return () => {
       interactionTask.cancel();
     };
-  }, [loadDashboard, loadItems, loadPersonalLivingWorldMarker, loadStories, loadVideoMoments, refreshBadges, user?.id]);
+  }, [loadDashboard, loadPersonalLivingWorldMarker, loadStories, loadVideoMoments, refreshBadges, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -357,7 +311,7 @@ export default function HomeScreen() {
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
-        data={items}
+        data={homeFeedQuery.data?.items ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
@@ -574,11 +528,11 @@ export default function HomeScreen() {
               </AppCard>
             ) : null}
 
-            {itemsCacheNotice ? (
+            {homeFeedQuery.data?.notice ? (
               <AppCard>
                 <View style={styles.cacheNoticeRow}>
                   <Ionicons name="cloud-offline-outline" size={18} color={colors.accent} />
-                  <AppText muted style={styles.cacheNoticeText}>{itemsCacheNotice}</AppText>
+                  <AppText muted style={styles.cacheNoticeText}>{homeFeedQuery.data.notice}</AppText>
                 </View>
               </AppCard>
             ) : null}
@@ -592,12 +546,12 @@ export default function HomeScreen() {
         }
         renderItem={({ item }) => <ItemCard item={item} />}
         ListEmptyComponent={
-          loading ? (
+          homeFeedQuery.isLoading ? (
             <EmptyState title="جاري التحميل" description="نلمّ أحدث العناصر المتاحة الآن." />
-          ) : error ? (
+) : homeFeedQuery.error ? (
             <View style={styles.stateBox}>
-              <EmptyState title="حدث خطأ" description={error} />
-              <AppButton label="إعادة المحاولة" onPress={loadItems} />
+              <EmptyState title="حدث خطأ" description={homeFeedQuery.error.message} />
+              <AppButton label="إعادة المحاولة" onPress={() => void homeFeedQuery.refetch()} />
             </View>
           ) : (
             <EmptyState title="لا توجد عناصر حالياً" description="الواجهة هادئة الآن، وستظهر العناصر هنا فور توفرها." />
