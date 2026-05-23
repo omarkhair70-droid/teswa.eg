@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import type { ComponentProps } from 'react';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -13,6 +14,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
+import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -72,6 +74,7 @@ export default function HomeScreen() {
   const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
   const personalWorldSeenCommittedRef = useRef(false);
   const skipFirstFocusRefreshRef = useRef(true);
+  const homeHubSheetRef = useRef<BottomSheetModal>(null);
 
 
   const homeFeedQuery = useHomeFeedQuery();
@@ -319,9 +322,14 @@ export default function HomeScreen() {
 
   const keyExtractor = useCallback((item: { id: string }) => item.id, []);
   const renderItem = useCallback(({ item }: { item: MarketplaceItem }) => <ItemCard item={item} />, []);
+  const notificationsLabel =
+    notificationsUnreadCount > 0
+      ? `الإشعارات (${notificationsUnreadCount > 99 ? '99+' : notificationsUnreadCount})`
+      : 'الإشعارات';
 
   return (
-    <AppScreen backgroundVariant="alive" style={styles.screen}>
+    <>
+      <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
         data={homeFeedQuery.data?.items ?? []}
         keyExtractor={keyExtractor}
@@ -354,6 +362,14 @@ export default function HomeScreen() {
                         <AppText weight="bold" style={styles.unreadBadgeText}>{notificationsUnreadCount > 99 ? '99+' : notificationsUnreadCount}</AppText>
                       </View>
                     ) : null}
+                  </Pressable>
+                  <Pressable
+                    style={styles.hubEntry}
+                    accessibilityRole="button"
+                    accessibilityLabel="فتح مركز تسوى"
+                    onPress={() => homeHubSheetRef.current?.present()}
+                  >
+                    <Ionicons name="compass-outline" size={18} color={colors.primary} />
                   </Pressable>
                 </View>
                 <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
@@ -585,7 +601,75 @@ export default function HomeScreen() {
           )
         }
       />
-    </AppScreen>
+      </AppScreen>
+      <AppActionSheet
+        ref={homeHubSheetRef}
+        title="مركز تسوى"
+        description="اختار وجهتك بسرعة من عالم تِسوى."
+        titleIconName="compass-outline"
+        actions={[
+        {
+          label: 'الرسائل',
+          description: 'افتح محادثاتك وردود القصص والصفقات.',
+          iconName: 'chatbubbles-outline',
+          onPress: () => {
+            homeHubSheetRef.current?.dismiss();
+            router.push('/(tabs)/messages');
+          },
+        },
+        {
+          label: notificationsLabel,
+          description: 'تابع الجديد والتنبيهات المهمة.',
+          iconName: 'notifications-outline',
+          onPress: () => {
+            homeHubSheetRef.current?.dismiss();
+            router.push('/notifications');
+          },
+        },
+        {
+          label: 'أضف عنصر',
+          description: 'اعرض حاجة جديدة وابدأ فرصة تبادل.',
+          iconName: 'add-circle-outline',
+          tone: 'primary',
+          onPress: () => {
+            homeHubSheetRef.current?.dismiss();
+            router.push('/(tabs)/add');
+          },
+        },
+        {
+          label: 'أضف قصة',
+          description: 'شارك لقطة سريعة من عالمك.',
+          iconName: 'camera-outline',
+          onPress: () => {
+            homeHubSheetRef.current?.dismiss();
+            router.push('/story/create');
+          },
+        },
+        {
+          label: 'استكشف',
+          description: 'شوف عناصر وناس وحركة جديدة حولك.',
+          iconName: 'compass-outline',
+          onPress: () => {
+            homeHubSheetRef.current?.dismiss();
+            router.push('/(tabs)/discover');
+          },
+        },
+        {
+          label: 'ملفي',
+          description: 'راجع حضورك ومعلوماتك في تِسوى.',
+          iconName: 'person-circle-outline',
+          onPress: () => {
+            homeHubSheetRef.current?.dismiss();
+            if (user?.id) {
+              router.push(`/profile/${user.id}`);
+              return;
+            }
+            router.push('/(auth)/login');
+          },
+        },
+        ]}
+      />
+    </>
   );
 }
 
@@ -621,12 +705,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroCopy: { gap: spacing.sm, maxWidth: '92%' },
-  heroTopRow: { alignItems: 'flex-start' },
+  heroTopRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+  },
   notificationsEntry: {
     minWidth: 44,
     minHeight: 44,
     borderRadius: radii.round,
     backgroundColor: 'rgba(255,253,248,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hubEntry: {
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(255,253,248,0.78)',
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.18)',
     alignItems: 'center',

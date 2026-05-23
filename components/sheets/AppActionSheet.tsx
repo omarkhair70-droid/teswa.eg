@@ -11,11 +11,18 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 
 export const AppActionSheet = forwardRef<BottomSheetModal, AppActionSheetProps>(function AppActionSheet(
-  { title, description, actions, onClose, snapPoints },
+  { title, description, titleIconName, actions, onClose, snapPoints },
   ref,
 ) {
   return (
-    <AppBottomSheet ref={ref} title={title} description={description} onClose={onClose} snapPoints={snapPoints}>
+    <AppBottomSheet
+      ref={ref}
+      title={title}
+      description={description}
+      titleIconName={titleIconName}
+      onClose={onClose}
+      snapPoints={snapPoints}
+    >
       <View style={styles.actionsWrap}>
         {actions.map((action, index) => {
           const tone = action.tone ?? 'neutral';
