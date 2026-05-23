@@ -118,6 +118,9 @@ export default function StoryViewerScreen() {
   const [voiceDraft, setVoiceDraft] = useState<{ uri: string; durationMs: number; mimeType: string } | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceSending, setVoiceSending] = useState(false);
+  const [touchPaused, setTouchPaused] = useState(false);
+  const [replyInputFocused, setReplyInputFocused] = useState(false);
+  const [navigatingAwayFromViewer, setNavigatingAwayFromViewer] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [safetyBusy, setSafetyBusy] = useState(false);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -133,20 +136,29 @@ export default function StoryViewerScreen() {
     voiceSending ||
     voiceBusy;
 
+  const storyPlaybackPaused =
+    touchPaused ||
+    replyInputFocused ||
+    storyReplyBody.trim().length > 0 ||
+    voiceReplyInteractionActive ||
+    navigatingAwayFromViewer;
+
   const closeViewer = useCallback(() => {
+    if (navigatingAwayFromViewer) return;
     router.back();
-  }, [router]);
+  }, [navigatingAwayFromViewer, router]);
 
   const goToIndex = useCallback((index: number) => {
     setActiveIndex(index);
   }, []);
 
   const goNext = useCallback(() => {
+    if (navigatingAwayFromViewer) return;
     const total = context?.stories.length ?? 0;
     if (!total) return closeViewer();
     if (activeIndex >= total - 1) return closeViewer();
     goToIndex(activeIndex + 1);
-  }, [activeIndex, closeViewer, context?.stories.length, goToIndex]);
+  }, [activeIndex, closeViewer, context?.stories.length, goToIndex, navigatingAwayFromViewer]);
 
   const goPrevious = useCallback(() => {
     if (activeIndex <= 0) return goToIndex(0);
@@ -283,28 +295,62 @@ export default function StoryViewerScreen() {
     setLikeActionError(null);
   }, [activeIndex, currentStory?.id]);
 
+
   useEffect(() => {
-    if (!context?.stories.length) return;
     progressAnim.stopAnimation();
     progressAnim.setValue(0);
+  }, [activeIndex, currentStory?.id, progressAnim]);
+
+  useEffect(() => {
+    if (!context?.stories.length) return;
     if (!currentStoryCanStart) return;
-    if (voiceReplyInteractionActive) return;
 
-    const animation = Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: storyDurationMs,
-      useNativeDriver: false,
-    });
+    let animation: Animated.CompositeAnimation | null = null;
 
-    animation.start(({ finished }) => {
-      if (finished) goNext();
+    const startAnimationFrom = (progressValue: number) => {
+      const clamped = Math.min(Math.max(progressValue, 0), 1);
+      const remainingDuration = Math.max(0, Math.round(storyDurationMs * (1 - clamped)));
+      if (remainingDuration <= 0) {
+        goNext();
+        return;
+      }
+
+      animation = Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: remainingDuration,
+        useNativeDriver: false,
+      });
+
+      animation.start(({ finished }) => {
+        if (finished && !navigatingAwayFromViewer) goNext();
+      });
+    };
+
+    if (storyPlaybackPaused) {
+      progressAnim.stopAnimation();
+      return;
+    }
+
+    progressAnim.stopAnimation((value) => {
+      if (value <= 0 || value >= 1) {
+        progressAnim.setValue(0);
+        startAnimationFrom(0);
+        return;
+      }
+      startAnimationFrom(value);
     });
 
     return () => {
-      animation.stop();
+      animation?.stop();
+      progressAnim.stopAnimation();
     };
-  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, progressAnim, storyDurationMs, voiceReplyInteractionActive]);
+  }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, navigatingAwayFromViewer, progressAnim, storyDurationMs, storyPlaybackPaused]);
 
+
+
+  useEffect(() => () => {
+    progressAnim.stopAnimation();
+  }, [progressAnim]);
 
   const handleToggleStoryLike = useCallback(async () => {
     if (!user?.id) return;
@@ -478,11 +524,13 @@ export default function StoryViewerScreen() {
 
   const openStoryActionsSheet = useCallback(() => {
     if (isViewingOwnStories) {
+      setNavigatingAwayFromViewer(true);
+      progressAnim.stopAnimation();
       router.push('/story/manage');
       return;
     }
     storyActionsSheetRef.current?.present();
-  }, [isViewingOwnStories, router]);
+  }, [isViewingOwnStories, progressAnim, router]);
 
 const renderUnavailableState = () => {
     if (isViewingOwnStories) {
@@ -548,7 +596,7 @@ const renderUnavailableState = () => {
                 <>
                   <StoryVideo
                     uri={signedUrl}
-                    active={index === activeIndex}
+                    active={index === activeIndex && !storyPlaybackPaused}
                     onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
                     onReady={() => setReadyVideoStoryIds((prev) => (
                       prev[story.id] ? prev : { ...prev, [story.id]: true }
@@ -623,8 +671,8 @@ const renderUnavailableState = () => {
       ) : null}
 
       <View style={styles.navLayer} pointerEvents={voiceReplyInteractionActive ? 'none' : 'box-none'}>
-        <Pressable style={styles.leftZone} onPress={goPrevious} />
-        <Pressable style={styles.rightZone} onPress={goNext} />
+        <Pressable style={styles.leftZone} onPressIn={() => setTouchPaused(true)} onPressOut={() => setTouchPaused(false)} onPress={goPrevious} />
+        <Pressable style={styles.rightZone} onPressIn={() => setTouchPaused(true)} onPressOut={() => setTouchPaused(false)} onPress={goNext} />
       </View>
 
 
@@ -652,7 +700,7 @@ const renderUnavailableState = () => {
             <Pressable style={[styles.replySendButton, (storyReplySending || !storyReplyBody.trim()) && styles.replySendButtonDisabled]} onPress={() => void handleSendStoryReply()} disabled={storyReplySending || !storyReplyBody.trim()}>
               <AppText style={styles.replySendButtonText}>{storyReplySending ? '...' : 'إرسال'}</AppText>
             </Pressable>
-            <TextInput value={storyReplyBody} onChangeText={setStoryReplyBody} placeholder="رد على القصة..." placeholderTextColor="rgba(255,255,255,0.6)" style={styles.replyInput} editable={!storyReplySending} textAlign="right" />
+            <TextInput value={storyReplyBody} onChangeText={setStoryReplyBody} onFocus={() => setReplyInputFocused(true)} onBlur={() => setReplyInputFocused(false)} placeholder="رد على القصة..." placeholderTextColor="rgba(255,255,255,0.6)" style={styles.replyInput} editable={!storyReplySending} textAlign="right" />
           </View>
           <Pressable onPress={() => void handleStartVoiceReply()} disabled={voiceBusy || recorderState.isRecording || voiceSending} style={styles.replyVoiceButton}><AppText style={styles.replySendButtonText}>رد بصوتك</AppText></Pressable>
           {voiceOpen ? (<View style={styles.voiceBox}>
