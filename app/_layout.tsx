@@ -18,6 +18,7 @@ import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppL
 import { trackEvent } from '@/lib/analytics';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
 import { QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import * as Network from 'expo-network';
 import { queryClient } from '@/lib/query/query-client';
 
@@ -470,18 +471,20 @@ export default function RootLayout() {
     <ShareIntentProvider>
       <KeyboardProvider preload={false}>
         <GestureHandlerRootView style={styles.gestureRoot}>
-          <AuthProvider>
-            <QueryClientProvider client={queryClient}>
-              <UnreadBadgesProvider>
-                <ReactQueryRuntimeCoordinator />
-                <ShareIntentCoordinator />
-                <BackgroundMemoryRefreshCoordinator />
-                <ForegroundMemoryRefreshCoordinator />
-                <RootNavigator />
-                <BiometricAppLockCoordinator />
-              </UnreadBadgesProvider>
-            </QueryClientProvider>
-          </AuthProvider>
+          <BottomSheetModalProvider>
+            <AuthProvider>
+              <QueryClientProvider client={queryClient}>
+                <UnreadBadgesProvider>
+                  <ReactQueryRuntimeCoordinator />
+                  <ShareIntentCoordinator />
+                  <BackgroundMemoryRefreshCoordinator />
+                  <ForegroundMemoryRefreshCoordinator />
+                  <RootNavigator />
+                  <BiometricAppLockCoordinator />
+                </UnreadBadgesProvider>
+              </QueryClientProvider>
+            </AuthProvider>
+          </BottomSheetModalProvider>
         </GestureHandlerRootView>
       </KeyboardProvider>
     </ShareIntentProvider>
