@@ -14,14 +14,14 @@ const items = [
 ] as const;
 
 export default function AdventureScreen() {
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
   const [busy, setBusy] = useState(false);
   const particles = useMemo(() => items.map(() => new Animated.Value(0)), []);
   const logo = useRef(new Animated.Value(0)).current;
   const copy = useRef(new Animated.Value(0)).current;
   const reveal = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { void getAdventureMuted().then(setMuted).catch(() => setMuted(true)); }, []);
+  useEffect(() => { void getAdventureMuted().then(setMuted).catch(() => setMuted(false)); }, []);
 
   useEffect(() => {
     Animated.sequence([
@@ -29,13 +29,21 @@ export default function AdventureScreen() {
       Animated.timing(copy, { toValue: 1, duration: 380, useNativeDriver: true }),
     ]).start();
 
+    const loops: Animated.CompositeAnimation[] = [];
+
     particles.forEach((value, index) => {
       const duration = 3000 + (index * 180);
-      Animated.loop(Animated.sequence([
+      const loop = Animated.loop(Animated.sequence([
         Animated.timing(value, { toValue: 1, duration, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
         Animated.timing(value, { toValue: 0, duration, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
-      ])).start();
+      ]));
+      loops.push(loop);
+      loop.start();
     });
+
+    return () => {
+      loops.forEach((loop) => loop.stop());
+    };
   }, [copy, logo, particles]);
 
   const playSound = async (name: string, force = false) => {
@@ -45,9 +53,9 @@ export default function AdventureScreen() {
       const create = audio.createAudioPlayer;
       if (!create) return;
       const map: Record<string, any> = {
-        tap: require('@/assets/sounds/teswa-tap-soft.mp3'),
-        logo: require('@/assets/sounds/teswa-logo-chime.mp3'),
-        swish: require('@/assets/sounds/teswa-transition-swish.mp3'),
+        tap: require('../../assets/sounds/teswa-tap-soft.mp3'),
+        logo: require('../../assets/sounds/teswa-logo-chime.mp3'),
+        swish: require('../../assets/sounds/teswa-transition-swish.mp3'),
       };
       const player = create(map[name]);
       if (player?.play) player.play();
