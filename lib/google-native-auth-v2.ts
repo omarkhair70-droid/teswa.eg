@@ -24,6 +24,15 @@ export type NativeGoogleSignInResult = {
   resultType?: string;
   fallbackToBrowser?: boolean;
   reason?: string;
+  supabaseErrorName?: string;
+  supabaseErrorMessage?: string;
+  supabaseErrorStatus?: string;
+  supabaseErrorCode?: string;
+  audMatchesWebClientId?: boolean;
+  tokenIssuer?: string;
+  tokenExpired?: boolean;
+  tokenAudSuffix?: string;
+  tokenAzpSuffix?: string;
 };
 
 type GoogleSignInDiagnosticFlow = 'native' | 'browser_fallback';
@@ -45,6 +54,15 @@ export type GoogleNativeDiagnosticsEvent = {
   platform?: string;
   implementation?: GoogleNativeAuthImplementation;
   moduleVersion?: string;
+  supabaseErrorName?: string;
+  supabaseErrorMessage?: string;
+  supabaseErrorStatus?: string;
+  supabaseErrorCode?: string;
+  audMatchesWebClientId?: boolean;
+  tokenIssuer?: string;
+  tokenExpired?: boolean;
+  tokenAudSuffix?: string;
+  tokenAzpSuffix?: string;
 };
 
 type GoogleNativeSignInOptions = { onStep?: (event: GoogleNativeDiagnosticsEvent) => void };
@@ -76,6 +94,42 @@ function configureGoogleSignin() {
   if (!webClientId) return;
   GoogleSignin.configure({ webClientId });
   configured = true;
+}
+
+type SafeIdTokenMetadata = {
+  audMatchesWebClientId?: boolean;
+  tokenIssuer?: string;
+  tokenExpired?: boolean;
+  tokenAudSuffix?: string;
+  tokenAzpSuffix?: string;
+};
+
+function decodeIdTokenSafeMetadata(idToken: string, webClientId?: string): SafeIdTokenMetadata {
+  try {
+    const payloadPart = idToken.split('.')[1];
+    if (!payloadPart) return {};
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+    const payloadRaw = globalThis.atob(padded);
+    const payload = JSON.parse(payloadRaw) as { iss?: unknown; aud?: unknown; azp?: unknown; exp?: unknown };
+
+    const iss = typeof payload.iss === 'string' ? payload.iss : undefined;
+    const aud = typeof payload.aud === 'string' ? payload.aud : undefined;
+    const azp = typeof payload.azp === 'string' ? payload.azp : undefined;
+    const exp = typeof payload.exp === 'number' ? payload.exp : undefined;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const tokenExpired = typeof exp === 'number' ? exp <= nowSeconds : undefined;
+
+    return {
+      audMatchesWebClientId: Boolean(aud && webClientId && aud === webClientId),
+      tokenIssuer: iss,
+      tokenExpired,
+      tokenAudSuffix: aud ? aud.slice(-8) : undefined,
+      tokenAzpSuffix: azp ? azp.slice(-8) : undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions): Promise<NativeGoogleSignInResult> {
@@ -118,10 +172,26 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_result_success', hasIdToken: Boolean(idToken), hasUser: true, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     if (!idToken) return { status: 'error', error: 'تعذر الحصول على بيانات تسجيل الدخول من جوجل. حاول مرة تانية.', fallbackToBrowser: true, reason: 'missing_id_token', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
 
-    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
+    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    const safeTokenMetadata = decodeIdTokenSafeMetadata(idToken, webClientId);
+    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, ...safeTokenMetadata }, options);
     const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
-    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_result', hasError: Boolean(error), implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-    if (error) return { status: 'error', error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.', fallbackToBrowser: true, reason: 'supabase_session_failed', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
+    const supabaseErrorName = error && typeof error.name === 'string' ? error.name : undefined;
+    const supabaseErrorMessage = error && typeof error.message === 'string' ? error.message : undefined;
+    const supabaseErrorStatus = error && 'status' in error && (typeof error.status === 'number' || typeof error.status === 'string') ? String(error.status) : undefined;
+    const supabaseErrorCode = error && typeof error.code === 'string' ? error.code : undefined;
+    emitGoogleNativeStep({
+      flow: 'native_step',
+      step: 'supabase_id_token_result',
+      hasError: Boolean(error),
+      implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
+      supabaseErrorName,
+      supabaseErrorMessage,
+      supabaseErrorStatus,
+      supabaseErrorCode,
+      ...safeTokenMetadata,
+    }, options);
+    if (error) return { status: 'error', error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.', fallbackToBrowser: true, reason: 'supabase_session_failed', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION, supabaseErrorName, supabaseErrorMessage, supabaseErrorStatus, supabaseErrorCode, ...safeTokenMetadata };
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_success', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     return { status: 'success', error: null, fallbackToBrowser: false, reason: 'native_success', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
