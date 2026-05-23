@@ -3,7 +3,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { File } from 'expo-file-system';
-import { AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
@@ -128,6 +128,10 @@ export default function DirectScreen() {
       await voicePlayer.seekTo(0).catch(() => undefined);
       setActiveVoiceId(null);
       setVoiceDraft(null);
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
+      });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
     } catch {
@@ -235,6 +239,10 @@ export default function DirectScreen() {
                 try {
                   const signed = await createDirectVoiceMessageSignedUrl(m.audioStoragePath);
                   if (!signed) { setError('تعذر تشغيل الرسالة الصوتية حالياً.'); return; }
+                  await setAudioModeAsync({
+                    playsInSilentMode: true,
+                    allowsRecording: false,
+                  });
                   voicePlayer.replace(signed);
                   setActiveVoiceId(m.id);
                   voicePlayer.play();
