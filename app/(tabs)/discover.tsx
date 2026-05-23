@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
+import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
 import { colors } from '@/constants/colors';
@@ -27,6 +28,7 @@ import { buildDiscoverIntelligenceState, buildDiscoverSpotlightItems } from '@/l
 import { DiscoverIntelligencePanel } from '@/components/discover/DiscoverIntelligencePanel';
 import { DiscoverStoryHighlightsRail } from '@/components/discover/DiscoverStoryHighlightsRail';
 import { DiscoverSpotlightRail } from '@/components/discover/DiscoverSpotlightRail';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 export default function DiscoverScreen() {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
@@ -49,6 +51,7 @@ export default function DiscoverScreen() {
   const [storyHighlights, setStoryHighlights] = useState<StoryDiscoveryItem[]>([]);
   const [storyHighlightsLoading, setStoryHighlightsLoading] = useState(true);
   const [storyHighlightsError, setStoryHighlightsError] = useState<string | null>(null);
+  const filterSheetRef = useRef<BottomSheetModal>(null);
 
   const clearAllFilters = useCallback(() => {
     setQuery('');
@@ -211,6 +214,23 @@ export default function DiscoverScreen() {
     setNearbyError(null);
     void loadItems();
   }, [loadItems]);
+
+  const openFilterSheet = useCallback(() => {
+    filterSheetRef.current?.present();
+  }, []);
+
+  const closeFilterSheet = useCallback(() => {
+    filterSheetRef.current?.dismiss();
+  }, []);
+
+  const applyFiltersAndClose = useCallback(() => {
+    closeFilterSheet();
+  }, [closeFilterSheet]);
+
+  const clearFiltersAndClose = useCallback(() => {
+    clearAllFilters();
+    closeFilterSheet();
+  }, [clearAllFilters, closeFilterSheet]);
 
   useEffect(() => {
     loadItems();
@@ -409,63 +429,9 @@ export default function DiscoverScreen() {
             ) : null}
 
             <AppCard>
-              <View style={styles.nearbyBox}>
-                <View style={styles.nearbyTitleRow}>
-                  <Ionicons name="navigate-outline" size={16} color={colors.primary} />
-                  <AppText weight="bold">التصفح القريب</AppText>
-                </View>
-                {activeNearbyLocation ? (
-                  <>
-                    <AppText>نعرض العناصر داخل 3 كم تقريبًا من: {activeNearbyLocation.label}</AppText>
-                    <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
-                  </>
-                ) : (
-                  <>
-                    <AppButton label={nearbyLoading ? 'جارٍ تحديد موقعك...' : 'اعرض الأقرب لي'} onPress={handleUseMyLocation} disabled={nearbyLoading} />
-                    <AppText muted>نستخدم موقعك مرة واحدة لتقريب نتائج التصفح.</AppText>
-                  </>
-                )}
-                {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
-                {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? <AppText muted>لا توجد عناصر قريبة بدقة في هذا النطاق بعد. جرّب عرض كل العناصر أو عُد لاحقًا.</AppText> : null}
-              </View>
-            </AppCard>
-
-            <AppCard>
-              <View style={styles.filterBox}>
-                <View style={styles.filterHeaderRow}>
-                  <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
-                  <AppText weight="bold">الفئة</AppText>
-                </View>
-                <View style={styles.chipsRow}>
-                  <Pressable onPress={() => setSelectedCategory(null)} style={[styles.chip, !selectedCategory && styles.chipActive]}>
-                    <AppText style={!selectedCategory ? styles.chipTextActive : undefined}>الكل</AppText>
-                  </Pressable>
-                  {availableCategories.map((category) => {
-                    const isActive = selectedCategory?.toLocaleLowerCase() === category.toLocaleLowerCase();
-                    return (
-                      <Pressable key={category} onPress={() => setSelectedCategory(category)} style={[styles.chip, isActive && styles.chipActive]}>
-                        <AppText style={isActive ? styles.chipTextActive : undefined}>{category}</AppText>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View style={styles.filterHeaderRow}>
-                  <Ionicons name="sparkles-outline" size={15} color={colors.primary} />
-                  <AppText weight="bold">الحالة</AppText>
-                </View>
-                <View style={styles.chipsRow}>
-                  <Pressable onPress={() => setSelectedCondition(null)} style={[styles.chip, !selectedCondition && styles.chipActive]}>
-                    <AppText style={!selectedCondition ? styles.chipTextActive : undefined}>الكل</AppText>
-                  </Pressable>
-                  {availableConditions.map((condition) => {
-                    const isActive = selectedCondition?.toLocaleLowerCase() === condition.toLocaleLowerCase();
-                    return (
-                      <Pressable key={condition} onPress={() => setSelectedCondition(condition)} style={[styles.chip, isActive && styles.chipActive]}>
-                        <AppText style={isActive ? styles.chipTextActive : undefined}>{condition}</AppText>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+              <View style={styles.filterTriggerBox}>
+                <AppButton label="ضبط الفلاتر" variant="neutral" iconName="options-outline" onPress={openFilterSheet} />
+                {activeFiltersCount > 0 ? <AppText muted>مفعّل: {activeFiltersCount}</AppText> : null}
               </View>
             </AppCard>
             {!loading && !error ? (
@@ -518,6 +484,75 @@ export default function DiscoverScreen() {
           )
         }
       />
+
+      <AppBottomSheet ref={filterSheetRef} title="فلاتر التصفح" description="اضبط الفئة والحالة والتصفح القريب." snapPoints={['65%', '90%']}>
+        <View style={styles.filterSheetContent}>
+          <View style={styles.filterBox}>
+            <View style={styles.filterHeaderRow}>
+              <Ionicons name="navigate-outline" size={15} color={colors.primary} />
+              <AppText weight="bold">التصفح القريب</AppText>
+            </View>
+            {activeNearbyLocation ? (
+              <>
+                <AppText>نعرض العناصر داخل 3 كم تقريبًا من: {activeNearbyLocation.label}</AppText>
+                <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
+              </>
+            ) : (
+              <>
+                <AppButton label={nearbyLoading ? 'جارٍ تحديد موقعك...' : 'اعرض الأقرب لي'} onPress={handleUseMyLocation} disabled={nearbyLoading} />
+                <AppText muted>نستخدم موقعك مرة واحدة لتقريب نتائج التصفح.</AppText>
+              </>
+            )}
+            {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
+            {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? <AppText muted>لا توجد عناصر قريبة بدقة في هذا النطاق بعد. جرّب عرض كل العناصر أو عُد لاحقًا.</AppText> : null}
+          </View>
+
+          <View style={styles.filterBox}>
+            <View style={styles.filterHeaderRow}>
+              <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
+              <AppText weight="bold">الفئة</AppText>
+            </View>
+            <View style={styles.chipsRow}>
+              <Pressable onPress={() => setSelectedCategory(null)} style={[styles.chip, !selectedCategory && styles.chipActive]}>
+                <AppText style={!selectedCategory ? styles.chipTextActive : undefined}>الكل</AppText>
+              </Pressable>
+              {availableCategories.map((category) => {
+                const isActive = selectedCategory?.toLocaleLowerCase() === category.toLocaleLowerCase();
+                return (
+                  <Pressable key={category} onPress={() => setSelectedCategory(category)} style={[styles.chip, isActive && styles.chipActive]}>
+                    <AppText style={isActive ? styles.chipTextActive : undefined}>{category}</AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.filterBox}>
+            <View style={styles.filterHeaderRow}>
+              <Ionicons name="sparkles-outline" size={15} color={colors.primary} />
+              <AppText weight="bold">الحالة</AppText>
+            </View>
+            <View style={styles.chipsRow}>
+              <Pressable onPress={() => setSelectedCondition(null)} style={[styles.chip, !selectedCondition && styles.chipActive]}>
+                <AppText style={!selectedCondition ? styles.chipTextActive : undefined}>الكل</AppText>
+              </Pressable>
+              {availableConditions.map((condition) => {
+                const isActive = selectedCondition?.toLocaleLowerCase() === condition.toLocaleLowerCase();
+                return (
+                  <Pressable key={condition} onPress={() => setSelectedCondition(condition)} style={[styles.chip, isActive && styles.chipActive]}>
+                    <AppText style={isActive ? styles.chipTextActive : undefined}>{condition}</AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.filterSheetFooter}>
+            <AppButton label="تطبيق الفلاتر" onPress={applyFiltersAndClose} />
+            {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearFiltersAndClose} /> : null}
+          </View>
+        </View>
+      </AppBottomSheet>
     </AppScreen>
   );
 }
@@ -589,8 +624,8 @@ const styles = StyleSheet.create({
   browseTitle: { fontSize: 24 },
   noticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   noticeText: { flex: 1 },
-  nearbyBox: { gap: spacing.sm },
-  nearbyTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  filterTriggerBox: { gap: spacing.xs, alignItems: 'flex-start' },
+  filterSheetContent: { gap: spacing.md },
   filterBox: { gap: spacing.sm },
   filterHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
@@ -606,6 +641,7 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.white },
   resultsRow: { gap: spacing.sm },
   resultsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  filterSheetFooter: { gap: spacing.sm },
   stateBox: { gap: spacing.md },
   footerBox: { gap: spacing.sm, marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
 });
