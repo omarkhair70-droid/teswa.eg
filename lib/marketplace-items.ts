@@ -333,6 +333,8 @@ export async function fetchMarketplaceItemDetailById(id: string, viewerId?: stri
     .map((row: { tag: string | null }) => normalizeNullableText(row.tag))
     .filter((tag: string | null): tag is string => Boolean(tag));
 
+  const likes = likesByItemId.get(id);
+
   return {
     id: item.id,
     title: item.title?.trim() || 'عنصر بدون عنوان',
