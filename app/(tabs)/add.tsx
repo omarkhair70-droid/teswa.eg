@@ -73,6 +73,7 @@ export default function AddScreen() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [draftRecoveryDismissed, setDraftRecoveryDismissed] = useState(false);
   const [locationFillLoading, setLocationFillLoading] = useState(false);
   const [locationFillMessage, setLocationFillMessage] = useState<string | null>(null);
   const [locationFillError, setLocationFillError] = useState<string | null>(null);
@@ -177,6 +178,7 @@ export default function AddScreen() {
         }
 
         setHasSavedDraft(true);
+        setDraftRecoveryDismissed(false);
       }
       setDraftHydrated(true);
     };
@@ -547,7 +549,7 @@ export default function AddScreen() {
   };
 
   const reviewImages = useMemo(() => assets, [assets]);
-  const showDraftCard = draftNotice || hasSavedDraft;
+  const showDraftCard = !draftRecoveryDismissed && (draftNotice || hasSavedDraft);
 
   const discardDraftAndReset = async () => {
     await clearAddItemDraft(user?.id);
@@ -562,6 +564,7 @@ export default function AddScreen() {
     setError(null);
     setDraftNotice(null);
     setHasSavedDraft(false);
+    setDraftRecoveryDismissed(false);
   };
 
   return <AppScreen scrollable backgroundVariant='alive'><LinearGradient colors={['#FFF6EC', '#FFE7CF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerCard}>
@@ -575,8 +578,7 @@ export default function AddScreen() {
     <View style={styles.progressTrack}>{steps.map((_, i) => <View key={`step-dot-${i}`} style={[styles.progressDot, i < step && styles.progressDotCompleted, i === step && styles.progressDotCurrent]} />)}</View>
   </LinearGradient>
     <AppCard style={styles.noticeCard}><View style={styles.gap}><AppText weight='semibold'>كل عنصر بتنشره يفتح فرصة تبديل جديدة.</AppText><AppText muted>ابدأ بصورة واضحة، والباقي نساعدك ترتبه خطوة بخطوة.</AppText></View></AppCard>
-    {showDraftCard && <AppCard style={styles.noticeCard}><View style={styles.gap}><View style={styles.noticeRow}><Ionicons name='bookmark-outline' size={18} color={colors.primary} /><AppText muted>{draftNotice ?? 'لديك مسودة محفوظة لهذا الإعلان.'}</AppText></View><View style={styles.actions}><AppButton label='ابدأ من جديد' variant='neutral' onPress={() => { void discardDraftAndReset(); }} disabled={submitting} /></View></View></AppCard>}
-    {showDraftCard && <View style={styles.actions}><AppButton label='كمل المسودة' onPress={() => { setDraftNotice(null); setError(null); }} disabled={submitting} /></View>}
+    {showDraftCard && <AppCard style={styles.noticeCard}><View style={styles.gap}><View style={styles.noticeRow}><Ionicons name='bookmark-outline' size={18} color={colors.primary} /><AppText muted>{draftNotice ?? 'لديك مسودة محفوظة لهذا الإعلان.'}</AppText></View><View style={styles.actions}><AppButton label='ابدأ من جديد' variant='neutral' onPress={() => { void discardDraftAndReset(); }} disabled={submitting} /><AppButton label='كمل المسودة' onPress={() => { setDraftRecoveryDismissed(true); setDraftNotice(null); setError(null); }} disabled={submitting} /></View></View></AppCard>}
     {isDefinitelyOffline && <AppCard style={styles.noticeCard}><View style={styles.gap}><View style={styles.noticeRow}><Ionicons name='cloud-offline-outline' size={18} color={colors.primary} /><AppText weight='bold'>أنت غير متصل بالإنترنت</AppText></View><AppText muted>يمكنك تجهيز الإعلان الآن، لكن النشر سيحتاج اتصالًا بالإنترنت. بيانات المسودة محفوظة.</AppText></View></AppCard>}
     {error && <AppCard style={styles.noticeCard}><View style={styles.noticeRow}><Ionicons name='alert-circle-outline' size={18} color={colors.primary} /><AppText style={styles.error}>{error}</AppText></View></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard style={styles.studioCard}><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}
