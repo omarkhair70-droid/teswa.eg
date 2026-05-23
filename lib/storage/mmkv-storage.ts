@@ -37,7 +37,7 @@ function isStorageAvailable(): boolean {
   }
   try {
     activeStorage.set('__teswa_mmkv_probe__', '1');
-    activeStorage.delete('__teswa_mmkv_probe__');
+    activeStorage.remove('__teswa_mmkv_probe__');
     storageAvailable = true;
   } catch {
     storageAvailable = false;
@@ -99,7 +99,7 @@ export function remove(key: string): boolean {
   const activeStorage = getStorage();
   if (!activeStorage) return false;
   try {
-    activeStorage.delete(key);
+    activeStorage.remove(key);
     return true;
   } catch {
     return false;
