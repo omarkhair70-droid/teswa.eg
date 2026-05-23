@@ -24,9 +24,12 @@ export async function setAdventureEntranceSeen(seen: boolean): Promise<void> {
 }
 
 export async function getAdventureMuted(): Promise<boolean> {
-  await migrateSafeAsyncStorageKeysToMmkv();
-  const mmkv = getString(ADVENTURE_MUTE_KEY);
-  if (mmkv !== null) return mmkv === 'true';
+  try {
+    await migrateSafeAsyncStorageKeysToMmkv();
+    const mmkv = getString(ADVENTURE_MUTE_KEY);
+    if (mmkv !== null) return mmkv === 'true';
+  } catch {}
+
   try {
     const fallback = await AsyncStorage.getItem(ADVENTURE_MUTE_KEY);
     return fallback === 'true';
