@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { AppCard } from '@/components/ui/AppCard';
@@ -10,48 +11,60 @@ import { useAuth } from '@/lib/auth';
 import { AppNotification, fetchMyNotifications, markAllNotificationsRead, markNotificationRead, notificationTypeLabel, resolveNotificationRoute } from '@/lib/notifications';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { trackEvent } from '@/lib/analytics';
+import { queryKeys } from '@/lib/query/query-keys';
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notifs, setNotifs] = useState<AppNotification[]>([]);
-  const [markingAll, setMarkingAll] = useState(false);
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   const { refreshBadges } = useUnreadBadges();
+  const queryClient = useQueryClient();
 
-  const loadNotifications = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    const result = await fetchMyNotifications(user.id);
-    if (!result.ok) {
-      setError(result.message);
-      setLoading(false);
-      return;
-    }
-    setNotifs(result.data);
-    setLoading(false);
-  }, [user]);
+  const notificationsQuery = useQuery({
+    queryKey: queryKeys.notifications.byUserId(user?.id ?? 'anonymous'),
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const result = await fetchMyNotifications(user!.id);
+      if (!result.ok) throw new Error(result.message);
+      return result.data;
+    },
+  });
 
-  useEffect(() => { loadNotifications(); }, [loadNotifications]);
+  const notifications = notificationsQuery.data ?? [];
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
 
-  const unreadCount = useMemo(() => notifs.filter((n) => !n.isRead).length, [notifs]);
+  const markReadMutation = useMutation({
+    mutationFn: async (notification: AppNotification) => {
+      if (!user?.id) return { ok: false as const };
+      return markNotificationRead(notification.id, user.id);
+    },
+  });
+
+  const markAllMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) return { ok: false as const };
+      return markAllNotificationsRead(user.id);
+    },
+  });
 
   const handleOpenNotification = async (notification: AppNotification) => {
     setDeepLinkError(null);
     const route = resolveNotificationRoute(notification);
+
     if (!notification.isRead && user) {
       try {
-        const readResult = await markNotificationRead(notification.id, user.id);
-        if (readResult.ok) {
-          setNotifs((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)));
+        const readResult = await markReadMutation.mutateAsync(notification);
+        if ('ok' in readResult && readResult.ok) {
+          queryClient.setQueryData<AppNotification[]>(queryKeys.notifications.byUserId(user.id), (prev = []) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)));
           void refreshBadges();
         } else if (__DEV__) {
-          console.log('[Notifications] mark read failed', readResult.error);
+          console.log('[ReactQuery]', 'notifications_mark_read_failed');
         }
-      } catch (err) {
-        if (__DEV__) console.log('[Notifications] mark read threw', { notificationId: notification.id, code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
+      } catch (error) {
+        if (__DEV__) {
+          console.log('[ReactQuery]', 'notifications_mark_read_threw', {
+            message: (error as { message?: string })?.message,
+          });
+        }
       }
     }
 
@@ -64,20 +77,21 @@ export default function NotificationsScreen() {
 
   const handleMarkAllRead = async () => {
     if (!user) return;
-    setMarkingAll(true);
     try {
-      const result = await markAllNotificationsRead(user.id);
-      if (result.ok) {
+      const result = await markAllMutation.mutateAsync();
+      if ('ok' in result && result.ok) {
         const now = new Date().toISOString();
         void refreshBadges();
-        setNotifs((prev) => prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: now })));
+        queryClient.setQueryData<AppNotification[]>(queryKeys.notifications.byUserId(user.id), (prev = []) => prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: now })));
       } else if (__DEV__) {
-        console.log('[Notifications] mark all read failed', result.error);
+        console.log('[ReactQuery]', 'notifications_mark_all_read_failed');
       }
-    } catch (err) {
-      if (__DEV__) console.log('[Notifications] mark all read threw', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
-    } finally {
-      setMarkingAll(false);
+    } catch (error) {
+      if (__DEV__) {
+        console.log('[ReactQuery]', 'notifications_mark_all_read_threw', {
+          message: (error as { message?: string })?.message,
+        });
+      }
     }
   };
 
@@ -87,9 +101,9 @@ export default function NotificationsScreen() {
     <AppScreen scrollable>
       <View style={styles.content}>
         <AppText weight="bold" style={styles.title}>الإشعارات</AppText>
-        {unreadCount > 0 ? <AppButton label={markingAll ? 'جاري التنفيذ...' : 'تعليم الكل كمقروء'} onPress={handleMarkAllRead} disabled={markingAll} variant="neutral" /> : null}
+        {unreadCount > 0 ? <AppButton label={markAllMutation.isPending ? 'جاري التنفيذ...' : 'تعليم الكل كمقروء'} onPress={handleMarkAllRead} disabled={markAllMutation.isPending} variant="neutral" /> : null}
 
-        {loading ? <AppText muted>جاري تحميل الإشعارات...</AppText> : null}
+        {notificationsQuery.isLoading ? <AppText muted>جاري تحميل الإشعارات...</AppText> : null}
         {deepLinkError ? (
           <AppCard>
             <View style={styles.group}>
@@ -101,18 +115,18 @@ export default function NotificationsScreen() {
             </View>
           </AppCard>
         ) : null}
-        {!loading && error ? (
+        {!notificationsQuery.isLoading && notificationsQuery.isError ? (
           <AppCard>
             <View style={styles.group}>
-              <AppText>{error}</AppText>
-              <AppButton label="إعادة المحاولة" onPress={loadNotifications} variant="neutral" />
+              <AppText>{notificationsQuery.error.message}</AppText>
+              <AppButton label="إعادة المحاولة" onPress={() => void notificationsQuery.refetch()} variant="neutral" />
             </View>
           </AppCard>
         ) : null}
 
-        {!loading && !error && notifs.length === 0 ? <AppText muted>لا توجد إشعارات حالياً.</AppText> : null}
+        {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length === 0 ? <AppText muted>لا توجد إشعارات حالياً.</AppText> : null}
 
-        {!loading && !error ? notifs.map((n) => {
+        {!notificationsQuery.isLoading && !notificationsQuery.isError ? notifications.map((n) => {
           const route = resolveNotificationRoute(n);
           const card = (
             <AppCard key={n.id}>
@@ -129,7 +143,7 @@ export default function NotificationsScreen() {
           );
 
           if (!route && n.isRead) return card;
-          return <Pressable key={n.id} onPress={() => handleOpenNotification(n)}>{card}</Pressable>;
+          return <Pressable key={n.id} onPress={() => void handleOpenNotification(n)}>{card}</Pressable>;
         }) : null}
       </View>
     </AppScreen>
