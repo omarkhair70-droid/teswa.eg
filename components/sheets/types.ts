@@ -26,6 +26,7 @@ export type AppActionSheetAction = {
 export type AppActionSheetProps = {
   title: string;
   description?: string;
+  titleIconName?: keyof typeof Ionicons.glyphMap;
   actions: AppActionSheetAction[];
   onClose?: () => void;
   snapPoints?: BottomSheetModalProps['snapPoints'];
