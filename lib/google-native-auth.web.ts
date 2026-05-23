@@ -1,3 +1,16 @@
+import { Platform } from 'react-native';
+
+export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth.web.ts.v1';
+export type GoogleNativeAuthImplementation = 'android-native' | 'web-shim' | 'unknown';
+export const GOOGLE_NATIVE_AUTH_IMPLEMENTATION: GoogleNativeAuthImplementation = 'web-shim';
+
+export type GoogleNativeAuthModuleInfo = {
+  moduleVersion: string;
+  implementation: GoogleNativeAuthImplementation;
+  platform: string;
+  hasSignInFunction: boolean;
+};
+
 export type NativeGoogleSignInResult = {
   status: 'success' | 'cancelled' | 'fallback' | 'error' | 'empty';
   error: string | null;
@@ -6,7 +19,8 @@ export type NativeGoogleSignInResult = {
   reason?: string;
   resultType?: string;
   fallbackToBrowser?: boolean;
-  implementation?: 'android-native' | 'web-shim' | 'unknown';
+  implementation?: GoogleNativeAuthImplementation;
+  moduleVersion?: string;
 };
 
 export type GoogleNativeDiagnosticsEvent = {
@@ -25,12 +39,22 @@ export type GoogleNativeDiagnosticsEvent = {
   hasIdToken?: boolean;
   hasUser?: boolean;
   platform?: string;
-  implementation?: 'android-native' | 'web-shim' | 'unknown';
+  implementation?: GoogleNativeAuthImplementation;
+  moduleVersion?: string;
 };
 
 type GoogleNativeSignInOptions = {
   onStep?: (event: GoogleNativeDiagnosticsEvent) => void;
 };
+
+export function getGoogleNativeAuthModuleInfo(): GoogleNativeAuthModuleInfo {
+  return {
+    moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION,
+    implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
+    platform: Platform.OS,
+    hasSignInFunction: typeof signInWithGoogleNative === 'function',
+  };
+}
 
 export function setGoogleNativeDiagnosticsListener(
   _listener: ((event: GoogleNativeDiagnosticsEvent) => void) | null
@@ -46,7 +70,15 @@ export async function signInWithGoogleNative(
     step: 'native_helper_entered',
     reason: 'non_android',
     platform: 'web',
-    implementation: 'web-shim',
+    implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
+    moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION,
   });
-  return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'non_android', implementation: 'web-shim' };
+  return {
+    status: 'fallback',
+    error: null,
+    fallbackToBrowser: true,
+    reason: 'non_android',
+    implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
+    moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION,
+  };
 }
