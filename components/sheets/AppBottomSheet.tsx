@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   titleIconWrap: {
     width: 28,
     height: 28,
-    borderRadius: radii.full,
+    borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primarySoft,
