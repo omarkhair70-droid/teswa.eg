@@ -31,7 +31,7 @@ export async function getAdventureMuted(): Promise<boolean> {
     const fallback = await AsyncStorage.getItem(ADVENTURE_MUTE_KEY);
     return fallback === 'true';
   } catch {
-    return true;
+    return false;
   }
 }
 
