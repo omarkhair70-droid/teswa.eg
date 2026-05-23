@@ -4,7 +4,11 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { supabase } from '@/lib/supabase/client';
 
 export type NativeGoogleSignInResult = {
+  status: 'success' | 'cancelled' | 'fallback' | 'error' | 'empty';
   error: string | null;
+  code?: string;
+  message?: string;
+  resultType?: string;
   fallbackToBrowser?: boolean;
   reason?:
     | 'native_success'
@@ -13,13 +17,21 @@ export type NativeGoogleSignInResult = {
     | 'play_services_unavailable'
     | 'in_progress'
     | 'cancelled'
+    | 'non_success_result'
     | 'missing_id_token'
     | 'supabase_session_failed'
+    | 'empty_result'
     | 'native_exception';
 };
 type GoogleSignInDiagnosticFlow = 'native' | 'browser_fallback';
 type GoogleSignInDiagnosticReason = NonNullable<NativeGoogleSignInResult['reason']>;
 type GoogleNativeDiagnosticStep =
+  | 'diagnostics_button_pressed'
+  | 'calling_native_helper'
+  | 'native_helper_returned'
+  | 'native_helper_threw'
+  | 'native_helper_returned_empty'
+  | 'native_timeout_no_result'
   | 'native_start'
   | 'config_check_start'
   | 'google_configure_done'
@@ -29,6 +41,7 @@ type GoogleNativeDiagnosticStep =
   | 'native_signout_done'
   | 'native_signin_start'
   | 'native_signin_resolved'
+  | 'native_signin_empty'
   | 'native_result_cancelled'
   | 'native_result_non_success'
   | 'native_result_success'
@@ -44,7 +57,14 @@ export type GoogleNativeDiagnosticsEvent = {
   reason?: GoogleSignInDiagnosticReason;
   resultType?: string;
   configured?: boolean;
+  hasWebClientId?: boolean;
+  hasNativeModule?: boolean;
   hasError?: boolean;
+  message?: string;
+  statusCode?: string;
+  isCancelled?: boolean;
+  hasIdToken?: boolean;
+  hasUser?: boolean;
   code?: string;
   platform?: string;
 };
@@ -87,17 +107,27 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
 
   if (Platform.OS !== 'android') {
     logGoogleSignInDiagnostic('browser_fallback', 'non_android');
-    return { error: null, fallbackToBrowser: true, reason: 'non_android' };
+    return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'non_android' };
   }
 
   try {
+    const hasWebClientId = Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
     emitGoogleNativeStep({ flow: 'native_step', step: 'config_check_start' }, options);
     configureGoogleSignin();
-    emitGoogleNativeStep({ flow: 'native_step', step: 'google_configure_done', configured }, options);
+    emitGoogleNativeStep(
+      {
+        flow: 'native_step',
+        step: 'google_configure_done',
+        configured,
+        hasWebClientId,
+        hasNativeModule: typeof GoogleSignin.signIn === 'function',
+      },
+      options
+    );
 
     if (!configured) {
       logGoogleSignInDiagnostic('browser_fallback', 'missing_web_client_id');
-      return { error: null, fallbackToBrowser: true, reason: 'missing_web_client_id' };
+      return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'missing_web_client_id' };
     }
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'play_services_check_start' }, options);
@@ -110,19 +140,29 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_signin_start' }, options);
     const userInfo = await GoogleSignin.signIn();
+    if (!userInfo) {
+      emitGoogleNativeStep({ flow: 'native_step', step: 'native_signin_empty' }, options);
+      return {
+        status: 'empty',
+        error: 'تعذر استلام نتيجة تسجيل الدخول من جوجل. حاول مرة تانية.',
+        fallbackToBrowser: true,
+        reason: 'empty_result',
+      };
+    }
+
     const resultType = typeof userInfo === 'object' && userInfo !== null && 'type' in userInfo ? String(userInfo.type) : 'unknown';
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_signin_resolved', resultType }, options);
 
     if (resultType === 'cancelled') {
-      emitGoogleNativeStep({ flow: 'native_step', step: 'native_result_cancelled' }, options);
+      emitGoogleNativeStep({ flow: 'native_step', step: 'native_result_cancelled', isCancelled: true }, options);
       logGoogleSignInDiagnostic('native', 'cancelled');
-      return { error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled' };
+      return { status: 'cancelled', error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled' };
     }
 
     if (resultType !== 'success') {
       emitGoogleNativeStep({ flow: 'native_step', step: 'native_result_non_success', resultType }, options);
-      logGoogleSignInDiagnostic('browser_fallback', 'native_exception');
-      return { error: null, fallbackToBrowser: true, reason: 'native_exception' };
+      logGoogleSignInDiagnostic('browser_fallback', 'non_success_result');
+      return { status: 'error', error: GOOGLE_NATIVE_GENERIC_ERROR, fallbackToBrowser: true, reason: 'non_success_result', resultType };
     }
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_result_success' }, options);
@@ -133,6 +173,7 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
       emitGoogleNativeStep({ flow: 'native_step', step: 'native_missing_id_token' }, options);
       logGoogleSignInDiagnostic('native', 'missing_id_token');
       return {
+        status: 'error',
         error: 'تعذر الحصول على بيانات تسجيل الدخول من جوجل. حاول مرة تانية.',
         fallbackToBrowser: true,
         reason: 'missing_id_token',
@@ -150,6 +191,7 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     if (error) {
       logGoogleSignInDiagnostic('native', 'supabase_session_failed');
       return {
+        status: 'error',
         error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.',
         fallbackToBrowser: true,
         reason: 'supabase_session_failed',
@@ -158,28 +200,31 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_success' }, options);
     logGoogleSignInDiagnostic('native', 'native_success');
-    return { error: null, fallbackToBrowser: false, reason: 'native_success' };
+    return { status: 'success', error: null, fallbackToBrowser: false, reason: 'native_success' };
   } catch (err: unknown) {
     const code = typeof err === 'object' && err !== null && 'code' in err ? String((err as { code?: unknown }).code) : undefined;
+    const message = typeof err === 'object' && err !== null && 'message' in err ? String((err as { message?: unknown }).message) : undefined;
+    const statusCode =
+      typeof err === 'object' && err !== null && 'statusCode' in err ? String((err as { statusCode?: unknown }).statusCode) : undefined;
 
-    emitGoogleNativeStep({ flow: 'native_step', step: 'native_catch', code }, options);
+    emitGoogleNativeStep({ flow: 'native_step', step: 'native_catch', code, message, statusCode }, options);
 
     if (code === statusCodes.SIGN_IN_CANCELLED) {
       logGoogleSignInDiagnostic('native', 'cancelled');
-      return { error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled' };
+      return { status: 'cancelled', error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled', code, message };
     }
 
     if (code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       logGoogleSignInDiagnostic('browser_fallback', 'play_services_unavailable');
-      return { error: null, fallbackToBrowser: true, reason: 'play_services_unavailable' };
+      return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'play_services_unavailable', code, message };
     }
 
     if (code === statusCodes.IN_PROGRESS) {
       logGoogleSignInDiagnostic('browser_fallback', 'in_progress');
-      return { error: null, fallbackToBrowser: true, reason: 'in_progress' };
+      return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'in_progress', code, message };
     }
 
     logGoogleSignInDiagnostic('browser_fallback', 'native_exception');
-    return { error: null, fallbackToBrowser: true, reason: 'native_exception' };
+    return { status: 'error', error: GOOGLE_NATIVE_GENERIC_ERROR, fallbackToBrowser: true, reason: 'native_exception', code, message };
   }
 }
