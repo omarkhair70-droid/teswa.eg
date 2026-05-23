@@ -77,7 +77,7 @@ export default function HomeScreen() {
   const homeHubSheetRef = useRef<BottomSheetModal>(null);
 
 
-  const homeFeedQuery = useHomeFeedQuery();
+  const homeFeedQuery = useHomeFeedQuery(user?.id ?? null);
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);

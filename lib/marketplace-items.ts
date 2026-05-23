@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { fetchItemVideoTeaserByItemId, type ItemVideoTeaser } from '@/lib/item-videos';
+import { fetchItemLikesSummaryForViewer } from '@/lib/item-likes';
 
 const MARKETPLACE_PAGE_SIZE = 20;
 
@@ -28,6 +29,8 @@ export type MarketplaceItem = {
   ownerDisplayName: string | null;
   hasVideoTeaser: boolean;
   distanceKm?: number | null;
+  likeCount: number;
+  likedByMe: boolean;
 };
 
 export type MarketplaceItemsPage = {
@@ -74,7 +77,7 @@ export type MarketplaceItemDetail = MarketplaceItem & {
   ownerPresence?: MarketplaceItemOwnerPresence | null;
 };
 
-function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false): MarketplaceItem {
+function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false, likeCount = 0, likedByMe = false): MarketplaceItem {
   return {
     id: row.id,
     title: row.title?.trim() || 'عنصر بدون عنوان',
@@ -86,6 +89,8 @@ function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false
     ownerDisplayName: row.owner_display_name,
     hasVideoTeaser,
     distanceKm: row.distance_km ?? null,
+    likeCount,
+    likedByMe,
   };
 }
 
@@ -101,7 +106,7 @@ const itemSelect = `
   created_at
 `;
 
-export async function fetchMarketplaceItemsPage(options?: { offset?: number; limit?: number; filters?: MarketplaceItemFilters }): Promise<MarketplaceItemsPage> {
+export async function fetchMarketplaceItemsPage(options?: { offset?: number; limit?: number; filters?: MarketplaceItemFilters; viewerId?: string | null }): Promise<MarketplaceItemsPage> {
   const offset = options?.offset ?? 0;
   const limit = options?.limit ?? MARKETPLACE_PAGE_SIZE;
   const query = options?.filters?.query?.trim();
@@ -142,16 +147,19 @@ export async function fetchMarketplaceItemsPage(options?: { offset?: number; lim
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
-  const videoPresenceByItemId = await fetchItemVideoPresenceMap(pageRows.map((row) => row.id));
+  const [videoPresenceByItemId, likesByItemId] = await Promise.all([
+    fetchItemVideoPresenceMap(pageRows.map((row) => row.id)),
+    fetchItemLikesSummaryForViewer({ itemIds: pageRows.map((row) => row.id), viewerId: options?.viewerId ?? null }),
+  ]);
 
   return {
-    items: pageRows.map((row) => mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true)),
+    items: pageRows.map((row) => { const likes = likesByItemId.get(row.id); return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true, likes?.likeCount ?? 0, likes?.likedByMe ?? false); }),
     hasMore,
   };
 }
 
 export async function fetchMarketplaceItems(): Promise<MarketplaceItem[]> {
-  const page = await fetchMarketplaceItemsPage({ offset: 0, limit: MARKETPLACE_PAGE_SIZE });
+  const page = await fetchMarketplaceItemsPage({ offset: 0, limit: MARKETPLACE_PAGE_SIZE, viewerId: null });
   return page.items;
 }
 
@@ -161,6 +169,7 @@ export async function fetchNearbyMarketplaceItemsPage(options: {
   radiusKm?: number;
   offset?: number;
   limit?: number;
+  viewerId?: string | null;
 }): Promise<MarketplaceItemsPage> {
   const offset = options.offset ?? 0;
   const limit = options.limit ?? MARKETPLACE_PAGE_SIZE;
@@ -179,15 +188,18 @@ export async function fetchNearbyMarketplaceItemsPage(options: {
   const rows = (data ?? []) as MarketplaceItemRow[];
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  const videoPresenceByItemId = await fetchItemVideoPresenceMap(pageRows.map((row) => row.id));
+  const [videoPresenceByItemId, likesByItemId] = await Promise.all([
+    fetchItemVideoPresenceMap(pageRows.map((row) => row.id)),
+    fetchItemLikesSummaryForViewer({ itemIds: pageRows.map((row) => row.id), viewerId: options?.viewerId ?? null }),
+  ]);
 
   return {
-    items: pageRows.map((row) => mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true)),
+    items: pageRows.map((row) => { const likes = likesByItemId.get(row.id); return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true, likes?.likeCount ?? 0, likes?.likedByMe ?? false); }),
     hasMore,
   };
 }
 
-export async function fetchMarketplaceItemById(id: string): Promise<MarketplaceItem | null> {
+export async function fetchMarketplaceItemById(id: string, viewerId?: string | null): Promise<MarketplaceItem | null> {
   const { data, error } = await supabase
     .from('marketplace_items')
     .select(itemSelect)
@@ -203,9 +215,13 @@ export async function fetchMarketplaceItemById(id: string): Promise<MarketplaceI
   }
 
   const row = data as MarketplaceItemRow;
-  const videoPresenceByItemId = await fetchItemVideoPresenceMap([row.id]);
+  const [videoPresenceByItemId, likesByItemId] = await Promise.all([
+    fetchItemVideoPresenceMap([row.id]),
+    fetchItemLikesSummaryForViewer({ itemIds: [row.id], viewerId: viewerId ?? null }),
+  ]);
 
-  return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true);
+  const likes = likesByItemId.get(row.id);
+  return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true, likes?.likeCount ?? 0, likes?.likedByMe ?? false);
 }
 
 type ItemDetailRow = {
@@ -236,7 +252,7 @@ function normalizeNullableText(value: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
-export async function fetchMarketplaceItemDetailById(id: string): Promise<MarketplaceItemDetail | null> {
+export async function fetchMarketplaceItemDetailById(id: string, viewerId?: string | null): Promise<MarketplaceItemDetail | null> {
   const { data: itemData, error: itemError } = await supabase
     .from('items')
     .select(
@@ -267,12 +283,13 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
 
   const item = itemData as ItemDetailRow;
 
-  const [imagesResult, categoryResult, ownerResult, wantedTagsResult, videoTeaser] = await Promise.all([
+  const [imagesResult, categoryResult, ownerResult, wantedTagsResult, videoTeaser, likesByItemId] = await Promise.all([
     supabase.from('item_images').select('image_url, is_primary, sort_order').eq('item_id', id),
     item.category_id ? supabase.from('categories').select('name_ar').eq('id', item.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     item.owner_id ? supabase.from('profiles').select('id, display_name, username, avatar_url, profile_tagline, city, area, successful_swaps_count, response_rate, is_banned').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     supabase.from('item_wanted_tags').select('tag').eq('item_id', id),
     fetchItemVideoTeaserByItemId(id),
+    fetchItemLikesSummaryForViewer({ itemIds: [id], viewerId: viewerId ?? null }),
   ]);
 
   if (imagesResult.error) throw imagesResult.error;
@@ -316,6 +333,8 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     .map((row: { tag: string | null }) => normalizeNullableText(row.tag))
     .filter((tag: string | null): tag is string => Boolean(tag));
 
+  const likes = likesByItemId.get(id);
+
   return {
     id: item.id,
     title: item.title?.trim() || 'عنصر بدون عنوان',
@@ -325,6 +344,8 @@ export async function fetchMarketplaceItemDetailById(id: string): Promise<Market
     condition: normalizeNullableText(item.condition),
     location: normalizeNullableText(item.city),
     ownerDisplayName: normalizeNullableText(ownerProfile?.display_name ?? null),
+    likeCount: likes?.likeCount ?? 0,
+    likedByMe: likes?.likedByMe ?? false,
     hasVideoTeaser: Boolean(videoTeaser),
     area: normalizeNullableText(item.area),
     conditionNotes: normalizeNullableText(item.condition_notes),

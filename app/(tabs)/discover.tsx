@@ -19,6 +19,7 @@ import { radii } from '@/constants/radii';
 import { fetchMarketplaceItemsPage, fetchNearbyMarketplaceItemsPage, MarketplaceItem } from '@/lib/marketplace-items';
 import { fetchStoryDiscoveryItems, StoryDiscoveryItem } from '@/lib/story-discovery';
 import { resolveCurrentDiscoveryLocation } from '@/lib/discovery-location';
+import { useAuth } from '@/lib/auth';
 import {
   readAnyMarketplaceFirstPageCache,
   readFreshMarketplaceFirstPageCache,
@@ -32,6 +33,7 @@ import { DiscoverSpotlightRail } from '@/components/discover/DiscoverSpotlightRa
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 export default function DiscoverScreen() {
+  const { user } = useAuth();
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function DiscoverScreen() {
     }
 
     try {
-      const page = await fetchMarketplaceItemsPage({ offset: 0 });
+      const page = await fetchMarketplaceItemsPage({ offset: 0, viewerId: user?.id ?? null });
       setItems(page.items);
       setHasMore(page.hasMore);
       setError(null);
@@ -142,8 +144,8 @@ export default function DiscoverScreen() {
     setLoadMoreError(null);
     try {
       const page = activeNearbyLocation
-        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: 0 })
-        : await fetchMarketplaceItemsPage({ offset: 0 });
+        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: 0, viewerId: user?.id ?? null })
+        : await fetchMarketplaceItemsPage({ offset: 0, viewerId: user?.id ?? null });
       setItems(page.items);
       setHasMore(page.hasMore);
       setError(null);
@@ -155,7 +157,7 @@ export default function DiscoverScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [activeNearbyLocation, loadStoryHighlights, loadVideoMoments, refreshing]);
+  }, [activeNearbyLocation, loadStoryHighlights, loadVideoMoments, refreshing, user?.id]);
 
   const loadMoreItems = useCallback(async () => {
     if (loading || refreshing || loadingMore || !hasMore || error) {
@@ -167,8 +169,8 @@ export default function DiscoverScreen() {
 
     try {
       const page = activeNearbyLocation
-        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: items.length })
-        : await fetchMarketplaceItemsPage({ offset: items.length });
+        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: items.length, viewerId: user?.id ?? null })
+        : await fetchMarketplaceItemsPage({ offset: items.length, viewerId: user?.id ?? null });
       setItems((currentItems) => {
         const merged = [...currentItems, ...page.items];
         const uniqueById = new Map(merged.map((item) => [item.id, item]));
@@ -180,7 +182,7 @@ export default function DiscoverScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [activeNearbyLocation, error, hasMore, items.length, loading, loadingMore, refreshing]);
+  }, [activeNearbyLocation, error, hasMore, items.length, loading, loadingMore, refreshing, user?.id]);
 
   const handleUseMyLocation = useCallback(async () => {
     setNearbyLoading(true);
@@ -190,7 +192,7 @@ export default function DiscoverScreen() {
       const result = await resolveCurrentDiscoveryLocation();
       if (result.ok) {
         try {
-          const page = await fetchNearbyMarketplaceItemsPage({ latitude: result.latitude, longitude: result.longitude, radiusKm: 3, offset: 0 });
+          const page = await fetchNearbyMarketplaceItemsPage({ latitude: result.latitude, longitude: result.longitude, radiusKm: 3, offset: 0, viewerId: user?.id ?? null });
           setItems(page.items);
           setHasMore(page.hasMore);
           setError(null);

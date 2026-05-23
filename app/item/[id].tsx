@@ -22,6 +22,8 @@ import { ItemShareCard } from '@/components/share/ItemShareCard';
 import { buildCachedVideoSource, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 import { trackEvent } from '@/lib/analytics';
 import { useItemDetailQuery } from '@/lib/query/use-item-detail-query';
+import { useAuth } from '@/lib/auth';
+import { setItemLiked } from '@/lib/item-likes';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 
 function formatDuration(durationMs: number | null): string | null {
@@ -94,11 +96,13 @@ export default function ItemDetailsScreen() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [shareError, setShareError] = useState<string | null>(null);
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
+  const [likePending, setLikePending] = useState(false);
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
   const trackedItemDetailRef = useRef<string | null>(null);
   const itemShareCardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
   const itemActionsSheetRef = useRef<BottomSheetModal>(null);
-  const itemDetailQuery = useItemDetailQuery(id);
+  const { user } = useAuth();
+  const itemDetailQuery = useItemDetailQuery(id, user?.id ?? null);
   const item = itemDetailQuery.data?.item ?? null;
   const loading = itemDetailQuery.isLoading;
   const error = itemDetailQuery.error instanceof Error ? itemDetailQuery.error.message : null;
@@ -132,6 +136,26 @@ export default function ItemDetailsScreen() {
       metadata: { source: 'detail_screen' },
     });
   }, [item?.id]);
+
+  const onToggleLike = useCallback(async () => {
+    if (!item || likePending) return;
+    if (!user?.id) {
+      router.push('/(auth)/login');
+      return;
+    }
+
+    setLikePending(true);
+    try {
+      const result = await setItemLiked({ itemId: item.id, userId: user.id, liked: !item.likedByMe });
+      if (result.ok) {
+        await itemDetailQuery.refetch();
+      }
+    } catch {
+      // ignore and keep current UI state
+    } finally {
+      setLikePending(false);
+    }
+  }, [item, likePending, user?.id, router, itemDetailQuery]);
 
   const handleShareItem = useCallback(async () => {
     if (!item) return;
@@ -193,7 +217,7 @@ export default function ItemDetailsScreen() {
 
       <Animated.View entering={FadeInDown.duration(220).delay(90)}>
         <AppCard style={styles.premiumCard}><View style={styles.infoBlock}><AppText weight="bold" style={styles.title}>{item.title}</AppText>
-          <View style={styles.metaRow}><View style={styles.metaPill}><Ionicons name="pricetag-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.category || 'فئة غير محددة'}</AppText></View><View style={styles.metaPill}><Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.condition || 'حالة غير محددة'}</AppText></View><View style={styles.metaPill}><Ionicons name="location-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{locationText}</AppText></View></View>
+          <View style={styles.metaRow}><Pressable onPress={onToggleLike} disabled={likePending} accessibilityRole="button" accessibilityLabel={item.likedByMe ? "إلغاء الإعجاب" : "إعجاب"} style={styles.likePill}><Ionicons name={item.likedByMe ? "heart" : "heart-outline"} size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.likeCount}</AppText></Pressable><View style={styles.metaPill}><Ionicons name="pricetag-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.category || 'فئة غير محددة'}</AppText></View><View style={styles.metaPill}><Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.condition || 'حالة غير محددة'}</AppText></View><View style={styles.metaPill}><Ionicons name="location-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{locationText}</AppText></View></View>
           {!owner && !!item.ownerDisplayName ? <AppText muted>صاحب العنصر: {item.ownerDisplayName}</AppText> : null}
           {item.description ? <AppText>{item.description}</AppText> : null}
         </View></AppCard>
@@ -299,6 +323,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 26 },
   infoBlock: { gap: spacing.sm },
   metaRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
+  likePill: {
+    maxWidth: "100%",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: "rgba(221,208,197,0.78)",
+    borderRadius: radii.round,
+    backgroundColor: "rgba(255,253,248,0.72)",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
   metaPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   metaText: { fontSize: 12 },
   ownerCard: { gap: spacing.sm, borderWidth: 1, borderColor: colors.border },

@@ -13,10 +13,11 @@ export type HomeFeedQueryResult = {
   notice: string | null;
 };
 
-export function useHomeFeedQuery() {
+export function useHomeFeedQuery(viewerId?: string | null) {
   const queryClient = useQueryClient();
   const hydratedRef = useRef(false);
-  const queryKey = queryKeys.feed.homeFirstPage;
+  const viewerCacheKey = viewerId?.trim() || "anon";
+  const queryKey = [...queryKeys.feed.homeFirstPage, viewerCacheKey] as const;
 
   useEffect(() => {
     if (hydratedRef.current) return;
@@ -43,8 +44,8 @@ export function useHomeFeedQuery() {
       const freshCached = await readFreshMarketplaceFirstPageCache().catch(() => null);
 
       try {
-        const page = await fetchMarketplaceItemsPage({ offset: 0 });
-        void writeMarketplaceFirstPageCache(page);
+        const page = await fetchMarketplaceItemsPage({ offset: 0, viewerId });
+        if (!viewerId) void writeMarketplaceFirstPageCache(page);
         return { items: page.items, notice: null };
       } catch {
         if (freshCached) {
