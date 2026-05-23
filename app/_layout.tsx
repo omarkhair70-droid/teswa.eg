@@ -358,8 +358,8 @@ function RootNavigator() {
 
     return (
       <AccountGateLoadingState
-        title="ندخلك إلى تِسوى..."
-        subtitle="نراجع حالة حسابك بسرعة ونفتح لك التجربة."
+        title="بنجهز حسابك..."
+        subtitle="ثواني بسيطة وندخلك على طول."
       />
     );
   }
@@ -368,7 +368,7 @@ function RootNavigator() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>تعذر التحقق من حالة حسابك.</Text>
-        <Text style={styles.errorSubtitle}>حاول مرة تانية.</Text>
+        <Text style={styles.errorSubtitle}>تعذر التحقق من السياسات. حاول مرة تانية.</Text>
         <Pressable style={styles.retryButton} onPress={() => void retryAccountStateChecks()}>
           <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
         </Pressable>

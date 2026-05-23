@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const CURRENT_TERMS_POLICY_VERSION = '2026-05';
 export const CURRENT_COMMUNITY_GUIDELINES_VERSION = '2026-05';
 
-const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS = 12_000;
+const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS = 6_000;
 const POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE = 'استغرق التحقق من موافقات السياسات وقتًا أطول من المتوقع. حاول مرة ثانية.';
 const POLICY_CACHE_PREFIX = 'teswa:policy-acceptance:v1';
 
