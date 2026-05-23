@@ -125,7 +125,7 @@ export default function DirectScreen() {
         </Pressable>
       </View>
 
-      {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); setBusy(false);}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); setBusy(false);}} /></View></AppCard> : null}
+      {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
       {isRequesterOnRequest ? <AppCard style={styles.infoCard}><AppText muted>طلب المراسلة اتبعت. هتكملوا الكلام لما الطرف التاني يقبل.</AppText></AppCard> : null}
       {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
@@ -201,15 +201,20 @@ export default function DirectScreen() {
               if (!convo?.otherUserId || !user?.id) return;
               void (async () => {
                 setBlockBusy(true);
-                const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId);
-                if (result.ok) {
-                  const next = await fetchUserBlockState(user.id, convo.otherUserId);
-                  if (next.ok) setBlockedByMe(next.state.blockedByMe);
-                  setError(null);
-                } else {
+                try {
+                  const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId);
+                  if (result.ok) {
+                    const next = await fetchUserBlockState(user.id, convo.otherUserId);
+                    if (next.ok) setBlockedByMe(next.state.blockedByMe);
+                    setError(null);
+                  } else {
+                    setError('تعذر تحديث حالة الحظر حالياً.');
+                  }
+                } catch {
                   setError('تعذر تحديث حالة الحظر حالياً.');
+                } finally {
+                  setBlockBusy(false);
                 }
-                setBlockBusy(false);
               })();
             },
           },
