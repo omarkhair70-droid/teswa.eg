@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session, User } from '@supabase/supabase-js';
+import { createMMKV } from 'react-native-mmkv';
 import { supabase } from '@/lib/supabase/client';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
@@ -51,22 +52,68 @@ type AccountGateCache = {
 
 const policyFingerprint = () => REQUIRED_POLICIES.map((policy) => `${policy.key}:${policy.version}`).join('|');
 const accountGateCacheKey = (userId: string) => `${ACCOUNT_GATE_CACHE_PREFIX}:${userId}`;
+const accountGateStorage = createMMKV({ id: 'teswa-account-gate-cache' });
 
 async function readAccountGateCache(userId: string): Promise<AccountGateCache | null> {
-  try {
-    const raw = await AsyncStorage.getItem(accountGateCacheKey(userId));
+  const startedAt = Date.now();
+  let mmkvHit = false;
+  let legacyHit = false;
+  let migrated = false;
+  let cacheStatus: ReturnType<typeof getAccountGateCacheStatus> = 'cache_missing';
+
+  const parseAndValidate = (raw: string | null): AccountGateCache | null => {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AccountGateCache;
     if (parsed.userId !== userId || parsed.policyFingerprint !== policyFingerprint()) return null;
     return parsed;
-  } catch {
+  };
+
+  try {
+    const key = accountGateCacheKey(userId);
+    const mmkvRaw = accountGateStorage.getString(key) ?? null;
+    const mmkvParsed = parseAndValidate(mmkvRaw);
+    if (mmkvParsed) {
+      mmkvHit = true;
+      cacheStatus = getAccountGateCacheStatus(mmkvParsed);
+      return mmkvParsed;
+    }
+
+    const legacyRaw = await AsyncStorage.getItem(key);
+    const legacyParsed = parseAndValidate(legacyRaw);
+    if (legacyParsed) {
+      legacyHit = true;
+      try {
+        accountGateStorage.set(key, legacyRaw as string);
+        migrated = true;
+      } catch {}
+      cacheStatus = getAccountGateCacheStatus(legacyParsed);
+      return legacyParsed;
+    }
+
+    cacheStatus = 'cache_missing';
     return null;
+  } catch {
+    cacheStatus = 'cache_missing';
+    return null;
+  } finally {
+    startupLog('account_gate_cache_read_done', {
+      mmkvHit,
+      legacyHit,
+      migrated,
+      cacheStatus,
+      dtMs: Date.now() - startedAt,
+    });
   }
 }
 
 async function writeAccountGateCache(entry: AccountGateCache): Promise<void> {
   try {
-    await AsyncStorage.setItem(accountGateCacheKey(entry.userId), JSON.stringify(entry));
+    const key = accountGateCacheKey(entry.userId);
+    const raw = JSON.stringify(entry);
+    try {
+      accountGateStorage.set(key, raw);
+    } catch {}
+    await AsyncStorage.setItem(key, raw);
   } catch {}
 }
 
