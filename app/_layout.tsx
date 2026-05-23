@@ -9,22 +9,19 @@ import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { getRouteFromNotificationResponse, syncPushDeviceRegistrationIfPermitted } from '@/lib/push-notifications';
+import { getRouteFromNotificationResponse } from '@/lib/push-notifications';
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
-import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-memory-refresh';
-import { createForegroundMemoryRefreshSubscription, runForegroundMemoryRefreshIfAllowed } from '@/lib/foreground-memory-refresh';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 import { trackEvent } from '@/lib/analytics';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
 import { QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import * as Network from 'expo-network';
 import { queryClient } from '@/lib/query/query-client';
 
 
 
-function ReactQueryRuntimeCoordinator() {
+function ReactQueryRuntimeCoordinator({ enableNetworkProbe }: { enableNetworkProbe: boolean }) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (Platform.OS !== 'web') focusManager.setFocused(state === 'active');
@@ -34,10 +31,13 @@ function ReactQueryRuntimeCoordinator() {
   }, []);
 
   useEffect(() => {
+    if (!enableNetworkProbe) return;
     let mounted = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const applyNetworkState = async () => {
       try {
+        const Network = await import('expo-network');
         const state = await Network.getNetworkStateAsync();
         if (!mounted) return;
         onlineManager.setOnline(Boolean(state.isConnected && state.isInternetReachable !== false));
@@ -51,15 +51,15 @@ function ReactQueryRuntimeCoordinator() {
     };
 
     void applyNetworkState();
-    const intervalId = setInterval(() => {
+    intervalId = setInterval(() => {
       void applyNetworkState();
     }, 30_000);
 
     return () => {
       mounted = false;
-      clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
     };
-  }, []);
+  }, [enableNetworkProbe]);
 
   return null;
 }
@@ -135,27 +135,10 @@ function ShareIntentCoordinator() {
 }
 
 
-function BackgroundMemoryRefreshCoordinator() {
-  useEffect(() => {
-    void ensureTeswaBackgroundMemoryRefreshRegistered();
-  }, []);
-
-  return null;
-}
-
-
-function ForegroundMemoryRefreshCoordinator() {
-  useEffect(() => {
-    const subscription = createForegroundMemoryRefreshSubscription();
-    return () => subscription.remove();
-  }, []);
-
-  return null;
-}
 
 const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 6_000;
 const DEFERRED_PUSH_SYNC_DELAY_MS = 7_000;
-const DEFERRED_FOREGROUND_MEMORY_REFRESH_DELAY_MS = 8_000;
+const DEFERRED_STARTUP_WORK_DELAY_MS = 2_000;
 const nativeGoogleTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
 
 function AccountGateLoadingState({
@@ -173,7 +156,7 @@ function AccountGateLoadingState({
   );
 }
 
-function RootNavigator() {
+function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void }) {
   const { bootstrapReady, loadingProfile, user, onboardingCompleted, profileCompleted, profileCheckError, loadingPolicyAcceptance, requiredPoliciesAccepted, policyAcceptanceCheckError, refreshProfile, refreshPolicyAcceptance, usingCachedAccountGate } = useAuth();
   const router = useRouter();
   const segments = useSegments();
@@ -219,31 +202,21 @@ function RootNavigator() {
     return () => clearTimeout(stallTimer);
   }, [user, loadingProfile, loadingPolicyAcceptance]);
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !markedFirstScreenReadyRef.current) return;
     void trackEvent('session_started', { route: '/_layout' });
-  }, [user?.id]);
+  }, [user?.id, hasSatisfiedAccountGate]);
 
   useEffect(() => {
     if (!bootstrapReady || !hasSatisfiedAccountGate || !user?.id) return;
     const userIdAtSchedule = user.id;
     const timer = setTimeout(() => {
       if (!user?.id || user.id !== userIdAtSchedule) return;
-      void syncPushDeviceRegistrationIfPermitted(user.id).then((result) => {
-        if (__DEV__) console.log('[Push] deferred post-login sync result', { userId: user.id, ...result });
-      });
+      void import('@/lib/push-notifications').then(({ syncPushDeviceRegistrationIfPermitted }) => {
+        return syncPushDeviceRegistrationIfPermitted(user.id);
+      }).then((result) => {
+        if (__DEV__) console.log('[Push] deferred post-login sync result', result);
+      }).catch(() => undefined);
     }, DEFERRED_PUSH_SYNC_DELAY_MS);
-
-    return () => clearTimeout(timer);
-  }, [bootstrapReady, hasSatisfiedAccountGate, user?.id]);
-
-  useEffect(() => {
-    if (!bootstrapReady || !hasSatisfiedAccountGate || !user?.id) return;
-    const userIdAtSchedule = user.id;
-    const timer = setTimeout(() => {
-      if (AppState.currentState !== 'active') return;
-      if (!user?.id || user.id !== userIdAtSchedule) return;
-      void runForegroundMemoryRefreshIfAllowed('manual_bootstrap');
-    }, DEFERRED_FOREGROUND_MEMORY_REFRESH_DELAY_MS);
 
     return () => clearTimeout(timer);
   }, [bootstrapReady, hasSatisfiedAccountGate, user?.id]);
@@ -296,6 +269,8 @@ function RootNavigator() {
       profileCompleted,
       requiredPoliciesAccepted,
     });
+    startupLog('first_screen_ready_signal');
+    onFirstScreenReady?.();
     void hideSplashSafely('first_screen_ready');
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, profileCompleted, requiredPoliciesAccepted, user]);
 
@@ -437,6 +412,50 @@ function RootNavigator() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }
 
+
+function DeferredStartupWorkCoordinator({ firstScreenReady }: { firstScreenReady: boolean }) {
+  useEffect(() => {
+    if (!firstScreenReady) return;
+    startupLog('deferred_startup_work_scheduled', { delayMs: DEFERRED_STARTUP_WORK_DELAY_MS });
+
+    let cancelled = false;
+    let foregroundCleanup: (() => void) | null = null;
+
+    const timer = setTimeout(() => {
+      startupLog('deferred_startup_work_started');
+      void (async () => {
+        try {
+          const [{ ensureTeswaBackgroundMemoryRefreshRegistered }, foregroundModule] = await Promise.all([
+            import('@/lib/background-memory-refresh'),
+            import('@/lib/foreground-memory-refresh'),
+          ]);
+
+          if (cancelled) return;
+          await ensureTeswaBackgroundMemoryRefreshRegistered();
+          if (cancelled) return;
+
+          const subscription = foregroundModule.createForegroundMemoryRefreshSubscription();
+          foregroundCleanup = () => subscription.remove();
+
+          if (AppState.currentState === 'active') {
+            void foregroundModule.runForegroundMemoryRefreshIfAllowed('manual_bootstrap');
+          }
+        } finally {
+          startupLog('deferred_startup_work_done');
+        }
+      })();
+    }, DEFERRED_STARTUP_WORK_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      foregroundCleanup?.();
+    };
+  }, [firstScreenReady]);
+
+  return null;
+}
+
 const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
@@ -475,6 +494,7 @@ const styles = StyleSheet.create({
 
 export default function RootLayout() {
   useRTLSetup();
+  const [firstScreenReady, setFirstScreenReady] = useState(false);
   useEffect(() => {
     startupTiming.mark('root_layout_mounted');
   }, []);
@@ -486,11 +506,10 @@ export default function RootLayout() {
             <AuthProvider>
               <QueryClientProvider client={queryClient}>
                 <UnreadBadgesProvider>
-                  <ReactQueryRuntimeCoordinator />
+                  <ReactQueryRuntimeCoordinator enableNetworkProbe={firstScreenReady} />
                   <ShareIntentCoordinator />
-                  <BackgroundMemoryRefreshCoordinator />
-                  <ForegroundMemoryRefreshCoordinator />
-                  <RootNavigator />
+                  <RootNavigator onFirstScreenReady={() => setFirstScreenReady(true)} />
+                  <DeferredStartupWorkCoordinator firstScreenReady={firstScreenReady} />
                   <BiometricAppLockCoordinator />
                 </UnreadBadgesProvider>
               </QueryClientProvider>
