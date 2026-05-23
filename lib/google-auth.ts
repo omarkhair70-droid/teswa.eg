@@ -3,7 +3,7 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
-import { logGoogleSignInDiagnostic, signInWithGoogleNative } from '@/lib/google-native-auth';
+import { logGoogleSignInDiagnostic, signInWithGoogleNative } from '@/lib/google-native-auth-v2';
 import { supabase } from '@/lib/supabase/client';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -180,6 +180,14 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
     const nativeResult = await signInWithGoogleNative();
     const nativeSuccess = nativeResult.status === 'success' && nativeResult.reason === 'native_success' && nativeResult.error === null;
     if (nativeSuccess) {
+      return { error: null };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const hasActiveSession = Boolean(sessionData.session);
+    const sessionBackedNativeSuccess =
+      hasActiveSession && (nativeResult.reason === 'native_success' || nativeResult.status === 'success');
+    if (sessionBackedNativeSuccess) {
       return { error: null };
     }
 
