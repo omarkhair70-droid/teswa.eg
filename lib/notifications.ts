@@ -132,7 +132,7 @@ export function resolveNotificationRoute(notification: Pick<AppNotification, 'ty
   if (notification.dealId) return `/deal/${notification.dealId}`;
   if (notification.offerId) return `/offer/${notification.offerId}`;
   if (notification.itemId) return `/item/${notification.itemId}`;
-  return '/notifications';
+  return null;
 }
 
 export const notificationTypeLabel: Record<NotificationType, string> = {
