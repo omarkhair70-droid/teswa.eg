@@ -31,6 +31,8 @@ import {
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { trackEvent } from '@/lib/analytics';
 import { useHomeFeedQuery } from '@/lib/query/use-home-feed-query';
+import { prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
+import type { MarketplaceItem } from '@/lib/marketplace-items';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 type NextActionKind = 'profile' | 'offers' | 'messages' | 'replies' | 'firstItem' | 'calm';
@@ -165,6 +167,12 @@ export default function HomeScreen() {
     if (!user?.id) return;
     void trackEvent('home_viewed', { route: '/(tabs)/home' });
   }, [user?.id]);
+
+  useEffect(() => {
+    const candidateUrls = (homeFeedQuery.data?.items ?? []).slice(0, 5).map((entry) => entry.imageUrl).filter(Boolean);
+    if (candidateUrls.length === 0) return;
+    void prefetchImagesMemoryDisk(candidateUrls);
+  }, [homeFeedQuery.data?.items]);
 
   useEffect(() => {
     personalWorldSeenCommittedRef.current = false;
@@ -308,11 +316,19 @@ export default function HomeScreen() {
     };
   }, [dashboard, profileCompleted]);
 
+  const keyExtractor = useCallback((item: { id: string }) => item.id, []);
+  const renderItem = useCallback(({ item }: { item: MarketplaceItem }) => <ItemCard item={item} />, []);
+
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
         data={homeFeedQuery.data?.items ?? []}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
+        removeClippedSubviews
+        initialNumToRender={4}
+        maxToRenderPerBatch={5}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View style={styles.header}>
@@ -544,7 +560,7 @@ export default function HomeScreen() {
             </View>
           </View>
         }
-        renderItem={({ item }) => <ItemCard item={item} />}
+        renderItem={renderItem}
         ListEmptyComponent={
           homeFeedQuery.isLoading ? (
             <EmptyState title="جاري التحميل" description="نلمّ أحدث العناصر المتاحة الآن." />
