@@ -7,5 +7,10 @@ export const colors = {
   textMuted: '#746A61',
   border: '#DDD0C5',
   accent: '#3E7C73',
+  accentSoft: '#D7E8E5',
+  danger: '#B44343',
+  dangerSoft: '#F6DFDF',
+  success: '#2F7D4B',
+  successSoft: '#DBEEDC',
   white: '#FFFFFF',
 };
