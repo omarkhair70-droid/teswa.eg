@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
@@ -13,6 +14,7 @@ import { ProfileAchievementSummary } from '@/components/profile/ProfileAchieveme
 import { TrustCard } from '@/components/profile/TrustCard';
 import { ProfileBadges } from '@/components/profile/ProfileBadges';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -71,6 +73,7 @@ export default function PublicProfileScreen() {
   const [trustLoading, setTrustLoading] = useState(false);
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [badgesLoading, setBadgesLoading] = useState(false);
+  const profileActionsSheetRef = useRef<BottomSheetModal>(null);
 
   const memberSince = useMemo(() => {
     if (!profile?.created_at) return null;
@@ -379,8 +382,7 @@ export default function PublicProfileScreen() {
           <View style={styles.group}>
             <AppText weight="semibold">الأمان والراحة</AppText>
             <AppText muted>لو في حاجة مش مريحة، تقدر تبلغ أو تتحكم في الحظر.</AppText>
-            <AppButton label="الإبلاغ عن المستخدم" variant="neutral" onPress={() => router.push(`/report/user/${profile.id}`)} />
-            <AppButton label={blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم')} onPress={onToggleBlock} disabled={blockBusy} variant="neutral" />
+            <AppButton label="خيارات المستخدم" variant="neutral" onPress={() => profileActionsSheetRef.current?.present()} />
             {blockError ? <AppText muted>{blockError}</AppText> : null}
           </View>
         </AppCard>
@@ -445,6 +447,30 @@ export default function PublicProfileScreen() {
           ) : null}
         </View>
       </AppCard>
+      <AppActionSheet
+        ref={profileActionsSheetRef}
+        title="خيارات البروفايل"
+        description="اختار إجراء مناسب."
+        actions={[
+          {
+            label: 'الإبلاغ عن المستخدم',
+            tone: 'danger',
+            onPress: () => {
+              profileActionsSheetRef.current?.dismiss();
+              router.push(`/report/user/${profile.id}`);
+            },
+          },
+          {
+            label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'),
+            tone: 'danger',
+            onPress: () => {
+              profileActionsSheetRef.current?.dismiss();
+              void onToggleBlock();
+            },
+          },
+        ]}
+      />
+
       <Modal visible={avatarViewerOpen} transparent animationType="fade" onRequestClose={() => setAvatarViewerOpen(false)}>
         <Pressable style={styles.viewerBackdrop} onPress={() => setAvatarViewerOpen(false)}>
           {profile.avatar_url ? <ExpoImage source={{ uri: profile.avatar_url }} style={styles.viewerImage} contentFit="contain" /> : null}
