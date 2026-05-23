@@ -20,6 +20,7 @@ export default function NativeGoogleDiagnosticsScreen() {
     fallbackToBrowser?: boolean;
     code?: string;
     message?: string;
+    implementation?: 'android-native' | 'web-shim' | 'unknown';
   } | null>(null);
 
   const safeErrorText = useMemo(() => {
@@ -36,6 +37,8 @@ export default function NativeGoogleDiagnosticsScreen() {
     setEvents((prev) => [...prev, { flow: 'native_step', step: 'diagnostics_button_pressed' }]);
     setEvents((prev) => [...prev, { flow: 'native_step', step: 'calling_native_helper' }]);
     let didTimeout = false;
+    let sawHelperEntry = false;
+    let latestImplementation: 'android-native' | 'web-shim' | 'unknown' | undefined;
     const timeoutId = setTimeout(() => {
       didTimeout = true;
       setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_timeout_no_result' }]);
@@ -49,17 +52,27 @@ export default function NativeGoogleDiagnosticsScreen() {
     }, 10_000);
     try {
       const nextResult = await signInWithGoogleNative({
-        onStep: (event) => setEvents((prev) => [...prev, event]),
+        onStep: (event) => {
+          if (event.step === 'native_helper_entered') {
+            sawHelperEntry = true;
+          }
+          if (event.implementation) {
+            latestImplementation = event.implementation;
+          }
+          setEvents((prev) => [...prev, event]);
+        },
       });
       if (didTimeout) return;
       setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_helper_returned' }]);
       if (!nextResult || typeof nextResult.status !== 'string') {
-        setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_helper_returned_empty' }]);
+        const emptyReason = sawHelperEntry ? 'native_helper_returned_empty' : 'native_helper_returned_before_entry';
+        setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_helper_returned_empty', implementation: latestImplementation }]);
         setResult({
           status: 'empty',
           error: 'لم يتم استلام نتيجة صالحة من Native Google.',
-          reason: 'native_helper_returned_empty',
+          reason: emptyReason,
           fallbackToBrowser: true,
+          implementation: latestImplementation,
         });
       } else {
         setResult(nextResult);
@@ -101,6 +114,7 @@ export default function NativeGoogleDiagnosticsScreen() {
           <AppText>reason: {result?.reason ?? '—'}</AppText>
           <AppText>code: {result?.code ?? '—'}</AppText>
           <AppText>message: {result?.message ?? '—'}</AppText>
+          <AppText>implementation: {result?.implementation ?? '—'}</AppText>
         </View>
 
         <View style={styles.card}>
@@ -110,6 +124,7 @@ export default function NativeGoogleDiagnosticsScreen() {
             <AppText key={`${event.step}-${index}`} style={styles.eventLine}>
               {index + 1}. {event.step}
               {event.platform ? ` | platform=${event.platform}` : ''}
+              {event.implementation ? ` | implementation=${event.implementation}` : ''}
               {typeof event.configured === 'boolean' ? ` | configured=${String(event.configured)}` : ''}
               {event.resultType ? ` | resultType=${event.resultType}` : ''}
               {event.code ? ` | code=${event.code}` : ''}

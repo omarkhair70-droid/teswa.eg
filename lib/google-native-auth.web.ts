@@ -6,6 +6,7 @@ export type NativeGoogleSignInResult = {
   reason?: string;
   resultType?: string;
   fallbackToBrowser?: boolean;
+  implementation?: 'android-native' | 'web-shim' | 'unknown';
 };
 
 export type GoogleNativeDiagnosticsEvent = {
@@ -24,6 +25,7 @@ export type GoogleNativeDiagnosticsEvent = {
   hasIdToken?: boolean;
   hasUser?: boolean;
   platform?: string;
+  implementation?: 'android-native' | 'web-shim' | 'unknown';
 };
 
 type GoogleNativeSignInOptions = {
@@ -41,9 +43,10 @@ export async function signInWithGoogleNative(
 ): Promise<NativeGoogleSignInResult> {
   options?.onStep?.({
     flow: 'native_step',
-    step: 'native_start',
+    step: 'native_helper_entered',
     reason: 'non_android',
     platform: 'web',
+    implementation: 'web-shim',
   });
-  return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'non_android' };
+  return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'non_android', implementation: 'web-shim' };
 }
