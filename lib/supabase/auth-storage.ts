@@ -1,7 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createMMKV } from 'react-native-mmkv';
 
-const supabaseAuthStorageMmkv = createMMKV({ id: 'teswa-supabase-auth' });
+type TeswaMmkvStorage = ReturnType<typeof createMMKV>;
+
+let storage: TeswaMmkvStorage | null = null;
+let storageInitAttempted = false;
+
+function getStorage(): TeswaMmkvStorage | null {
+  if (storageInitAttempted) return storage;
+  storageInitAttempted = true;
+  try {
+    storage = createMMKV({ id: 'teswa-supabase-auth' });
+    return storage;
+  } catch {
+    storage = null;
+    return null;
+  }
+}
 
 const startupAt = Date.now();
 const startupLog = (event: string, data?: Record<string, unknown>) => {
@@ -15,22 +30,27 @@ export const supabaseAuthStorage = {
     let legacyHit = false;
     let migrated = false;
 
-    try {
-      const mmkvValue = supabaseAuthStorageMmkv.getString(key);
-      if (typeof mmkvValue === 'string') {
-        mmkvHit = true;
-        return mmkvValue;
-      }
-    } catch {}
+    const storage = getStorage();
+    if (storage) {
+      try {
+        const mmkvValue = storage.getString(key);
+        if (typeof mmkvValue === 'string') {
+          mmkvHit = true;
+          return mmkvValue;
+        }
+      } catch {}
+    }
 
     try {
       const legacyValue = await AsyncStorage.getItem(key);
       if (typeof legacyValue === 'string') {
         legacyHit = true;
-        try {
-          supabaseAuthStorageMmkv.set(key, legacyValue);
-          migrated = true;
-        } catch {}
+        if (storage) {
+          try {
+            storage.set(key, legacyValue);
+            migrated = true;
+          } catch {}
+        }
       }
       return legacyValue;
     } finally {
@@ -43,15 +63,21 @@ export const supabaseAuthStorage = {
     }
   },
   setItem: async (key: string, value: string) => {
-    try {
-      supabaseAuthStorageMmkv.set(key, value);
-    } catch {}
+    const storage = getStorage();
+    if (storage) {
+      try {
+        storage.set(key, value);
+      } catch {}
+    }
     await AsyncStorage.setItem(key, value);
   },
   removeItem: async (key: string) => {
-    try {
-      supabaseAuthStorageMmkv.remove(key);
-    } catch {}
+    const storage = getStorage();
+    if (storage) {
+      try {
+        storage.remove(key);
+      } catch {}
+    }
     await AsyncStorage.removeItem(key);
   },
 };

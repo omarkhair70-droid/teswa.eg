@@ -9,6 +9,8 @@ import { REQUIRED_POLICIES, fetchRequiredPolicyAcceptanceState } from '@/lib/pol
 import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
 
+type TeswaMmkvStorage = ReturnType<typeof createMMKV>;
+
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
 const SIGNED_IN_PROFILE_RETRY_DELAY_MS = 650;
@@ -52,7 +54,20 @@ type AccountGateCache = {
 
 const policyFingerprint = () => REQUIRED_POLICIES.map((policy) => `${policy.key}:${policy.version}`).join('|');
 const accountGateCacheKey = (userId: string) => `${ACCOUNT_GATE_CACHE_PREFIX}:${userId}`;
-const accountGateStorage = createMMKV({ id: 'teswa-account-gate-cache' });
+let accountGateStorage: TeswaMmkvStorage | null = null;
+let accountGateStorageInitAttempted = false;
+
+function getAccountGateStorage(): TeswaMmkvStorage | null {
+  if (accountGateStorageInitAttempted) return accountGateStorage;
+  accountGateStorageInitAttempted = true;
+  try {
+    accountGateStorage = createMMKV({ id: 'teswa-account-gate-cache' });
+    return accountGateStorage;
+  } catch {
+    accountGateStorage = null;
+    return null;
+  }
+}
 
 async function readAccountGateCache(userId: string): Promise<AccountGateCache | null> {
   const startedAt = Date.now();
@@ -63,14 +78,19 @@ async function readAccountGateCache(userId: string): Promise<AccountGateCache | 
 
   const parseAndValidate = (raw: string | null): AccountGateCache | null => {
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as AccountGateCache;
-    if (parsed.userId !== userId || parsed.policyFingerprint !== policyFingerprint()) return null;
-    return parsed;
+    try {
+      const parsed = JSON.parse(raw) as AccountGateCache;
+      if (parsed.userId !== userId || parsed.policyFingerprint !== policyFingerprint()) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
   };
 
   try {
     const key = accountGateCacheKey(userId);
-    const mmkvRaw = accountGateStorage.getString(key) ?? null;
+    const storage = getAccountGateStorage();
+    const mmkvRaw = storage?.getString(key) ?? null;
     const mmkvParsed = parseAndValidate(mmkvRaw);
     if (mmkvParsed) {
       mmkvHit = true;
@@ -82,10 +102,12 @@ async function readAccountGateCache(userId: string): Promise<AccountGateCache | 
     const legacyParsed = parseAndValidate(legacyRaw);
     if (legacyParsed) {
       legacyHit = true;
-      try {
-        accountGateStorage.set(key, legacyRaw as string);
-        migrated = true;
-      } catch {}
+      if (storage) {
+        try {
+          storage.set(key, legacyRaw as string);
+          migrated = true;
+        } catch {}
+      }
       cacheStatus = getAccountGateCacheStatus(legacyParsed);
       return legacyParsed;
     }
@@ -110,9 +132,12 @@ async function writeAccountGateCache(entry: AccountGateCache): Promise<void> {
   try {
     const key = accountGateCacheKey(entry.userId);
     const raw = JSON.stringify(entry);
-    try {
-      accountGateStorage.set(key, raw);
-    } catch {}
+    const storage = getAccountGateStorage();
+    if (storage) {
+      try {
+        storage.set(key, raw);
+      } catch {}
+    }
     await AsyncStorage.setItem(key, raw);
   } catch {}
 }
