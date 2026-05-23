@@ -31,7 +31,7 @@ function classifyFinalResult(
 ): NativeGoogleSignInResult {
   if (!nextResult || typeof nextResult.status !== 'string') return fallback;
   if (!TERMINAL_STATUS.has(nextResult.status as (typeof TERMINAL_STATUS extends Set<infer T> ? T : never))) {
-    return { ...nextResult, status: 'error', reason: 'unclassified_google_auth_failure', error: nextResult.error ?? 'Unclassified Google Auth result', fallbackToBrowser: true } as NativeGoogleSignInResult;
+    return { ...nextResult, status: 'error', reason: 'unclassified_google_auth_failure', error: nextResult.error ?? 'Unclassified Google Auth result', fallbackToBrowser: true, failedStep: 'result_classification', nextSuggestedCheck: 'Verify module export shape and native step timeline for missing terminal result.' } as NativeGoogleSignInResult;
   }
   return nextResult as NativeGoogleSignInResult;
 }
@@ -44,7 +44,8 @@ export default function NativeGoogleDiagnosticsScreen() {
   const moduleInfo = GoogleNativeAuth.getGoogleNativeAuthModuleInfo?.();
   const exportedKeys = Object.keys(GoogleNativeAuth).filter((key) => EXPORTED_KEYS_SAFE_LIST.includes(key));
 
-  const [result, setResult] = useState<(NativeGoogleSignInResult & { supabaseHasError?: boolean; hasUser?: boolean; hasIdToken?: boolean }) | null>(null);
+  type DiagnosticsResult = NativeGoogleSignInResult & { supabaseHasError?: boolean; hasUser?: boolean; hasIdToken?: boolean; lastSuccessfulStep?: string; failedStep?: string; nextSuggestedCheck?: string };
+  const [result, setResult] = useState<DiagnosticsResult | null>(null);
   const [browserResult, setBrowserResult] = useState<{ error: string | null } | null>(null);
   const [productionFlowResult, setProductionFlowResult] = useState<{ error: string | null } | null>(null);
 
@@ -79,7 +80,7 @@ export default function NativeGoogleDiagnosticsScreen() {
     let sawHelperEntered = false;
     const timeoutId = setTimeout(() => {
       didTimeout = true;
-      setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_timeout_no_result' as never }]);
+      setEvents((prev) => [...prev, { flow: 'native_step', step: 'native_timeout_no_result' }]);
       setResult({ status: 'timeout', reason: 'native_timeout_no_result', error: 'انتهت مهلة انتظار نتيجة Native Google.', fallbackToBrowser: true });
       setRunningNative(false);
     }, 10_000);
@@ -89,10 +90,10 @@ export default function NativeGoogleDiagnosticsScreen() {
         onStep: (event) => {
           if (event.step === 'native_helper_entered') sawHelperEntered = true;
           setEvents((prev) => [...prev, event]);
-          if (event.step === 'supabase_id_token_result') setResult((prevResult) => ({ ...prevResult, supabaseHasError: event.hasError } as never));
-          if (event.step === 'native_signin_resolved') setResult((prevResult) => ({ ...prevResult, resultType: event.resultType, hasUser: event.hasUser, hasIdToken: event.hasIdToken } as never));
-          if (event.step === 'native_result_success') setResult((prevResult) => ({ ...prevResult, hasUser: true } as never));
-          if (event.step === 'native_missing_id_token') setResult((prevResult) => ({ ...prevResult, hasIdToken: false } as never));
+          if (event.step === 'supabase_id_token_result') setResult((prevResult) => ({ ...(prevResult ?? { status: 'empty', error: null }), supabaseHasError: event.hasError }));
+          if (event.step === 'native_signin_resolved') setResult((prevResult) => ({ ...(prevResult ?? { status: 'empty', error: null }), resultType: event.resultType, hasUser: event.hasUser, hasIdToken: event.hasIdToken }));
+          if (event.step === 'native_result_success') setResult((prevResult) => ({ ...(prevResult ?? { status: 'empty', error: null }), hasUser: true }));
+          if (event.step === 'native_missing_id_token') setResult((prevResult) => ({ ...(prevResult ?? { status: 'empty', error: null }), hasIdToken: false }));
         },
       });
 
@@ -104,7 +105,7 @@ export default function NativeGoogleDiagnosticsScreen() {
         error: 'لم يتم استلام نتيجة صالحة من Native Google.',
         fallbackToBrowser: true,
       });
-      setResult(classified);
+      setResult({ ...classified, lastSuccessfulStep: events.length ? events[events.length - 1]?.step : undefined, failedStep: classified.status === 'error' ? (classified.reason ?? 'unknown_error') : undefined, nextSuggestedCheck: classified.reason === 'unclassified_google_auth_failure' ? 'Check helper return shape and step emissions in v2 module.' : undefined });
     } catch (error: unknown) {
       if (didTimeout) return;
       const message = typeof error === 'object' && error !== null && 'message' in error ? String((error as { message?: unknown }).message) : undefined;
@@ -133,7 +134,7 @@ export default function NativeGoogleDiagnosticsScreen() {
 
         <View style={styles.card}><AppText style={styles.subhead}>Native Google configuration</AppText><AppText>hasNativeModule: {String(typeof GoogleNativeAuth.signInWithGoogleNative === 'function')}</AppText><AppText>hasGoogleSigninConfigure: {String(events.some((e) => e.step === 'google_configure_done'))}</AppText><AppText>hasGoogleSigninSignIn: {String(events.some((e) => e.step === 'native_signin_start'))}</AppText><AppText>hasGoogleSigninHasPlayServices: {String(events.some((e) => e.step === 'play_services_check_start'))}</AppText><AppText>configured: {toBooleanText(events.findLast((e) => e.step === 'google_configure_done')?.configured)}</AppText><AppText>hasWebClientId: {toBooleanText(events.findLast((e) => e.step === 'google_configure_done')?.hasWebClientId)}</AppText></View>
 
-        <View style={styles.card}><AppText style={styles.subhead}>Final result</AppText><AppText>status: {result?.status ?? 'error'}</AppText><AppText>reason: {result?.reason ?? 'unclassified_google_auth_failure'}</AppText><AppText>fallbackToBrowser: {result ? String(Boolean(result.fallbackToBrowser)) : 'true'}</AppText><AppText>implementation: {result?.implementation ?? '—'}</AppText><AppText>moduleVersion: {result?.moduleVersion ?? '—'}</AppText><AppText>code: {result?.code ?? '—'}</AppText><AppText>message: {result?.message ?? '—'}</AppText><AppText>resultType: {result?.resultType ?? '—'}</AppText><AppText>hasIdToken: {result ? String(Boolean(result.hasIdToken)) : '—'}</AppText><AppText>hasUser: {result ? String(Boolean(result.hasUser)) : '—'}</AppText><AppText>supabaseHasError: {result ? String(Boolean(result.supabaseHasError)) : '—'}</AppText><AppText>error: {safeErrorText}</AppText></View>
+        <View style={styles.card}><AppText style={styles.subhead}>Final result</AppText><AppText>status: {result?.status ?? 'error'}</AppText><AppText>reason: {result?.reason ?? 'unclassified_google_auth_failure'}</AppText><AppText>fallbackToBrowser: {result ? String(Boolean(result.fallbackToBrowser)) : 'true'}</AppText><AppText>implementation: {result?.implementation ?? '—'}</AppText><AppText>moduleVersion: {result?.moduleVersion ?? '—'}</AppText><AppText>code: {result?.code ?? '—'}</AppText><AppText>message: {result?.message ?? '—'}</AppText><AppText>resultType: {result?.resultType ?? '—'}</AppText><AppText>hasIdToken: {result ? String(Boolean(result.hasIdToken)) : '—'}</AppText><AppText>hasUser: {result ? String(Boolean(result.hasUser)) : '—'}</AppText><AppText>supabaseHasError: {result ? String(Boolean(result.supabaseHasError)) : '—'}</AppText><AppText>error: {safeErrorText}</AppText><AppText>lastSuccessfulStep: {result?.lastSuccessfulStep ?? '—'}</AppText><AppText>failedStep: {result?.failedStep ?? '—'}</AppText><AppText>nextSuggestedCheck: {result?.nextSuggestedCheck ?? '—'}</AppText></View>
         <View style={styles.card}><AppText style={styles.subhead}>Browser test result</AppText><AppText>error: {browserResult?.error ?? '—'}</AppText></View>
         <View style={styles.card}><AppText style={styles.subhead}>Production flow test result</AppText><AppText>error: {productionFlowResult?.error ?? '—'}</AppText></View>
 
