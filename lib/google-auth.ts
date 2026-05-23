@@ -18,6 +18,14 @@ let recentSuccessfulCallbacks = new Map<string, number>();
 type QueryParamValue = string | string[] | undefined;
 type OAuthCallbackParams = Record<string, QueryParamValue>;
 
+type GoogleFlowReason =
+  | 'native_disabled'
+  | 'native_throw'
+  | 'native_non_success'
+  | 'native_error_present'
+  | 'native_missing_reason'
+  | 'native_missing_fallback_flag';
+
 function logGoogleBrowserOAuthDiagnostic(
   step:
     | 'start'
@@ -37,6 +45,10 @@ function logGoogleBrowserOAuthDiagnostic(
   details?: Record<string, boolean | string | null>
 ) {
   console.log('[GoogleOAuthBrowser]', { step, ...details });
+}
+
+function logGoogleNativeFallbackDiagnostic(reason: GoogleFlowReason, details?: Record<string, boolean | string | null>) {
+  console.log('[GoogleSignIn]', { flow: 'native_to_browser_fallback', reason, ...details });
 }
 
 export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: string | null }> {
@@ -105,7 +117,7 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
   }
 }
 
-async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | null }> {
+export async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | null }> {
   try {
     logGoogleBrowserOAuthDiagnostic('start');
     const redirectTo = makeRedirectUri({ scheme: 'teswa', path: 'auth/callback' });
@@ -149,6 +161,10 @@ async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | null }>
   }
 }
 
+export async function testGoogleBrowserOAuthForDiagnostics(): Promise<{ error: string | null }> {
+  return signInWithGoogleBrowserOAuth();
+}
+
 export async function signInWithGoogle(): Promise<{ error: string | null }> {
   if (Platform.OS === 'web') {
     return signInWithGoogleBrowserOAuth();
@@ -156,18 +172,39 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
 
   const nativeGoogleEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED === 'true';
   if (!nativeGoogleEnabled) {
-    console.log('[GoogleSignIn]', { flow: 'browser_default', reason: 'native_disabled' });
+    logGoogleNativeFallbackDiagnostic('native_disabled');
     return signInWithGoogleBrowserOAuth();
   }
 
-  const nativeResult = await signInWithGoogleNative();
-  if (!nativeResult.fallbackToBrowser) {
-    return { error: nativeResult.error ?? GOOGLE_AUTH_ERROR };
-  }
+  try {
+    const nativeResult = await signInWithGoogleNative();
+    const nativeSuccess = nativeResult.status === 'success' && nativeResult.reason === 'native_success' && nativeResult.error === null;
+    if (nativeSuccess) {
+      return { error: null };
+    }
 
-  if (nativeResult.reason) {
-    logGoogleSignInDiagnostic('browser_fallback', nativeResult.reason);
-  }
+    if (nativeResult.fallbackToBrowser === false) {
+      logGoogleNativeFallbackDiagnostic('native_missing_fallback_flag', {
+        status: nativeResult.status,
+        reason: nativeResult.reason ?? null,
+      });
+    }
 
-  return signInWithGoogleBrowserOAuth();
+    logGoogleNativeFallbackDiagnostic('native_non_success', {
+      status: nativeResult.status,
+      reason: nativeResult.reason ?? 'unknown',
+      hasError: Boolean(nativeResult.error),
+    });
+
+    if (nativeResult.reason) {
+      logGoogleSignInDiagnostic('browser_fallback', nativeResult.reason);
+    } else {
+      logGoogleNativeFallbackDiagnostic('native_missing_reason');
+    }
+
+    return signInWithGoogleBrowserOAuth();
+  } catch {
+    logGoogleNativeFallbackDiagnostic('native_throw');
+    return signInWithGoogleBrowserOAuth();
+  }
 }
