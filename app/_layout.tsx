@@ -107,7 +107,7 @@ function ForegroundMemoryRefreshCoordinator() {
   return null;
 }
 
-const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 11_000;
+const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 6_000;
 const DEFERRED_PUSH_SYNC_DELAY_MS = 7_000;
 const DEFERRED_FOREGROUND_MEMORY_REFRESH_DELAY_MS = 8_000;
 const nativeGoogleTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
@@ -150,6 +150,7 @@ function RootNavigator() {
     const shouldRefreshPolicy = loadingPolicyAcceptance || policyAcceptanceCheckError;
 
     setAccountStateCheckStalled(false);
+    startupLog('account_gate_retry');
 
     if (shouldRefreshProfile) await refreshProfile();
     if (shouldRefreshPolicy) await refreshPolicyAcceptance();
@@ -164,6 +165,7 @@ function RootNavigator() {
 
     const stallTimer = setTimeout(() => {
       setAccountStateCheckStalled(true);
+      startupLog('account_gate_blocked_pending_server');
     }, ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS);
 
     return () => clearTimeout(stallTimer);
@@ -358,8 +360,8 @@ function RootNavigator() {
 
     return (
       <AccountGateLoadingState
-        title="ندخلك إلى تِسوى..."
-        subtitle="نراجع حالة حسابك بسرعة ونفتح لك التجربة."
+        title="بنجهز حسابك..."
+        subtitle="ثواني ونراجع حالة حسابك."
       />
     );
   }
@@ -367,8 +369,7 @@ function RootNavigator() {
   if (user && (profileCheckError || policyAcceptanceCheckError) && (!profileCompleted || !requiredPoliciesAccepted)) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>تعذر التحقق من حالة حسابك.</Text>
-        <Text style={styles.errorSubtitle}>حاول مرة تانية.</Text>
+        <Text style={styles.errorTitle}>تعذر التحقق من حسابك والسياسات. حاول مرة تانية.</Text>
         <Pressable style={styles.retryButton} onPress={() => void retryAccountStateChecks()}>
           <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
         </Pressable>

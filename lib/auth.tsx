@@ -13,6 +13,8 @@ const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مر�
 const SIGNED_IN_PROFILE_RETRY_DELAY_MS = 650;
 const POLICY_CHECK_ERROR_MESSAGE = 'تعذر التحقق من موافقات السياسات. حاول مرة تانية.';
 const ACCOUNT_GATE_CACHE_PREFIX = 'teswa:account-gate:v1';
+const ACCOUNT_GATE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
+const ACCOUNT_GATE_SERVER_TIMEOUT_MS = 6_000;
 const startupAt = Date.now();
 const startupLog = (event: string, data?: Record<string, unknown>) => {
   console.log('[StartupTiming]', event, { dtMs: Date.now() - startupAt, ...data });
@@ -68,8 +70,28 @@ async function writeAccountGateCache(entry: AccountGateCache): Promise<void> {
   } catch {}
 }
 
+function getAccountGateCacheStatus(cache: AccountGateCache | null): 'cache_missing' | 'cache_false' | 'cache_stale' | 'cache_hit_valid' {
+  if (!cache) return 'cache_missing';
+  if (!cache.profileCompleted || !cache.requiredPoliciesAccepted) return 'cache_false';
+  const verifiedAtMs = Date.parse(cache.verifiedAt);
+  if (!Number.isFinite(verifiedAtMs)) return 'cache_stale';
+  if (Date.now() - verifiedAtMs > ACCOUNT_GATE_CACHE_MAX_AGE_MS) return 'cache_stale';
+  return 'cache_hit_valid';
+}
 
-
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutError: Error): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(timeoutError), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [bootstrapReady, setBootstrapReady] = useState(false);
@@ -109,7 +131,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const checkPromise = (async () => {
       const startedAt = Date.now();
-      startupLog('profile_fetch_started', { reason, hasUserId: Boolean(userId), background: Boolean(options?.background) });
+      startupLog('account_gate_profile_start', { reason, hasUserId: Boolean(userId), background: Boolean(options?.background) });
       if (!startupProfileMarkedRef.current && (reason === 'bootstrap_session' || reason === 'auth_state_change')) {
         startupProfileMarkedRef.current = true;
         startupTiming.mark('profile_load_start', { reason, background: Boolean(options?.background) });
@@ -129,17 +151,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
           }
         };
 
-        const profile = await fetchProfileWithOptionalRetry();
+        const profile = await withTimeout(fetchProfileWithOptionalRetry(), ACCOUNT_GATE_SERVER_TIMEOUT_MS, new Error('account_gate_profile_timeout'));
         const completed = isProfileComplete(profile);
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
         setProfileCompleted(completed);
         setProfileCheckError(null);
       } catch (error) {
+        if ((error as Error)?.message?.includes('account_gate_profile_timeout')) startupLog('account_gate_server_validation_timeout', { type: 'profile', reason });
         if (__DEV__) console.log('[Auth] profile check failed', { userId, error });
         if (!mountedRef.current || activeProfileCheckTokenRef.current !== checkToken) return;
         if (!options?.suppressErrors) setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       } finally {
-        startupLog('profile_fetch_finished', { reason, dtMs: Date.now() - startedAt });
+        startupLog('account_gate_profile_done', { reason, dtMs: Date.now() - startedAt });
         if (startupProfileMarkedRef.current) {
           startupTiming.mark('profile_load_done', { reason });
         }
@@ -176,10 +199,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const checkPromise = (async () => {
       const startedAt = Date.now();
-      startupLog('policy_fetch_started', { hasUserId: Boolean(userId), background: Boolean(options?.background) });
+      startupLog('account_gate_policy_start', { hasUserId: Boolean(userId), background: Boolean(options?.background) });
       startupTrace.mark('policy_check_start');
       try {
-        const state = await fetchRequiredPolicyAcceptanceState(userId);
+        const state = await withTimeout(fetchRequiredPolicyAcceptanceState(userId), ACCOUNT_GATE_SERVER_TIMEOUT_MS, new Error('account_gate_policy_timeout'));
         if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
         if (!state.ok) {
           setRequiredPoliciesAccepted(false);
@@ -190,6 +213,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setRequiredPoliciesAccepted(state.requiredPoliciesAccepted);
         setPolicyAcceptanceCheckError(null);
       } catch (error) {
+        if ((error as Error)?.message?.includes('account_gate_policy_timeout')) startupLog('account_gate_server_validation_timeout', { type: 'policy' });
         if (__DEV__) console.log('[Auth] policy acceptance check failed', { userId, error });
         if (!mountedRef.current || activePolicyCheckTokenRef.current !== checkToken) return;
         if (!options?.suppressErrors) {
@@ -197,7 +221,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setPolicyAcceptanceCheckError(POLICY_CHECK_ERROR_MESSAGE);
         }
       } finally {
-        startupLog('policy_fetch_finished', { dtMs: Date.now() - startedAt });
+        startupLog('account_gate_policy_done', { dtMs: Date.now() - startedAt });
         startupTrace.mark('policy_check_end');
         if (!options?.background && mountedRef.current && activePolicyCheckTokenRef.current === checkToken) {
           setLoadingPolicyAcceptance(false);
@@ -292,13 +316,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
         lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
         bootstrappedUserIdRef.current = currentSession?.user?.id ?? null;
         if (currentSession?.user) {
+          startupLog('account_gate_start', { source: 'bootstrap_session' });
           const cachedGate = await readAccountGateCache(currentSession.user.id);
-          const canUseCachedGate = Boolean(cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted);
+          const cacheStatus = getAccountGateCacheStatus(cachedGate);
+          const canUseCachedGate = cacheStatus === 'cache_hit_valid';
+          startupLog('account_gate_cache_result', { source: 'bootstrap_session', cacheStatus });
+          if (!canUseCachedGate) startupLog('account_gate_server_validation_required', { source: 'bootstrap_session', cacheStatus });
           startupTrace.mark('account_gate_cache_read_done', { hasCachedGate: canUseCachedGate, hasSession: true });
           if (mountedRef.current && canUseCachedGate) {
             setProfileCompleted(true);
             setRequiredPoliciesAccepted(true);
             setUsingCachedAccountGate(true);
+            startupLog('account_gate_enter_from_cache', { source: 'bootstrap_session' });
           }
           if (mountedRef.current) {
             setBootstrapReady(true);
@@ -383,13 +412,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
         lastAuthenticatedUserIdRef.current = nextSession.user.id;
 
+        startupLog('account_gate_start', { source: 'auth_state_change', event });
         const cachedGate = await readAccountGateCache(nextSession.user.id);
-        const canUseCachedGate = Boolean(cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted);
+        const cacheStatus = getAccountGateCacheStatus(cachedGate);
+        const canUseCachedGate = cacheStatus === 'cache_hit_valid';
+        startupLog('account_gate_cache_result', { source: 'auth_state_change', cacheStatus, event });
+        if (!canUseCachedGate) startupLog('account_gate_server_validation_required', { source: 'auth_state_change', cacheStatus, event });
         startupTrace.mark('account_gate_cache_read_done', { hasCachedGate: canUseCachedGate, hasSession: true });
         if (canUseCachedGate) {
           setProfileCompleted(true);
           setRequiredPoliciesAccepted(true);
           setUsingCachedAccountGate(true);
+          startupLog('account_gate_enter_from_cache', { source: 'auth_state_change', event });
         }
         await Promise.all([
           checkProfileForUser(nextSession.user.id, 'auth_state_change', { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
