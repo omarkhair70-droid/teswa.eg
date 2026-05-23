@@ -339,8 +339,10 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     }
 
     if (!user) {
+      let cancelled = false;
       void (async () => {
         const hasSeenAdventure = await getAdventureEntranceSeen().catch(() => true);
+        if (cancelled) return;
         if (!hasSeenAdventure) {
           if (!(inAuth && leaf === 'adventure')) router.replace('/(auth)/adventure');
           return;
@@ -351,7 +353,9 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
           router.replace('/(auth)/login');
         }
       })();
-      return;
+      return () => {
+        cancelled = true;
+      };
     } else if (profileCheckError) {
       void SplashScreen.hideAsync();
       return;

@@ -15,9 +15,7 @@ const items = [
 
 export default function AdventureScreen() {
   const [muted, setMuted] = useState(true);
-  const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [audioReady, setAudioReady] = useState(false);
   const particles = useMemo(() => items.map(() => new Animated.Value(0)), []);
   const logo = useRef(new Animated.Value(0)).current;
   const copy = useRef(new Animated.Value(0)).current;
@@ -40,8 +38,8 @@ export default function AdventureScreen() {
     });
   }, [copy, logo, particles]);
 
-  const playSound = async (name: string) => {
-    if (muted || !audioReady) return;
+  const playSound = async (name: string, force = false) => {
+    if (!force && muted) return;
     try {
       const audio = await import('expo-audio') as Record<string, any>;
       const create = audio.createAudioPlayer;
@@ -63,7 +61,6 @@ export default function AdventureScreen() {
     await playSound('tap');
     await playSound('swish');
     Animated.timing(reveal, { toValue: 1, duration: 420, useNativeDriver: true, easing: Easing.out(Easing.cubic) }).start(() => {
-      setRevealed(true);
       router.replace('/(auth)/login');
     });
   };
@@ -78,9 +75,8 @@ export default function AdventureScreen() {
   const onMuteToggle = async () => {
     const next = !muted;
     setMuted(next);
-    setAudioReady(true);
     await setAdventureMuted(next).catch(() => undefined);
-    if (!next) await playSound('logo');
+    if (!next) await playSound('logo', true);
   };
 
   return (
