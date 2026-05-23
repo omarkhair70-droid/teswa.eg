@@ -90,7 +90,7 @@ function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoT
 }
 
 export default function ItemDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, moment } = useLocalSearchParams<{ id: string; moment?: string }>();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [shareError, setShareError] = useState<string | null>(null);
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
@@ -187,6 +187,7 @@ export default function ItemDetailsScreen() {
       </Animated.View>
 
       {item.videoTeaser ? <ItemVideoTeaserSection teaser={item.videoTeaser} active={videoTeaserActive} onPlay={() => setVideoTeaserActive(true)} /> : null}
+      {moment === 'published' ? <Animated.View entering={FadeInDown.duration(220).delay(70)}><AppCard style={styles.noticeCard}><View style={styles.gap8}><AppText weight="bold">عنصرك بقى جاهز للتبادل</AppText><AppText muted>دلوقتي الناس تقدر تشوفه وتبدأ عرض تبديل.</AppText></View></AppCard></Animated.View> : null}
 
       {itemCacheNotice ? <Animated.View entering={FadeInDown.duration(220).delay(80)}><AppCard style={styles.noticeCard}><View style={styles.noticeRow}><Ionicons name="cloud-offline-outline" size={16} color={colors.primary} /><AppText muted style={styles.noticeText}>{itemCacheNotice}</AppText></View></AppCard></Animated.View> : null}
 
@@ -292,6 +293,7 @@ const styles = StyleSheet.create({
   videoUnavailableSubtitle: { color: colors.textMuted },
   teaserVideo: { width: '100%', height: 220, borderRadius: radii.lg, overflow: 'hidden', backgroundColor: colors.background },
   noticeCard: { borderWidth: 1, borderColor: colors.border },
+  gap8: { gap: spacing.xs },
   noticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   noticeText: { flex: 1 },
   title: { fontSize: 26 },
