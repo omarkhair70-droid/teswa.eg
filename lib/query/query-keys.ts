@@ -1,6 +1,7 @@
 export const queryKeys = {
   feed: {
     all: ['feed'] as const,
+    homeFirstPage: ['feed', 'home-first-page'] as const,
   },
   itemDetail: {
     all: ['item-detail'] as const,
