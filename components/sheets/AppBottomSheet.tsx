@@ -2,6 +2,7 @@ import { forwardRef, useMemo } from 'react';
 import { I18nManager, StyleSheet, View } from 'react-native';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
@@ -42,12 +43,14 @@ export const AppBottomSheet = forwardRef<BottomSheetModal, AppBottomSheetProps>(
     >
       <BottomSheetView style={styles.content}>
         {(title || description) ? (
-          <View style={styles.header}>
+          <AppFadeIn style={styles.header}>
             {title ? <AppText weight="semibold" style={styles.title}>{title}</AppText> : null}
             {description ? <AppText muted style={styles.description}>{description}</AppText> : null}
-          </View>
+          </AppFadeIn>
         ) : null}
-        {children}
+        <AppFadeIn delay={40}>
+          {children}
+        </AppFadeIn>
       </BottomSheetView>
     </BottomSheetModal>
   );
