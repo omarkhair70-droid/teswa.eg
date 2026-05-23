@@ -18,6 +18,7 @@ import { startupTiming, startupTrace } from '@/lib/startup-trace';
 import { QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { queryClient } from '@/lib/query/query-client';
+import { getAdventureEntranceSeen } from '@/lib/adventure-entrance';
 
 
 
@@ -338,11 +339,19 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     }
 
     if (!user) {
-      if (!onboardingCompleted && !inOnboarding) {
-        router.replace('/(auth)/onboarding');
-      } else if (onboardingCompleted && !inLoginOrSignup) {
-        router.replace('/(auth)/login');
-      }
+      void (async () => {
+        const hasSeenAdventure = await getAdventureEntranceSeen().catch(() => true);
+        if (!hasSeenAdventure) {
+          if (!(inAuth && leaf === 'adventure')) router.replace('/(auth)/adventure');
+          return;
+        }
+        if (!onboardingCompleted && !inOnboarding) {
+          router.replace('/(auth)/onboarding');
+        } else if (onboardingCompleted && !inLoginOrSignup) {
+          router.replace('/(auth)/login');
+        }
+      })();
+      return;
     } else if (profileCheckError) {
       void SplashScreen.hideAsync();
       return;
