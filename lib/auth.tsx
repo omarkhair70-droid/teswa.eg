@@ -6,7 +6,7 @@ import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
 import { REQUIRED_POLICIES, fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
 import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
-import { startupTrace } from '@/lib/startup-trace';
+import { startupTiming, startupTrace } from '@/lib/startup-trace';
 
 const PROFILE_CHECK_ERROR_MESSAGE = 'تعذر التحقق من بيانات الحساب. حاول مرة تانية.';
 const SIGN_OUT_ERROR_MESSAGE = 'تعذر تسجيل الخروج. حاول مرة تانية.';
@@ -91,6 +91,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [usingCachedAccountGate, setUsingCachedAccountGate] = useState(false);
   const hasLoggedFirstAuthStateEventRef = useRef(false);
+  const startupProfileMarkedRef = useRef(false);
+  const startupResolvedSessionRef = useRef(false);
+  const bootstrappedUserIdRef = useRef<string | null>(null);
 
   const checkProfileForUser = async (userId: string, reason: string, options?: { background?: boolean; suppressErrors?: boolean }) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
@@ -107,6 +110,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const checkPromise = (async () => {
       const startedAt = Date.now();
       startupLog('profile_fetch_started', { reason, hasUserId: Boolean(userId), background: Boolean(options?.background) });
+      if (!startupProfileMarkedRef.current && (reason === 'bootstrap_session' || reason === 'auth_state_change')) {
+        startupProfileMarkedRef.current = true;
+        startupTiming.mark('profile_load_start', { reason, background: Boolean(options?.background) });
+      }
       startupTrace.mark('profile_check_start', { reason });
       try {
         const shouldRetrySignedInBootstrap =
@@ -133,6 +140,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!options?.suppressErrors) setProfileCheckError(PROFILE_CHECK_ERROR_MESSAGE);
       } finally {
         startupLog('profile_fetch_finished', { reason, dtMs: Date.now() - startedAt });
+        if (startupProfileMarkedRef.current) {
+          startupTiming.mark('profile_load_done', { reason });
+        }
         startupTrace.mark('profile_check_end', { reason });
         if (!options?.background && mountedRef.current && activeProfileCheckTokenRef.current === checkToken) {
           setLoadingProfile(false);
@@ -254,6 +264,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const bootstrap = async () => {
       try {
         startupLog('auth_hydration_started');
+        startupTiming.mark('auth_bootstrap_start');
         startupTrace.mark('bootstrap_start');
         setBootstrapError(null);
         const onboardingPromise = getOnboardingCompleted().then((value) => {
@@ -274,7 +285,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const currentSession = sessionResult.data.session;
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
+        if (!startupResolvedSessionRef.current) {
+          startupResolvedSessionRef.current = true;
+          startupTiming.mark('auth_session_resolved', { hasSession: Boolean(currentSession?.user) });
+        }
         lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
+        bootstrappedUserIdRef.current = currentSession?.user?.id ?? null;
         if (currentSession?.user) {
           const cachedGate = await readAccountGateCache(currentSession.user.id);
           const canUseCachedGate = Boolean(cachedGate?.profileCompleted && cachedGate?.requiredPoliciesAccepted);
@@ -340,6 +356,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
         });
       }
       try {
+        const nextUserId = nextSession?.user?.id ?? null;
+        if (!startupResolvedSessionRef.current) {
+          startupResolvedSessionRef.current = true;
+          startupTiming.mark('auth_session_resolved', { hasSession: Boolean(nextUserId), source: 'auth_state_change' });
+        }
+        if (event === 'INITIAL_SESSION' && nextUserId && nextUserId === bootstrappedUserIdRef.current) {
+          startupLog('skip_duplicate_initial_session_profile_checks', { event, hasUser: true });
+          return;
+        }
         setBootstrapError(null);
         setSession(nextSession);
         setUser(nextSession?.user ?? null);

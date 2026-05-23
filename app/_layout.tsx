@@ -16,7 +16,7 @@ import { ensureTeswaBackgroundMemoryRefreshRegistered } from '@/lib/background-m
 import { createForegroundMemoryRefreshSubscription, runForegroundMemoryRefreshIfAllowed } from '@/lib/foreground-memory-refresh';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 import { trackEvent } from '@/lib/analytics';
-import { startupTrace } from '@/lib/startup-trace';
+import { startupTiming, startupTrace } from '@/lib/startup-trace';
 
 const rootStartedAt = Date.now();
 const startupLog = (event: string, data?: Record<string, unknown>) => {
@@ -142,6 +142,8 @@ function RootNavigator() {
     && !profileCheckError
     && !policyAcceptanceCheckError,
   );
+  const markedInitialRouteRef = useRef(false);
+  const markedFirstScreenReadyRef = useRef(false);
 
   const retryAccountStateChecks = async () => {
     const shouldRefreshProfile = loadingProfile || profileCheckError;
@@ -227,8 +229,24 @@ function RootNavigator() {
   useEffect(() => {
     if (!bootstrapReady) return;
     startupLog('initial_route_decision_ready', { hasUser: Boolean(user), profileCompleted, requiredPoliciesAccepted });
+    if (!markedInitialRouteRef.current) {
+      markedInitialRouteRef.current = true;
+      startupTiming.mark('initial_route_decided', { hasUser: Boolean(user), profileCompleted, requiredPoliciesAccepted });
+    }
     void hideSplashSafely('bootstrap_ready');
   }, [bootstrapReady]);
+
+  useEffect(() => {
+    if (!bootstrapReady) return;
+    if (markedFirstScreenReadyRef.current) return;
+    if (user && (loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate) return;
+    markedFirstScreenReadyRef.current = true;
+    startupTiming.mark('first_screen_ready', {
+      hasUser: Boolean(user),
+      profileCompleted,
+      requiredPoliciesAccepted,
+    });
+  }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, profileCompleted, requiredPoliciesAccepted, user]);
 
   useEffect(() => {
     if (!pendingNotificationRoute) return;
@@ -399,6 +417,9 @@ const styles = StyleSheet.create({
 
 export default function RootLayout() {
   useRTLSetup();
+  useEffect(() => {
+    startupTiming.mark('root_layout_mounted');
+  }, []);
   return (
     <ShareIntentProvider>
       <KeyboardProvider preload={false}>

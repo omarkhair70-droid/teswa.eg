@@ -2,6 +2,58 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STARTUP_TRACE_KEY = 'teswa:startup:last-trace:v1';
 
+const startupStartedAt = Date.now();
+const startupConsole = (event: string, data?: Record<string, unknown>) => {
+  console.log('[StartupTiming]', event, { dtMs: Date.now() - startupStartedAt, ...data });
+};
+
+type StartupTimingMarkName =
+  | 'app_start'
+  | 'root_layout_mounted'
+  | 'auth_bootstrap_start'
+  | 'auth_session_resolved'
+  | 'profile_load_start'
+  | 'profile_load_done'
+  | 'initial_route_decided'
+  | 'first_screen_ready';
+
+class StartupTiming {
+  private readonly startedAt = Date.now();
+  private readonly marks = new Map<StartupTimingMarkName, number>();
+
+  mark(name: StartupTimingMarkName, data?: Record<string, unknown>) {
+    const t = Date.now();
+    if (!this.marks.has(name)) this.marks.set(name, t);
+    startupConsole(name, data);
+    if (name === 'first_screen_ready') this.printReport();
+  }
+
+  printReport() {
+    const ordered: StartupTimingMarkName[] = [
+      'app_start',
+      'root_layout_mounted',
+      'auth_bootstrap_start',
+      'auth_session_resolved',
+      'profile_load_start',
+      'profile_load_done',
+      'initial_route_decided',
+      'first_screen_ready',
+    ];
+    const points = ordered
+      .map((name) => ({ name, t: this.marks.get(name) }))
+      .filter((entry): entry is { name: StartupTimingMarkName; t: number } => typeof entry.t === 'number');
+    const steps = points.map((entry, i) => ({
+      mark: entry.name,
+      sinceStartMs: entry.t - this.startedAt,
+      stepMs: i === 0 ? 0 : entry.t - points[i - 1].t,
+    }));
+    startupConsole('report', { totalMs: Date.now() - this.startedAt, steps });
+  }
+}
+
+export const startupTiming = new StartupTiming();
+startupTiming.mark('app_start');
+
 type StartupTraceEventName =
   | 'bootstrap_start'
   | 'onboarding_read_done'
