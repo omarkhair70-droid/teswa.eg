@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { ShareIntentProvider, useShareIntentContext } from '@/lib/share-intent-compat';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -17,6 +17,51 @@ import { createForegroundMemoryRefreshSubscription, runForegroundMemoryRefreshIf
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 import { trackEvent } from '@/lib/analytics';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
+import { QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
+import * as Network from 'expo-network';
+import { queryClient } from '@/lib/query/query-client';
+
+
+
+function ReactQueryRuntimeCoordinator() {
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (Platform.OS !== 'web') focusManager.setFocused(state === 'active');
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const applyNetworkState = async () => {
+      try {
+        const state = await Network.getNetworkStateAsync();
+        if (!mounted) return;
+        onlineManager.setOnline(Boolean(state.isConnected && state.isInternetReachable !== false));
+      } catch (error) {
+        if (__DEV__) {
+          console.log('[ReactQuery]', 'network_state_probe_failed', {
+            message: (error as { message?: string })?.message,
+          });
+        }
+      }
+    };
+
+    void applyNetworkState();
+    const intervalId = setInterval(() => {
+      void applyNetworkState();
+    }, 30_000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, []);
+
+  return null;
+}
 
 const rootStartedAt = Date.now();
 const startupLog = (event: string, data?: Record<string, unknown>) => {
@@ -425,15 +470,18 @@ export default function RootLayout() {
     <ShareIntentProvider>
       <KeyboardProvider preload={false}>
         <GestureHandlerRootView style={styles.gestureRoot}>
-        <AuthProvider>
-          <UnreadBadgesProvider>
-            <ShareIntentCoordinator />
-            <BackgroundMemoryRefreshCoordinator />
-            <ForegroundMemoryRefreshCoordinator />
-            <RootNavigator />
-            <BiometricAppLockCoordinator />
-          </UnreadBadgesProvider>
-        </AuthProvider>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+              <UnreadBadgesProvider>
+                <ReactQueryRuntimeCoordinator />
+                <ShareIntentCoordinator />
+                <BackgroundMemoryRefreshCoordinator />
+                <ForegroundMemoryRefreshCoordinator />
+                <RootNavigator />
+                <BiometricAppLockCoordinator />
+              </UnreadBadgesProvider>
+            </QueryClientProvider>
+          </AuthProvider>
         </GestureHandlerRootView>
       </KeyboardProvider>
     </ShareIntentProvider>
