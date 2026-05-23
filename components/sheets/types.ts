@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 export type AppBottomSheetProps = {
   title?: string;
   description?: string;
+  titleIconName?: keyof typeof Ionicons.glyphMap;
   children: ReactNode;
   snapPoints?: BottomSheetModalProps['snapPoints'];
   onClose?: () => void;
@@ -15,6 +16,7 @@ export type AppActionSheetTone = 'neutral' | 'primary' | 'danger';
 
 export type AppActionSheetAction = {
   label: string;
+  description?: string;
   iconName?: keyof typeof Ionicons.glyphMap;
   tone?: AppActionSheetTone;
   onPress: () => void;

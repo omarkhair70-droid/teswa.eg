@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
 import type { AppActionSheetProps, AppActionSheetTone } from '@/components/sheets/types';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
@@ -16,27 +17,36 @@ export const AppActionSheet = forwardRef<BottomSheetModal, AppActionSheetProps>(
   return (
     <AppBottomSheet ref={ref} title={title} description={description} onClose={onClose} snapPoints={snapPoints}>
       <View style={styles.actionsWrap}>
-        {actions.map((action) => {
+        {actions.map((action, index) => {
           const tone = action.tone ?? 'neutral';
-          const color = getToneColor(tone);
+          const toneColor = getToneColor(tone);
           return (
-            <Pressable
-              key={action.label}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: action.disabled }}
-              disabled={action.disabled}
-              onPress={action.onPress}
-              style={({ pressed }) => [
-                styles.actionRow,
-                pressed && !action.disabled && styles.actionRowPressed,
-                action.disabled && styles.actionRowDisabled,
-              ]}
-            >
-              <View style={styles.actionContent}>
-                {action.iconName ? <Ionicons name={action.iconName} size={20} color={color} /> : null}
-                <AppText weight="medium" style={[styles.actionText, { color }]}>{action.label}</AppText>
-              </View>
-            </Pressable>
+            <AppFadeIn key={action.label} delay={index * 28} fromY={6}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: action.disabled }}
+                disabled={action.disabled}
+                onPress={action.onPress}
+                style={({ pressed }) => [
+                  styles.actionRow,
+                  tone === 'danger' && styles.actionRowDanger,
+                  pressed && !action.disabled && styles.actionRowPressed,
+                  action.disabled && styles.actionRowDisabled,
+                ]}
+              >
+                <View style={styles.actionContent}>
+                  {action.iconName ? (
+                    <View style={[styles.iconWrap, getIconWrapToneStyle(tone)]}>
+                      <Ionicons name={action.iconName} size={18} color={toneColor} />
+                    </View>
+                  ) : null}
+                  <View style={styles.textWrap}>
+                    <AppText weight="medium" style={[styles.actionText, { color: toneColor }]}>{action.label}</AppText>
+                    {action.description ? <AppText muted style={styles.actionDescription}>{action.description}</AppText> : null}
+                  </View>
+                </View>
+              </Pressable>
+            </AppFadeIn>
           );
         })}
       </View>
@@ -55,22 +65,37 @@ function getToneColor(tone: AppActionSheetTone) {
   }
 }
 
+function getIconWrapToneStyle(tone: AppActionSheetTone) {
+  switch (tone) {
+    case 'primary':
+      return styles.iconWrapPrimary;
+    case 'danger':
+      return styles.iconWrapDanger;
+    default:
+      return styles.iconWrapNeutral;
+  }
+}
+
 const styles = StyleSheet.create({
   actionsWrap: {
     gap: spacing.sm,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
   },
   actionRow: {
-    minHeight: 52,
-    borderRadius: radii.md,
+    minHeight: 58,
+    borderRadius: radii.lg,
     justifyContent: 'center',
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  actionRowDanger: {
+    borderColor: colors.dangerSoft,
+  },
   actionRowPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
   },
   actionRowDisabled: {
     opacity: 0.45,
@@ -80,8 +105,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  actionText: {
+  iconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapNeutral: {
+    backgroundColor: colors.background,
+  },
+  iconWrapPrimary: {
+    backgroundColor: colors.primarySoft,
+  },
+  iconWrapDanger: {
+    backgroundColor: colors.dangerSoft,
+  },
+  textWrap: {
     flex: 1,
+    gap: 2,
+  },
+  actionText: {
     textAlign: I18nManager.isRTL ? 'right' : 'left',
+  },
+  actionDescription: {
+    textAlign: I18nManager.isRTL ? 'right' : 'left',
+    lineHeight: 18,
   },
 });
