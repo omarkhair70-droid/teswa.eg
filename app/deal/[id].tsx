@@ -775,6 +775,11 @@ export default function Screen() {
               />
             </AppCard>
           ) : null}
+          {blockError ? (
+            <AppCard style={styles.blockErrorCard}>
+              <AppText muted>{blockError}</AppText>
+            </AppCard>
+          ) : null}
           <View style={styles.threadSection}>
             <View style={styles.threadTopLine}>
               <AppText weight="semibold">المحادثة</AppText>
@@ -1122,6 +1127,7 @@ const styles = StyleSheet.create({
   voiceBubble: { gap: spacing.xs },
   compactActionGroup: { gap: spacing.xs },
   compactStatusRow: { fontSize: 13 },
+  blockErrorCard: { gap: spacing.xs },
   voiceBubbleHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
