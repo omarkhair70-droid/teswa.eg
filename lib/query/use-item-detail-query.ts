@@ -84,6 +84,5 @@ export function useItemDetailQuery(itemId: string | undefined) {
         throw new Error('تعذر تحميل تفاصيل العنصر. حاول مرة أخرى.');
       }
     },
-    placeholderData: (previousData) => previousData,
   });
 }
