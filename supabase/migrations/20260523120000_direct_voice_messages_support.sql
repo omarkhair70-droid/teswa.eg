@@ -7,7 +7,8 @@ alter table public.direct_messages
 
 create index if not exists direct_messages_type_idx on public.direct_messages (message_type);
 
-create or replace function public.get_direct_conversation_messages(p_conversation_id uuid)
+drop function if exists public.get_direct_conversation_messages(uuid);
+create function public.get_direct_conversation_messages(p_conversation_id uuid)
 returns table (
   id uuid,
   sender_id uuid,
@@ -28,6 +29,52 @@ begin
   update public.direct_messages set read_at=now() where conversation_id=p_conversation_id and sender_id=v_other and read_at is null;
   return query select m.id,m.sender_id,m.body,m.message_type,m.audio_storage_path,m.audio_duration_ms,m.audio_mime_type,m.audio_size_bytes,m.created_at,m.read_at from public.direct_messages m where m.conversation_id=p_conversation_id order by m.created_at asc;
 end; $$;
+revoke all on function public.get_direct_conversation_messages(uuid) from public;
+grant execute on function public.get_direct_conversation_messages(uuid) to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('direct-voice-messages','direct-voice-messages',false,15728640,array['audio/m4a','audio/mp4','audio/aac','audio/mpeg','audio/wav','audio/webm','audio/ogg'])
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "direct_voice_messages_select_participants"
+on storage.objects for select to authenticated
+using (
+  bucket_id = 'direct-voice-messages'
+  and exists (
+    select 1 from public.direct_conversations c
+    where c.id::text = split_part(storage.objects.name, '/', 2)
+      and auth.uid()::text in (c.participant_a::text, c.participant_b::text)
+  )
+);
+
+create policy "direct_voice_messages_insert_sender"
+on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'direct-voice-messages'
+  and split_part(storage.objects.name, '/', 1) = 'direct'
+  and split_part(storage.objects.name, '/', 3) = auth.uid()::text
+  and exists (
+    select 1 from public.direct_conversations c
+    where c.id::text = split_part(storage.objects.name, '/', 2)
+      and auth.uid()::text in (c.participant_a::text, c.participant_b::text)
+  )
+);
+
+create policy "direct_voice_messages_delete_sender"
+on storage.objects for delete to authenticated
+using (
+  bucket_id = 'direct-voice-messages'
+  and split_part(storage.objects.name, '/', 1) = 'direct'
+  and split_part(storage.objects.name, '/', 3) = auth.uid()::text
+  and exists (
+    select 1 from public.direct_conversations c
+    where c.id::text = split_part(storage.objects.name, '/', 2)
+      and auth.uid()::text in (c.participant_a::text, c.participant_b::text)
+  )
+);
 
 drop function if exists public.send_direct_voice_message(uuid,text,text,integer,text,bigint);
 create or replace function public.send_direct_voice_message(
