@@ -1,5 +1,6 @@
 import type { BottomSheetModalProps } from '@gorhom/bottom-sheet';
 import type { ReactNode } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 
 export type AppBottomSheetProps = {
   title?: string;
@@ -14,7 +15,7 @@ export type AppActionSheetTone = 'neutral' | 'primary' | 'danger';
 
 export type AppActionSheetAction = {
   label: string;
-  iconName?: string;
+  iconName?: keyof typeof Ionicons.glyphMap;
   tone?: AppActionSheetTone;
   onPress: () => void;
   disabled?: boolean;
