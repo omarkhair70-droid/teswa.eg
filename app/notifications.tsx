@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +16,8 @@ import { queryKeys } from '@/lib/query/query-keys';
 export default function NotificationsScreen() {
   const { user } = useAuth();
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
+  const [openingNotificationId, setOpeningNotificationId] = useState<string | null>(null);
+  const openingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { refreshBadges } = useUnreadBadges();
   const queryClient = useQueryClient();
 
@@ -47,32 +49,54 @@ export default function NotificationsScreen() {
   });
 
   const handleOpenNotification = async (notification: AppNotification) => {
+    if (openingNotificationId) return;
+
+    setOpeningNotificationId(notification.id);
+    if (openingTimeoutRef.current) clearTimeout(openingTimeoutRef.current);
+    openingTimeoutRef.current = setTimeout(() => setOpeningNotificationId(null), 1200);
+
     setDeepLinkError(null);
+    if (__DEV__) console.log('[NotificationsNav] open_start', { notificationType: notification.type });
+
     const route = resolveNotificationRoute(notification);
+    if (!route) {
+      if (__DEV__) console.log('[NotificationsNav] route_missing', { notificationType: notification.type });
+      setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
+      return;
+    }
 
     if (!notification.isRead && user) {
-      try {
-        const readResult = await markReadMutation.mutateAsync(notification);
-        if ('ok' in readResult && readResult.ok) {
-          queryClient.setQueryData<AppNotification[]>(queryKeys.notifications.byUserId(user.id), (prev = []) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n)));
-          void refreshBadges();
-        } else if (__DEV__) {
-          console.log('[ReactQuery]', 'notifications_mark_read_failed');
-        }
-      } catch (error) {
-        if (__DEV__) {
-          console.log('[ReactQuery]', 'notifications_mark_read_threw', {
-            message: (error as { message?: string })?.message,
-          });
-        }
-      }
+      const readAt = new Date().toISOString();
+      queryClient.setQueryData<AppNotification[]>(queryKeys.notifications.byUserId(user.id), (prev = []) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true, readAt } : n)));
+      void markReadMutation.mutateAsync(notification)
+        .then((readResult) => {
+          if ('ok' in readResult && readResult.ok) {
+            void refreshBadges();
+            return;
+          }
+          if (__DEV__) console.log('[NotificationsNav] mark_read_background_failed', { notificationType: notification.type });
+        })
+        .catch(() => {
+          if (__DEV__) console.log('[NotificationsNav] mark_read_background_failed', { notificationType: notification.type });
+        });
     }
 
-    if (route) {
+    try {
+      if (__DEV__) console.log('[NotificationsNav] route_push', { notificationType: notification.type });
       void trackEvent('notification_opened', { route: '/notifications', metadata: { notificationType: notification.type } });
       router.push(route);
+    } catch (error) {
+      if (__DEV__) {
+        console.log('[NotificationsNav] route_push_failed', {
+          notificationType: notification.type,
+          message: (error as { message?: string })?.message,
+        });
+      }
+      setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
+    } finally {
+      if (openingTimeoutRef.current) clearTimeout(openingTimeoutRef.current);
+      openingTimeoutRef.current = setTimeout(() => setOpeningNotificationId(null), 500);
     }
-    else setDeepLinkError('تعذر فتح الإشعار لأن المحتوى لم يعد متاحًا. تقدر تكمّل من الرسائل أو الرئيسية.');
   };
 
   const handleMarkAllRead = async () => {
@@ -128,6 +152,7 @@ export default function NotificationsScreen() {
 
         {!notificationsQuery.isLoading && !notificationsQuery.isError ? notifications.map((n) => {
           const route = resolveNotificationRoute(n);
+          const isOpening = openingNotificationId === n.id;
           const card = (
             <AppCard key={n.id}>
               <View style={styles.group}>
@@ -143,12 +168,17 @@ export default function NotificationsScreen() {
           );
 
           if (!route && n.isRead) return card;
-          return <Pressable key={n.id} onPress={() => void handleOpenNotification(n)}>{card}</Pressable>;
+          return (
+            <Pressable key={n.id} onPress={() => void handleOpenNotification(n)} disabled={Boolean(openingNotificationId)} style={isOpening ? styles.openingItem : undefined}>
+              {card}
+            </Pressable>
+          );
         }) : null}
       </View>
     </AppScreen>
   );
 }
+
 
 const styles = StyleSheet.create({
   content: { gap: spacing.md },
@@ -157,4 +187,5 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   typeLabel: { fontSize: 12 },
   newBadge: { fontSize: 12, color: '#0A7D25' },
+  openingItem: { opacity: 0.6 },
 });
