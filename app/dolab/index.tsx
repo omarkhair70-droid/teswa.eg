@@ -16,7 +16,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-types';
-import { createLocalAudioPlaceholder, toPendingMedia } from '@/lib/dolab/local-media';
+import { createPendingAudioMedia, toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
@@ -26,6 +26,7 @@ import { DolabVaultHero } from '@/components/dolab/DolabVaultHero';
 import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
 import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import { DolabSavedLibrarySection } from '@/components/dolab/DolabSavedLibrarySection';
+import { DolabAudioRecorderSheet } from '@/components/dolab/DolabAudioRecorderSheet';
 import type { DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
@@ -60,6 +61,7 @@ export default function DolabScreen() {
   const shareBridgeRef = useRef<BottomSheetModal>(null);
   const publishBridgeRef = useRef<BottomSheetModal>(null);
   const confirmDeleteRef = useRef<BottomSheetModal>(null);
+  const audioRecorderSheetRef = useRef<BottomSheetModal>(null);
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
@@ -215,19 +217,8 @@ export default function DolabScreen() {
 
       let successCount = 0;
       let failCount = 0;
-      let skippedAudioCount = 0;
 
       for (const media of toProcess) {
-        if (media.mediaType === 'audio' && media.uri.startsWith('local://')) {
-          skippedAudioCount += 1;
-          setPendingMedia((prev) =>
-            prev.map((item) =>
-              item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: 'الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.' } : item,
-            ),
-          );
-          continue;
-        }
-
         setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'uploading', uploadError: undefined } : item)));
         const linkedRemoteDraftId = findLinkedRemoteDraftId(media.id);
         const result = await uploadAndSaveDolabMedia(user.id, media, { dolabItemId: linkedRemoteDraftId, sortOrder: 0 });
@@ -268,10 +259,6 @@ export default function DolabScreen() {
       }
       if (failCount > 0) {
         setInlineFeedback('تعذر حفظ بعض الميديا سحابيًا. شغّال محليًا مؤقتًا.');
-        return;
-      }
-      if (skippedAudioCount > 0) {
-        setInlineFeedback('الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.');
         return;
       }
       setInlineFeedback('تم حفظ الميديا السحابية بنجاح.');
@@ -688,8 +675,7 @@ export default function DolabScreen() {
         description: 'احفظ ملاحظة صوتية لنفسك لاحقًا.',
         onPress: () => {
           addSheetRef.current?.dismiss();
-          appendMedia([createLocalAudioPlaceholder()]);
-          setInlineFeedback('تم تجهيز مكان ملاحظة صوتية. التسجيل الحقيقي في PR لاحق.');
+          audioRecorderSheetRef.current?.present();
         },
       },
       {
@@ -977,6 +963,16 @@ export default function DolabScreen() {
         titleIconName="add-circle-outline"
         snapPoints={['52%']}
         actions={sheetActions}
+      />
+
+
+      <DolabAudioRecorderSheet
+        sheetRef={audioRecorderSheetRef}
+        onFeedback={setInlineFeedback}
+        onSave={(recording) => {
+          appendMedia([createPendingAudioMedia(recording)]);
+          setInlineFeedback('تم حفظ الملاحظة الصوتية محليًا في الدولاب.');
+        }}
       />
 
       <DolabShareBridgeSheet
