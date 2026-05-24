@@ -25,11 +25,12 @@ import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStri
 import { DolabVaultHero } from '@/components/dolab/DolabVaultHero';
 import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
 import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
+import { DolabSavedLibrarySection } from '@/components/dolab/DolabSavedLibrarySection';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
-import { fetchDolabRemoteSnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
+import { fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -76,24 +77,28 @@ export default function DolabScreen() {
   const [publishDrafts, setPublishDrafts] = useState<DolabPublishDraft[]>([]);
   const [selectedPublishSourceDraftId, setSelectedPublishSourceDraftId] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'local_only' | 'partial_sync' | 'schema_missing'>('local_only');
-  const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number }>({ items: 0, notes: 0 });
+  const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number; media: number }>({ items: 0, notes: 0, media: 0 });
+  const [savedRemote, setSavedRemote] = useState<{ items: any[]; notes: any[]; media: any[] }>({ items: [], notes: [], media: [] });
 
-  const refreshRemoteSnapshot = async (targetUserId: string) => {
-    const result = await fetchDolabRemoteSnapshot(targetUserId);
+  const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
+    const result = await fetchDolabLibrarySnapshot(targetUserId);
     if (result.error) {
       if (result.error.kind === 'schema_missing') {
         setCloudStatus('schema_missing');
         setInlineFeedback('الحفظ السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.');
       }
-      return;
+      return false;
     }
 
-    setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length });
-    if (result.data.items.length > 0 || result.data.notes.length > 0) {
+    setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length, media: result.data.media.length });
+    setSavedRemote({ items: result.data.items, notes: result.data.notes, media: result.data.media });
+    if (result.data.items.length > 0 || result.data.notes.length > 0 || result.data.media.length > 0) {
       setCloudStatus('partial_sync');
     } else {
       setCloudStatus('local_only');
     }
+
+    return true;
   };
 
   useEffect(() => {
@@ -108,6 +113,28 @@ export default function DolabScreen() {
 
     void loadRemoteSnapshot();
   }, [user?.id]);
+
+
+
+  const mappedSavedMedia = useMemo(() => savedRemote.media.map((m) => ({
+    id: m.id,
+    mediaTypeLabel: m.media_type === 'image' ? 'صورة' : m.media_type === 'video' ? 'فيديو' : 'صوت',
+    storagePath: m.storage_path,
+    linkedItemTitle: savedRemote.items.find((i) => i.id === m.dolab_item_id)?.title || undefined,
+    meta: [m.width && m.height ? `${m.width}x${m.height}` : null, m.size_bytes ? `${Math.round(m.size_bytes / 1024)}KB` : null, m.duration_ms ? `${Math.round(m.duration_ms / 1000)}ث` : null].filter(Boolean).join(' · ') || 'بدون بيانات إضافية',
+  })), [savedRemote.media, savedRemote.items]);
+
+  const mappedSavedItems = useMemo(() => savedRemote.items.map((item) => ({
+    id: item.id,
+    title: item.title || 'عنصر محفوظ بدون عنوان',
+    description: item.description || '',
+    mediaCount: savedRemote.media.filter((m) => m.dolab_item_id === item.id).length,
+    badge: item.status === 'draft' ? 'مسودة محفوظة' : 'محفوظ',
+  })), [savedRemote.items, savedRemote.media]);
+
+  const mappedSavedNotes = useMemo(() => savedRemote.notes.map((n) => ({ id: n.id, body: n.body || 'ملاحظة بدون نص', label: n.note_type, createdAt: n.created_at })), [savedRemote.notes]);
+
+  const visibleLocalDrafts = useMemo(() => localDrafts.filter((draft) => !draft.remoteDolabItemId), [localDrafts]);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -630,15 +657,38 @@ export default function DolabScreen() {
           {cloudStatus === 'schema_missing'
             ? 'الحفظ السحابي غير مفعّل بعد'
             : cloudStatus === 'partial_sync'
-              ? `متزامن جزئيًا · عناصر ${remoteSnapshot.items} · ملاحظات ${remoteSnapshot.notes}`
+              ? `متزامن جزئيًا · عناصر ${remoteSnapshot.items} · ميديا ${remoteSnapshot.media} · ملاحظات ${remoteSnapshot.notes}`
               : 'محلي فقط'}
         </AppText>
 
+        <Pressable
+          style={styles.actionBtnInline}
+          onPress={async () => {
+            if (!user?.id) {
+              setInlineFeedback('سجّل الدخول عشان تجيب دولابك المحفوظ.');
+              return;
+            }
+
+            const refreshed = await refreshRemoteSnapshot(user.id);
+            if (refreshed) {
+              setInlineFeedback('اتحدّث الدولاب.');
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="تحديث الدولاب المحفوظ"
+        >
+          <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
+        </Pressable>
+
         <DolabAnimatedSection delay={20}>
+        <DolabSavedLibrarySection items={mappedSavedItems} notes={mappedSavedNotes} media={mappedSavedMedia} />
+        </DolabAnimatedSection>
+
+        <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">ميديا جاهزة للحفظ</AppText>
-            <AppText muted>لسه محلية على جهازك، تقدر تحفظها سحابيًا بدون تعطيل تدفقك المحلي.</AppText>
+            <AppText weight="bold">ميديا مؤقتة</AppText>
+            <AppText muted>لسه على جهازك. احفظها سحابيًا عشان تفضل موجودة.</AppText>
             <AppText muted style={styles.smallText}>
               عدد العناصر: {pendingMedia.length}
             </AppText>
@@ -763,7 +813,7 @@ export default function DolabScreen() {
             <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
           </View>
           <View style={styles.listWrap}>
-            {localDrafts.map((draft) => (
+            {visibleLocalDrafts.map((draft) => (
               <DolabPressableCard
                 key={draft.id}
                 style={styles.localDraftCard}
@@ -775,7 +825,7 @@ export default function DolabScreen() {
                   <AppText weight="semibold">{draft.title || 'مسودة بدون اسم'}</AppText>
                   <View style={styles.localBadge}>
                     <AppText style={styles.localBadgeText}>
-                      {publishDrafts.some((item) => item.sourceDraftId === draft.id) ? 'تحضير نشر' : 'مسودة محلية'}
+                      {publishDrafts.some((item) => item.sourceDraftId === draft.id) ? 'تحضير نشر' : 'مسودة مؤقتة'}
                     </AppText>
                   </View>
                 </View>
