@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.round,
     paddingHorizontal: spacing.sm,
     paddingVertical: 8,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
   },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text },
