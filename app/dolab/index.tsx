@@ -5,15 +5,18 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AppActionSheet } from '@/components/sheets/AppActionSheet';
+import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppCard } from '@/components/ui/AppCard';
+import { AppInput } from '@/components/ui/AppInput';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
-import { AppCard } from '@/components/ui/AppCard';
-import { AppButton } from '@/components/ui/AppButton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
+import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-types';
 import { toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 
@@ -27,15 +30,45 @@ const exchangeIdeas = [
   { id: 'e2', text: 'دمج عنصرين في عرض واحد لتسريع التبادل.' },
 ];
 
+const emptyDraftForm: DolabDraftItemInput = {
+  title: '',
+  description: '',
+  category: '',
+  condition: '',
+  exchangeIntent: '',
+  linkedPendingMediaIds: [],
+};
+
 export default function DolabScreen() {
   const router = useRouter();
   const addSheetRef = useRef<BottomSheetModal>(null);
+  const draftStudioRef = useRef<BottomSheetModal>(null);
   const glow = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
+
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
+  const [localDrafts, setLocalDrafts] = useState<DolabDraftItem[]>([]);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [draftForm, setDraftForm] = useState<DolabDraftItemInput>(emptyDraftForm);
 
-  const appendMedia = (items: DolabPendingMedia[]) => setPendingMedia((prev) => [...items, ...prev]);
+  const appendMedia = (items: DolabPendingMedia[]) => {
+    setPendingMedia((prev) => [...items, ...prev]);
+  };
+
+  const removePendingMedia = (mediaId: string) => {
+    setPendingMedia((prev) => prev.filter((item) => item.id !== mediaId));
+    setDraftForm((prev) => ({
+      ...prev,
+      linkedPendingMediaIds: prev.linkedPendingMediaIds.filter((id) => id !== mediaId),
+    }));
+    setLocalDrafts((prev) => prev.map((draft) => ({ ...draft, linkedPendingMediaIds: draft.linkedPendingMediaIds.filter((id) => id !== mediaId) })));
+  };
+
+  const resetDraftForm = () => {
+    setEditingDraftId(null);
+    setDraftForm(emptyDraftForm);
+  };
 
   const pickImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -103,6 +136,69 @@ export default function DolabScreen() {
     const items = result.assets.map((asset) => toPendingMedia(asset, 'image'));
     appendMedia(items);
     setInlineFeedback('تم التقاط صورة وإضافتها للدولاب المحلي.');
+  };
+
+  const openDraftStudioForNew = () => {
+    resetDraftForm();
+    draftStudioRef.current?.present();
+  };
+
+  const openDraftStudioForEdit = (draft: DolabDraftItem) => {
+    setEditingDraftId(draft.id);
+    setDraftForm({
+      title: draft.title,
+      description: draft.description,
+      category: draft.category ?? '',
+      condition: draft.condition ?? '',
+      exchangeIntent: draft.exchangeIntent ?? '',
+      linkedPendingMediaIds: draft.linkedPendingMediaIds,
+    });
+    draftStudioRef.current?.present();
+  };
+
+  const toggleMediaLink = (mediaId: string) => {
+    setDraftForm((prev) => ({
+      ...prev,
+      linkedPendingMediaIds: prev.linkedPendingMediaIds.includes(mediaId)
+        ? prev.linkedPendingMediaIds.filter((id) => id !== mediaId)
+        : [...prev.linkedPendingMediaIds, mediaId],
+    }));
+  };
+
+  const saveLocalDraft = () => {
+    const now = new Date().toISOString();
+
+    if (editingDraftId) {
+      setLocalDrafts((prev) =>
+        prev.map((draft) =>
+          draft.id === editingDraftId
+            ? {
+                ...draft,
+                ...draftForm,
+                category: draftForm.category || undefined,
+                condition: draftForm.condition || undefined,
+                exchangeIntent: draftForm.exchangeIntent || undefined,
+                updatedAt: now,
+              }
+            : draft,
+        ),
+      );
+    } else {
+      const newDraft: DolabDraftItem = {
+        id: `local-draft-${Date.now()}`,
+        ...draftForm,
+        category: draftForm.category || undefined,
+        condition: draftForm.condition || undefined,
+        exchangeIntent: draftForm.exchangeIntent || undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setLocalDrafts((prev) => [newDraft, ...prev]);
+    }
+
+    draftStudioRef.current?.dismiss();
+    setInlineFeedback('اتحفظت كمسودة محلية داخل دولابك.');
+    resetDraftForm();
   };
 
   useEffect(() => {
@@ -184,7 +280,7 @@ export default function DolabScreen() {
         description: 'ابدأ عنصرًا يتحول لاحقًا لعرض.',
         onPress: () => {
           addSheetRef.current?.dismiss();
-          setInlineFeedback('مسودة العنصر في PR لاحق.');
+          openDraftStudioForNew();
         },
       },
     ],
@@ -194,7 +290,7 @@ export default function DolabScreen() {
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>{/* ...existing header unchanged style */}
+        <View style={styles.headerRow}>
           <Pressable
             style={styles.backButton}
             onPress={() => router.back()}
@@ -208,30 +304,74 @@ export default function DolabScreen() {
           </AppText>
         </View>
 
-        <LinearGradient colors={['#FFF8EE', '#F4EDE4', '#F2F7F6']} style={styles.hero}>{/* ... */}
-          <Animated.View style={[styles.heroGlow, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.5] }) }]} />
-          <Animated.View style={[styles.floatingChip, { transform: [{ translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }]}>
+        <LinearGradient colors={['#FFF8EE', '#F4EDE4', '#F2F7F6']} style={styles.hero}>
+          <Animated.View
+            style={[
+              styles.heroGlow,
+              {
+                opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.5] }),
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.floatingChip,
+              {
+                transform: [
+                  {
+                    translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
             <AppText style={styles.chipText}>خاص</AppText>
           </Animated.View>
-          <Animated.View style={[styles.floatingChipSecondary, { transform: [{ translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [-2, 6] }) }] }]}>
+          <Animated.View
+            style={[
+              styles.floatingChipSecondary,
+              {
+                transform: [
+                  {
+                    translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [-2, 6] }),
+                  },
+                ],
+              },
+            ]}
+          >
             <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
             <AppText style={styles.chipText}>حيّ</AppText>
           </Animated.View>
-          <View style={styles.heroTopIcon}><Ionicons name="archive-outline" size={22} color={colors.primary} /></View>
-          <View style={styles.heroBadge}><AppText weight="semibold" style={styles.heroBadgeText}>نسخة أولى</AppText></View>
-          <AppText weight="bold" style={styles.heroTitle}>دولاب تسوى</AppText>
-          <AppText muted style={styles.heroSubtitle}>مكانك الخاص لتجميع الصور، الفيديوهات، الأفكار، والحاجات اللي ممكن تتحول لتبادل.</AppText>
+          <View style={styles.heroTopIcon}>
+            <Ionicons name="archive-outline" size={22} color={colors.primary} />
+          </View>
+          <View style={styles.heroBadge}>
+            <AppText weight="semibold" style={styles.heroBadgeText}>
+              نسخة أولى
+            </AppText>
+          </View>
+          <AppText weight="bold" style={styles.heroTitle}>
+            دولاب تسوى
+          </AppText>
+          <AppText muted style={styles.heroSubtitle}>
+            مكانك الخاص لتجميع الصور، الفيديوهات، الأفكار، والحاجات اللي ممكن تتحول لتبادل.
+          </AppText>
         </LinearGradient>
 
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">ميديا جاهزة للحفظ</AppText>
             <AppText muted>لسه محلية على جهازك، والحفظ السحابي هييجي في الخطوة الجاية.</AppText>
-            <AppText muted style={styles.smallText}>عدد العناصر: {pendingMedia.length}</AppText>
+            <AppText muted style={styles.smallText}>
+              عدد العناصر: {pendingMedia.length}
+            </AppText>
           </View>
+
           {pendingMedia.length === 0 ? (
-            <AppText muted style={styles.smallText}>لسه ما أضفتش ميديا محلية.</AppText>
+            <AppText muted style={styles.smallText}>
+              لسه ما أضفتش ميديا محلية.
+            </AppText>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingRow}>
               {pendingMedia.map((item) => (
@@ -240,15 +380,22 @@ export default function DolabScreen() {
                     <Image source={{ uri: item.uri }} style={styles.pendingImage} />
                   ) : (
                     <View style={styles.pendingPlaceholder}>
-                      <Ionicons name={item.mediaType === 'video' ? 'videocam-outline' : 'mic-outline'} size={20} color={colors.primary} />
-                      <AppText style={styles.smallText}>{item.durationMs ? `${Math.round(item.durationMs / 1000)}ث` : 'بدون مدة'}</AppText>
+                      <Ionicons
+                        name={item.mediaType === 'video' ? 'videocam-outline' : 'mic-outline'}
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <AppText style={styles.smallText}>
+                        {item.durationMs ? `${Math.round(item.durationMs / 1000)}ث` : 'بدون مدة'}
+                      </AppText>
                     </View>
                   )}
+
                   <Pressable
                     style={styles.removeButton}
                     accessibilityRole="button"
                     accessibilityLabel="حذف عنصر ميديا من قائمة الدولاب"
-                    onPress={() => setPendingMedia((prev) => prev.filter((m) => m.id !== item.id))}
+                    onPress={() => removePendingMedia(item.id)}
                   >
                     <Ionicons name="close-circle" size={18} color={colors.danger} />
                   </Pressable>
@@ -264,6 +411,29 @@ export default function DolabScreen() {
             <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
           </View>
           <View style={styles.listWrap}>
+            {localDrafts.map((draft) => (
+              <Pressable
+                key={draft.id}
+                style={styles.localDraftCard}
+                onPress={() => openDraftStudioForEdit(draft)}
+                accessibilityRole="button"
+                accessibilityLabel={`فتح مسودة محلية ${draft.title || 'بدون عنوان'} للتعديل`}
+              >
+                <View style={styles.localDraftHeader}>
+                  <AppText weight="semibold">{draft.title || 'مسودة بدون اسم'}</AppText>
+                  <View style={styles.localBadge}>
+                    <AppText style={styles.localBadgeText}>مسودة محلية</AppText>
+                  </View>
+                </View>
+                <AppText muted style={styles.smallText}>
+                  {draft.description || draft.exchangeIntent || 'بدون تفاصيل إضافية حتى الآن.'}
+                </AppText>
+                <AppText muted style={styles.smallText}>
+                  ميديا مرتبطة: {draft.linkedPendingMediaIds.length}
+                </AppText>
+              </Pressable>
+            ))}
+
             {draftItems.map((item) => (
               <View key={item.id} style={styles.rowCard}>
                 <Ionicons name="cube-outline" size={18} color={colors.primary} />
@@ -299,12 +469,18 @@ export default function DolabScreen() {
             description="عند ربط البيانات الحقيقية، ستظهر هنا العناصر والميديا والأفكار الجديدة."
             iconName="folder-open-outline"
           />
-          <AppButton label="ابدأ الإضافة الآن" variant="neutral" onPress={() => addSheetRef.current?.present()} />
+          <AppButton
+            label="ابدأ الإضافة الآن"
+            variant="neutral"
+            onPress={() => addSheetRef.current?.present()}
+          />
         </AppCard>
 
         <View style={styles.ctaWrap}>
           <AppButton label="أضف للدولاب" onPress={() => addSheetRef.current?.present()} />
-          <AppText muted style={styles.feedbackText}>{inlineFeedback ?? 'اختَر طريقة البداية، والباقي قريبًا.'}</AppText>
+          <AppText muted style={styles.feedbackText}>
+            {inlineFeedback ?? 'اختَر طريقة البداية، والباقي قريبًا.'}
+          </AppText>
         </View>
       </ScrollView>
 
@@ -316,14 +492,104 @@ export default function DolabScreen() {
         snapPoints={['52%']}
         actions={sheetActions}
       />
+
+      <AppBottomSheet
+        ref={draftStudioRef}
+        title="مسودة عنصر"
+        description="حوّل الصور والأفكار اللي في دولابك لمسودة جاهزة للتبادل لاحقًا."
+        titleIconName="cube-outline"
+        snapPoints={['80%']}
+      >
+        <ScrollView contentContainerStyle={styles.studioBody}>
+          <AppInput
+            value={draftForm.title}
+            onChangeText={(value) => setDraftForm((prev) => ({ ...prev, title: value }))}
+            placeholder="اسم الحاجة"
+          />
+          <AppInput
+            value={draftForm.description}
+            onChangeText={(value) => setDraftForm((prev) => ({ ...prev, description: value }))}
+            placeholder="وصف سريع"
+            multiline
+          />
+          <AppInput
+            value={draftForm.category}
+            onChangeText={(value) => setDraftForm((prev) => ({ ...prev, category: value }))}
+            placeholder="التصنيف"
+          />
+          <AppInput
+            value={draftForm.condition}
+            onChangeText={(value) => setDraftForm((prev) => ({ ...prev, condition: value }))}
+            placeholder="الحالة"
+          />
+          <AppInput
+            value={draftForm.exchangeIntent}
+            onChangeText={(value) => setDraftForm((prev) => ({ ...prev, exchangeIntent: value }))}
+            placeholder="نية التبادل / هتحب تبدلها بإيه؟"
+            multiline
+          />
+
+          <View style={styles.sectionHeader}>
+            <AppText weight="semibold">ربط ميديا محلية</AppText>
+            {pendingMedia.length === 0 ? (
+              <AppText muted style={styles.smallText}>
+                ارفع صور أو فيديوهات الأول عشان تربطها بالمسودة.
+              </AppText>
+            ) : null}
+          </View>
+
+          {pendingMedia.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingRow}>
+              {pendingMedia.map((item) => {
+                const selected = draftForm.linkedPendingMediaIds.includes(item.id);
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.pendingCard, selected && styles.pendingCardSelected]}
+                    onPress={() => toggleMediaLink(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={selected ? 'إلغاء ربط عنصر ميديا بالمسودة' : 'ربط عنصر ميديا بالمسودة'}
+                  >
+                    {item.mediaType === 'image' ? (
+                      <Image source={{ uri: item.uri }} style={styles.pendingImage} />
+                    ) : (
+                      <View style={styles.pendingPlaceholder}>
+                        <Ionicons name="videocam-outline" size={20} color={colors.primary} />
+                        <AppText style={styles.smallText}>فيديو</AppText>
+                      </View>
+                    )}
+                    {selected ? (
+                      <View style={styles.selectedOverlay}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+
+          <AppButton label="احفظ المسودة محليًا" onPress={saveLocalDraft} />
+        </ScrollView>
+      </AppBottomSheet>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { paddingHorizontal: 0 },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.sm },
-  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  screen: {
+    paddingHorizontal: 0,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.sm,
+  },
+  headerRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   backButton: {
     width: 40,
     height: 40,
@@ -334,7 +600,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.9)',
   },
-  headerTitle: { fontSize: 22 },
+  headerTitle: {
+    fontSize: 22,
+  },
   hero: {
     borderRadius: radii.xl,
     borderWidth: 1,
@@ -371,9 +639,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
   },
-  heroBadgeText: { color: '#7B5230', fontSize: 12 },
-  heroTitle: { fontSize: 28 },
-  heroSubtitle: { lineHeight: 23 },
+  heroBadgeText: {
+    color: '#7B5230',
+    fontSize: 12,
+  },
+  heroTitle: {
+    fontSize: 28,
+  },
+  heroSubtitle: {
+    lineHeight: 23,
+  },
   floatingChip: {
     position: 'absolute',
     top: 16,
@@ -398,9 +673,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radii.round,
   },
-  chipText: { fontSize: 12 },
-  sectionHeader: { gap: 3, marginBottom: spacing.xs },
-  listWrap: { gap: spacing.xs },
+  chipText: {
+    fontSize: 12,
+  },
+  sectionHeader: {
+    gap: 3,
+    marginBottom: spacing.xs,
+  },
+  listWrap: {
+    gap: spacing.xs,
+  },
   rowCard: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -411,8 +693,13 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     backgroundColor: '#FFFDF9',
   },
-  rowCopy: { flex: 1, gap: 2 },
-  smallText: { fontSize: 12 },
+  rowCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  smallText: {
+    fontSize: 12,
+  },
   noteCard: {
     gap: spacing.xs,
     borderWidth: 1,
@@ -421,7 +708,9 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     backgroundColor: '#FFFEFC',
   },
-  pendingRow: { gap: spacing.sm },
+  pendingRow: {
+    gap: spacing.sm,
+  },
   pendingCard: {
     width: 124,
     height: 124,
@@ -431,8 +720,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#FFFDF9',
   },
-  pendingImage: { width: '100%', height: '100%' },
-  pendingPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  pendingCardSelected: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 26,
+    height: 26,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  pendingPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
   removeButton: {
     position: 'absolute',
     top: 6,
@@ -440,6 +752,38 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: radii.round,
   },
-  ctaWrap: { gap: spacing.xs, marginBottom: spacing.md },
-  feedbackText: { textAlign: 'center' },
+  ctaWrap: {
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  feedbackText: {
+    textAlign: 'center',
+  },
+  localDraftCard: {
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
+    borderRadius: radii.lg,
+    padding: spacing.sm,
+    backgroundColor: '#FFF9F1',
+    gap: spacing.xs,
+  },
+  localDraftHeader: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  localBadge: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 4,
+  },
+  localBadgeText: {
+    fontSize: 11,
+    color: colors.primary,
+  },
+  studioBody: {
+    gap: spacing.sm,
+    paddingBottom: spacing.xxl,
+  },
 });
