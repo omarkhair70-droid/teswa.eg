@@ -188,6 +188,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const startupProfileMarkedRef = useRef(false);
   const startupResolvedSessionRef = useRef(false);
   const bootstrappedUserIdRef = useRef<string | null>(null);
+  const bootstrapReadySetRef = useRef(false);
+
+  const markBootstrapReady = (reason: string, payload: Record<string, unknown>) => {
+    if (!mountedRef.current || bootstrapReadySetRef.current) return;
+    bootstrapReadySetRef.current = true;
+    setBootstrapReady(true);
+    startupLog('bootstrap_ready_set', { ...payload, reason });
+    startupTrace.mark('bootstrap_ready_set', { ...payload, reason });
+  };
 
   const checkProfileForUser = async (userId: string, reason: string, options?: { background?: boolean; suppressErrors?: boolean }) => {
     const existingCheck = inFlightProfileChecksRef.current.get(userId);
@@ -401,11 +410,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             setUsingCachedAccountGate(true);
             startupLog('account_gate_enter_from_cache', { source: 'bootstrap_session' });
           }
-          if (mountedRef.current) {
-            setBootstrapReady(true);
-            startupLog('bootstrap_ready_set', { hasSession: true, usedCachedGate: canUseCachedGate });
-            startupTrace.mark('bootstrap_ready_set', { hasSession: true, usedCachedGate: canUseCachedGate });
-          }
+          markBootstrapReady('bootstrap_session', { hasSession: true, usedCachedGate: canUseCachedGate, source: 'bootstrap_session' });
           await Promise.all([
             checkProfileForUser(currentSession.user.id, 'bootstrap_session', { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
             checkPolicyAcceptanceForUser(currentSession.user.id, { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
@@ -415,11 +420,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           startupTrace.mark('account_gate_cache_read_done', { hasCachedGate: false, hasSession: false });
           setProfileCheckError(null);
           setUsingCachedAccountGate(false);
-          if (mountedRef.current) {
-            setBootstrapReady(true);
-            startupLog('bootstrap_ready_set', { hasSession: false });
-            startupTrace.mark('bootstrap_ready_set', { hasSession: false, usedCachedGate: false });
-          }
+          markBootstrapReady('bootstrap_no_session', { hasSession: false, usedCachedGate: false, source: 'bootstrap_session' });
         }
       } catch (error) {
         if (__DEV__) console.log('[Auth] bootstrap failed', error);
@@ -431,11 +432,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setProfileCheckError(null);
         setPolicyAcceptanceCheckError(null);
         setBootstrapError('تعذر تهيئة تسجيل الدخول حالياً. حاول مرة أخرى.');
-        if (mountedRef.current) {
-          setBootstrapReady(true);
-          startupLog('bootstrap_ready_set', { hasSession: false, outcome: 'error' });
-          startupTrace.mark('bootstrap_ready_set', { outcome: 'error' });
-        }
+        markBootstrapReady('bootstrap_error', { hasSession: false, usedCachedGate: false, source: 'bootstrap_session', outcome: 'error' });
       }
     };
 
@@ -460,10 +457,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
           startupResolvedSessionRef.current = true;
           startupTiming.mark('auth_session_resolved', { hasSession: Boolean(nextUserId), source: 'auth_state_change' });
         }
-        if (event === 'INITIAL_SESSION' && nextUserId && nextUserId === bootstrappedUserIdRef.current) {
-          startupLog('skip_duplicate_initial_session_profile_checks', { event, hasUser: true });
-          return;
-        }
+        const isDuplicateInitialSession =
+          event === 'INITIAL_SESSION' && nextUserId && nextUserId === bootstrappedUserIdRef.current;
         setBootstrapError(null);
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
@@ -494,6 +489,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setRequiredPoliciesAccepted(true);
           setUsingCachedAccountGate(true);
           startupLog('account_gate_enter_from_cache', { source: 'auth_state_change', event });
+          markBootstrapReady('auth_state_change_cached_gate', {
+            hasSession: true,
+            usedCachedGate: true,
+            source: 'auth_state_change',
+            event,
+          });
+        }
+        if (isDuplicateInitialSession) {
+          startupLog('skip_duplicate_initial_session_profile_checks', { event, hasUser: true, bootstrapReadyAlreadySet: bootstrapReadySetRef.current });
+          startupTrace.mark('auth_state_change_end', { outcome: 'skipped_duplicate_initial_session', usedCachedGate: canUseCachedGate });
+          return;
         }
         await Promise.all([
           checkProfileForUser(nextSession.user.id, 'auth_state_change', { background: canUseCachedGate, suppressErrors: canUseCachedGate }),
