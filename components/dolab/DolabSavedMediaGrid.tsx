@@ -7,7 +7,6 @@ import { spacing } from '@/constants/spacing';
 type SavedMediaCard = {
   id: string;
   mediaTypeLabel: string;
-  storagePath: string;
   linkedItemTitle?: string;
   meta: string;
 };
@@ -23,7 +22,7 @@ export function DolabSavedMediaGrid({ media }: { media: SavedMediaCard[] }) {
         <View key={item.id} style={styles.card}>
           <AppText weight="semibold">{item.mediaTypeLabel}</AppText>
           <AppText muted style={styles.small}>محفوظ</AppText>
-          <AppText muted style={styles.small} numberOfLines={1}>المسار: {item.storagePath}</AppText>
+          <AppText muted style={styles.small}>محفوظ في الدولاب السحابي</AppText>
           {item.linkedItemTitle ? <AppText muted style={styles.small}>مرتبط: {item.linkedItemTitle}</AppText> : null}
           <AppText muted style={styles.small}>{item.meta}</AppText>
         </View>

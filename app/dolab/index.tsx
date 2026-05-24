@@ -80,14 +80,14 @@ export default function DolabScreen() {
   const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number; media: number }>({ items: 0, notes: 0, media: 0 });
   const [savedRemote, setSavedRemote] = useState<{ items: any[]; notes: any[]; media: any[] }>({ items: [], notes: [], media: [] });
 
-  const refreshRemoteSnapshot = async (targetUserId: string) => {
+  const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
     if (result.error) {
       if (result.error.kind === 'schema_missing') {
         setCloudStatus('schema_missing');
         setInlineFeedback('الحفظ السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.');
       }
-      return;
+      return false;
     }
 
     setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length, media: result.data.media.length });
@@ -97,6 +97,8 @@ export default function DolabScreen() {
     } else {
       setCloudStatus('local_only');
     }
+
+    return true;
   };
 
   useEffect(() => {
@@ -661,13 +663,16 @@ export default function DolabScreen() {
 
         <Pressable
           style={styles.actionBtnInline}
-          onPress={() => {
+          onPress={async () => {
             if (!user?.id) {
               setInlineFeedback('سجّل الدخول عشان تجيب دولابك المحفوظ.');
               return;
             }
-            void refreshRemoteSnapshot(user.id);
-            setInlineFeedback('اتحدّث الدولاب.');
+
+            const refreshed = await refreshRemoteSnapshot(user.id);
+            if (refreshed) {
+              setInlineFeedback('اتحدّث الدولاب.');
+            }
           }}
           accessibilityRole="button"
           accessibilityLabel="تحديث الدولاب المحفوظ"

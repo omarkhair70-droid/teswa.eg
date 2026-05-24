@@ -100,18 +100,48 @@ export async function fetchDolabRemoteSnapshot(userId: string): Promise<DolabRes
 }
 
 export async function fetchDolabItems(userId: string): Promise<DolabResult<DolabItem[]>> {
-  const { data, error } = await supabase.from('dolab_items').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-  return { data: (data as DolabItem[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+  try {
+    const { data, error } = await supabase.from('dolab_items').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    return { data: (data as DolabItem[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+  } catch {
+    return {
+      data: [],
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحديث الدولاب حاليًا. شغّال محليًا مؤقتًا.',
+      },
+    };
+  }
 }
 
 export async function fetchDolabMedia(userId: string): Promise<DolabResult<DolabMedia[]>> {
-  const { data, error } = await supabase.from('dolab_media').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-  return { data: (data as DolabMedia[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+  try {
+    const { data, error } = await supabase.from('dolab_media').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    return { data: (data as DolabMedia[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+  } catch {
+    return {
+      data: [],
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحديث الدولاب حاليًا. شغّال محليًا مؤقتًا.',
+      },
+    };
+  }
 }
 
 export async function fetchDolabNotes(userId: string): Promise<DolabResult<DolabNote[]>> {
-  const { data, error } = await supabase.from('dolab_notes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-  return { data: (data as DolabNote[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+  try {
+    const { data, error } = await supabase.from('dolab_notes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    return { data: (data as DolabNote[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+  } catch {
+    return {
+      data: [],
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحديث الدولاب حاليًا. شغّال محليًا مؤقتًا.',
+      },
+    };
+  }
 }
 
 export const fetchDolabLibrarySnapshot = fetchDolabRemoteSnapshot;
