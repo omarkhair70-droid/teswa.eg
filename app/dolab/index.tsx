@@ -31,7 +31,7 @@ import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-ch
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
-import { createDolabMediaSignedUrls, fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
+import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDolabNote, fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, updateDolabSavedItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -59,6 +59,7 @@ export default function DolabScreen() {
   const draftStudioRef = useRef<BottomSheetModal>(null);
   const shareBridgeRef = useRef<BottomSheetModal>(null);
   const publishBridgeRef = useRef<BottomSheetModal>(null);
+  const confirmDeleteRef = useRef<BottomSheetModal>(null);
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
@@ -81,6 +82,8 @@ export default function DolabScreen() {
   const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number; media: number }>({ items: 0, notes: 0, media: 0 });
   const [savedRemote, setSavedRemote] = useState<{ items: any[]; notes: any[]; media: any[] }>({ items: [], notes: [], media: [] });
   const [savedMediaSignedUrls, setSavedMediaSignedUrls] = useState<Record<string, string | null>>({});
+  const [isUploadingCloud, setIsUploadingCloud] = useState(false);
+  const [selectedDelete, setSelectedDelete] = useState<{ type: 'item'|'note'|'media'; id: string; storagePath?: string } | null>(null);
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -196,14 +199,18 @@ export default function DolabScreen() {
   };
 
   const uploadPendingMediaToCloud = async () => {
+    if (isUploadingCloud) return;
+    setIsUploadingCloud(true);
     if (!user?.id) {
       setInlineFeedback('سجّل الدخول عشان تحفظ ميديا الدولاب سحابيًا.');
+      setIsUploadingCloud(false);
       return;
     }
 
     const toProcess = pendingMedia.filter((item) => item.uploadStatus !== 'uploaded' && item.uploadStatus !== 'uploading' && !item.remoteMediaId);
     if (toProcess.length === 0) {
       setInlineFeedback('كل الميديا الحالية محفوظة أو لا تحتاج رفع الآن.');
+      setIsUploadingCloud(false);
       return;
     }
 
@@ -258,17 +265,21 @@ export default function DolabScreen() {
 
     if (failCount > 0 && successCount > 0) {
       setInlineFeedback(`تم حفظ ${successCount} عنصر سحابيًا، وتعذر حفظ ${failCount} عنصر. شغّال محليًا مؤقتًا.`);
+      setIsUploadingCloud(false);
       return;
     }
     if (failCount > 0) {
       setInlineFeedback('تعذر حفظ بعض الميديا سحابيًا. شغّال محليًا مؤقتًا.');
+      setIsUploadingCloud(false);
       return;
     }
     if (skippedAudioCount > 0) {
       setInlineFeedback('الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.');
+      setIsUploadingCloud(false);
       return;
     }
     setInlineFeedback('تم حفظ الميديا السحابية بنجاح.');
+    setIsUploadingCloud(false);
   };
 
   const resetDraftForm = () => {
@@ -577,9 +588,9 @@ export default function DolabScreen() {
       return;
     }
 
-    const existingRemoteId = localDrafts.find((item) => item.id === nextDraftId)?.remoteDolabItemId;
+    const existingRemoteId = editingDraftId?.startsWith('remote-') ? editingDraftId.replace('remote-','') : localDrafts.find((item) => item.id === nextDraftId)?.remoteDolabItemId;
     const remoteResult = existingRemoteId
-      ? await updateDolabDraftItem(user.id, existingRemoteId, localDraft)
+      ? await updateDolabSavedItem(user.id, existingRemoteId, localDraft)
       : await saveDolabDraftItem(user.id, localDraft);
 
     if (remoteResult.error) {
@@ -596,6 +607,44 @@ export default function DolabScreen() {
     }
   };
 
+
+
+
+  const requestDelete = (target: { type: 'item'|'note'|'media'; id: string; storagePath?: string }) => {
+    setSelectedDelete(target);
+    confirmDeleteRef.current?.present();
+  };
+
+  const confirmDelete = async () => {
+    if (!user?.id || !selectedDelete) return;
+    let error = null;
+    if (selectedDelete.type === 'note') {
+      const r = await deleteDolabNote(user.id, selectedDelete.id); error = r.error;
+      if (!error) setInlineFeedback('اتحذفت الملاحظة من دولابك.');
+    } else if (selectedDelete.type === 'media' && selectedDelete.storagePath) {
+      const r = await deleteDolabMedia(user.id, selectedDelete.id, selectedDelete.storagePath); error = r.error;
+    } else if (selectedDelete.type === 'item') {
+      const linked = savedRemote.media.filter((m) => m.dolab_item_id === selectedDelete.id);
+      for (const m of linked) {
+        const rm = await deleteDolabMedia(user.id, m.id, m.storage_path);
+        if (rm.error) { error = rm.error; break; }
+      }
+      if (!error) { const di = await deleteDolabItem(user.id, selectedDelete.id); error = di.error; }
+    }
+    confirmDeleteRef.current?.dismiss();
+    setSelectedDelete(null);
+    if (error) { setInlineFeedback(error.message); return; }
+    await refreshRemoteSnapshot(user.id);
+    setInlineFeedback('تم الحذف من الدولاب السحابي.');
+  };
+
+  const editSavedItem = (itemId: string) => {
+    const remote = savedRemote.items.find((item) => item.id === itemId);
+    if (!remote) return;
+    setEditingDraftId(`remote-${itemId}`);
+    setDraftForm({ title: remote.title || '', description: remote.description || '', category: remote.category || '', condition: remote.condition || '', exchangeIntent: '', linkedPendingMediaIds: [] });
+    draftStudioRef.current?.present();
+  };
 
   const sheetActions = useMemo(
     () => [
@@ -704,7 +753,7 @@ export default function DolabScreen() {
         </Pressable>
 
         <DolabAnimatedSection delay={20}>
-        <DolabSavedLibrarySection items={mappedSavedItems} notes={mappedSavedNotes} media={mappedSavedMedia} />
+        <DolabSavedLibrarySection items={mappedSavedItems} notes={mappedSavedNotes} media={mappedSavedMedia} onDeleteNote={(id)=>requestDelete({type:'note',id})} onDeleteItem={(id)=>requestDelete({type:'item',id})} onDeleteMedia={(item)=>requestDelete({type:'media',id:item.id,storagePath:item.storagePath})} onEditItem={editSavedItem} />
         </DolabAnimatedSection>
 
         <DolabAnimatedSection delay={30}>
@@ -717,6 +766,7 @@ export default function DolabScreen() {
             </AppText>
           </View>
           <AppButton label="احفظ الميديا سحابيًا" variant="neutral" onPress={() => { void uploadPendingMediaToCloud(); }} />
+          <AppText muted style={styles.smallText}>تقدر تعيد محاولة حفظ العناصر الفاشلة.</AppText>
 
           <DolabPendingMediaStrip
             pendingMedia={pendingMedia}
@@ -949,6 +999,14 @@ export default function DolabScreen() {
         linkedPendingMedia={selectedPublishLinkedMedia}
         missingFields={selectedPublishBridgeData?.missingFields ?? []}
         onPrepare={preparePublishDraft}
+      />
+
+      <AppActionSheet
+        ref={confirmDeleteRef}
+        title="تأكيد الحذف"
+        description="الحذف من الدولاب السحابي لا يمكن التراجع عنه حاليًا."
+        titleIconName="trash-outline"
+        actions={[{ label: 'احذف', tone: 'danger', onPress: () => { void confirmDelete(); } }, { label: 'إلغاء', onPress: () => confirmDeleteRef.current?.dismiss() }]}
       />
 
       <AppBottomSheet

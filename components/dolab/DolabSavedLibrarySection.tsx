@@ -24,10 +24,18 @@ export function DolabSavedLibrarySection({
   items,
   notes,
   media,
+  onDeleteNote,
+  onDeleteItem,
+  onDeleteMedia,
+  onEditItem,
 }: {
   items: SavedItem[];
   notes: SavedNote[];
   media: DolabSavedMediaCardModel[];
+  onDeleteNote?: (id: string) => void;
+  onDeleteItem?: (id: string) => void;
+  onDeleteMedia?: (item: DolabSavedMediaCardModel) => void;
+  onEditItem?: (id: string) => void;
 }) {
   const isEmpty = items.length === 0 && notes.length === 0 && media.length === 0;
 
@@ -45,18 +53,23 @@ export function DolabSavedLibrarySection({
       ) : (
         <>
           {items.map((item) => (
-            <AppText key={item.id} style={styles.smallText}>
-              • {item.title} · {item.badge} · ميديا {item.mediaCount}
-            </AppText>
+            <View key={item.id} style={styles.row}>
+              <AppText style={styles.smallText}>• {item.title} · {item.badge} · ميديا {item.mediaCount}</AppText>
+              <View style={styles.rowActions}>
+                {onEditItem ? <AppText style={styles.action} onPress={() => onEditItem(item.id)}>تعديل</AppText> : null}
+                {onDeleteItem ? <AppText style={styles.actionDanger} onPress={() => onDeleteItem(item.id)}>حذف</AppText> : null}
+              </View>
+            </View>
           ))}
 
           {notes.slice(0, 3).map((note) => (
-            <AppText key={note.id} style={styles.smallText}>
-              • ملاحظة ({note.label}): {note.body}
-            </AppText>
+            <View key={note.id} style={styles.row}>
+              <AppText style={styles.smallText}>• ملاحظة ({note.label}): {note.body}</AppText>
+              {onDeleteNote ? <AppText style={styles.actionDanger} onPress={() => onDeleteNote(note.id)}>حذف</AppText> : null}
+            </View>
           ))}
 
-          <DolabSavedMediaGrid media={media.slice(0, 6)} />
+          <DolabSavedMediaGrid media={media.slice(0, 6)} onDeleteMedia={onDeleteMedia} />
         </>
       )}
     </AppCard>
@@ -71,4 +84,8 @@ const styles = StyleSheet.create({
   smallText: {
     fontSize: 12,
   },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rowActions: { flexDirection: 'row', gap: spacing.sm },
+  action: { fontSize: 12 },
+  actionDanger: { fontSize: 12, color: '#B3261E' },
 });

@@ -3,7 +3,7 @@ import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { DolabSavedMediaPreviewCard, type DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 
-export function DolabSavedMediaGrid({ media }: { media: DolabSavedMediaCardModel[] }) {
+export function DolabSavedMediaGrid({ media, onDeleteMedia }: { media: DolabSavedMediaCardModel[]; onDeleteMedia?: (item: DolabSavedMediaCardModel) => void }) {
   if (media.length === 0) {
     return <AppText muted style={styles.empty}>مفيش ميديا محفوظة سحابيًا لسه.</AppText>;
   }
@@ -11,7 +11,7 @@ export function DolabSavedMediaGrid({ media }: { media: DolabSavedMediaCardModel
   return (
     <View style={styles.wrap}>
       {media.map((item) => (
-        <DolabSavedMediaPreviewCard key={item.id} item={item} />
+        <DolabSavedMediaPreviewCard key={item.id} item={item} onDelete={onDeleteMedia} />
       ))}
     </View>
   );
