@@ -46,13 +46,13 @@ export function PersonalLivingWorldCard({ state, loading = false, onPrimaryActio
       {loading ? (
         <View style={styles.loadingBlock}>
           <AppText weight="bold" style={styles.title}>نقرأ آخر حركة في عالمك...</AppText>
-          <AppText muted>لحظات ونرتّب لك المشهد بشكل أوضح.</AppText>
+          <AppText muted style={styles.supportMutedText}>لحظات ونرتّب لك المشهد بشكل أوضح.</AppText>
         </View>
       ) : (
         <>
           <View style={styles.copyBlock}>
             <AppText weight="bold" style={styles.title}>{state.title}</AppText>
-            <AppText muted style={styles.body}>{state.body}</AppText>
+            <AppText muted style={[styles.body, styles.supportMutedText]}>{state.body}</AppText>
           </View>
           <View style={styles.signalsWrap}>
             {state.signals.map((signal) => (
@@ -82,6 +82,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   iconShell: { width: 34, height: 34, borderRadius: radii.round, borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)', backgroundColor: 'rgba(255,253,248,0.74)', alignItems: 'center', justifyContent: 'center' },
   eyebrow: { fontSize: 12 },
+  supportMutedText: { color: '#5C5146' },
   loadingBlock: { gap: spacing.xs },
   copyBlock: { gap: spacing.xs },
   title: { fontSize: 20, lineHeight: 28 },
