@@ -43,7 +43,7 @@ export function HomeHubDrawer({ visible, onClose, actions }: { visible: boolean;
           <AppText muted style={styles.subtitle}>اختار وجهتك بسرعة من عالم تِسوى.</AppText>
           <View style={styles.actionsList}>
             {actions.map((action) => (
-              <Pressable key={action.label} style={styles.actionRow} onPress={action.onPress}>
+              <Pressable key={action.label} style={styles.actionRow} onPress={action.onPress} accessibilityRole="button" accessibilityLabel={action.label}>
                 <View style={[styles.iconWrap, action.tone === 'primary' ? styles.iconWrapPrimary : null]}>
                   <Ionicons name={action.iconName} size={18} color={action.tone === 'primary' ? colors.white : colors.primary} />
                 </View>
