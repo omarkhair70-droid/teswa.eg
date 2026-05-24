@@ -83,22 +83,28 @@ function ItemCardComponent({ item }: { item: MarketplaceItem }) {
       }}
       style={[styles.pressable, animatedStyle]}
     >
-      <LinearGradient colors={['rgba(255,253,248,0.98)', 'rgba(255,246,232,0.92)', 'rgba(238,216,203,0.42)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+      <LinearGradient colors={['rgba(255,253,248,0.98)', 'rgba(255,247,236,0.95)', 'rgba(238,216,203,0.42)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
         <View style={styles.wrapper}>
-          <View style={styles.imageFrame}>{/* unchanged visual layout */}
-            {item.imageUrl ? <ExpoImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={160} recyclingKey={item.id} /> : <LinearGradient colors={['#FFF6E8', colors.primarySoft, 'rgba(62,124,115,0.18)']} style={[styles.image, styles.placeholder]}><View style={styles.placeholderIcon}><Ionicons name="image-outline" size={24} color={colors.primary} /></View><AppText muted weight="semibold" style={styles.placeholderText}>الصورة غير متاحة</AppText></LinearGradient>}
+          <View style={styles.imageFrame}>
+            {item.imageUrl ? (
+              <ExpoImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={160} recyclingKey={item.id} />
+            ) : (
+              <LinearGradient colors={['#FFF6E8', colors.primarySoft, 'rgba(62,124,115,0.18)']} style={[styles.image, styles.placeholder]}>
+                <View style={styles.placeholderIcon}><Ionicons name="image-outline" size={24} color={colors.primary} /></View>
+                <AppText muted weight="semibold" style={styles.placeholderText}>الصورة غير متاحة</AppText>
+              </LinearGradient>
+            )}
             <LinearGradient colors={['rgba(29,26,22,0)', 'rgba(29,26,22,0.16)']} style={styles.imageShade} />
+            <Pressable onPress={handleLikePress} disabled={likePending} style={styles.likeChip} accessibilityRole="button" accessibilityLabel={likedByMe ? 'إلغاء الإعجاب' : 'إعجاب'}>
+              <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={14} color={colors.primary} />
+              <AppText style={styles.likeChipText} weight="semibold">{likeCount}</AppText>
+            </Pressable>
             {item.hasVideoTeaser === true ? <View style={styles.videoBadge}><Ionicons name="play-circle-outline" size={15} color={colors.primary} /><AppText weight="semibold" style={styles.videoBadgeText}>لمحة فيديو</AppText></View> : null}
           </View>
 
           <View style={styles.content}>
             <AppText weight="bold" numberOfLines={2} style={styles.title}>{item.title}</AppText>
-
             <View style={styles.metadataRow}>
-              <Pressable onPress={handleLikePress} disabled={likePending} style={styles.metaPill} accessibilityRole="button" accessibilityLabel={likedByMe ? 'إلغاء الإعجاب' : 'إعجاب'}>
-                <Ionicons name={likedByMe ? 'heart' : 'heart-outline'} size={13} color={colors.primary} />
-                <AppText muted numberOfLines={1} style={styles.metaText}>{likeCount}</AppText>
-              </Pressable>
               {metadata.map((meta) => (
                 <View key={meta.key} style={styles.metaPill}>
                   <Ionicons name={meta.icon} size={13} color={meta.color} />
@@ -106,8 +112,7 @@ function ItemCardComponent({ item }: { item: MarketplaceItem }) {
                 </View>
               ))}
             </View>
-
-            {item.ownerDisplayName ? <View style={styles.ownerRow}><View style={styles.ownerIcon}><Ionicons name="person-outline" size={13} color={colors.primary} /></View><AppText muted numberOfLines={1} style={styles.ownerText}>صاحبها {item.ownerDisplayName}</AppText></View> : null}
+            {item.ownerDisplayName ? <View style={styles.ownerRow}><View style={styles.ownerIcon}><Ionicons name="person-outline" size={13} color={colors.primary} /></View><AppText muted numberOfLines={1} style={styles.ownerText}>من {item.ownerDisplayName}</AppText></View> : null}
           </View>
         </View>
       </LinearGradient>
@@ -122,5 +127,25 @@ function areItemCardPropsEqual(prev: { item: MarketplaceItem }, next: { item: Ma
 export const ItemCard = memo(ItemCardComponent, areItemCardPropsEqual);
 
 const styles = StyleSheet.create({
-  pressable: { marginBottom: spacing.md }, card: { borderRadius: radii.xl, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', padding: spacing.md, shadowColor: colors.primary, shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 }, wrapper: { gap: spacing.md }, imageFrame: { position: 'relative', borderRadius: radii.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: 'rgba(255,253,248,0.86)', overflow: 'hidden' }, image: { width: '100%', height: 178, borderRadius: radii.lg, backgroundColor: colors.primarySoft }, imageShade: { ...StyleSheet.absoluteFillObject }, placeholder: { justifyContent: 'center', alignItems: 'center', gap: spacing.sm }, placeholderIcon: { width: 48, height: 48, borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.68)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', alignItems: 'center', justifyContent: 'center' }, placeholderText: { fontSize: 13 }, videoBadge: { position: 'absolute', right: spacing.sm, bottom: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: 'rgba(255,253,248,0.94)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.22)', shadowColor: colors.primary, shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 2 }, videoBadgeText: { color: colors.primary, fontSize: 12 }, content: { gap: spacing.sm }, title: { fontSize: 18, lineHeight: 25 }, metadataRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs }, metaPill: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: 'rgba(221,208,197,0.78)', borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.72)', paddingHorizontal: spacing.sm, paddingVertical: 6 }, metaText: { fontSize: 12, flexShrink: 1 }, ownerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, paddingTop: spacing.xs }, ownerIcon: { width: 24, height: 24, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.1)', alignItems: 'center', justifyContent: 'center' }, ownerText: { flex: 1, fontSize: 13 },
+  pressable: { marginBottom: spacing.md },
+  card: { borderRadius: radii.xl, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', padding: spacing.md, shadowColor: colors.primary, shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  wrapper: { gap: spacing.md },
+  imageFrame: { position: 'relative', borderRadius: radii.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: 'rgba(255,253,248,0.86)', overflow: 'hidden' },
+  image: { width: '100%', height: 184, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
+  imageShade: { ...StyleSheet.absoluteFillObject },
+  likeChip: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: 'rgba(255,253,248,0.95)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)' },
+  likeChipText: { color: colors.primary, fontSize: 12 },
+  placeholder: { justifyContent: 'center', alignItems: 'center', gap: spacing.sm },
+  placeholderIcon: { width: 48, height: 48, borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.68)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', alignItems: 'center', justifyContent: 'center' },
+  placeholderText: { fontSize: 13 },
+  videoBadge: { position: 'absolute', right: spacing.sm, bottom: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: 'rgba(255,253,248,0.94)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.22)' },
+  videoBadgeText: { color: colors.primary, fontSize: 12 },
+  content: { gap: spacing.sm },
+  title: { fontSize: 18, lineHeight: 25 },
+  metadataRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
+  metaPill: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: 'rgba(221,208,197,0.78)', borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.72)', paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  metaText: { fontSize: 12, flexShrink: 1 },
+  ownerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, paddingTop: spacing.xs },
+  ownerIcon: { width: 24, height: 24, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.1)', alignItems: 'center', justifyContent: 'center' },
+  ownerText: { flex: 1, fontSize: 13 },
 });
