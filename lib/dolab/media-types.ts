@@ -1,5 +1,7 @@
 export type DolabPendingMediaType = 'image' | 'video' | 'audio';
 
+export type DolabPendingMediaUploadStatus = 'local' | 'uploading' | 'uploaded' | 'failed';
+
 export type DolabPendingMedia = {
   id: string;
   uri: string;
@@ -11,4 +13,8 @@ export type DolabPendingMedia = {
   height?: number;
   sizeBytes?: number;
   createdAt: string;
+  remoteMediaId?: string;
+  storagePath?: string;
+  uploadStatus?: DolabPendingMediaUploadStatus;
+  uploadError?: string;
 };

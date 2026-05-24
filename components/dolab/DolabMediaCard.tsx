@@ -1,4 +1,4 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
@@ -21,6 +21,14 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
   const details = [formatMediaDuration(item.durationMs), formatMediaDimensions(item.width, item.height), formatMediaSize(item.sizeBytes)]
     .filter(Boolean)
     .join(' • ');
+  const uploadLabel =
+    item.uploadStatus === 'uploading'
+      ? 'بيتحفظ...'
+      : item.uploadStatus === 'uploaded'
+        ? 'محفوظ'
+        : item.uploadStatus === 'failed'
+          ? 'فشل الحفظ'
+          : 'محلي';
 
   return (
     <DolabPressableCard
@@ -42,6 +50,7 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
       )}
 
       <View style={styles.badge}><AppText style={styles.badgeText}>{item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'صوت'}</AppText></View>
+      <View style={styles.statusBadge}><AppText style={styles.statusBadgeText}>{uploadLabel}</AppText></View>
       {details ? <AppText muted style={styles.meta} numberOfLines={1}>{details}</AppText> : null}
 
       {onRemove ? (
@@ -104,6 +113,17 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 11,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.round,
+    backgroundColor: '#EEF3FF',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    color: '#2F5FB3',
   },
   removeButton: {
     position: 'absolute',

@@ -95,3 +95,5 @@ export async function fetchDolabRemoteSnapshot(userId: string): Promise<DolabRes
     error: normalizedError,
   };
 }
+
+export { buildDolabStoragePath, saveDolabMediaRow, uploadAndSaveDolabMedia, uploadDolabPendingMedia } from '@/lib/dolab/upload';

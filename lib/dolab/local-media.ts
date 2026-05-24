@@ -18,6 +18,7 @@ export function toPendingMedia(asset: ImagePickerAsset, mediaType: DolabPendingM
     height: typeof asset.height === 'number' && asset.height > 0 ? asset.height : undefined,
     sizeBytes: typeof asset.fileSize === 'number' && asset.fileSize > 0 ? asset.fileSize : undefined,
     createdAt: new Date().toISOString(),
+    uploadStatus: 'local',
   };
 }
 
@@ -29,6 +30,7 @@ export function createLocalAudioPlaceholder(): DolabPendingMedia {
     fileName: 'ملاحظة صوتية محلية',
     durationMs: undefined,
     createdAt: new Date().toISOString(),
+    uploadStatus: 'local',
   };
 }
 
