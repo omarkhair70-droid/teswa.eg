@@ -6,6 +6,7 @@ export type DolabDraftItem = {
   condition?: string;
   exchangeIntent?: string;
   linkedPendingMediaIds: string[];
+  remoteDolabItemId?: string;
   createdAt: string;
   updatedAt: string;
 };

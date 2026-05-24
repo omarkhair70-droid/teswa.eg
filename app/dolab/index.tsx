@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +28,8 @@ import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
+import { useAuth } from '@/lib/auth';
+import { fetchDolabRemoteSnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem } from '@/lib/dolab';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -49,6 +51,7 @@ const emptyDraftForm: DolabDraftItemInput = {
 };
 
 export default function DolabScreen() {
+  const { user } = useAuth();
   const router = useRouter();
   const addSheetRef = useRef<BottomSheetModal>(null);
   const draftStudioRef = useRef<BottomSheetModal>(null);
@@ -72,6 +75,33 @@ export default function DolabScreen() {
   const [shareBridgeTargetMode, setShareBridgeTargetMode] = useState<DolabShareDraftTargetMode>('choose_later');
   const [publishDrafts, setPublishDrafts] = useState<DolabPublishDraft[]>([]);
   const [selectedPublishSourceDraftId, setSelectedPublishSourceDraftId] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<'local_only' | 'partial_sync' | 'schema_missing'>('local_only');
+  const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number }>({ items: 0, notes: 0 });
+
+  useEffect(() => {
+    const loadRemoteSnapshot = async () => {
+      if (!user?.id) {
+        setCloudStatus('local_only');
+        return;
+      }
+
+      const result = await fetchDolabRemoteSnapshot(user.id);
+      if (result.error) {
+        if (result.error.kind === 'schema_missing') {
+          setCloudStatus('schema_missing');
+          setInlineFeedback('الحفظ السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.');
+        }
+        return;
+      }
+
+      setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length });
+      if (result.data.items.length > 0 || result.data.notes.length > 0) {
+        setCloudStatus('partial_sync');
+      }
+    };
+
+    void loadRemoteSnapshot();
+  }, [user?.id]);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -203,7 +233,7 @@ export default function DolabScreen() {
     setSelfComposerMediaIds((prev) => (prev.includes(mediaId) ? prev.filter((id) => id !== mediaId) : [...prev, mediaId]));
   };
 
-  const saveSelfMessage = () => {
+  const saveSelfMessage = async () => {
     const cleanBody = selfComposerBody.trim();
     if (!cleanBody) {
       setSelfComposerError('اكتب ملاحظة أو فكرة الأول قبل الحفظ.');
@@ -222,6 +252,30 @@ export default function DolabScreen() {
     setSelfMessages((prev) => [newMessage, ...prev]);
     setSelfComposerBody('');
     setSelfComposerError(null);
+
+    if (!user?.id) {
+      setInlineFeedback('سجّل الدخول عشان تحفظ دولابك سحابيًا.');
+      return;
+    }
+
+    const linkedDraft = localDrafts.find((draft) => draft.id === newMessage.linkedDraftId);
+    const result = await saveDolabSelfNote(user.id, {
+      body: newMessage.body,
+      messageType: newMessage.messageType,
+      dolabItemId: linkedDraft?.remoteDolabItemId ?? null,
+    });
+
+    if (result.error) {
+      setInlineFeedback(result.error.message);
+      if (result.error.kind === 'schema_missing') setCloudStatus('schema_missing');
+      return;
+    }
+
+    if (result.data?.id) {
+      setSelfMessages((prev) => prev.map((item) => (item.id === newMessage.id ? { ...item, remoteNoteId: result.data?.id } : item)));
+      setCloudStatus('partial_sync');
+      setInlineFeedback('تم حفظ ملاحظة السيلف-شات سحابيًا بشكل جزئي.');
+    }
   };
 
   const deleteSelfMessage = (messageId: string) => {
@@ -337,8 +391,20 @@ export default function DolabScreen() {
     setInlineFeedback('العرض اتجهز محليًا. النشر الحقيقي في PR لاحق.');
   };
 
-  const saveLocalDraft = () => {
+  const saveLocalDraft = async () => {
     const now = new Date().toISOString();
+    const nextDraftId = editingDraftId ?? `local-draft-${Date.now()}`;
+    const localDraft: DolabDraftItem = {
+      id: nextDraftId,
+      title: draftForm.title,
+      description: draftForm.description,
+      category: draftForm.category || undefined,
+      condition: draftForm.condition || undefined,
+      exchangeIntent: draftForm.exchangeIntent || undefined,
+      linkedPendingMediaIds: draftForm.linkedPendingMediaIds,
+      createdAt: now,
+      updatedAt: now,
+    };
 
     if (editingDraftId) {
       setLocalDrafts((prev) =>
@@ -356,21 +422,34 @@ export default function DolabScreen() {
         ),
       );
     } else {
-      const newDraft: DolabDraftItem = {
-        id: `local-draft-${Date.now()}`,
-        ...draftForm,
-        category: draftForm.category || undefined,
-        condition: draftForm.condition || undefined,
-        exchangeIntent: draftForm.exchangeIntent || undefined,
-        createdAt: now,
-        updatedAt: now,
-      };
-      setLocalDrafts((prev) => [newDraft, ...prev]);
+      setLocalDrafts((prev) => [localDraft, ...prev]);
     }
 
     draftStudioRef.current?.dismiss();
     setInlineFeedback('اتحفظت كمسودة محلية داخل دولابك.');
     resetDraftForm();
+
+    if (!user?.id) {
+      setInlineFeedback('سجّل الدخول عشان تحفظ دولابك سحابيًا.');
+      return;
+    }
+
+    const existingRemoteId = localDrafts.find((item) => item.id === nextDraftId)?.remoteDolabItemId;
+    const remoteResult = existingRemoteId
+      ? await updateDolabDraftItem(user.id, existingRemoteId, localDraft)
+      : await saveDolabDraftItem(user.id, localDraft);
+
+    if (remoteResult.error) {
+      setInlineFeedback(remoteResult.error.message);
+      if (remoteResult.error.kind === 'schema_missing') setCloudStatus('schema_missing');
+      return;
+    }
+
+    if (remoteResult.data?.id) {
+      setLocalDrafts((prev) => prev.map((item) => (item.id === nextDraftId ? { ...item, remoteDolabItemId: remoteResult.data?.id } : item)));
+      setCloudStatus('partial_sync');
+      setInlineFeedback('تم حفظ المسودة محليًا وسحابيًا بشكل جزئي.');
+    }
   };
 
 
@@ -453,6 +532,13 @@ export default function DolabScreen() {
         </View>
 
         <DolabVaultHero />
+        <AppText muted style={styles.cloudStatusText}>
+          {cloudStatus === 'schema_missing'
+            ? 'الحفظ السحابي غير مفعّل بعد'
+            : cloudStatus === 'partial_sync'
+              ? `متزامن جزئيًا · عناصر ${remoteSnapshot.items} · ملاحظات ${remoteSnapshot.notes}`
+              : 'محلي فقط'}
+        </AppText>
 
         <DolabAnimatedSection delay={20}>
         <AppCard>
@@ -493,7 +579,9 @@ export default function DolabScreen() {
           onSelectType={setSelfComposerType}
           onSelectDraft={setSelfComposerDraftId}
           onToggleMedia={toggleSelfComposerMedia}
-          onSave={saveSelfMessage}
+          onSave={() => {
+            void saveSelfMessage();
+          }}
           onShareLater={openShareBridge}
           onDelete={deleteSelfMessage}
         />
@@ -749,7 +837,9 @@ export default function DolabScreen() {
             />
           ) : null}
 
-          <AppButton label="احفظ المسودة محليًا" onPress={saveLocalDraft} />
+          <AppButton label="احفظ المسودة محليًا" onPress={() => {
+            void saveLocalDraft();
+          }} />
         </ScrollView>
       </AppBottomSheet>
     </AppScreen>
@@ -950,6 +1040,10 @@ const styles = StyleSheet.create({
   },
   feedbackText: {
     textAlign: 'center',
+  },
+  cloudStatusText: {
+    textAlign: 'center',
+    fontSize: 12,
   },
   localDraftCard: {
     borderWidth: 1,

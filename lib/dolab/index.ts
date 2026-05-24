@@ -1,156 +1,97 @@
 import { supabase } from '@/lib/supabase/client';
-import type {
-  DolabDashboardSummary,
-  DolabItem,
-  DolabItemSource,
-  DolabItemStatus,
-  DolabMedia,
-  DolabNote,
-  DolabNoteType,
-} from '@/lib/dolab/types';
+import type { DolabDraftItem } from '@/lib/dolab/draft-types';
+import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
+import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
+import type { DolabItem, DolabItemSource, DolabItemStatus, DolabNote, DolabNoteType } from '@/lib/dolab/types';
 
-type DolabResult<T> = { data: T; error: string | null };
+type DolabResult<T> = { data: T; error: DolabPersistenceError | null };
 
-type CreateDolabItemDraftInput = {
-  userId: string;
-  title?: string | null;
-  description?: string | null;
-  category?: string | null;
-  condition?: string | null;
-  source?: DolabItemSource;
-  status?: DolabItemStatus;
+type SaveDolabDraftInput = Pick<DolabDraftItem, 'title' | 'description' | 'category' | 'condition'> & {
+  status?: Extract<DolabItemStatus, 'draft' | 'ready'>;
+  source?: Extract<DolabItemSource, 'manual'>;
 };
 
-type CreateDolabNoteInput = {
-  userId: string;
+type SaveDolabNoteInput = Pick<DolabSelfMessage, 'body'> & {
+  messageType: DolabSelfMessageType;
   dolabItemId?: string | null;
-  noteType?: DolabNoteType;
-  body?: string | null;
-  mediaId?: string | null;
-  sharedToConversationId?: string | null;
 };
 
-const getSafeErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Unexpected Dolab error');
+export type DolabRemoteSnapshot = {
+  items: DolabItem[];
+  notes: DolabNote[];
+};
 
-export async function fetchDolabItems(userId: string): Promise<DolabResult<DolabItem[]>> {
-  try {
-    const { data, error } = await supabase
-      .from('dolab_items')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) return { data: [], error: error.message };
-    return { data: (data ?? []) as DolabItem[], error: null };
-  } catch (error) {
-    return { data: [], error: getSafeErrorMessage(error) };
-  }
+const mapMessageTypeToNoteType = (messageType: DolabSelfMessageType): DolabNoteType => {
+  if (messageType === 'voice_placeholder') return 'voice';
+  return messageType;
+};
+
+export async function saveDolabDraftItem(userId: string, input: SaveDolabDraftInput): Promise<DolabResult<DolabItem | null>> {
+  const { data, error } = await supabase
+    .from('dolab_items')
+    .insert({
+      user_id: userId,
+      title: input.title || null,
+      description: input.description || null,
+      category: input.category || null,
+      condition: input.condition || null,
+      status: input.status ?? 'draft',
+      source: input.source ?? 'manual',
+    })
+    .select('*')
+    .single();
+
+  return { data: (data as DolabItem | null) ?? null, error: normalizeDolabPersistenceError(error) };
 }
 
-export async function fetchDolabMedia(userId: string): Promise<DolabResult<DolabMedia[]>> {
-  try {
-    const { data, error } = await supabase
-      .from('dolab_media')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) return { data: [], error: error.message };
-    return { data: (data ?? []) as DolabMedia[], error: null };
-  } catch (error) {
-    return { data: [], error: getSafeErrorMessage(error) };
-  }
+export async function updateDolabDraftItem(userId: string, id: string, input: SaveDolabDraftInput): Promise<DolabResult<DolabItem | null>> {
+  const { data, error } = await supabase
+    .from('dolab_items')
+    .update({
+      title: input.title || null,
+      description: input.description || null,
+      category: input.category || null,
+      condition: input.condition || null,
+      status: input.status ?? 'draft',
+      source: input.source ?? 'manual',
+    })
+    .eq('user_id', userId)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle();
+
+  return { data: (data as DolabItem | null) ?? null, error: normalizeDolabPersistenceError(error) };
 }
 
-export async function fetchDolabNotes(userId: string): Promise<DolabResult<DolabNote[]>> {
-  try {
-    const { data, error } = await supabase
-      .from('dolab_notes')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) return { data: [], error: error.message };
-    return { data: (data ?? []) as DolabNote[], error: null };
-  } catch (error) {
-    return { data: [], error: getSafeErrorMessage(error) };
-  }
+export async function saveDolabSelfNote(userId: string, input: SaveDolabNoteInput): Promise<DolabResult<DolabNote | null>> {
+  const { data, error } = await supabase
+    .from('dolab_notes')
+    .insert({
+      user_id: userId,
+      body: input.body,
+      note_type: mapMessageTypeToNoteType(input.messageType),
+      dolab_item_id: input.dolabItemId ?? null,
+      media_id: null,
+    })
+    .select('*')
+    .single();
+
+  return { data: (data as DolabNote | null) ?? null, error: normalizeDolabPersistenceError(error) };
 }
 
-export async function fetchDolabDashboardSummary(userId: string): Promise<DolabResult<DolabDashboardSummary>> {
-  const emptySummary: DolabDashboardSummary = {
-    totalItems: 0,
-    draftItems: 0,
-    readyItems: 0,
-    publishedItems: 0,
-    exchangedItems: 0,
-    archivedItems: 0,
-    totalMedia: 0,
-    totalNotes: 0,
-  };
-
-  const [itemsResult, mediaResult, notesResult] = await Promise.all([
-    fetchDolabItems(userId),
-    fetchDolabMedia(userId),
-    fetchDolabNotes(userId),
+export async function fetchDolabRemoteSnapshot(userId: string): Promise<DolabResult<DolabRemoteSnapshot>> {
+  const [itemsResult, notesResult] = await Promise.all([
+    supabase.from('dolab_items').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('dolab_notes').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
   ]);
 
-  const error = itemsResult.error || mediaResult.error || notesResult.error;
-  if (error) return { data: emptySummary, error };
+  const normalizedError = normalizeDolabPersistenceError(itemsResult.error ?? notesResult.error);
 
   return {
     data: {
-      totalItems: itemsResult.data.length,
-      draftItems: itemsResult.data.filter((item) => item.status === 'draft').length,
-      readyItems: itemsResult.data.filter((item) => item.status === 'ready').length,
-      publishedItems: itemsResult.data.filter((item) => item.status === 'published').length,
-      exchangedItems: itemsResult.data.filter((item) => item.status === 'exchanged').length,
-      archivedItems: itemsResult.data.filter((item) => item.status === 'archived').length,
-      totalMedia: mediaResult.data.length,
-      totalNotes: notesResult.data.length,
+      items: (itemsResult.data as DolabItem[] | null) ?? [],
+      notes: (notesResult.data as DolabNote[] | null) ?? [],
     },
-    error: null,
+    error: normalizedError,
   };
-}
-
-export async function createDolabItemDraft(input: CreateDolabItemDraftInput): Promise<DolabResult<DolabItem | null>> {
-  try {
-    const { data, error } = await supabase
-      .from('dolab_items')
-      .insert({
-        user_id: input.userId,
-        title: input.title ?? null,
-        description: input.description ?? null,
-        category: input.category ?? null,
-        condition: input.condition ?? null,
-        source: input.source ?? 'manual',
-        status: input.status ?? 'draft',
-      })
-      .select('*')
-      .single();
-
-    if (error) return { data: null, error: error.message };
-    return { data: data as DolabItem, error: null };
-  } catch (error) {
-    return { data: null, error: getSafeErrorMessage(error) };
-  }
-}
-
-export async function createDolabNote(input: CreateDolabNoteInput): Promise<DolabResult<DolabNote | null>> {
-  try {
-    const { data, error } = await supabase
-      .from('dolab_notes')
-      .insert({
-        user_id: input.userId,
-        dolab_item_id: input.dolabItemId ?? null,
-        note_type: input.noteType ?? 'text',
-        body: input.body ?? null,
-        media_id: input.mediaId ?? null,
-        shared_to_conversation_id: input.sharedToConversationId ?? null,
-      })
-      .select('*')
-      .single();
-
-    if (error) return { data: null, error: error.message };
-    return { data: data as DolabNote, error: null };
-  } catch (error) {
-    return { data: null, error: getSafeErrorMessage(error) };
-  }
 }
