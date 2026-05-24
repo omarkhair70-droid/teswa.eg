@@ -96,7 +96,7 @@ export function DolabVaultHero() {
         <AppText weight="semibold" style={styles.heroBadgeText}>
           نسخة أولى
         </AppText>
-      </Animated.View>
+      </View>
       <AppText weight="bold" style={styles.heroTitle}>
         دولاب تسوى
       </AppText>
