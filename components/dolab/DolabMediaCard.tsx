@@ -1,0 +1,119 @@
+import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { AppText } from '@/components/ui/AppText';
+import { colors } from '@/constants/colors';
+import { radii } from '@/constants/radii';
+import { spacing } from '@/constants/spacing';
+import { formatMediaDimensions, formatMediaDuration, formatMediaSize } from '@/lib/dolab/local-media';
+import type { DolabPendingMedia } from '@/lib/dolab/media-types';
+import { DolabAudioPlaceholderCard } from './DolabAudioPlaceholderCard';
+
+type Props = {
+  item: DolabPendingMedia;
+  selectable?: boolean;
+  selected?: boolean;
+  onPress?: () => void;
+  onRemove?: () => void;
+};
+
+export function DolabMediaCard({ item, selectable = false, selected = false, onPress, onRemove }: Props) {
+  const details = [formatMediaDuration(item.durationMs), formatMediaDimensions(item.width, item.height), formatMediaSize(item.sizeBytes)]
+    .filter(Boolean)
+    .join(' • ');
+
+  return (
+    <Pressable
+      style={[styles.card, selectable && styles.selectableCard, selected && styles.selectedCard]}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`عنصر ميديا ${item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'صوت'}`}
+    >
+      {item.mediaType === 'image' ? (
+        <Image source={{ uri: item.uri }} style={styles.image} />
+      ) : item.mediaType === 'video' ? (
+        <View style={styles.videoPlaceholder}>
+          <Ionicons name="play-circle-outline" size={24} color={colors.primary} />
+          <AppText muted style={styles.fileName} numberOfLines={1}>{item.fileName ?? 'video.mp4'}</AppText>
+        </View>
+      ) : (
+        <DolabAudioPlaceholderCard title={item.fileName ?? 'ملاحظة صوتية محلية'} subtitle={formatMediaDuration(item.durationMs) ?? 'بدون مدة'} />
+      )}
+
+      <View style={styles.badge}><AppText style={styles.badgeText}>{item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'صوت'}</AppText></View>
+      {details ? <AppText muted style={styles.meta} numberOfLines={1}>{details}</AppText> : null}
+
+      {onRemove ? (
+        <Pressable style={styles.removeButton} onPress={onRemove} accessibilityRole="button" accessibilityLabel="حذف عنصر ميديا محلي">
+          <Ionicons name="close-circle" size={18} color={colors.danger} />
+        </Pressable>
+      ) : null}
+      {selected ? <View style={styles.selectedOverlay}><Ionicons name="checkmark-circle" size={20} color={colors.white} /></View> : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    width: 160,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    padding: spacing.xs,
+    backgroundColor: '#FFFEFC',
+    gap: 6,
+    position: 'relative',
+  },
+  selectableCard: {
+    paddingBottom: spacing.sm,
+  },
+  selectedCard: {
+    borderColor: colors.primary,
+    backgroundColor: '#FFF7EE',
+  },
+  image: {
+    width: '100%',
+    height: 88,
+    borderRadius: radii.md,
+  },
+  videoPlaceholder: {
+    height: 88,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    backgroundColor: '#FFF8F0',
+  },
+  fileName: {
+    fontSize: 11,
+    maxWidth: 120,
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.round,
+    backgroundColor: colors.primarySoft,
+  },
+  badgeText: {
+    fontSize: 11,
+    color: colors.primary,
+  },
+  meta: {
+    fontSize: 11,
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+  },
+  selectedOverlay: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radii.round,
+  },
+});

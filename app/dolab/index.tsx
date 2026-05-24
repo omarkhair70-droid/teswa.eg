@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
@@ -17,11 +17,12 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-types';
-import { toPendingMedia } from '@/lib/dolab/local-media';
+import { createLocalAudioPlaceholder, toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
 import { DolabPublishBridgeSheet } from '@/components/dolab/DolabPublishBridgeSheet';
+import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStrip';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
@@ -89,6 +90,12 @@ export default function DolabScreen() {
         ...message,
         linkedPendingMediaIds: message.linkedPendingMediaIds.filter((id) => id !== mediaId),
       })),
+    );
+    setShareDrafts((prev) =>
+      prev.map((draft) => ({ ...draft, linkedPendingMediaIds: draft.linkedPendingMediaIds.filter((id) => id !== mediaId) })),
+    );
+    setPublishDrafts((prev) =>
+      prev.map((draft) => ({ ...draft, linkedPendingMediaIds: draft.linkedPendingMediaIds.filter((id) => id !== mediaId) })),
     );
   };
 
@@ -436,7 +443,8 @@ export default function DolabScreen() {
         description: 'احفظ ملاحظة صوتية لنفسك لاحقًا.',
         onPress: () => {
           addSheetRef.current?.dismiss();
-          setInlineFeedback('تسجيل الصوت في PR لاحق.');
+          appendMedia([createLocalAudioPlaceholder()]);
+          setInlineFeedback('تم تجهيز مكان ملاحظة صوتية. التسجيل الحقيقي في PR لاحق.');
         },
       },
       {
@@ -533,41 +541,12 @@ export default function DolabScreen() {
             </AppText>
           </View>
 
-          {pendingMedia.length === 0 ? (
-            <AppText muted style={styles.smallText}>
-              لسه ما أضفتش ميديا محلية.
-            </AppText>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingRow}>
-              {pendingMedia.map((item) => (
-                <View key={item.id} style={styles.pendingCard}>
-                  {item.mediaType === 'image' ? (
-                    <Image source={{ uri: item.uri }} style={styles.pendingImage} />
-                  ) : (
-                    <View style={styles.pendingPlaceholder}>
-                      <Ionicons
-                        name={item.mediaType === 'video' ? 'videocam-outline' : 'mic-outline'}
-                        size={20}
-                        color={colors.primary}
-                      />
-                      <AppText style={styles.smallText}>
-                        {item.durationMs ? `${Math.round(item.durationMs / 1000)}ث` : 'بدون مدة'}
-                      </AppText>
-                    </View>
-                  )}
-
-                  <Pressable
-                    style={styles.removeButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="حذف عنصر ميديا من قائمة الدولاب"
-                    onPress={() => removePendingMedia(item.id)}
-                  >
-                    <Ionicons name="close-circle" size={18} color={colors.danger} />
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+          <DolabPendingMediaStrip
+            pendingMedia={pendingMedia}
+            mode="preview"
+            onRemove={removePendingMedia}
+            emptyText="لسه ما أضفتش ميديا محلية."
+          />
         </AppCard>
 
         <DolabSelfChatPanel
@@ -833,34 +812,12 @@ export default function DolabScreen() {
           </View>
 
           {pendingMedia.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingRow}>
-              {pendingMedia.map((item) => {
-                const selected = draftForm.linkedPendingMediaIds.includes(item.id);
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={[styles.pendingCard, selected && styles.pendingCardSelected]}
-                    onPress={() => toggleMediaLink(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={selected ? 'إلغاء ربط عنصر ميديا بالمسودة' : 'ربط عنصر ميديا بالمسودة'}
-                  >
-                    {item.mediaType === 'image' ? (
-                      <Image source={{ uri: item.uri }} style={styles.pendingImage} />
-                    ) : (
-                      <View style={styles.pendingPlaceholder}>
-                        <Ionicons name="videocam-outline" size={20} color={colors.primary} />
-                        <AppText style={styles.smallText}>فيديو</AppText>
-                      </View>
-                    )}
-                    {selected ? (
-                      <View style={styles.selectedOverlay}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.white} />
-                      </View>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <DolabPendingMediaStrip
+              pendingMedia={pendingMedia}
+              mode="selectable"
+              selectedMediaIds={draftForm.linkedPendingMediaIds}
+              onToggleSelect={toggleMediaLink}
+            />
           ) : null}
 
           <AppButton label="احفظ المسودة محليًا" onPress={saveLocalDraft} />
