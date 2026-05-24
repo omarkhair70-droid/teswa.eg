@@ -10,6 +10,12 @@ export function DiscoverWorldHeader() {
   return (
     <LinearGradient colors={['#FFF8EF', '#FFE4C4', 'rgba(62,124,115,0.18)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.wrap}>
       <View style={styles.badge}><Ionicons name="compass-outline" size={16} color={colors.primary} /><AppText weight="semibold">بوابة الاكتشاف</AppText></View>
+      <View style={styles.pathRow}>
+        <View style={styles.pathLine} />
+        <View style={styles.portalDot}>
+          <Ionicons name="navigate-outline" size={11} color={colors.primary} />
+        </View>
+      </View>
       <AppText weight="bold" style={styles.title}>اكتشف عالم تسوى</AppText>
       <AppText muted>سطح استكشاف حيّ يجمع الناس، الحركة، والعناصر بإيقاع واضح وهادئ.</AppText>
     </LinearGradient>
@@ -18,6 +24,9 @@ export function DiscoverWorldHeader() {
 
 const styles = StyleSheet.create({
   wrap: { borderRadius: radii.xl, padding: spacing.md, borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)', gap: spacing.xs },
-  badge: { alignSelf: 'flex-start', flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: 'rgba(255,255,255,0.66)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)' },
+  badge: { alignSelf: 'flex-start', flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radii.round, backgroundColor: 'rgba(255,255,255,0.66)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)' },
+  pathRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 2 },
+  pathLine: { flex: 1, height: 2, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.2)' },
+  portalDot: { width: 22, height: 22, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(184,98,63,0.22)', backgroundColor: 'rgba(255,255,255,0.62)' },
   title: { fontSize: 24 },
 });
