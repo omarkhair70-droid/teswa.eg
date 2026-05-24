@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Video as VideoCompressor } from 'react-native-compressor';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
@@ -15,9 +15,12 @@ const ORIGINAL_IS_BETTER_MESSAGE = 'النسخة الأصلية أنسب للر�
 type DolabResult<T> = { data: T; error: string | null };
 
 async function getFileSizeBytes(uri: string): Promise<number | undefined> {
-  const info = await FileSystem.getInfoAsync(uri, { size: true });
-  if (!info.exists) return undefined;
-  return typeof info.size === 'number' && info.size > 0 ? info.size : undefined;
+  try {
+    const info = await new File(uri).info();
+    return typeof info.size === 'number' && info.size > 0 ? info.size : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function toJpegFileName(fileName?: string): string | undefined {
