@@ -4,7 +4,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import type { ComponentProps } from 'react';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -14,7 +13,6 @@ import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
 import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { ItemVideoDiscoveryRail } from '@/components/marketplace/ItemVideoDiscoveryRail';
-import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
@@ -24,6 +22,7 @@ import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
 import { PersonalLivingWorldCard } from '@/components/home/PersonalLivingWorldCard';
 import { HomeLivingWorldHero } from '@/components/home/HomeLivingWorldHero';
+import { HomeHubDrawer } from '@/components/home/HomeHubDrawer';
 import {
   buildPersonalLivingWorldState,
   countActiveStoriesSince,
@@ -75,7 +74,7 @@ export default function HomeScreen() {
   const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
   const personalWorldSeenCommittedRef = useRef(false);
   const skipFirstFocusRefreshRef = useRef(true);
-  const homeHubSheetRef = useRef<BottomSheetModal>(null);
+  const [homeHubVisible, setHomeHubVisible] = useState(false);
 
 
   const homeFeedQuery = useHomeFeedQuery(user?.id ?? null);
@@ -346,7 +345,7 @@ export default function HomeScreen() {
               <HomeLivingWorldHero
                 unreadCount={notificationsUnreadCount}
                 onOpenNotifications={() => router.push('/notifications')}
-                onOpenHub={() => homeHubSheetRef.current?.present()}
+                onOpenHub={() => setHomeHubVisible(true)}
                 onStartSwap={() => router.push('/(tabs)/add')}
                 onDiscover={() => router.push('/(tabs)/discover')}
               />
@@ -575,71 +574,69 @@ export default function HomeScreen() {
         }
       />
       </AppScreen>
-      <AppActionSheet
-        ref={homeHubSheetRef}
-        title="مركز تسوى"
-        description="اختار وجهتك بسرعة من عالم تِسوى."
-        titleIconName="compass-outline"
+      <HomeHubDrawer
+        visible={homeHubVisible}
+        onClose={() => setHomeHubVisible(false)}
         actions={[
-        {
-          label: 'الرسائل',
-          description: 'افتح محادثاتك وردود القصص والصفقات.',
-          iconName: 'chatbubbles-outline',
-          onPress: () => {
-            homeHubSheetRef.current?.dismiss();
-            router.push('/(tabs)/messages');
+          {
+            label: 'الرسائل',
+            description: 'افتح محادثاتك وردود القصص والصفقات.',
+            iconName: 'chatbubbles-outline',
+            onPress: () => {
+              setHomeHubVisible(false);
+              router.push('/(tabs)/messages');
+            },
           },
-        },
-        {
-          label: notificationsLabel,
-          description: 'تابع الجديد والتنبيهات المهمة.',
-          iconName: 'notifications-outline',
-          onPress: () => {
-            homeHubSheetRef.current?.dismiss();
-            router.push('/notifications');
+          {
+            label: notificationsLabel,
+            description: 'تابع الجديد والتنبيهات المهمة.',
+            iconName: 'notifications-outline',
+            onPress: () => {
+              setHomeHubVisible(false);
+              router.push('/notifications');
+            },
           },
-        },
-        {
-          label: 'أضف عنصر',
-          description: 'اعرض حاجة جديدة وابدأ فرصة تبادل.',
-          iconName: 'add-circle-outline',
-          tone: 'primary',
-          onPress: () => {
-            homeHubSheetRef.current?.dismiss();
-            router.push('/(tabs)/add');
+          {
+            label: 'أضف عنصر',
+            description: 'اعرض حاجة جديدة وابدأ فرصة تبادل.',
+            iconName: 'add-circle-outline',
+            tone: 'primary',
+            onPress: () => {
+              setHomeHubVisible(false);
+              router.push('/(tabs)/add');
+            },
           },
-        },
-        {
-          label: 'أضف قصة',
-          description: 'شارك لقطة سريعة من عالمك.',
-          iconName: 'camera-outline',
-          onPress: () => {
-            homeHubSheetRef.current?.dismiss();
-            router.push('/story/create');
+          {
+            label: 'أضف قصة',
+            description: 'شارك لقطة سريعة من عالمك.',
+            iconName: 'camera-outline',
+            onPress: () => {
+              setHomeHubVisible(false);
+              router.push('/story/create');
+            },
           },
-        },
-        {
-          label: 'استكشف',
-          description: 'شوف عناصر وناس وحركة جديدة حولك.',
-          iconName: 'compass-outline',
-          onPress: () => {
-            homeHubSheetRef.current?.dismiss();
-            router.push('/(tabs)/discover');
+          {
+            label: 'استكشف',
+            description: 'شوف عناصر وناس وحركة جديدة حولك.',
+            iconName: 'compass-outline',
+            onPress: () => {
+              setHomeHubVisible(false);
+              router.push('/(tabs)/discover');
+            },
           },
-        },
-        {
-          label: 'ملفي',
-          description: 'راجع حضورك ومعلوماتك في تِسوى.',
-          iconName: 'person-circle-outline',
-          onPress: () => {
-            homeHubSheetRef.current?.dismiss();
-            if (user?.id) {
-              router.push(`/profile/${user.id}`);
-              return;
-            }
-            router.push('/(auth)/login');
+          {
+            label: 'ملفي',
+            description: 'راجع حضورك ومعلوماتك في تِسوى.',
+            iconName: 'person-circle-outline',
+            onPress: () => {
+              setHomeHubVisible(false);
+              if (user?.id) {
+                router.push(`/profile/${user.id}`);
+                return;
+              }
+              router.push('/(auth)/login');
+            },
           },
-        },
         ]}
       />
     </>
@@ -725,11 +722,11 @@ const styles = StyleSheet.create({
   dashboardSection: { gap: spacing.md },
   dashboardErrorText: { color: '#B42318' },
   nextActionBlock: {
-    gap: spacing.md,
+    gap: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.16)',
+    borderColor: 'rgba(184,98,63,0.12)',
     borderRadius: radii.lg,
-    padding: spacing.md,
+    padding: spacing.sm,
     overflow: 'hidden',
   },
   nextActionTopRow: {
@@ -862,7 +859,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(221,208,197,0.8)',
     borderRadius: radii.md,
     backgroundColor: 'rgba(255,253,248,0.7)',
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   loadingPanel: {
     flexDirection: 'row-reverse',
