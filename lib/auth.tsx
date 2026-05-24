@@ -498,7 +498,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
         if (isDuplicateInitialSession) {
           startupLog('skip_duplicate_initial_session_profile_checks', { event, hasUser: true, bootstrapReadyAlreadySet: bootstrapReadySetRef.current });
-          startupTrace.mark('auth_state_change_end', { outcome: 'skipped_duplicate_initial_session', usedCachedGate: canUseCachedGate });
+          startupTrace.mark('auth_state_change_end', { outcome: 'ok', reason: 'skipped_duplicate_initial_session', usedCachedGate: canUseCachedGate });
           return;
         }
         await Promise.all([
