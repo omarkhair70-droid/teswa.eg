@@ -26,11 +26,12 @@ import { DolabVaultHero } from '@/components/dolab/DolabVaultHero';
 import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
 import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import { DolabSavedLibrarySection } from '@/components/dolab/DolabSavedLibrarySection';
+import type { DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
-import { fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
+import { createDolabMediaSignedUrls, fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -79,6 +80,7 @@ export default function DolabScreen() {
   const [cloudStatus, setCloudStatus] = useState<'local_only' | 'partial_sync' | 'schema_missing'>('local_only');
   const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number; media: number }>({ items: 0, notes: 0, media: 0 });
   const [savedRemote, setSavedRemote] = useState<{ items: any[]; notes: any[]; media: any[] }>({ items: [], notes: [], media: [] });
+  const [savedMediaSignedUrls, setSavedMediaSignedUrls] = useState<Record<string, string | null>>({});
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -92,6 +94,11 @@ export default function DolabScreen() {
 
     setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length, media: result.data.media.length });
     setSavedRemote({ items: result.data.items, notes: result.data.notes, media: result.data.media });
+    const signedUrlsResult = await createDolabMediaSignedUrls(result.data.media);
+    setSavedMediaSignedUrls(signedUrlsResult.data);
+    if (signedUrlsResult.error) {
+      setInlineFeedback((prev) => prev ?? 'تم تحديث الدولاب، وبعض معاينات الميديا غير متاحة الآن.');
+    }
     if (result.data.items.length > 0 || result.data.notes.length > 0 || result.data.media.length > 0) {
       setCloudStatus('partial_sync');
     } else {
@@ -116,13 +123,29 @@ export default function DolabScreen() {
 
 
 
-  const mappedSavedMedia = useMemo(() => savedRemote.media.map((m) => ({
-    id: m.id,
-    mediaTypeLabel: m.media_type === 'image' ? 'صورة' : m.media_type === 'video' ? 'فيديو' : 'صوت',
-    storagePath: m.storage_path,
-    linkedItemTitle: savedRemote.items.find((i) => i.id === m.dolab_item_id)?.title || undefined,
-    meta: [m.width && m.height ? `${m.width}x${m.height}` : null, m.size_bytes ? `${Math.round(m.size_bytes / 1024)}KB` : null, m.duration_ms ? `${Math.round(m.duration_ms / 1000)}ث` : null].filter(Boolean).join(' · ') || 'بدون بيانات إضافية',
-  })), [savedRemote.media, savedRemote.items]);
+  const mappedSavedMedia = useMemo<DolabSavedMediaCardModel[]>(
+    () =>
+      savedRemote.media.map((m) => {
+        const signedUrl = savedMediaSignedUrls[m.id] ?? undefined;
+        const mediaTypeLabel = m.media_type === 'image' ? 'صورة' : m.media_type === 'video' ? 'فيديو' : 'صوت';
+        const previewStatus = !m.storage_path ? 'unavailable' : signedUrl ? 'ready' : 'failed';
+        return {
+          id: m.id,
+          remoteMediaId: m.id,
+          mediaType: m.media_type,
+          mediaTypeLabel,
+          storagePath: m.storage_path,
+          signedUrl,
+          linkedItemTitle: savedRemote.items.find((i) => i.id === m.dolab_item_id)?.title || undefined,
+          meta:
+            [m.width && m.height ? `${m.width}x${m.height}` : null, m.size_bytes ? `${Math.round(m.size_bytes / 1024)}KB` : null, m.duration_ms ? `${Math.round(m.duration_ms / 1000)}ث` : null]
+              .filter(Boolean)
+              .join(' · ') || 'بدون بيانات إضافية',
+          previewStatus,
+        };
+      }),
+    [savedRemote.media, savedRemote.items, savedMediaSignedUrls],
+  );
 
   const mappedSavedItems = useMemo(() => savedRemote.items.map((item) => ({
     id: item.id,

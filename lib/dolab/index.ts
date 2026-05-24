@@ -147,3 +147,4 @@ export async function fetchDolabNotes(userId: string): Promise<DolabResult<Dolab
 export const fetchDolabLibrarySnapshot = fetchDolabRemoteSnapshot;
 
 export { buildDolabStoragePath, saveDolabMediaRow, uploadAndSaveDolabMedia, uploadDolabPendingMedia } from '@/lib/dolab/upload';
+export { createDolabMediaSignedUrl, createDolabMediaSignedUrls } from '@/lib/dolab/signed-urls';
