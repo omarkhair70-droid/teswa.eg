@@ -68,16 +68,6 @@ export async function uploadDolabPendingMedia(
   media: DolabPendingMedia,
   dolabItemId?: string | null,
 ): Promise<DolabResult<{ storagePath: string } | null>> {
-  if (media.mediaType === 'audio' && media.uri.startsWith('local://')) {
-    return {
-      data: null,
-      error: {
-        kind: 'unknown',
-        message: 'الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.',
-      },
-    };
-  }
-
   const storagePath = buildDolabStoragePath(userId, dolabItemId ?? 'inbox', media);
   try {
     const response = await fetch(media.uri);

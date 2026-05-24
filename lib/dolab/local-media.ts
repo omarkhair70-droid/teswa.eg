@@ -22,13 +22,15 @@ export function toPendingMedia(asset: ImagePickerAsset, mediaType: DolabPendingM
   };
 }
 
-export function createLocalAudioPlaceholder(): DolabPendingMedia {
+
+export function createPendingAudioMedia(input: { uri: string; durationMs?: number; mimeType?: string }): DolabPendingMedia {
   return {
-    id: `local-audio-${Date.now()}`,
-    uri: 'local://dolab/audio-placeholder',
+    id: `local-audio-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    uri: input.uri,
     mediaType: 'audio',
-    fileName: 'ملاحظة صوتية محلية',
-    durationMs: undefined,
+    fileName: 'ملاحظة صوتية',
+    mimeType: input.mimeType ?? 'audio/m4a',
+    durationMs: typeof input.durationMs === 'number' && input.durationMs > 0 ? input.durationMs : undefined,
     createdAt: new Date().toISOString(),
     uploadStatus: 'local',
   };
