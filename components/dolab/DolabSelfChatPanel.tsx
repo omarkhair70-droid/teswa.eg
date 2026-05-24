@@ -287,6 +287,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
   },
+  preparedBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.round,
+    backgroundColor: colors.accentSoft,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 3,
+  },
+  preparedBadgeText: {
+    color: colors.accent,
+    fontSize: 11,
+  },
   chipsRow: {
     gap: spacing.xs,
     marginBottom: spacing.xs,
