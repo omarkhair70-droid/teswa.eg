@@ -352,11 +352,14 @@ export default function HomeScreen() {
             </AppFadeIn>
             {user ? (
               <AppFadeIn delay={40} duration={210} fromY={8}>
+                <View style={styles.sectionKickerWrap}>
+                  <AppText weight="semibold" style={styles.sectionKicker}>خطوتك الآن</AppText>
+                </View>
                 <AppCard>
                 <View style={styles.dashboardSection}>
                   <View style={styles.sectionHeader}>
                     <AppText weight="bold" style={styles.sectionTitle}>يهمك الآن</AppText>
-                    <AppText muted style={styles.supportMutedText}>نبضة شخصية تجمع لك أقرب خطوة، من غير ضجيج.</AppText>
+                    <AppText muted style={styles.supportMutedText}>اقتراح شخصي هادئ يوضح الخطوة التالية.</AppText>
                   </View>
 
                   {dashboardLoading ? (
@@ -439,6 +442,9 @@ export default function HomeScreen() {
             ) : null}
 
             <AppFadeIn delay={120} duration={220} fromY={8}>
+              <View style={styles.sectionKickerWrap}>
+                <AppText weight="semibold" style={styles.sectionKicker}>النبض الاجتماعي</AppText>
+              </View>
               <AppCard>
               <View style={styles.storiesSection}>
                 <View style={styles.storiesHeaderRow}>
@@ -537,13 +543,16 @@ export default function HomeScreen() {
 
             {shouldShowVideoMomentsRail ? (
               <AppFadeIn delay={120} duration={220} fromY={8}>
+                <View style={styles.sectionKickerWrap}>
+                  <AppText weight="semibold" style={styles.sectionKicker}>اكتشاف بصري</AppText>
+                </View>
                 <AppCard>
                   <ItemVideoDiscoveryRail
             onOpenViewer={() => router.push('/motion/viewer')}
             viewerCtaLabel='شوف المشاهد'
-                  eyebrow="لمحات مرئية"
-                  title="عناصر تقدر تشوفها أقرب"
-                  description="فيديوهات قصيرة تساعدك تلمح العنصر قبل ما تفتح تفاصيله."
+                  eyebrow="معاينة المشاهد"
+                  title="لمحات سريعة قبل الاستكشاف"
+                  description="معاينة مرئية خفيفة تنقلك إلى مشاهد العناصر والحركة القريبة."
                   moments={videoMoments}
                   loading={videoMomentsLoading}
                   errorMessage={videoMomentsError}
@@ -562,10 +571,14 @@ export default function HomeScreen() {
               </AppCard>
             ) : null}
 
+            <View style={styles.feedLeadIn}>
+              <AppText weight="semibold" style={styles.sectionKicker}>سوق تِسوى</AppText>
+              <AppText muted style={styles.feedLeadText}>جاهز للتصفّح؟ هذه أحدث العناصر القريبة منك.</AppText>
+            </View>
+
             <View style={styles.itemsHeader}>
               <AppText weight="semibold" style={styles.itemsEyebrow}>ظهر حديثًا</AppText>
               <AppText weight="bold" style={styles.itemsTitle}>أحدث العناصر</AppText>
-              <AppText muted>حاجات وصلت للتو، جاهزة تفتح رحلة تبادل جديدة.</AppText>
             </View>
           </View>
         }
@@ -656,7 +669,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  header: { gap: spacing.sm, marginBottom: spacing.md },
+  header: { gap: spacing.xs, marginBottom: spacing.md },
   heroCard: {
     minHeight: 190,
     gap: spacing.md,
@@ -730,14 +743,14 @@ const styles = StyleSheet.create({
   sectionHeader: { gap: spacing.xs, flexShrink: 1 },
   supportMutedText: { color: '#5F5348' },
   sectionTitle: { fontSize: 18 },
-  dashboardSection: { gap: spacing.sm },
+  dashboardSection: { gap: spacing.xs },
   dashboardErrorText: { color: '#B42318' },
   nextActionBlock: {
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.12)',
     borderRadius: radii.lg,
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
     paddingHorizontal: spacing.sm,
     overflow: 'hidden',
   },
@@ -782,7 +795,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
   metricValue: { fontSize: 22, lineHeight: 27 },
-  storiesSection: { gap: spacing.sm },
+  storiesSection: { gap: spacing.xs },
   storiesHeaderRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
@@ -807,7 +820,7 @@ const styles = StyleSheet.create({
     paddingRight: 2,
   },
   storyTile: {
-    width: 76,
+    width: 72,
     alignItems: 'center',
     gap: 6,
     borderRadius: radii.lg,
@@ -816,8 +829,8 @@ const styles = StyleSheet.create({
   myStoryTile: { backgroundColor: 'rgba(238,216,203,0.24)' },
   addStoryTile: { backgroundColor: 'rgba(255,246,232,0.68)' },
   storyAvatarRing: {
-    width: 66,
-    height: 66,
+    width: 62,
+    height: 62,
     borderRadius: radii.round,
     padding: 3,
     shadowColor: colors.primary,
@@ -885,7 +898,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.md,
     backgroundColor: 'rgba(249,243,234,0.72)',
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
     paddingHorizontal: spacing.sm,
   },
   quietStoryCopy: { flex: 1, gap: 6 },
@@ -899,11 +912,32 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   compactStoryActionText: { color: colors.primary, fontSize: 12 },
+
+  sectionKickerWrap: {
+    paddingHorizontal: spacing.xs,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  sectionKicker: {
+    fontSize: 12,
+    color: '#7A5C43',
+  },
+  feedLeadIn: {
+    gap: 4,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  feedLeadText: {
+    color: '#5F5348',
+    fontSize: 13,
+    lineHeight: 19,
+  },
   cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   cacheNoticeText: { flex: 1 },
   itemsHeader: {
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    gap: 2,
+    marginTop: 2,
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
   },
