@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 type Props = PressableProps & {
@@ -8,6 +8,12 @@ type Props = PressableProps & {
 
 export function DolabPressableCard({ children, style, onPressIn, onPressOut, ...props }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    return () => {
+      scale.stopAnimation();
+    };
+  }, [scale]);
 
   const animateTo = (value: number) => {
     Animated.timing(scale, { toValue: value, duration: 120, useNativeDriver: true }).start();
