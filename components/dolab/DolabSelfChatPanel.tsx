@@ -34,7 +34,7 @@ type Props = {
   selectedDraftId: string | null;
   linkedMediaIds: string[];
   composerError: string | null;
-  shareFeedbackMessageId: string | null;
+  preparedShareSourceIds: string[];
   onChangeBody: (value: string) => void;
   onSelectType: (value: DolabSelfMessageType) => void;
   onSelectDraft: (value: string | null) => void;
@@ -54,7 +54,7 @@ export function DolabSelfChatPanel(props: Props) {
     selectedDraftId,
     linkedMediaIds,
     composerError,
-    shareFeedbackMessageId,
+    preparedShareSourceIds,
     onChangeBody,
     onSelectType,
     onSelectDraft,
@@ -125,10 +125,10 @@ export function DolabSelfChatPanel(props: Props) {
               </Pressable>
             </View>
 
-            {shareFeedbackMessageId === message.id ? (
-              <AppText muted style={styles.smallText}>
-                مشاركة الرسالة لشات حقيقي في PR لاحق.
-              </AppText>
+            {preparedShareSourceIds.includes(message.id) ? (
+              <View style={styles.preparedBadge}>
+                <AppText style={styles.preparedBadgeText}>مجهز للمشاركة</AppText>
+              </View>
             ) : null}
           </View>
         );

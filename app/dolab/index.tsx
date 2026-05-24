@@ -20,7 +20,9 @@ import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-type
 import { toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
+import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
+import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -45,6 +47,7 @@ export default function DolabScreen() {
   const router = useRouter();
   const addSheetRef = useRef<BottomSheetModal>(null);
   const draftStudioRef = useRef<BottomSheetModal>(null);
+  const shareBridgeRef = useRef<BottomSheetModal>(null);
   const glow = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
 
@@ -59,7 +62,10 @@ export default function DolabScreen() {
   const [selfComposerDraftId, setSelfComposerDraftId] = useState<string | null>(null);
   const [selfComposerMediaIds, setSelfComposerMediaIds] = useState<string[]>([]);
   const [selfComposerError, setSelfComposerError] = useState<string | null>(null);
-  const [shareFeedbackMessageId, setShareFeedbackMessageId] = useState<string | null>(null);
+  const [shareDrafts, setShareDrafts] = useState<DolabShareDraft[]>([]);
+  const [shareBridgeMessageId, setShareBridgeMessageId] = useState<string | null>(null);
+  const [shareBridgeBody, setShareBridgeBody] = useState('');
+  const [shareBridgeTargetMode, setShareBridgeTargetMode] = useState<DolabShareDraftTargetMode>('choose_later');
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -204,13 +210,69 @@ export default function DolabScreen() {
     setSelfMessages((prev) => [newMessage, ...prev]);
     setSelfComposerBody('');
     setSelfComposerError(null);
-    setShareFeedbackMessageId(null);
   };
 
   const deleteSelfMessage = (messageId: string) => {
     setSelfMessages((prev) => prev.filter((message) => message.id !== messageId));
-    setShareFeedbackMessageId((prev) => (prev === messageId ? null : prev));
+    setShareDrafts((prev) => prev.filter((draft) => draft.sourceMessageId !== messageId));
   };
+
+
+  const openShareBridge = (messageId: string) => {
+    const message = selfMessages.find((item) => item.id === messageId);
+    if (!message) {
+      setInlineFeedback('تعذر تحميل الرسالة المختارة للمشاركة.');
+      return;
+    }
+
+    setShareBridgeMessageId(message.id);
+    setShareBridgeBody(message.body);
+    setShareBridgeTargetMode('choose_later');
+    shareBridgeRef.current?.present();
+  };
+
+  const openMessagesHub = () => {
+    setShareBridgeTargetMode('direct_chat_placeholder');
+    shareBridgeRef.current?.dismiss();
+    router.push('/(tabs)/messages');
+  };
+
+  const prepareShareDraft = () => {
+    if (!shareBridgeMessageId) {
+      return;
+    }
+
+    const sourceMessage = selfMessages.find((item) => item.id === shareBridgeMessageId);
+    if (!sourceMessage) {
+      setInlineFeedback('تعذر تجهيز الرسالة للمشاركة.');
+      return;
+    }
+
+    const cleanBody = shareBridgeBody.trim() || sourceMessage.body;
+    const draft: DolabShareDraft = {
+      id: `local-share-draft-${Date.now()}`,
+      sourceMessageId: sourceMessage.id,
+      body: cleanBody,
+      linkedDraftId: sourceMessage.linkedDraftId,
+      linkedPendingMediaIds: sourceMessage.linkedPendingMediaIds,
+      targetMode: shareBridgeTargetMode,
+      createdAt: new Date().toISOString(),
+    };
+
+    setShareDrafts((prev) => [draft, ...prev.filter((item) => item.sourceMessageId !== sourceMessage.id)]);
+    shareBridgeRef.current?.dismiss();
+    setInlineFeedback('اتجهزت للمشاركة. الربط بالشات الحقيقي في PR لاحق.');
+  };
+
+  const selectedShareMessage = useMemo(
+    () => selfMessages.find((message) => message.id === shareBridgeMessageId) ?? null,
+    [selfMessages, shareBridgeMessageId],
+  );
+
+  const selectedShareLinkedDraft = useMemo(
+    () => localDrafts.find((draft) => draft.id === selectedShareMessage?.linkedDraftId),
+    [localDrafts, selectedShareMessage?.linkedDraftId],
+  );
 
   const saveLocalDraft = () => {
     const now = new Date().toISOString();
@@ -461,7 +523,7 @@ export default function DolabScreen() {
           selectedDraftId={selfComposerDraftId}
           linkedMediaIds={selfComposerMediaIds}
           composerError={selfComposerError}
-          shareFeedbackMessageId={shareFeedbackMessageId}
+          preparedShareSourceIds={shareDrafts.map((draft) => draft.sourceMessageId)}
           onChangeBody={(value) => {
             setSelfComposerBody(value);
             if (selfComposerError) {
@@ -472,9 +534,44 @@ export default function DolabScreen() {
           onSelectDraft={setSelfComposerDraftId}
           onToggleMedia={toggleSelfComposerMedia}
           onSave={saveSelfMessage}
-          onShareLater={(messageId) => setShareFeedbackMessageId(messageId)}
+          onShareLater={openShareBridge}
           onDelete={deleteSelfMessage}
         />
+
+
+
+        <AppCard>
+          <View style={styles.sectionHeader}>
+            <AppText weight="bold">جاهز للمشاركة</AppText>
+            <AppText muted>مسودات مشاركة محلية فقط لحد PR الربط الحقيقي.</AppText>
+          </View>
+          {shareDrafts.length === 0 ? (
+            <AppText muted style={styles.smallText}>مفيش رسائل مجهزة للمشاركة لسه.</AppText>
+          ) : (
+            <View style={styles.listWrap}>
+              {shareDrafts.map((draft) => (
+                <View key={draft.id} style={styles.localDraftCard}>
+                  <View style={styles.localDraftHeader}>
+                    <AppText weight="semibold" numberOfLines={2}>{draft.body}</AppText>
+                    <View style={styles.localBadge}>
+                      <AppText style={styles.localBadgeText}>مجهز</AppText>
+                    </View>
+                  </View>
+                  <AppText muted style={styles.smallText}>ميديا مرتبطة: {draft.linkedPendingMediaIds.length}</AppText>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="فتح الرسائل لإكمال المشاركة لاحقًا"
+                    onPress={openMessagesHub}
+                    style={styles.actionBtnInline}
+                  >
+                    <AppText style={styles.actionBtnInlineText}>افتح الرسائل</AppText>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </AppCard>
+
 
         <AppCard>
           <View style={styles.sectionHeader}>
@@ -562,6 +659,18 @@ export default function DolabScreen() {
         titleIconName="add-circle-outline"
         snapPoints={['52%']}
         actions={sheetActions}
+      />
+
+      <DolabShareBridgeSheet
+        sheetRef={shareBridgeRef}
+        selectedMessage={selectedShareMessage}
+        linkedDraft={selectedShareLinkedDraft}
+        shareBody={shareBridgeBody}
+        targetMode={shareBridgeTargetMode}
+        onChangeBody={setShareBridgeBody}
+        onSelectTargetMode={setShareBridgeTargetMode}
+        onPrepareShare={prepareShareDraft}
+        onOpenMessages={openMessagesHub}
       />
 
       <AppBottomSheet
@@ -770,6 +879,18 @@ const styles = StyleSheet.create({
   },
   smallText: {
     fontSize: 12,
+  },
+  actionBtnInline: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  actionBtnInlineText: {
+    color: colors.primary,
+    fontSize: 13,
   },
   noteCard: {
     gap: spacing.xs,
