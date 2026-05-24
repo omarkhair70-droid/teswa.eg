@@ -3,6 +3,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { DolabSavedMediaGrid } from '@/components/dolab/DolabSavedMediaGrid';
+import type { DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 
 type SavedItem = {
   id: string;
@@ -19,13 +20,6 @@ type SavedNote = {
   createdAt: string;
 };
 
-type SavedMedia = {
-  id: string;
-  mediaTypeLabel: string;
-  linkedItemTitle?: string;
-  meta: string;
-};
-
 export function DolabSavedLibrarySection({
   items,
   notes,
@@ -33,7 +27,7 @@ export function DolabSavedLibrarySection({
 }: {
   items: SavedItem[];
   notes: SavedNote[];
-  media: SavedMedia[];
+  media: DolabSavedMediaCardModel[];
 }) {
   const isEmpty = items.length === 0 && notes.length === 0 && media.length === 0;
 

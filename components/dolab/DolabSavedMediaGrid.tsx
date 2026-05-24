@@ -1,17 +1,9 @@
 import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
-import { colors } from '@/constants/colors';
-import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
+import { DolabSavedMediaPreviewCard, type DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 
-type SavedMediaCard = {
-  id: string;
-  mediaTypeLabel: string;
-  linkedItemTitle?: string;
-  meta: string;
-};
-
-export function DolabSavedMediaGrid({ media }: { media: SavedMediaCard[] }) {
+export function DolabSavedMediaGrid({ media }: { media: DolabSavedMediaCardModel[] }) {
   if (media.length === 0) {
     return <AppText muted style={styles.empty}>مفيش ميديا محفوظة سحابيًا لسه.</AppText>;
   }
@@ -19,13 +11,7 @@ export function DolabSavedMediaGrid({ media }: { media: SavedMediaCard[] }) {
   return (
     <View style={styles.wrap}>
       {media.map((item) => (
-        <View key={item.id} style={styles.card}>
-          <AppText weight="semibold">{item.mediaTypeLabel}</AppText>
-          <AppText muted style={styles.small}>محفوظ</AppText>
-          <AppText muted style={styles.small}>محفوظ في الدولاب السحابي</AppText>
-          {item.linkedItemTitle ? <AppText muted style={styles.small}>مرتبط: {item.linkedItemTitle}</AppText> : null}
-          <AppText muted style={styles.small}>{item.meta}</AppText>
-        </View>
+        <DolabSavedMediaPreviewCard key={item.id} item={item} />
       ))}
     </View>
   );
@@ -33,7 +19,5 @@ export function DolabSavedMediaGrid({ media }: { media: SavedMediaCard[] }) {
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.xs },
-  card: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing.sm, backgroundColor: '#FFFEFC', gap: 2 },
-  small: { fontSize: 12 },
   empty: { fontSize: 12 },
 });
