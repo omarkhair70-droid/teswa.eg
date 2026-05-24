@@ -250,7 +250,7 @@ export default function DolabScreen() {
                     accessibilityLabel="حذف عنصر ميديا من قائمة الدولاب"
                     onPress={() => setPendingMedia((prev) => prev.filter((m) => m.id !== item.id))}
                   >
-                    <Ionicons name="close-circle" size={18} color={colors.error} />
+                    <Ionicons name="close-circle" size={18} color={colors.danger} />
                   </Pressable>
                 </View>
               ))}
@@ -258,12 +258,47 @@ export default function DolabScreen() {
           )}
         </AppCard>
 
-        <AppCard><View style={styles.sectionHeader}><AppText weight="bold">جاهز يتحول لعرض</AppText><AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText></View><View style={styles.listWrap}>{draftItems.map((item) => (<View key={item.id} style={styles.rowCard}><Ionicons name="cube-outline" size={18} color={colors.primary} /><View style={styles.rowCopy}><AppText weight="semibold">{item.title}</AppText><AppText muted style={styles.smallText}>{item.hint}</AppText></View></View>))}</View></AppCard>
-
-        <AppCard><View style={styles.sectionHeader}><AppText weight="bold">أفكار التبادل</AppText><AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText></View><View style={styles.listWrap}>{exchangeIdeas.map((idea) => (<View key={idea.id} style={styles.noteCard}><Ionicons name="document-text-outline" size={16} color={colors.primary} /><AppText>{idea.text}</AppText></View>))}</View></AppCard>
+        <AppCard>
+          <View style={styles.sectionHeader}>
+            <AppText weight="bold">جاهز يتحول لعرض</AppText>
+            <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
+          </View>
+          <View style={styles.listWrap}>
+            {draftItems.map((item) => (
+              <View key={item.id} style={styles.rowCard}>
+                <Ionicons name="cube-outline" size={18} color={colors.primary} />
+                <View style={styles.rowCopy}>
+                  <AppText weight="semibold">{item.title}</AppText>
+                  <AppText muted style={styles.smallText}>
+                    {item.hint}
+                  </AppText>
+                </View>
+              </View>
+            ))}
+          </View>
+        </AppCard>
 
         <AppCard>
-          <EmptyState title="المساحة الفارغة جاهزة لك" description="عند ربط البيانات الحقيقية، ستظهر هنا العناصر والميديا والأفكار الجديدة." iconName="folder-open-outline" />
+          <View style={styles.sectionHeader}>
+            <AppText weight="bold">أفكار التبادل</AppText>
+            <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
+          </View>
+          <View style={styles.listWrap}>
+            {exchangeIdeas.map((idea) => (
+              <View key={idea.id} style={styles.noteCard}>
+                <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+                <AppText>{idea.text}</AppText>
+              </View>
+            ))}
+          </View>
+        </AppCard>
+
+        <AppCard>
+          <EmptyState
+            title="المساحة الفارغة جاهزة لك"
+            description="عند ربط البيانات الحقيقية، ستظهر هنا العناصر والميديا والأفكار الجديدة."
+            iconName="folder-open-outline"
+          />
           <AppButton label="ابدأ الإضافة الآن" variant="neutral" onPress={() => addSheetRef.current?.present()} />
         </AppCard>
 
@@ -273,7 +308,14 @@ export default function DolabScreen() {
         </View>
       </ScrollView>
 
-      <AppActionSheet ref={addSheetRef} title="أضف حاجة للدولاب" description="ابدأ بصورة، فيديو، ملاحظة، أو مسودة تبادل." titleIconName="add-circle-outline" snapPoints={['52%']} actions={sheetActions} />
+      <AppActionSheet
+        ref={addSheetRef}
+        title="أضف حاجة للدولاب"
+        description="ابدأ بصورة، فيديو، ملاحظة، أو مسودة تبادل."
+        titleIconName="add-circle-outline"
+        snapPoints={['52%']}
+        actions={sheetActions}
+      />
     </AppScreen>
   );
 }
@@ -282,29 +324,122 @@ const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.sm },
   headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
-  backButton: { width: 40, height: 40, borderRadius: radii.round, borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.9)' },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
   headerTitle: { fontSize: 22 },
-  hero: { borderRadius: radii.xl, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', padding: spacing.lg, overflow: 'hidden', gap: spacing.sm },
-  heroGlow: { position: 'absolute', width: 170, height: 170, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.22)', left: -30, top: -20 },
-  heroTopIcon: { width: 44, height: 44, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,253,248,0.9)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)' },
-  heroBadge: { alignSelf: 'flex-start', borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.92)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.22)', paddingHorizontal: spacing.sm, paddingVertical: 4 },
+  hero: {
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.16)',
+    padding: spacing.lg,
+    overflow: 'hidden',
+    gap: spacing.sm,
+  },
+  heroGlow: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(184,98,63,0.22)',
+    left: -30,
+    top: -20,
+  },
+  heroTopIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,253,248,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.16)',
+  },
+  heroBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.round,
+    backgroundColor: 'rgba(255,253,248,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.22)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
   heroBadgeText: { color: '#7B5230', fontSize: 12 },
   heroTitle: { fontSize: 28 },
   heroSubtitle: { lineHeight: 23 },
-  floatingChip: { position: 'absolute', top: 16, right: 16, flexDirection: 'row-reverse', gap: 4, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.84)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round },
-  floatingChipSecondary: { position: 'absolute', bottom: 18, left: 14, flexDirection: 'row-reverse', gap: 4, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.84)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round },
+  floatingChip: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    flexDirection: 'row-reverse',
+    gap: 4,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radii.round,
+  },
+  floatingChipSecondary: {
+    position: 'absolute',
+    bottom: 18,
+    left: 14,
+    flexDirection: 'row-reverse',
+    gap: 4,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radii.round,
+  },
   chipText: { fontSize: 12 },
   sectionHeader: { gap: 3, marginBottom: spacing.xs },
   listWrap: { gap: spacing.xs },
-  rowCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing.sm, backgroundColor: '#FFFDF9' },
+  rowCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    padding: spacing.sm,
+    backgroundColor: '#FFFDF9',
+  },
   rowCopy: { flex: 1, gap: 2 },
   smallText: { fontSize: 12 },
-  noteCard: { gap: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing.sm, backgroundColor: '#FFFEFC' },
+  noteCard: {
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    padding: spacing.sm,
+    backgroundColor: '#FFFEFC',
+  },
   pendingRow: { gap: spacing.sm },
-  pendingCard: { width: 124, height: 124, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', backgroundColor: '#FFFDF9' },
+  pendingCard: {
+    width: 124,
+    height: 124,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    backgroundColor: '#FFFDF9',
+  },
   pendingImage: { width: '100%', height: '100%' },
   pendingPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
-  removeButton: { position: 'absolute', top: 6, left: 6, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: radii.round },
+  removeButton: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: radii.round,
+  },
   ctaWrap: { gap: spacing.xs, marginBottom: spacing.md },
   feedbackText: { textAlign: 'center' },
 });
