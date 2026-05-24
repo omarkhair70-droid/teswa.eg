@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { StyleSheet, View } from 'react-native';
-import { RecordingPresets, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
+import { RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppText } from '@/components/ui/AppText';
@@ -10,6 +10,7 @@ import { spacing } from '@/constants/spacing';
 import { buildDolabAudioRecordingResult, DOLAB_AUDIO_SAVE_ERROR, DOLAB_AUDIO_START_ERROR, prepareDolabAudioRecordingMode, requestDolabAudioPermission } from '@/lib/dolab/audio-recording';
 
 const formatElapsed = (durationMs?: number) => `${Math.max(0, Math.floor((durationMs ?? 0) / 1000))}ث`;
+const MIN_VALID_RECORDING_MS = 500;
 
 type Props = {
   sheetRef: React.RefObject<BottomSheetModal | null>;
@@ -24,6 +25,17 @@ export function DolabAudioRecorderSheet({ sheetRef, onSave, onFeedback }: Props)
 
   const isRecording = !!recorderState.isRecording;
   const elapsedLabel = useMemo(() => formatElapsed(recorderState.durationMillis), [recorderState.durationMillis]);
+
+  const resetAudioModeAfterRecording = async () => {
+    try {
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+      });
+    } catch {
+      // Intentionally swallow to keep UI safe.
+    }
+  };
 
   const startRecording = async () => {
     if (busy || isRecording) return;
@@ -58,6 +70,13 @@ export function DolabAudioRecorderSheet({ sheetRef, onSave, onFeedback }: Props)
     try {
       const capturedDuration = recorderState.durationMillis;
       await recorder.stop();
+      await resetAudioModeAfterRecording();
+
+      if ((capturedDuration ?? 0) < MIN_VALID_RECORDING_MS) {
+        onFeedback('التسجيل قصير جدًا. سجّل ملاحظة أوضح.');
+        return;
+      }
+
       const built = buildDolabAudioRecordingResult(recorder.uri, capturedDuration, 'audio/m4a');
       if (!built.data) {
         onFeedback(built.errorMessage ?? DOLAB_AUDIO_SAVE_ERROR);
@@ -74,8 +93,14 @@ export function DolabAudioRecorderSheet({ sheetRef, onSave, onFeedback }: Props)
 
   const cancel = async () => {
     if (isRecording) {
-      try { await recorder.stop(); } catch {}
+      try {
+        await recorder.stop();
+      } catch {
+        // No-op
+      }
     }
+
+    await resetAudioModeAfterRecording();
     sheetRef.current?.dismiss();
   };
 
@@ -88,7 +113,13 @@ export function DolabAudioRecorderSheet({ sheetRef, onSave, onFeedback }: Props)
   }, [recorder, recorderState.isRecording]);
 
   return (
-    <AppBottomSheet ref={sheetRef} title="تسجيل صوتي" description="سجّل فكرة سريعة أو ملاحظة عن الحاجة قبل ما تتحول لعرض." titleIconName="mic-outline" snapPoints={['48%']}>
+    <AppBottomSheet
+      ref={sheetRef}
+      title="تسجيل صوتي"
+      description="سجّل فكرة سريعة أو ملاحظة عن الحاجة قبل ما تتحول لعرض."
+      titleIconName="mic-outline"
+      snapPoints={['48%']}
+    >
       <View style={styles.body}>
         {isRecording ? (
           <View style={styles.recordingBadge}>
@@ -98,16 +129,52 @@ export function DolabAudioRecorderSheet({ sheetRef, onSave, onFeedback }: Props)
         ) : (
           <AppText muted>ابدأ التسجيل ثم احفظ الملاحظة الصوتية مباشرة في الدولاب.</AppText>
         )}
-        <AppButton label="ابدأ التسجيل" variant="neutral" onPress={() => { void startRecording(); }} disabled={busy || isRecording} accessibilityRole="button" accessibilityLabel="ابدأ تسجيل ملاحظة صوتية" />
-        <AppButton label="إيقاف وحفظ" onPress={() => { void stopAndSave(); }} disabled={busy || !isRecording} accessibilityRole="button" accessibilityLabel="إيقاف التسجيل وحفظ الملاحظة الصوتية" />
-        <AppButton label="إلغاء" variant="ghost" onPress={() => { void cancel(); }} accessibilityRole="button" accessibilityLabel="إلغاء تسجيل الملاحظة الصوتية" />
+        <AppButton
+          label="ابدأ التسجيل"
+          variant="neutral"
+          onPress={() => {
+            void startRecording();
+          }}
+          disabled={busy || isRecording}
+        />
+        <AppButton
+          label="إيقاف وحفظ"
+          onPress={() => {
+            void stopAndSave();
+          }}
+          disabled={busy || !isRecording}
+        />
+        <AppButton
+          label="إلغاء"
+          variant="ghost"
+          onPress={() => {
+            void cancel();
+          }}
+        />
       </View>
     </AppBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { gap: spacing.sm, paddingBottom: spacing.md },
-  recordingBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, backgroundColor: '#FFF4F2', borderRadius: 999, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, alignSelf: 'flex-start' },
-  dot: { width: 10, height: 10, borderRadius: 99, backgroundColor: colors.danger },
+  body: {
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  recordingBadge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#FFF4F2',
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 99,
+    backgroundColor: colors.danger,
+  },
 });
