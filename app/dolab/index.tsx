@@ -78,6 +78,24 @@ export default function DolabScreen() {
   const [cloudStatus, setCloudStatus] = useState<'local_only' | 'partial_sync' | 'schema_missing'>('local_only');
   const [remoteSnapshot, setRemoteSnapshot] = useState<{ items: number; notes: number }>({ items: 0, notes: 0 });
 
+  const refreshRemoteSnapshot = async (targetUserId: string) => {
+    const result = await fetchDolabRemoteSnapshot(targetUserId);
+    if (result.error) {
+      if (result.error.kind === 'schema_missing') {
+        setCloudStatus('schema_missing');
+        setInlineFeedback('الحفظ السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.');
+      }
+      return;
+    }
+
+    setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length });
+    if (result.data.items.length > 0 || result.data.notes.length > 0) {
+      setCloudStatus('partial_sync');
+    } else {
+      setCloudStatus('local_only');
+    }
+  };
+
   useEffect(() => {
     const loadRemoteSnapshot = async () => {
       if (!user?.id) {
@@ -85,19 +103,7 @@ export default function DolabScreen() {
         return;
       }
 
-      const result = await fetchDolabRemoteSnapshot(user.id);
-      if (result.error) {
-        if (result.error.kind === 'schema_missing') {
-          setCloudStatus('schema_missing');
-          setInlineFeedback('الحفظ السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.');
-        }
-        return;
-      }
-
-      setRemoteSnapshot({ items: result.data.items.length, notes: result.data.notes.length });
-      if (result.data.items.length > 0 || result.data.notes.length > 0) {
-        setCloudStatus('partial_sync');
-      }
+      await refreshRemoteSnapshot(user.id);
     };
 
     void loadRemoteSnapshot();
@@ -274,6 +280,7 @@ export default function DolabScreen() {
     if (result.data?.id) {
       setSelfMessages((prev) => prev.map((item) => (item.id === newMessage.id ? { ...item, remoteNoteId: result.data?.id } : item)));
       setCloudStatus('partial_sync');
+      await refreshRemoteSnapshot(user.id);
       setInlineFeedback('تم حفظ ملاحظة السيلف-شات سحابيًا بشكل جزئي.');
     }
   };
@@ -448,6 +455,7 @@ export default function DolabScreen() {
     if (remoteResult.data?.id) {
       setLocalDrafts((prev) => prev.map((item) => (item.id === nextDraftId ? { ...item, remoteDolabItemId: remoteResult.data?.id } : item)));
       setCloudStatus('partial_sync');
+      await refreshRemoteSnapshot(user.id);
       setInlineFeedback('تم حفظ المسودة محليًا وسحابيًا بشكل جزئي.');
     }
   };
