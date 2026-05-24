@@ -21,8 +21,10 @@ import { toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
+import { DolabPublishBridgeSheet } from '@/components/dolab/DolabPublishBridgeSheet';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
+import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -48,6 +50,7 @@ export default function DolabScreen() {
   const addSheetRef = useRef<BottomSheetModal>(null);
   const draftStudioRef = useRef<BottomSheetModal>(null);
   const shareBridgeRef = useRef<BottomSheetModal>(null);
+  const publishBridgeRef = useRef<BottomSheetModal>(null);
   const glow = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
 
@@ -66,6 +69,8 @@ export default function DolabScreen() {
   const [shareBridgeMessageId, setShareBridgeMessageId] = useState<string | null>(null);
   const [shareBridgeBody, setShareBridgeBody] = useState('');
   const [shareBridgeTargetMode, setShareBridgeTargetMode] = useState<DolabShareDraftTargetMode>('choose_later');
+  const [publishDrafts, setPublishDrafts] = useState<DolabPublishDraft[]>([]);
+  const [selectedPublishSourceDraftId, setSelectedPublishSourceDraftId] = useState<string | null>(null);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -273,6 +278,57 @@ export default function DolabScreen() {
     () => localDrafts.find((draft) => draft.id === selectedShareMessage?.linkedDraftId),
     [localDrafts, selectedShareMessage?.linkedDraftId],
   );
+
+
+  const selectedPublishSourceDraft = useMemo(
+    () => localDrafts.find((draft) => draft.id === selectedPublishSourceDraftId) ?? null,
+    [localDrafts, selectedPublishSourceDraftId],
+  );
+
+  const selectedPublishLinkedMedia = useMemo(() => {
+    if (!selectedPublishSourceDraft) {
+      return [];
+    }
+
+    return pendingMedia.filter((item) => selectedPublishSourceDraft.linkedPendingMediaIds.includes(item.id));
+  }, [pendingMedia, selectedPublishSourceDraft]);
+
+  const selectedPublishBridgeData = useMemo(() => {
+    if (!selectedPublishSourceDraft) {
+      return null;
+    }
+
+    return buildPublishDraftFromDolabDraft(selectedPublishSourceDraft, selectedPublishLinkedMedia);
+  }, [selectedPublishLinkedMedia, selectedPublishSourceDraft]);
+
+  const openPublishBridge = (draft: DolabDraftItem) => {
+    setSelectedPublishSourceDraftId(draft.id);
+    publishBridgeRef.current?.present();
+  };
+
+  const preparePublishDraft = () => {
+    if (!selectedPublishSourceDraft || !selectedPublishBridgeData) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    setPublishDrafts((prev) => {
+      const existing = prev.find((item) => item.sourceDraftId === selectedPublishSourceDraft.id);
+      const nextDraft: DolabPublishDraft = {
+        ...selectedPublishBridgeData,
+        id: existing?.id ?? `local-publish-draft-${Date.now()}`,
+        readinessStatus: selectedPublishBridgeData.missingFields.length === 0 ? 'prepared' : 'incomplete',
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      return [nextDraft, ...prev.filter((item) => item.sourceDraftId !== selectedPublishSourceDraft.id)];
+    });
+
+    publishBridgeRef.current?.dismiss();
+    setInlineFeedback('العرض اتجهز محليًا. النشر الحقيقي في PR لاحق.');
+  };
 
   const saveLocalDraft = () => {
     const now = new Date().toISOString();
@@ -575,6 +631,43 @@ export default function DolabScreen() {
 
         <AppCard>
           <View style={styles.sectionHeader}>
+            <AppText weight="bold">عروض جاهزة للسوق</AppText>
+            <AppText muted>تحضيرات محلية لحد ما نربط النشر الحقيقي.</AppText>
+          </View>
+          {publishDrafts.length === 0 ? (
+            <AppText muted style={styles.smallText}>لسه مفيش عروض محضرة للسوق.</AppText>
+          ) : (
+            <View style={styles.listWrap}>
+              {publishDrafts.map((draft) => (
+                <View key={draft.id} style={styles.localDraftCard}>
+                  <View style={styles.localDraftHeader}>
+                    <AppText weight="semibold">{draft.title || 'مسودة بدون اسم'}</AppText>
+                    <View style={styles.localBadge}>
+                      <AppText style={styles.localBadgeText}>
+                        {draft.readinessStatus === 'prepared' ? 'مجهز' : draft.readinessStatus === 'ready' ? 'جاهز' : 'ناقص بيانات'}
+                      </AppText>
+                    </View>
+                  </View>
+                  <AppText muted style={styles.smallText}>ميديا مرتبطة: {draft.linkedPendingMediaIds.length}</AppText>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="فتح إضافة عنصر لاستكمال النشر"
+                    onPress={() => {
+                      setInlineFeedback('افتح إضافة عنصر وكمّل النشر هناك.');
+                      router.push('/(tabs)/add');
+                    }}
+                    style={styles.actionBtnInline}
+                  >
+                    <AppText style={styles.actionBtnInlineText}>افتح إضافة عنصر</AppText>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </AppCard>
+
+        <AppCard>
+          <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز يتحول لعرض</AppText>
             <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
           </View>
@@ -590,7 +683,9 @@ export default function DolabScreen() {
                 <View style={styles.localDraftHeader}>
                   <AppText weight="semibold">{draft.title || 'مسودة بدون اسم'}</AppText>
                   <View style={styles.localBadge}>
-                    <AppText style={styles.localBadgeText}>مسودة محلية</AppText>
+                    <AppText style={styles.localBadgeText}>
+                      {publishDrafts.some((item) => item.sourceDraftId === draft.id) ? 'تحضير نشر' : 'مسودة محلية'}
+                    </AppText>
                   </View>
                 </View>
                 <AppText muted style={styles.smallText}>
@@ -599,6 +694,17 @@ export default function DolabScreen() {
                 <AppText muted style={styles.smallText}>
                   ميديا مرتبطة: {draft.linkedPendingMediaIds.length}
                 </AppText>
+                <Pressable
+                  style={styles.actionBtnInline}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    openPublishBridge(draft);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="تحويل المسودة إلى تحضير عرض"
+                >
+                  <AppText style={styles.actionBtnInlineText}>حوّل لعرض</AppText>
+                </Pressable>
               </Pressable>
             ))}
 
@@ -671,6 +777,14 @@ export default function DolabScreen() {
         onSelectTargetMode={setShareBridgeTargetMode}
         onPrepareShare={prepareShareDraft}
         onOpenMessages={openMessagesHub}
+      />
+
+      <DolabPublishBridgeSheet
+        sheetRef={publishBridgeRef}
+        selectedDraft={selectedPublishSourceDraft}
+        linkedPendingMedia={selectedPublishLinkedMedia}
+        missingFields={selectedPublishBridgeData?.missingFields ?? []}
+        onPrepare={preparePublishDraft}
       />
 
       <AppBottomSheet
