@@ -36,6 +36,9 @@ export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPending
       snapPoints={['70%']}
     >
       <View style={styles.content}>
+        <View style={styles.localHint}>
+          <AppText style={styles.localHintText}>تحضير محلي فقط • بدون نشر فعلي</AppText>
+        </View>
         <View style={styles.previewCard}>
           <AppText weight="semibold">{selectedDraft?.title || 'بدون اسم'}</AppText>
           <AppText muted style={styles.smallText}>{selectedDraft?.description || 'بدون وصف'}</AppText>
@@ -79,4 +82,17 @@ const styles = StyleSheet.create({
   checkItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   warningText: { color: colors.danger, fontSize: 12 },
   smallText: { fontSize: 12 },
+  localHint: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: '#FFF9F2',
+  },
+  localHintText: {
+    fontSize: 11,
+    color: colors.primary,
+  },
 });

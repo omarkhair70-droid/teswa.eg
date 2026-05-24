@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
@@ -7,6 +7,7 @@ import { spacing } from '@/constants/spacing';
 import { formatMediaDimensions, formatMediaDuration, formatMediaSize } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabAudioPlaceholderCard } from './DolabAudioPlaceholderCard';
+import { DolabPressableCard } from './DolabPressableCard';
 
 type Props = {
   item: DolabPendingMedia;
@@ -22,7 +23,7 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
     .join(' • ');
 
   return (
-    <Pressable
+    <DolabPressableCard
       style={[styles.card, selectable && styles.selectableCard, selected && styles.selectedCard]}
       onPress={onPress}
       disabled={!onPress}
@@ -49,7 +50,7 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
         </Pressable>
       ) : null}
       {selected ? <View style={styles.selectedOverlay}><Ionicons name="checkmark-circle" size={20} color={colors.white} /></View> : null}
-    </Pressable>
+    </DolabPressableCard>
   );
 }
 

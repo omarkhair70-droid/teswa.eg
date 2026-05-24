@@ -43,6 +43,9 @@ export function DolabShareBridgeSheet(props: Props) {
       snapPoints={['72%']}
     >
       <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.localHint}>
+          <AppText style={styles.localHintText}>محلي فقط • بدون إرسال فعلي</AppText>
+        </View>
         {!selectedMessage ? (
           <AppText muted>اختار رسالة من شات نفسك الأول.</AppText>
         ) : (
@@ -132,4 +135,17 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text },
   chipTextSelected: { color: colors.white },
+  localHint: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: '#FFF9F2',
+  },
+  localHintText: {
+    fontSize: 11,
+    color: colors.primary,
+  },
 });
