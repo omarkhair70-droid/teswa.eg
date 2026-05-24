@@ -2,6 +2,8 @@ export type DolabPendingMediaType = 'image' | 'video' | 'audio';
 
 export type DolabPendingMediaUploadStatus = 'local' | 'uploading' | 'uploaded' | 'failed';
 
+export type DolabCompressionStatus = 'not_needed' | 'pending' | 'compressing' | 'compressed' | 'failed';
+
 export type DolabPendingMedia = {
   id: string;
   uri: string;
@@ -17,4 +19,9 @@ export type DolabPendingMedia = {
   storagePath?: string;
   uploadStatus?: DolabPendingMediaUploadStatus;
   uploadError?: string;
+  originalUri?: string;
+  originalSizeBytes?: number;
+  compressedSizeBytes?: number;
+  compressionStatus?: DolabCompressionStatus;
+  compressionError?: string;
 };
