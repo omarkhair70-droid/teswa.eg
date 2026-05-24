@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as ImagePicker from 'expo-image-picker';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
 import { AppButton } from '@/components/ui/AppButton';
@@ -23,6 +22,9 @@ import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
 import { DolabPublishBridgeSheet } from '@/components/dolab/DolabPublishBridgeSheet';
 import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStrip';
+import { DolabVaultHero } from '@/components/dolab/DolabVaultHero';
+import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
+import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
@@ -52,8 +54,6 @@ export default function DolabScreen() {
   const draftStudioRef = useRef<BottomSheetModal>(null);
   const shareBridgeRef = useRef<BottomSheetModal>(null);
   const publishBridgeRef = useRef<BottomSheetModal>(null);
-  const glow = useRef(new Animated.Value(0)).current;
-  const drift = useRef(new Animated.Value(0)).current;
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
@@ -373,31 +373,6 @@ export default function DolabScreen() {
     resetDraftForm();
   };
 
-  useEffect(() => {
-    const glowLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, { toValue: 1, duration: 2400, useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0, duration: 2400, useNativeDriver: true }),
-      ]),
-    );
-
-    const driftLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(drift, { toValue: 1, duration: 3400, useNativeDriver: true }),
-        Animated.timing(drift, { toValue: 0, duration: 3400, useNativeDriver: true }),
-      ]),
-    );
-
-    glowLoop.start();
-    driftLoop.start();
-
-    return () => {
-      glowLoop.stop();
-      driftLoop.stop();
-      glow.stopAnimation();
-      drift.stopAnimation();
-    };
-  }, [drift, glow]);
 
   const sheetActions = useMemo(
     () => [
@@ -477,61 +452,9 @@ export default function DolabScreen() {
           </AppText>
         </View>
 
-        <LinearGradient colors={['#FFF8EE', '#F4EDE4', '#F2F7F6']} style={styles.hero}>
-          <Animated.View
-            style={[
-              styles.heroGlow,
-              {
-                opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.5] }),
-              },
-            ]}
-          />
-          <Animated.View
-            style={[
-              styles.floatingChip,
-              {
-                transform: [
-                  {
-                    translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
-            <AppText style={styles.chipText}>خاص</AppText>
-          </Animated.View>
-          <Animated.View
-            style={[
-              styles.floatingChipSecondary,
-              {
-                transform: [
-                  {
-                    translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [-2, 6] }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
-            <AppText style={styles.chipText}>حيّ</AppText>
-          </Animated.View>
-          <View style={styles.heroTopIcon}>
-            <Ionicons name="archive-outline" size={22} color={colors.primary} />
-          </View>
-          <View style={styles.heroBadge}>
-            <AppText weight="semibold" style={styles.heroBadgeText}>
-              نسخة أولى
-            </AppText>
-          </View>
-          <AppText weight="bold" style={styles.heroTitle}>
-            دولاب تسوى
-          </AppText>
-          <AppText muted style={styles.heroSubtitle}>
-            مكانك الخاص لتجميع الصور، الفيديوهات، الأفكار، والحاجات اللي ممكن تتحول لتبادل.
-          </AppText>
-        </LinearGradient>
+        <DolabVaultHero />
 
+        <DolabAnimatedSection delay={20}>
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">ميديا جاهزة للحفظ</AppText>
@@ -548,7 +471,9 @@ export default function DolabScreen() {
             emptyText="لسه ما أضفتش ميديا محلية."
           />
         </AppCard>
+        </DolabAnimatedSection>
 
+        <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
           messages={selfMessages}
           localDrafts={localDrafts}
@@ -572,20 +497,21 @@ export default function DolabScreen() {
           onShareLater={openShareBridge}
           onDelete={deleteSelfMessage}
         />
+        </DolabAnimatedSection>
 
 
 
-        <AppCard>
+        <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز للمشاركة</AppText>
             <AppText muted>مسودات مشاركة محلية فقط لحد PR الربط الحقيقي.</AppText>
           </View>
           {shareDrafts.length === 0 ? (
-            <AppText muted style={styles.smallText}>مفيش رسائل مجهزة للمشاركة لسه.</AppText>
+            <AppText muted style={styles.smallText}>مفيش رسائل مجهزة للمشاركة لسه، جهّز واحدة من شاتك.</AppText>
           ) : (
             <View style={styles.listWrap}>
               {shareDrafts.map((draft) => (
-                <View key={draft.id} style={styles.localDraftCard}>
+                <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={openMessagesHub} accessibilityRole="button" accessibilityLabel="فتح الرسائل لاستكمال المشاركة">
                   <View style={styles.localDraftHeader}>
                     <AppText weight="semibold" numberOfLines={2}>{draft.body}</AppText>
                     <View style={styles.localBadge}>
@@ -601,24 +527,27 @@ export default function DolabScreen() {
                   >
                     <AppText style={styles.actionBtnInlineText}>افتح الرسائل</AppText>
                   </Pressable>
-                </View>
+                </DolabPressableCard>
               ))}
             </View>
           )}
-        </AppCard>
+        </AppCard></DolabAnimatedSection>
 
 
-        <AppCard>
+        <DolabAnimatedSection delay={170}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">عروض جاهزة للسوق</AppText>
             <AppText muted>تحضيرات محلية لحد ما نربط النشر الحقيقي.</AppText>
           </View>
           {publishDrafts.length === 0 ? (
-            <AppText muted style={styles.smallText}>لسه مفيش عروض محضرة للسوق.</AppText>
+            <AppText muted style={styles.smallText}>لسه مفيش عروض محضرة للسوق، حضّر مسودة أولًا.</AppText>
           ) : (
             <View style={styles.listWrap}>
               {publishDrafts.map((draft) => (
-                <View key={draft.id} style={styles.localDraftCard}>
+                <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={() => {
+                      setInlineFeedback('افتح إضافة عنصر وكمّل النشر هناك.');
+                      router.push('/(tabs)/add');
+                    }} accessibilityRole="button" accessibilityLabel="فتح إضافة عنصر لاستكمال النشر">
                   <View style={styles.localDraftHeader}>
                     <AppText weight="semibold">{draft.title || 'مسودة بدون اسم'}</AppText>
                     <View style={styles.localBadge}>
@@ -639,20 +568,20 @@ export default function DolabScreen() {
                   >
                     <AppText style={styles.actionBtnInlineText}>افتح إضافة عنصر</AppText>
                   </Pressable>
-                </View>
+                </DolabPressableCard>
               ))}
             </View>
           )}
-        </AppCard>
+        </AppCard></DolabAnimatedSection>
 
-        <AppCard>
+        <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز يتحول لعرض</AppText>
             <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
           </View>
           <View style={styles.listWrap}>
             {localDrafts.map((draft) => (
-              <Pressable
+              <DolabPressableCard
                 key={draft.id}
                 style={styles.localDraftCard}
                 onPress={() => openDraftStudioForEdit(draft)}
@@ -684,7 +613,7 @@ export default function DolabScreen() {
                 >
                   <AppText style={styles.actionBtnInlineText}>حوّل لعرض</AppText>
                 </Pressable>
-              </Pressable>
+              </DolabPressableCard>
             ))}
 
             {draftItems.map((item) => (
@@ -699,9 +628,9 @@ export default function DolabScreen() {
               </View>
             ))}
           </View>
-        </AppCard>
+        </AppCard></DolabAnimatedSection>
 
-        <AppCard>
+        <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">أفكار التبادل</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
@@ -714,7 +643,7 @@ export default function DolabScreen() {
               </View>
             ))}
           </View>
-        </AppCard>
+        </AppCard></DolabAnimatedSection>
 
         <AppCard>
           <EmptyState

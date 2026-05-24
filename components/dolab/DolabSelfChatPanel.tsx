@@ -74,7 +74,7 @@ export function DolabSelfChatPanel(props: Props) {
 
       {messages.length === 0 ? (
         <AppText muted style={styles.smallText}>
-          ابدأ بأول فكرة في دولابك.
+          ابدأ بأول فكرة في دولابك، وهتظهر هنا فورًا بشكل محلي.
         </AppText>
       ) : null}
 
