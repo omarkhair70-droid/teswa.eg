@@ -50,11 +50,38 @@ export function DolabSavedMediaPreviewCard({ item }: { item: DolabSavedMediaCard
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, backgroundColor: '#FFFEFC', overflow: 'hidden' },
-  previewImage: { width: '100%', height: 120, backgroundColor: colors.surfaceMuted },
-  previewFallback: { height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceMuted, gap: 4 },
-  previewFallbackText: { fontSize: 12 },
-  body: { padding: spacing.sm, gap: 2 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  small: { fontSize: 12 },
+  card: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFFEFC',
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: colors.background,
+  },
+  previewFallback: {
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    gap: 4,
+  },
+  previewFallbackText: {
+    fontSize: 12,
+  },
+  body: {
+    padding: spacing.sm,
+    gap: 2,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  small: {
+    fontSize: 12,
+  },
 });
