@@ -5,6 +5,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { formatMediaDimensions, formatMediaDuration, formatMediaSize } from '@/lib/dolab/local-media';
+import { formatCompressionSavings } from '@/lib/dolab/media-compression';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabAudioPlaceholderCard } from './DolabAudioPlaceholderCard';
 import { DolabPressableCard } from './DolabPressableCard';
@@ -21,6 +22,19 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
   const details = [formatMediaDuration(item.durationMs), formatMediaDimensions(item.width, item.height), formatMediaSize(item.sizeBytes)]
     .filter(Boolean)
     .join(' • ');
+
+  const compressionLabel =
+    item.compressionStatus === 'compressing'
+      ? 'بيتحسن...'
+      : item.compressionStatus === 'pending'
+        ? 'هيتحسن قبل الرفع'
+        : item.compressionStatus === 'compressed'
+          ? 'مضغوط'
+          : item.compressionStatus === 'failed'
+            ? 'فشل الضغط'
+            : 'بدون ضغط';
+  const savingsResult = formatCompressionSavings(item.originalSizeBytes, item.compressedSizeBytes);
+
   const uploadLabel =
     item.uploadStatus === 'uploading'
       ? 'بيتحفظ...'
@@ -51,6 +65,8 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
 
       <View style={styles.badge}><AppText style={styles.badgeText}>{item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'صوت'}</AppText></View>
       <View style={styles.statusBadge}><AppText style={styles.statusBadgeText}>{uploadLabel}</AppText></View>
+      <View style={styles.compressionBadge}><AppText style={styles.compressionBadgeText}>{compressionLabel}</AppText></View>
+      {savingsResult.data ? <AppText muted style={styles.meta} numberOfLines={1}>{savingsResult.data}</AppText> : null}
       {details ? <AppText muted style={styles.meta} numberOfLines={1}>{details}</AppText> : null}
 
       {onRemove ? (
@@ -124,6 +140,17 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 11,
     color: '#2F5FB3',
+  },
+  compressionBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.round,
+    backgroundColor: '#EFFAF1',
+  },
+  compressionBadgeText: {
+    fontSize: 11,
+    color: '#2F8A57',
   },
   removeButton: {
     position: 'absolute',

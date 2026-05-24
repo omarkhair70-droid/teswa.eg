@@ -19,6 +19,9 @@ export function toPendingMedia(asset: ImagePickerAsset, mediaType: DolabPendingM
     sizeBytes: typeof asset.fileSize === 'number' && asset.fileSize > 0 ? asset.fileSize : undefined,
     createdAt: new Date().toISOString(),
     uploadStatus: 'local',
+    compressionStatus: mediaType === 'audio' ? 'not_needed' : 'pending',
+    originalUri: asset.uri,
+    originalSizeBytes: typeof asset.fileSize === 'number' && asset.fileSize > 0 ? asset.fileSize : undefined,
   };
 }
 
@@ -33,6 +36,8 @@ export function createPendingAudioMedia(input: { uri: string; durationMs?: numbe
     durationMs: typeof input.durationMs === 'number' && input.durationMs > 0 ? input.durationMs : undefined,
     createdAt: new Date().toISOString(),
     uploadStatus: 'local',
+    compressionStatus: 'not_needed',
+    originalUri: input.uri,
   };
 }
 

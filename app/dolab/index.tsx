@@ -33,6 +33,7 @@ import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/sha
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
 import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDolabNote, fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, updateDolabSavedItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
+import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -218,10 +219,49 @@ export default function DolabScreen() {
       let successCount = 0;
       let failCount = 0;
 
+      let compressedCount = 0;
+      let compressionFailedCount = 0;
+
       for (const media of toProcess) {
+        let uploadCandidate = media;
         setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'uploading', uploadError: undefined } : item)));
+
+        const sizeResolved = await resolveDolabMediaSize(uploadCandidate);
+        uploadCandidate = sizeResolved.data;
+        if (sizeResolved.error) {
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate } : item)));
+        }
+
+        const shouldCompressResult = shouldCompressDolabMedia(uploadCandidate);
+        if (shouldCompressResult.data) {
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, compressionStatus: 'compressing', compressionError: undefined } : item)));
+          setInlineFeedback('بنجهز الميديا للرفع...');
+          const compressedResult = await compressDolabMedia(uploadCandidate);
+          uploadCandidate = compressedResult.data;
+          if (compressedResult.error) compressionFailedCount += 1;
+          if (!compressedResult.error && uploadCandidate.compressionStatus === 'compressed') compressedCount += 1;
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate } : item)));
+        } else if (media.mediaType === 'audio') {
+          uploadCandidate = { ...media, compressionStatus: 'not_needed', compressionError: undefined };
+        } else if (!media.compressionStatus) {
+          uploadCandidate = { ...media, compressionStatus: 'not_needed', compressionError: undefined };
+        }
+
+        const candidateSize = uploadCandidate.compressedSizeBytes ?? uploadCandidate.sizeBytes ?? uploadCandidate.originalSizeBytes;
+        const hardMax = maxUploadBytesForType(uploadCandidate.mediaType);
+        if (typeof candidateSize !== 'number') {
+          failCount += 1;
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate, uploadStatus: 'failed', uploadError: 'تعذر تحديد حجم الملف الآن. هنحاول الرفع بحذر.' } : item)));
+          continue;
+        }
+        if (candidateSize > hardMax) {
+          failCount += 1;
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate, uploadStatus: 'failed', uploadError: 'حجم الملف كبير جدًا. جرّب ملف أصغر.' } : item)));
+          continue;
+        }
+
         const linkedRemoteDraftId = findLinkedRemoteDraftId(media.id);
-        const result = await uploadAndSaveDolabMedia(user.id, media, { dolabItemId: linkedRemoteDraftId, sortOrder: 0 });
+        const result = await uploadAndSaveDolabMedia(user.id, uploadCandidate, { dolabItemId: linkedRemoteDraftId, sortOrder: 0 });
 
         if (result.error || !result.data) {
           failCount += 1;
@@ -251,6 +291,13 @@ export default function DolabScreen() {
       if (successCount > 0) {
         setCloudStatus('partial_sync');
         await refreshRemoteSnapshot(user.id);
+      }
+
+      if (compressedCount > 0) {
+        setInlineFeedback('تم ضغط بعض الملفات قبل الحفظ السحابي.');
+      }
+      if (compressionFailedCount > 0) {
+        setInlineFeedback('تعذر ضغط بعض الملفات. هنحاول نحفظ الأصل لو حجمه مناسب.');
       }
 
       if (failCount > 0 && successCount > 0) {
