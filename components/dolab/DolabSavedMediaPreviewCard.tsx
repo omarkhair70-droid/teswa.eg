@@ -1,9 +1,10 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
+import { DolabSyncBadge } from '@/components/dolab/DolabSyncBadge';
 
 export type DolabSavedMediaCardModel = {
   id: string;
@@ -17,7 +18,12 @@ export type DolabSavedMediaCardModel = {
   previewStatus: 'loading' | 'ready' | 'unavailable' | 'failed';
 };
 
-export function DolabSavedMediaPreviewCard({ item }: { item: DolabSavedMediaCardModel }) {
+type DolabSavedMediaPreviewCardProps = {
+  item: DolabSavedMediaCardModel;
+  onDelete?: (item: DolabSavedMediaCardModel) => void;
+};
+
+export function DolabSavedMediaPreviewCard({ item, onDelete }: DolabSavedMediaPreviewCardProps) {
   const renderPreview = () => {
     if (item.mediaType === 'image' && item.signedUrl) {
       return <Image source={{ uri: item.signedUrl }} style={styles.previewImage} resizeMode="cover" />;
@@ -40,10 +46,15 @@ export function DolabSavedMediaPreviewCard({ item }: { item: DolabSavedMediaCard
       <View style={styles.body}>
         <View style={styles.rowBetween}>
           <AppText weight="semibold">{item.mediaTypeLabel}</AppText>
-          <AppText muted style={styles.small}>محفوظ</AppText>
+          <DolabSyncBadge state="saved" />
         </View>
         {item.linkedItemTitle ? <AppText muted style={styles.small}>مرتبط: {item.linkedItemTitle}</AppText> : null}
         <AppText muted style={styles.small}>{item.meta}</AppText>
+        {onDelete ? (
+          <Pressable onPress={() => onDelete(item)} accessibilityRole="button" accessibilityLabel="حذف ميديا محفوظة من الدولاب">
+            <AppText style={styles.deleteText}>حذف</AppText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -83,5 +94,9 @@ const styles = StyleSheet.create({
   },
   small: {
     fontSize: 12,
+  },
+  deleteText: {
+    fontSize: 12,
+    color: colors.danger,
   },
 });

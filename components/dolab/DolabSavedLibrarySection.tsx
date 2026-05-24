@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
@@ -24,10 +24,18 @@ export function DolabSavedLibrarySection({
   items,
   notes,
   media,
+  onDeleteNote,
+  onDeleteItem,
+  onDeleteMedia,
+  onEditItem,
 }: {
   items: SavedItem[];
   notes: SavedNote[];
   media: DolabSavedMediaCardModel[];
+  onDeleteNote?: (id: string) => void;
+  onDeleteItem?: (id: string) => void;
+  onDeleteMedia?: (item: DolabSavedMediaCardModel) => void;
+  onEditItem?: (id: string) => void;
 }) {
   const isEmpty = items.length === 0 && notes.length === 0 && media.length === 0;
 
@@ -45,18 +53,47 @@ export function DolabSavedLibrarySection({
       ) : (
         <>
           {items.map((item) => (
-            <AppText key={item.id} style={styles.smallText}>
-              • {item.title} · {item.badge} · ميديا {item.mediaCount}
-            </AppText>
+            <View key={item.id} style={styles.row}>
+              <AppText style={styles.smallText}>• {item.title} · {item.badge} · ميديا {item.mediaCount}</AppText>
+              <View style={styles.rowActions}>
+                {onEditItem ? (
+                  <Pressable
+                    onPress={() => onEditItem(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="تعديل عنصر محفوظ"
+                  >
+                    <AppText style={styles.action}>تعديل</AppText>
+                  </Pressable>
+                ) : null}
+                {onDeleteItem ? (
+                  <Pressable
+                    onPress={() => onDeleteItem(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="حذف عنصر محفوظ"
+                  >
+                    <AppText style={styles.actionDanger}>حذف</AppText>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
           ))}
 
           {notes.slice(0, 3).map((note) => (
-            <AppText key={note.id} style={styles.smallText}>
-              • ملاحظة ({note.label}): {note.body}
-            </AppText>
+            <View key={note.id} style={styles.row}>
+              <AppText style={styles.smallText}>• ملاحظة ({note.label}): {note.body}</AppText>
+              {onDeleteNote ? (
+                <Pressable
+                  onPress={() => onDeleteNote(note.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="حذف ملاحظة محفوظة"
+                >
+                  <AppText style={styles.actionDanger}>حذف</AppText>
+                </Pressable>
+              ) : null}
+            </View>
           ))}
 
-          <DolabSavedMediaGrid media={media.slice(0, 6)} />
+          <DolabSavedMediaGrid media={media.slice(0, 6)} onDeleteMedia={onDeleteMedia} />
         </>
       )}
     </AppCard>
@@ -70,5 +107,21 @@ const styles = StyleSheet.create({
   },
   smallText: {
     fontSize: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rowActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  action: {
+    fontSize: 12,
+  },
+  actionDanger: {
+    fontSize: 12,
+    color: '#B3261E',
   },
 });
