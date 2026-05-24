@@ -226,7 +226,7 @@ export default function DolabScreen() {
           <EmptyState
             title="المساحة الفارغة جاهزة لك"
             description="عند ربط البيانات الحقيقية، ستظهر هنا العناصر والميديا والأفكار الجديدة."
-            icon={<Ionicons name="folder-open-outline" size={28} color={colors.textMuted} />}
+            iconName="folder-open-outline"
           />
           <AppButton label="ابدأ الإضافة الآن" variant="neutral" onPress={() => addSheetRef.current?.present()} />
         </AppCard>
