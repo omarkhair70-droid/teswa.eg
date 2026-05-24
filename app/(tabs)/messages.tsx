@@ -98,7 +98,7 @@ export default function Screen() {
           <AppCard style={styles.hero}>
             <View style={styles.heroOrb}><Ionicons name="chatbubbles-outline" size={20} color={colors.primary} /></View>
             <AppText weight="bold" style={styles.title}>مركز الرسائل</AppText>
-            <AppText muted>كل المحادثات والعروض وردود القصص في مكان واحد.</AppText>
+            <AppText muted>كل حديثك في تِسوى — مباشر وواضح.</AppText>
           </AppCard>
         </AppFadeIn>
 
@@ -150,8 +150,8 @@ export default function Screen() {
           </View>
         ) : (
           <View style={styles.group}>
-            <AppCard style={styles.offerSection}><View style={styles.offerSectionHeader}><Ionicons name="arrow-down-circle-outline" size={18} color={colors.primary} /><AppText weight="semibold">فرص تبادل مستنية ردك</AppText></View>{incoming.length ? incoming.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض وارد" />) : <AppCard style={styles.emptyCard}><EmptyState title="لسه مفيش عروض واردة" description="أول فرصة تبادل جديدة هتظهر هنا." /></AppCard>}</AppCard>
-            <AppCard style={styles.offerSection}><View style={styles.offerSectionHeader}><Ionicons name="arrow-up-circle-outline" size={18} color={colors.primary} /><AppText weight="semibold">العروض اللي بدأت بيها التبادل</AppText></View>{sent.length ? sent.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض مرسل" />) : <AppCard style={styles.emptyCard}><EmptyState title="لسه ما بدأتش عروض" description="ابدأ بعرض بسيط من صفحة أي عنصر، ويمكن منها تبدأ صفقة حلوة." /></AppCard>}</AppCard>
+            <AppCard style={styles.offerSection}><View style={styles.offerSectionHeader}><Ionicons name="arrow-down-circle-outline" size={18} color={colors.primary} /><AppText weight="semibold">عروض تنتظر ردك</AppText></View>{incoming.length ? incoming.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض وارد" />) : <AppCard style={styles.emptyCard}><EmptyState title="لسه مفيش عروض واردة" description="أول فرصة تبادل جديدة هتظهر هنا." /></AppCard>}</AppCard>
+            <AppCard style={styles.offerSection}><View style={styles.offerSectionHeader}><Ionicons name="arrow-up-circle-outline" size={18} color={colors.primary} /><AppText weight="semibold">عروضك المرسلة</AppText></View>{sent.length ? sent.map((offer) => <OfferRow key={offer.id} offer={offer} label="عرض مرسل" />) : <AppCard style={styles.emptyCard}><EmptyState title="لسه ما بدأتش عروض" description="ابدأ بعرض بسيط من صفحة أي عنصر، ويمكن منها تبدأ صفقة حلوة." /></AppCard>}</AppCard>
           </View>
         )}
       </View>
@@ -160,10 +160,10 @@ export default function Screen() {
 }
 
 const styles = StyleSheet.create({
-  group: { gap: spacing.sm }, title: { fontSize: 24 },
+  group: { gap: spacing.md }, title: { fontSize: 24 },
   hero: { borderRadius: radii.xl, padding: spacing.md, backgroundColor: colors.primarySoft, gap: spacing.xs, borderWidth: 1, borderColor: colors.border },
   heroOrb: { width: 38, height: 38, borderRadius: 999, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  summaryGrid: { flexDirection: 'row-reverse', gap: spacing.xs },
+  summaryGrid: { flexDirection: 'row-reverse', gap: spacing.sm },
   summaryCard: { flex: 1, borderWidth: 1, borderColor: colors.border, alignItems: 'center', gap: 2, paddingVertical: spacing.sm },
   summaryValue: { fontSize: 20 },
   segments: { flexDirection: 'row-reverse', backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xs, gap: spacing.xs, borderWidth: 1, borderColor: colors.border },
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   filterChip: { borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.surface },
   filterChipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   filterChipText: { color: colors.textMuted }, filterChipActiveText: { color: colors.primary },
-  card: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  card: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.md },
   emptyCard: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   avatarWrap: { width: 44, height: 44, borderRadius: 999, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatar: { width: '100%', height: '100%' },
