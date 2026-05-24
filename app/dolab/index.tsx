@@ -696,7 +696,10 @@ export default function DolabScreen() {
                 </AppText>
                 <Pressable
                   style={styles.actionBtnInline}
-                  onPress={() => openPublishBridge(draft)}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    openPublishBridge(draft);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel="تحويل المسودة إلى تحضير عرض"
                 >

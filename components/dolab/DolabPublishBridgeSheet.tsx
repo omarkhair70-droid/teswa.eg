@@ -50,7 +50,7 @@ export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPending
           <AppText weight="semibold">فحص الجاهزية</AppText>
           {checklist.map((item) => (
             <View key={item.key} style={styles.checkItem}>
-              <Ionicons name={item.ready ? 'checkmark-circle' : 'alert-circle-outline'} size={18} color={item.ready ? colors.success : colors.warning} />
+              <Ionicons name={item.ready ? 'checkmark-circle' : 'alert-circle-outline'} size={18} color={item.ready ? colors.success : colors.danger} />
               <AppText>{item.label}</AppText>
             </View>
           ))}
@@ -59,8 +59,6 @@ export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPending
         <AppButton
           label={hasMissing ? 'احفظ كتحضير ناقص' : 'جهّز العرض'}
           onPress={onPrepare}
-          accessibilityRole="button"
-          accessibilityLabel={hasMissing ? 'حفظ المسودة كتحضير ناقص' : 'تجهيز العرض محليًا'}
         />
       </View>
     </AppBottomSheet>
@@ -79,6 +77,6 @@ const styles = StyleSheet.create({
   },
   checklist: { gap: spacing.xs },
   checkItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
-  warningText: { color: colors.warning, fontSize: 12 },
+  warningText: { color: colors.danger, fontSize: 12 },
   smallText: { fontSize: 12 },
 });
