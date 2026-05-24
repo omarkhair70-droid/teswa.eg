@@ -30,6 +30,7 @@ import { buildDiscoverIntelligenceState, buildDiscoverSpotlightItems } from '@/l
 import { DiscoverIntelligencePanel } from '@/components/discover/DiscoverIntelligencePanel';
 import { DiscoverStoryHighlightsRail } from '@/components/discover/DiscoverStoryHighlightsRail';
 import { DiscoverSpotlightRail } from '@/components/discover/DiscoverSpotlightRail';
+import { DiscoverWorldHeader } from '@/components/discover/DiscoverWorldHeader';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 export default function DiscoverScreen() {
@@ -345,18 +346,7 @@ export default function DiscoverScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <AppFadeIn delay={0} duration={200} fromY={8}>
-              <LinearGradient colors={['#FFF6E8', '#FFE7C8', 'rgba(62,124,115,0.24)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
-              <View style={styles.heroOrbOne} />
-              <View style={styles.heroOrbTwo} />
-              <View style={styles.heroIconShell}>
-                <Ionicons name="compass-outline" size={18} color={colors.primary} />
-              </View>
-              <View style={styles.heroBox}>
-                <AppText weight="bold" style={styles.heroTitle}>اكتشف تِسوى</AppText>
-                <AppText>ناس، حركة، وحاجات بتدور على رحلة جديدة. اختار الباب اللي تحب تبدأ منه.</AppText>
-                <AppText muted>لو هدفك عنصر معيّن، مركز التصفح تحت يختصر الطريق عليك.</AppText>
-              </View>
-              </LinearGradient>
+              <DiscoverWorldHeader />
             </AppFadeIn>
 
             <AppFadeIn delay={40} duration={210} fromY={8}>
