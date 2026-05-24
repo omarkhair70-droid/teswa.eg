@@ -352,14 +352,11 @@ export default function HomeScreen() {
             </AppFadeIn>
             {user ? (
               <AppFadeIn delay={40} duration={210} fromY={8}>
-                <View style={styles.sectionKickerWrap}>
-                  <AppText weight="semibold" style={styles.sectionKicker}>خطوتك الآن</AppText>
-                </View>
                 <AppCard>
                 <View style={styles.dashboardSection}>
                   <View style={styles.sectionHeader}>
                     <AppText weight="bold" style={styles.sectionTitle}>يهمك الآن</AppText>
-                    <AppText muted style={styles.supportMutedText}>اقتراح شخصي هادئ يوضح الخطوة التالية.</AppText>
+                    <AppText muted style={styles.supportMutedText}>نبضة شخصية تجمع لك أقرب خطوة، من غير ضجيج.</AppText>
                   </View>
 
                   {dashboardLoading ? (
@@ -442,9 +439,6 @@ export default function HomeScreen() {
             ) : null}
 
             <AppFadeIn delay={120} duration={220} fromY={8}>
-              <View style={styles.sectionKickerWrap}>
-                <AppText weight="semibold" style={styles.sectionKicker}>النبض الاجتماعي</AppText>
-              </View>
               <AppCard>
               <View style={styles.storiesSection}>
                 <View style={styles.storiesHeaderRow}>
@@ -543,16 +537,13 @@ export default function HomeScreen() {
 
             {shouldShowVideoMomentsRail ? (
               <AppFadeIn delay={120} duration={220} fromY={8}>
-                <View style={styles.sectionKickerWrap}>
-                  <AppText weight="semibold" style={styles.sectionKicker}>اكتشاف بصري</AppText>
-                </View>
                 <AppCard>
                   <ItemVideoDiscoveryRail
             onOpenViewer={() => router.push('/motion/viewer')}
             viewerCtaLabel='شوف المشاهد'
-                  eyebrow="معاينة المشاهد"
-                  title="لمحات سريعة قبل الاستكشاف"
-                  description="معاينة مرئية خفيفة تنقلك إلى مشاهد العناصر والحركة القريبة."
+                  eyebrow="لمحات مرئية"
+                  title="عناصر تقدر تشوفها أقرب"
+                  description="فيديوهات قصيرة تساعدك تلمح العنصر قبل ما تفتح تفاصيله."
                   moments={videoMoments}
                   loading={videoMomentsLoading}
                   errorMessage={videoMomentsError}
@@ -571,14 +562,10 @@ export default function HomeScreen() {
               </AppCard>
             ) : null}
 
-            <View style={styles.feedLeadIn}>
-              <AppText weight="semibold" style={styles.sectionKicker}>سوق تِسوى</AppText>
-              <AppText muted style={styles.feedLeadText}>جاهز للتصفّح؟ هذه أحدث العناصر القريبة منك.</AppText>
-            </View>
-
             <View style={styles.itemsHeader}>
               <AppText weight="semibold" style={styles.itemsEyebrow}>ظهر حديثًا</AppText>
               <AppText weight="bold" style={styles.itemsTitle}>أحدث العناصر</AppText>
+              <AppText muted style={styles.itemsSupportText}>حاجات وصلت للتو، جاهزة تفتح رحلة تبادل جديدة.</AppText>
             </View>
           </View>
         }
@@ -913,26 +900,6 @@ const styles = StyleSheet.create({
   },
   compactStoryActionText: { color: colors.primary, fontSize: 12 },
 
-  sectionKickerWrap: {
-    paddingHorizontal: spacing.xs,
-    marginTop: 2,
-    marginBottom: 2,
-  },
-  sectionKicker: {
-    fontSize: 12,
-    color: '#7A5C43',
-  },
-  feedLeadIn: {
-    gap: 4,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  feedLeadText: {
-    color: '#5F5348',
-    fontSize: 13,
-    lineHeight: 19,
-  },
   cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   cacheNoticeText: { flex: 1 },
   itemsHeader: {
@@ -943,5 +910,6 @@ const styles = StyleSheet.create({
   },
   itemsEyebrow: { color: colors.primary, fontSize: 12 },
   itemsTitle: { fontSize: 21 },
+  itemsSupportText: { color: '#5F5348', fontSize: 13, lineHeight: 19 },
   stateBox: { gap: spacing.md },
 });
