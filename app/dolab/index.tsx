@@ -29,7 +29,7 @@ import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-ch
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
-import { fetchDolabRemoteSnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem } from '@/lib/dolab';
+import { fetchDolabRemoteSnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -133,6 +133,92 @@ export default function DolabScreen() {
     setPublishDrafts((prev) =>
       prev.map((draft) => ({ ...draft, linkedPendingMediaIds: draft.linkedPendingMediaIds.filter((id) => id !== mediaId) })),
     );
+  };
+
+  const findLinkedRemoteDraftId = (mediaId: string): string | null => {
+    const linkedRemoteIds = localDrafts
+      .filter((draft) => draft.linkedPendingMediaIds.includes(mediaId) && draft.remoteDolabItemId)
+      .map((draft) => draft.remoteDolabItemId as string);
+
+    const uniqueIds = [...new Set(linkedRemoteIds)];
+    if (uniqueIds.length === 1) return uniqueIds[0];
+    return null;
+  };
+
+  const uploadPendingMediaToCloud = async () => {
+    if (!user?.id) {
+      setInlineFeedback('سجّل الدخول عشان تحفظ ميديا الدولاب سحابيًا.');
+      return;
+    }
+
+    const toProcess = pendingMedia.filter((item) => item.uploadStatus !== 'uploaded' && item.uploadStatus !== 'uploading' && !item.remoteMediaId);
+    if (toProcess.length === 0) {
+      setInlineFeedback('كل الميديا الحالية محفوظة أو لا تحتاج رفع الآن.');
+      return;
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+    let skippedAudioCount = 0;
+
+    for (const media of toProcess) {
+      if (media.mediaType === 'audio' && media.uri.startsWith('local://')) {
+        skippedAudioCount += 1;
+        setPendingMedia((prev) =>
+          prev.map((item) =>
+            item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: 'الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.' } : item,
+          ),
+        );
+        continue;
+      }
+
+      setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'uploading', uploadError: undefined } : item)));
+      const linkedRemoteDraftId = findLinkedRemoteDraftId(media.id);
+      const result = await uploadAndSaveDolabMedia(user.id, media, { dolabItemId: linkedRemoteDraftId, sortOrder: 0 });
+
+      if (result.error || !result.data) {
+        failCount += 1;
+        setPendingMedia((prev) =>
+          prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: result.error?.message } : item)),
+        );
+        if (result.error?.kind === 'schema_missing') setCloudStatus('schema_missing');
+        continue;
+      }
+
+      successCount += 1;
+      setPendingMedia((prev) =>
+        prev.map((item) =>
+          item.id === media.id
+            ? {
+                ...item,
+                uploadStatus: 'uploaded',
+                uploadError: undefined,
+                storagePath: result.data?.storagePath,
+                remoteMediaId: result.data?.media.id,
+              }
+            : item,
+        ),
+      );
+    }
+
+    if (successCount > 0) {
+      setCloudStatus('partial_sync');
+      await refreshRemoteSnapshot(user.id);
+    }
+
+    if (failCount > 0 && successCount > 0) {
+      setInlineFeedback(`تم حفظ ${successCount} عنصر سحابيًا، وتعذر حفظ ${failCount} عنصر. شغّال محليًا مؤقتًا.`);
+      return;
+    }
+    if (failCount > 0) {
+      setInlineFeedback('تعذر حفظ بعض الميديا سحابيًا. شغّال محليًا مؤقتًا.');
+      return;
+    }
+    if (skippedAudioCount > 0) {
+      setInlineFeedback('الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.');
+      return;
+    }
+    setInlineFeedback('تم حفظ الميديا السحابية بنجاح.');
   };
 
   const resetDraftForm = () => {
@@ -552,11 +638,12 @@ export default function DolabScreen() {
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">ميديا جاهزة للحفظ</AppText>
-            <AppText muted>لسه محلية على جهازك، والحفظ السحابي هييجي في الخطوة الجاية.</AppText>
+            <AppText muted>لسه محلية على جهازك، تقدر تحفظها سحابيًا بدون تعطيل تدفقك المحلي.</AppText>
             <AppText muted style={styles.smallText}>
               عدد العناصر: {pendingMedia.length}
             </AppText>
           </View>
+          <AppButton label="احفظ الميديا سحابيًا" variant="neutral" onPress={() => { void uploadPendingMediaToCloud(); }} />
 
           <DolabPendingMediaStrip
             pendingMedia={pendingMedia}
