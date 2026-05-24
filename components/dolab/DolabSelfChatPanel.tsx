@@ -10,6 +10,7 @@ import { spacing } from '@/constants/spacing';
 import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
+import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStrip';
 
 const messageTypeOptions: Array<{ type: DolabSelfMessageType; label: string }> = [
   { type: 'text', label: 'ملاحظة' },
@@ -196,36 +197,13 @@ export function DolabSelfChatPanel(props: Props) {
         </ScrollView>
       )}
 
-      {pendingMedia.length === 0 ? (
-        <AppText muted style={styles.smallText}>
-          أضف ميديا في دولابك عشان تربطها بالملاحظة.
-        </AppText>
-      ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-          {pendingMedia.map((item, index) => {
-            const isSelected = linkedMediaIds.includes(item.id);
-
-            return (
-              <Pressable
-                key={item.id}
-                accessibilityRole="button"
-                accessibilityLabel={`تبديل ربط الميديا رقم ${index + 1}`}
-                onPress={() => onToggleMedia(item.id)}
-                style={[styles.chip, isSelected && styles.chipSel]}
-              >
-                <Ionicons
-                  name={item.mediaType === 'video' ? 'videocam-outline' : 'image-outline'}
-                  size={14}
-                  color={isSelected ? colors.white : colors.primary}
-                />
-                <AppText style={[styles.chipText, isSelected && styles.chipTextSel]}>
-                  ميديا {index + 1}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+      <DolabPendingMediaStrip
+        pendingMedia={pendingMedia}
+        mode="selectable"
+        selectedMediaIds={linkedMediaIds}
+        onToggleSelect={onToggleMedia}
+        emptyText="أضف ميديا في دولابك عشان تربطها بالملاحظة."
+      />
 
       <AppButton label="حفظ" onPress={onSave} />
     </AppCard>
