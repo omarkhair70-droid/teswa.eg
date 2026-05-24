@@ -79,16 +79,25 @@ export async function uploadDolabPendingMedia(
   }
 
   const storagePath = buildDolabStoragePath(userId, dolabItemId ?? 'inbox', media);
+  try {
+    const response = await fetch(media.uri);
+    const blob = await response.blob();
 
-  const response = await fetch(media.uri);
-  const blob = await response.blob();
+    const { error } = await supabase.storage.from(DOLAB_BUCKET).upload(storagePath, blob, {
+      contentType: media.mimeType ?? fallbackContentType(media),
+      upsert: false,
+    });
 
-  const { error } = await supabase.storage.from(DOLAB_BUCKET).upload(storagePath, blob, {
-    contentType: media.mimeType ?? fallbackContentType(media),
-    upsert: false,
-  });
-
-  return { data: error ? null : { storagePath }, error: normalizeUploadError(error) };
+    return { data: error ? null : { storagePath }, error: normalizeUploadError(error) };
+  } catch {
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حفظ الميديا سحابيًا حاليًا. شغّال محليًا مؤقتًا.',
+      },
+    };
+  }
 }
 
 export async function saveDolabMediaRow(userId: string, input: SaveDolabMediaRowInput): Promise<DolabResult<DolabMedia | null>> {
@@ -144,6 +153,7 @@ export async function uploadAndSaveDolabMedia(
   });
 
   if (rowResult.error || !rowResult.data) {
+    void supabase.storage.from(DOLAB_BUCKET).remove([uploadResult.data.storagePath]);
     return { data: null, error: rowResult.error };
   }
 
