@@ -32,7 +32,7 @@ export function HomeHubDrawer({ visible, onClose, actions }: { visible: boolean;
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="إغلاق مركز تسوى" />
-        <Animated.View style={[styles.backdrop, { opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0, 0.26] }) }]} />
+        <Animated.View pointerEvents="none" style={[styles.backdrop, { opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0, 0.26] }) }]} />
         <Animated.View style={[styles.drawer, containerTransform]}>
           <View style={styles.header}>
             <AppText weight="bold" style={styles.title}>مركز تسوى</AppText>
