@@ -520,7 +520,12 @@ export default function HomeScreen() {
                     <Ionicons name="moon-outline" size={17} color={colors.textMuted} />
                     <View style={styles.quietStoryCopy}>
                       <AppText muted style={styles.supportMutedText}>لا توجد قصص نشطة بعد. كن أول نبضة اليوم.</AppText>
-                      <Pressable onPress={() => router.push('/story/create')} style={styles.compactStoryAction}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="انشر قصة"
+                        onPress={() => router.push('/story/create')}
+                        style={styles.compactStoryAction}
+                      >
                         <AppText weight="semibold" style={styles.compactStoryActionText}>انشر قصة</AppText>
                       </Pressable>
                     </View>

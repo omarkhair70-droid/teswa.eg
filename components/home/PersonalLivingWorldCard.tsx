@@ -40,7 +40,7 @@ export function PersonalLivingWorldCard({ state, loading = false, onPrimaryActio
         <View style={styles.iconShell}>
           <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
         </View>
-          <AppText muted style={styles.eyebrow}>{state.visitLabel}</AppText>
+        <AppText muted style={styles.eyebrow}>{state.visitLabel}</AppText>
       </View>
 
       {loading ? (
