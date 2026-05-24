@@ -33,7 +33,7 @@ import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/sha
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
 import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDolabNote, fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, updateDolabSavedItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
-import { compressDolabMedia, maxUploadBytesForType, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
+import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -226,11 +226,17 @@ export default function DolabScreen() {
         let uploadCandidate = media;
         setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'uploading', uploadError: undefined } : item)));
 
-        const shouldCompressResult = shouldCompressDolabMedia(media);
+        const sizeResolved = await resolveDolabMediaSize(uploadCandidate);
+        uploadCandidate = sizeResolved.data;
+        if (sizeResolved.error) {
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate } : item)));
+        }
+
+        const shouldCompressResult = shouldCompressDolabMedia(uploadCandidate);
         if (shouldCompressResult.data) {
           setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, compressionStatus: 'compressing', compressionError: undefined } : item)));
           setInlineFeedback('بنجهز الميديا للرفع...');
-          const compressedResult = await compressDolabMedia(media);
+          const compressedResult = await compressDolabMedia(uploadCandidate);
           uploadCandidate = compressedResult.data;
           if (compressedResult.error) compressionFailedCount += 1;
           if (!compressedResult.error && uploadCandidate.compressionStatus === 'compressed') compressedCount += 1;
@@ -243,7 +249,12 @@ export default function DolabScreen() {
 
         const candidateSize = uploadCandidate.compressedSizeBytes ?? uploadCandidate.sizeBytes ?? uploadCandidate.originalSizeBytes;
         const hardMax = maxUploadBytesForType(uploadCandidate.mediaType);
-        if (typeof candidateSize === 'number' && candidateSize > hardMax) {
+        if (typeof candidateSize !== 'number') {
+          failCount += 1;
+          setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate, uploadStatus: 'failed', uploadError: 'تعذر تحديد حجم الملف الآن. هنحاول الرفع بحذر.' } : item)));
+          continue;
+        }
+        if (candidateSize > hardMax) {
           failCount += 1;
           setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, ...uploadCandidate, uploadStatus: 'failed', uploadError: 'حجم الملف كبير جدًا. جرّب ملف أصغر.' } : item)));
           continue;

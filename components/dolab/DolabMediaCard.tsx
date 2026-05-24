@@ -26,11 +26,13 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
   const compressionLabel =
     item.compressionStatus === 'compressing'
       ? 'بيتحسن...'
-      : item.compressionStatus === 'compressed'
-        ? 'مضغوط'
-        : item.compressionStatus === 'failed'
-          ? 'فشل الضغط'
-          : 'بدون ضغط';
+      : item.compressionStatus === 'pending'
+        ? 'هيتحسن قبل الرفع'
+        : item.compressionStatus === 'compressed'
+          ? 'مضغوط'
+          : item.compressionStatus === 'failed'
+            ? 'فشل الضغط'
+            : 'بدون ضغط';
   const savingsResult = formatCompressionSavings(item.originalSizeBytes, item.compressedSizeBytes);
 
   const uploadLabel =

@@ -10,7 +10,7 @@ export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_VIDEO_UPLOAD_BYTES = 80 * 1024 * 1024;
 export const MAX_AUDIO_UPLOAD_BYTES = 20 * 1024 * 1024;
 
-const UNKNOWN_SIZE_FALLBACK = 0;
+const ORIGINAL_IS_BETTER_MESSAGE = 'النسخة الأصلية أنسب للرفع.';
 
 type DolabResult<T> = { data: T; error: string | null };
 
@@ -18,6 +18,43 @@ async function getFileSizeBytes(uri: string): Promise<number | undefined> {
   const info = await FileSystem.getInfoAsync(uri, { size: true });
   if (!info.exists) return undefined;
   return typeof info.size === 'number' && info.size > 0 ? info.size : undefined;
+}
+
+function toJpegFileName(fileName?: string): string | undefined {
+  if (!fileName) return undefined;
+  const normalized = fileName.trim();
+  if (!normalized) return undefined;
+  if (/\.jpe?g$/i.test(normalized)) return normalized;
+  return normalized.replace(/\.[^./]+$/, '') + '.jpg';
+}
+
+export async function resolveDolabMediaSize(media: DolabPendingMedia): Promise<DolabResult<DolabPendingMedia>> {
+  if ((media.sizeBytes && media.sizeBytes > 0) || (media.originalSizeBytes && media.originalSizeBytes > 0)) {
+    return { data: media, error: null };
+  }
+
+  try {
+    const resolvedSize = await getFileSizeBytes(media.uri);
+    if (resolvedSize && resolvedSize > 0) {
+      return {
+        data: {
+          ...media,
+          sizeBytes: resolvedSize,
+          originalSizeBytes: media.originalSizeBytes ?? resolvedSize,
+          compressionError: undefined,
+        },
+        error: null,
+      };
+    }
+  } catch {}
+
+  return {
+    data: {
+      ...media,
+      compressionError: media.compressionError ?? 'تعذر تحديد حجم الملف الآن. هنحاول الرفع بحذر.',
+    },
+    error: 'تعذر تحديد حجم الملف الآن. هنحاول الرفع بحذر.',
+  };
 }
 
 export function maxUploadBytesForType(mediaType: DolabPendingMedia['mediaType']): number {
@@ -30,7 +67,13 @@ export function shouldCompressDolabMedia(media: DolabPendingMedia): DolabResult<
   if (media.mediaType === 'audio') return { data: false, error: null };
   if (media.compressionStatus === 'compressed' && media.compressedSizeBytes && media.uri) return { data: false, error: null };
 
-  const size = media.sizeBytes ?? media.originalSizeBytes ?? UNKNOWN_SIZE_FALLBACK;
+  const size = media.sizeBytes ?? media.originalSizeBytes;
+  if (typeof size !== 'number' || size <= 0) {
+    return {
+      data: media.mediaType === 'image' || media.mediaType === 'video',
+      error: 'تعذر تحديد حجم الملف الآن. هنحاول الرفع بحذر.',
+    };
+  }
   if (media.mediaType === 'image') return { data: size > IMAGE_COMPRESSION_THRESHOLD_BYTES, error: null };
   if (media.mediaType === 'video') return { data: size > VIDEO_COMPRESSION_THRESHOLD_BYTES, error: null };
   return { data: false, error: null };
@@ -50,12 +93,28 @@ export async function compressDolabMedia(media: DolabPendingMedia): Promise<Dola
     if (media.mediaType === 'image') {
       const imageResult = await ImageManipulator.manipulateAsync(media.uri, [], { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG });
       const compressedSizeBytes = await getFileSizeBytes(imageResult.uri);
+      const nextFileName = toJpegFileName(media.fileName ?? media.uri.split('/').pop());
+
+      if (originalSizeBytes && compressedSizeBytes && compressedSizeBytes >= originalSizeBytes) {
+        return {
+          data: {
+            ...media,
+            originalUri: media.originalUri ?? media.uri,
+            originalSizeBytes,
+            compressionStatus: 'not_needed',
+            compressionError: ORIGINAL_IS_BETTER_MESSAGE,
+          },
+          error: null,
+        };
+      }
+
       return {
         data: {
           ...media,
           originalUri: media.originalUri ?? media.uri,
           originalSizeBytes: originalSizeBytes ?? media.sizeBytes,
           uri: imageResult.uri,
+          fileName: nextFileName ?? media.fileName,
           mimeType: 'image/jpeg',
           compressedSizeBytes,
           sizeBytes: compressedSizeBytes ?? media.sizeBytes,
@@ -68,6 +127,20 @@ export async function compressDolabMedia(media: DolabPendingMedia): Promise<Dola
 
     const compressedUri = await VideoCompressor.compress(media.uri, { compressionMethod: 'auto' });
     const compressedSizeBytes = compressedUri ? await getFileSizeBytes(compressedUri) : undefined;
+
+    if (originalSizeBytes && compressedSizeBytes && compressedSizeBytes >= originalSizeBytes) {
+      return {
+        data: {
+          ...media,
+          originalUri: media.originalUri ?? media.uri,
+          originalSizeBytes,
+          compressionStatus: 'not_needed',
+          compressionError: ORIGINAL_IS_BETTER_MESSAGE,
+        },
+        error: null,
+      };
+    }
+
     return {
       data: {
         ...media,
