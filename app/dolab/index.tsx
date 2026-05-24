@@ -19,6 +19,8 @@ import { spacing } from '@/constants/spacing';
 import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-types';
 import { toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
+import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
+import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -51,6 +53,13 @@ export default function DolabScreen() {
   const [localDrafts, setLocalDrafts] = useState<DolabDraftItem[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [draftForm, setDraftForm] = useState<DolabDraftItemInput>(emptyDraftForm);
+  const [selfMessages, setSelfMessages] = useState<DolabSelfMessage[]>([]);
+  const [selfComposerBody, setSelfComposerBody] = useState('');
+  const [selfComposerType, setSelfComposerType] = useState<DolabSelfMessageType>('text');
+  const [selfComposerDraftId, setSelfComposerDraftId] = useState<string | null>(null);
+  const [selfComposerMediaIds, setSelfComposerMediaIds] = useState<string[]>([]);
+  const [selfComposerError, setSelfComposerError] = useState<string | null>(null);
+  const [shareFeedbackMessageId, setShareFeedbackMessageId] = useState<string | null>(null);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -63,6 +72,13 @@ export default function DolabScreen() {
       linkedPendingMediaIds: prev.linkedPendingMediaIds.filter((id) => id !== mediaId),
     }));
     setLocalDrafts((prev) => prev.map((draft) => ({ ...draft, linkedPendingMediaIds: draft.linkedPendingMediaIds.filter((id) => id !== mediaId) })));
+    setSelfComposerMediaIds((prev) => prev.filter((id) => id !== mediaId));
+    setSelfMessages((prev) =>
+      prev.map((message) => ({
+        ...message,
+        linkedPendingMediaIds: message.linkedPendingMediaIds.filter((id) => id !== mediaId),
+      })),
+    );
   };
 
   const resetDraftForm = () => {
@@ -163,6 +179,37 @@ export default function DolabScreen() {
         ? prev.linkedPendingMediaIds.filter((id) => id !== mediaId)
         : [...prev.linkedPendingMediaIds, mediaId],
     }));
+  };
+
+  const toggleSelfComposerMedia = (mediaId: string) => {
+    setSelfComposerMediaIds((prev) => (prev.includes(mediaId) ? prev.filter((id) => id !== mediaId) : [...prev, mediaId]));
+  };
+
+  const saveSelfMessage = () => {
+    const cleanBody = selfComposerBody.trim();
+    if (!cleanBody) {
+      setSelfComposerError('اكتب ملاحظة أو فكرة الأول قبل الحفظ.');
+      return;
+    }
+
+    const newMessage: DolabSelfMessage = {
+      id: `local-self-message-${Date.now()}`,
+      body: cleanBody,
+      messageType: selfComposerType,
+      linkedDraftId: selfComposerDraftId ?? undefined,
+      linkedPendingMediaIds: selfComposerMediaIds,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSelfMessages((prev) => [newMessage, ...prev]);
+    setSelfComposerBody('');
+    setSelfComposerError(null);
+    setShareFeedbackMessageId(null);
+  };
+
+  const deleteSelfMessage = (messageId: string) => {
+    setSelfMessages((prev) => prev.filter((message) => message.id !== messageId));
+    setShareFeedbackMessageId((prev) => (prev === messageId ? null : prev));
   };
 
   const saveLocalDraft = () => {
@@ -404,6 +451,30 @@ export default function DolabScreen() {
             </ScrollView>
           )}
         </AppCard>
+
+        <DolabSelfChatPanel
+          messages={selfMessages}
+          localDrafts={localDrafts}
+          pendingMedia={pendingMedia}
+          composerBody={selfComposerBody}
+          selectedType={selfComposerType}
+          selectedDraftId={selfComposerDraftId}
+          linkedMediaIds={selfComposerMediaIds}
+          composerError={selfComposerError}
+          shareFeedbackMessageId={shareFeedbackMessageId}
+          onChangeBody={(value) => {
+            setSelfComposerBody(value);
+            if (selfComposerError) {
+              setSelfComposerError(null);
+            }
+          }}
+          onSelectType={setSelfComposerType}
+          onSelectDraft={setSelfComposerDraftId}
+          onToggleMedia={toggleSelfComposerMedia}
+          onSave={saveSelfMessage}
+          onShareLater={(messageId) => setShareFeedbackMessageId(messageId)}
+          onDelete={deleteSelfMessage}
+        />
 
         <AppCard>
           <View style={styles.sectionHeader}>
