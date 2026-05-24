@@ -635,6 +635,15 @@ export default function HomeScreen() {
             },
           },
           {
+            label: 'دولابي',
+            description: 'ادخل مساحتك الخاصة للمسودات والميديا والأفكار.',
+            iconName: 'archive-outline',
+            onPress: () => {
+              setHomeHubVisible(false);
+              router.push('/dolab');
+            },
+          },
+          {
             label: 'ملفي',
             description: 'راجع حضورك ومعلوماتك في تِسوى.',
             iconName: 'person-circle-outline',
