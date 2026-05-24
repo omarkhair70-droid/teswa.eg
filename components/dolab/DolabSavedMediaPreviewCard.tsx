@@ -18,7 +18,12 @@ export type DolabSavedMediaCardModel = {
   previewStatus: 'loading' | 'ready' | 'unavailable' | 'failed';
 };
 
-export function DolabSavedMediaPreviewCard({ item, onDelete }: { item: DolabSavedMediaCardModel; onDelete?: (item: DolabSavedMediaCardModel) => void }) {
+type DolabSavedMediaPreviewCardProps = {
+  item: DolabSavedMediaCardModel;
+  onDelete?: (item: DolabSavedMediaCardModel) => void;
+};
+
+export function DolabSavedMediaPreviewCard({ item, onDelete }: DolabSavedMediaPreviewCardProps) {
   const renderPreview = () => {
     if (item.mediaType === 'image' && item.signedUrl) {
       return <Image source={{ uri: item.signedUrl }} style={styles.previewImage} resizeMode="cover" />;
@@ -87,6 +92,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  small: { fontSize: 12 },
-  deleteText: { fontSize: 12, color: colors.danger },
+  small: {
+    fontSize: 12,
+  },
+  deleteText: {
+    fontSize: 12,
+    color: colors.danger,
+  },
 });

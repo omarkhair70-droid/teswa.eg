@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
@@ -56,8 +56,24 @@ export function DolabSavedLibrarySection({
             <View key={item.id} style={styles.row}>
               <AppText style={styles.smallText}>• {item.title} · {item.badge} · ميديا {item.mediaCount}</AppText>
               <View style={styles.rowActions}>
-                {onEditItem ? <AppText style={styles.action} onPress={() => onEditItem(item.id)}>تعديل</AppText> : null}
-                {onDeleteItem ? <AppText style={styles.actionDanger} onPress={() => onDeleteItem(item.id)}>حذف</AppText> : null}
+                {onEditItem ? (
+                  <Pressable
+                    onPress={() => onEditItem(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="تعديل عنصر محفوظ"
+                  >
+                    <AppText style={styles.action}>تعديل</AppText>
+                  </Pressable>
+                ) : null}
+                {onDeleteItem ? (
+                  <Pressable
+                    onPress={() => onDeleteItem(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="حذف عنصر محفوظ"
+                  >
+                    <AppText style={styles.actionDanger}>حذف</AppText>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           ))}
@@ -65,7 +81,15 @@ export function DolabSavedLibrarySection({
           {notes.slice(0, 3).map((note) => (
             <View key={note.id} style={styles.row}>
               <AppText style={styles.smallText}>• ملاحظة ({note.label}): {note.body}</AppText>
-              {onDeleteNote ? <AppText style={styles.actionDanger} onPress={() => onDeleteNote(note.id)}>حذف</AppText> : null}
+              {onDeleteNote ? (
+                <Pressable
+                  onPress={() => onDeleteNote(note.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="حذف ملاحظة محفوظة"
+                >
+                  <AppText style={styles.actionDanger}>حذف</AppText>
+                </Pressable>
+              ) : null}
             </View>
           ))}
 
@@ -84,8 +108,20 @@ const styles = StyleSheet.create({
   smallText: {
     fontSize: 12,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowActions: { flexDirection: 'row', gap: spacing.sm },
-  action: { fontSize: 12 },
-  actionDanger: { fontSize: 12, color: '#B3261E' },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rowActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  action: {
+    fontSize: 12,
+  },
+  actionDanger: {
+    fontSize: 12,
+    color: '#B3261E',
+  },
 });

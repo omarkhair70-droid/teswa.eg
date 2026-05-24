@@ -201,85 +201,83 @@ export default function DolabScreen() {
   const uploadPendingMediaToCloud = async () => {
     if (isUploadingCloud) return;
     setIsUploadingCloud(true);
-    if (!user?.id) {
-      setInlineFeedback('سجّل الدخول عشان تحفظ ميديا الدولاب سحابيًا.');
-      setIsUploadingCloud(false);
-      return;
-    }
+    try {
+      if (!user?.id) {
+        setInlineFeedback('سجّل الدخول عشان تحفظ ميديا الدولاب سحابيًا.');
+        return;
+      }
 
-    const toProcess = pendingMedia.filter((item) => item.uploadStatus !== 'uploaded' && item.uploadStatus !== 'uploading' && !item.remoteMediaId);
-    if (toProcess.length === 0) {
-      setInlineFeedback('كل الميديا الحالية محفوظة أو لا تحتاج رفع الآن.');
-      setIsUploadingCloud(false);
-      return;
-    }
+      const toProcess = pendingMedia.filter((item) => item.uploadStatus !== 'uploaded' && item.uploadStatus !== 'uploading' && !item.remoteMediaId);
+      if (toProcess.length === 0) {
+        setInlineFeedback('كل الميديا الحالية محفوظة أو لا تحتاج رفع الآن.');
+        return;
+      }
 
-    let successCount = 0;
-    let failCount = 0;
-    let skippedAudioCount = 0;
+      let successCount = 0;
+      let failCount = 0;
+      let skippedAudioCount = 0;
 
-    for (const media of toProcess) {
-      if (media.mediaType === 'audio' && media.uri.startsWith('local://')) {
-        skippedAudioCount += 1;
+      for (const media of toProcess) {
+        if (media.mediaType === 'audio' && media.uri.startsWith('local://')) {
+          skippedAudioCount += 1;
+          setPendingMedia((prev) =>
+            prev.map((item) =>
+              item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: 'الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.' } : item,
+            ),
+          );
+          continue;
+        }
+
+        setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'uploading', uploadError: undefined } : item)));
+        const linkedRemoteDraftId = findLinkedRemoteDraftId(media.id);
+        const result = await uploadAndSaveDolabMedia(user.id, media, { dolabItemId: linkedRemoteDraftId, sortOrder: 0 });
+
+        if (result.error || !result.data) {
+          failCount += 1;
+          setPendingMedia((prev) =>
+            prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: result.error?.message } : item)),
+          );
+          if (result.error?.kind === 'schema_missing') setCloudStatus('schema_missing');
+          continue;
+        }
+
+        successCount += 1;
         setPendingMedia((prev) =>
           prev.map((item) =>
-            item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: 'الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.' } : item,
+            item.id === media.id
+              ? {
+                  ...item,
+                  uploadStatus: 'uploaded',
+                  uploadError: undefined,
+                  storagePath: result.data?.storagePath,
+                  remoteMediaId: result.data?.media.id,
+                }
+              : item,
           ),
         );
-        continue;
       }
 
-      setPendingMedia((prev) => prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'uploading', uploadError: undefined } : item)));
-      const linkedRemoteDraftId = findLinkedRemoteDraftId(media.id);
-      const result = await uploadAndSaveDolabMedia(user.id, media, { dolabItemId: linkedRemoteDraftId, sortOrder: 0 });
-
-      if (result.error || !result.data) {
-        failCount += 1;
-        setPendingMedia((prev) =>
-          prev.map((item) => (item.id === media.id ? { ...item, uploadStatus: 'failed', uploadError: result.error?.message } : item)),
-        );
-        if (result.error?.kind === 'schema_missing') setCloudStatus('schema_missing');
-        continue;
+      if (successCount > 0) {
+        setCloudStatus('partial_sync');
+        await refreshRemoteSnapshot(user.id);
       }
 
-      successCount += 1;
-      setPendingMedia((prev) =>
-        prev.map((item) =>
-          item.id === media.id
-            ? {
-                ...item,
-                uploadStatus: 'uploaded',
-                uploadError: undefined,
-                storagePath: result.data?.storagePath,
-                remoteMediaId: result.data?.media.id,
-              }
-            : item,
-        ),
-      );
-    }
-
-    if (successCount > 0) {
-      setCloudStatus('partial_sync');
-      await refreshRemoteSnapshot(user.id);
-    }
-
-    if (failCount > 0 && successCount > 0) {
-      setInlineFeedback(`تم حفظ ${successCount} عنصر سحابيًا، وتعذر حفظ ${failCount} عنصر. شغّال محليًا مؤقتًا.`);
+      if (failCount > 0 && successCount > 0) {
+        setInlineFeedback(`تم حفظ ${successCount} عنصر سحابيًا، وتعذر حفظ ${failCount} عنصر. شغّال محليًا مؤقتًا.`);
+        return;
+      }
+      if (failCount > 0) {
+        setInlineFeedback('تعذر حفظ بعض الميديا سحابيًا. شغّال محليًا مؤقتًا.');
+        return;
+      }
+      if (skippedAudioCount > 0) {
+        setInlineFeedback('الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.');
+        return;
+      }
+      setInlineFeedback('تم حفظ الميديا السحابية بنجاح.');
+    } finally {
       setIsUploadingCloud(false);
-      return;
     }
-    if (failCount > 0) {
-      setInlineFeedback('تعذر حفظ بعض الميديا سحابيًا. شغّال محليًا مؤقتًا.');
-      setIsUploadingCloud(false);
-      return;
-    }
-    if (skippedAudioCount > 0) {
-      setInlineFeedback('الملاحظة الصوتية لسه Placeholder، التسجيل الحقيقي في PR لاحق.');
-      setIsUploadingCloud(false);
-      return;
-    }
-    setInlineFeedback('تم حفظ الميديا السحابية بنجاح.');
-    setIsUploadingCloud(false);
   };
 
   const resetDraftForm = () => {
@@ -610,7 +608,7 @@ export default function DolabScreen() {
 
 
 
-  const requestDelete = (target: { type: 'item'|'note'|'media'; id: string; storagePath?: string }) => {
+  const requestDelete = (target: { type: 'item' | 'note' | 'media'; id: string; storagePath?: string }) => {
     setSelectedDelete(target);
     confirmDeleteRef.current?.present();
   };
@@ -1006,7 +1004,19 @@ export default function DolabScreen() {
         title="تأكيد الحذف"
         description="الحذف من الدولاب السحابي لا يمكن التراجع عنه حاليًا."
         titleIconName="trash-outline"
-        actions={[{ label: 'احذف', tone: 'danger', onPress: () => { void confirmDelete(); } }, { label: 'إلغاء', onPress: () => confirmDeleteRef.current?.dismiss() }]}
+        actions={[
+          {
+            label: 'احذف',
+            tone: 'danger',
+            onPress: () => {
+              void confirmDelete();
+            },
+          },
+          {
+            label: 'إلغاء',
+            onPress: () => confirmDeleteRef.current?.dismiss(),
+          },
+        ]}
       />
 
       <AppBottomSheet

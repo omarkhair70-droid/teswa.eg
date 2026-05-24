@@ -3,7 +3,12 @@ import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { DolabSavedMediaPreviewCard, type DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 
-export function DolabSavedMediaGrid({ media, onDeleteMedia }: { media: DolabSavedMediaCardModel[]; onDeleteMedia?: (item: DolabSavedMediaCardModel) => void }) {
+type DolabSavedMediaGridProps = {
+  media: DolabSavedMediaCardModel[];
+  onDeleteMedia?: (item: DolabSavedMediaCardModel) => void;
+};
+
+export function DolabSavedMediaGrid({ media, onDeleteMedia }: DolabSavedMediaGridProps) {
   if (media.length === 0) {
     return <AppText muted style={styles.empty}>مفيش ميديا محفوظة سحابيًا لسه.</AppText>;
   }

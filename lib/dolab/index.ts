@@ -150,13 +150,33 @@ export async function fetchDolabNotes(userId: string): Promise<DolabResult<Dolab
 }
 
 export async function deleteDolabNote(userId: string, noteId: string): Promise<DolabResult<{ id: string } | null>> {
-  const { error } = await supabase.from('dolab_notes').delete().eq('id', noteId).eq('user_id', userId);
-  return { data: error ? null : { id: noteId }, error: normalizeDolabPersistenceError(error) };
+  try {
+    const { error } = await supabase.from('dolab_notes').delete().eq('id', noteId).eq('user_id', userId);
+    return { data: error ? null : { id: noteId }, error: normalizeDolabPersistenceError(error) };
+  } catch {
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حذف الملاحظة من الدولاب حاليًا.',
+      },
+    };
+  }
 }
 
 export async function deleteDolabItem(userId: string, itemId: string): Promise<DolabResult<{ id: string } | null>> {
-  const { error } = await supabase.from('dolab_items').delete().eq('id', itemId).eq('user_id', userId);
-  return { data: error ? null : { id: itemId }, error: normalizeDolabPersistenceError(error) };
+  try {
+    const { error } = await supabase.from('dolab_items').delete().eq('id', itemId).eq('user_id', userId);
+    return { data: error ? null : { id: itemId }, error: normalizeDolabPersistenceError(error) };
+  } catch {
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حذف العنصر من الدولاب حاليًا.',
+      },
+    };
+  }
 }
 
 export async function deleteDolabMedia(
@@ -164,22 +184,37 @@ export async function deleteDolabMedia(
   mediaId: string,
   storagePath: string,
 ): Promise<DolabResult<{ id: string } | null>> {
-  const storageResult = await supabase.storage.from(DOLAB_BUCKET).remove([storagePath]);
-  if (storageResult.error) {
-    return {
-      data: null,
-      error: normalizeDolabPersistenceError(storageResult.error) ?? { kind: 'unknown', message: 'تعذر حذف الملف من التخزين السحابي.' },
-    };
-  }
+  try {
+    // Delete the DB row first so the UI/source-of-truth no longer references this media.
+    const { error } = await supabase.from('dolab_media').delete().eq('id', mediaId).eq('user_id', userId);
+    if (error) {
+      return {
+        data: null,
+        error: normalizeDolabPersistenceError(error) ?? { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب.' },
+      };
+    }
 
-  const { error } = await supabase.from('dolab_media').delete().eq('id', mediaId).eq('user_id', userId);
-  if (error) {
+    const storageResult = await supabase.storage.from(DOLAB_BUCKET).remove([storagePath]);
+    if (storageResult.error) {
+      return {
+        data: { id: mediaId },
+        error: {
+          kind: 'unknown',
+          message: 'اتحذف سجل الميديا، لكن تنظيف ملف التخزين السحابي اتعطل.',
+        },
+      };
+    }
+
+    return { data: { id: mediaId }, error: null };
+  } catch {
     return {
       data: null,
-      error: normalizeDolabPersistenceError(error) ?? { kind: 'unknown', message: 'تم حذف الملف، لكن فشل حذف سجل الميديا من الدولاب.' },
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حذف الميديا من الدولاب حاليًا.',
+      },
     };
   }
-  return { data: { id: mediaId }, error: null };
 }
 
 export const fetchDolabLibrarySnapshot = fetchDolabRemoteSnapshot;
