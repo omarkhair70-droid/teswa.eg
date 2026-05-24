@@ -71,18 +71,78 @@ create policy "dolab_items_delete_own" on public.dolab_items for delete to authe
 drop policy if exists "dolab_media_select_own" on public.dolab_media;
 create policy "dolab_media_select_own" on public.dolab_media for select to authenticated using (auth.uid() = user_id);
 drop policy if exists "dolab_media_insert_own" on public.dolab_media;
-create policy "dolab_media_insert_own" on public.dolab_media for insert to authenticated with check (auth.uid() = user_id);
+create policy "dolab_media_insert_own" on public.dolab_media for insert to authenticated with check (
+  auth.uid() = user_id
+  and (
+    dolab_item_id is null
+    or exists (
+      select 1 from public.dolab_items di
+      where di.id = dolab_media.dolab_item_id
+      and di.user_id = auth.uid()
+    )
+  )
+);
 drop policy if exists "dolab_media_update_own" on public.dolab_media;
-create policy "dolab_media_update_own" on public.dolab_media for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "dolab_media_update_own" on public.dolab_media for update to authenticated
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and (
+    dolab_item_id is null
+    or exists (
+      select 1 from public.dolab_items di
+      where di.id = dolab_media.dolab_item_id
+      and di.user_id = auth.uid()
+    )
+  )
+);
 drop policy if exists "dolab_media_delete_own" on public.dolab_media;
 create policy "dolab_media_delete_own" on public.dolab_media for delete to authenticated using (auth.uid() = user_id);
 
 drop policy if exists "dolab_notes_select_own" on public.dolab_notes;
 create policy "dolab_notes_select_own" on public.dolab_notes for select to authenticated using (auth.uid() = user_id);
 drop policy if exists "dolab_notes_insert_own" on public.dolab_notes;
-create policy "dolab_notes_insert_own" on public.dolab_notes for insert to authenticated with check (auth.uid() = user_id);
+create policy "dolab_notes_insert_own" on public.dolab_notes for insert to authenticated with check (
+  auth.uid() = user_id
+  and (
+    dolab_item_id is null
+    or exists (
+      select 1 from public.dolab_items di
+      where di.id = dolab_notes.dolab_item_id
+      and di.user_id = auth.uid()
+    )
+  )
+  and (
+    media_id is null
+    or exists (
+      select 1 from public.dolab_media dm
+      where dm.id = dolab_notes.media_id
+      and dm.user_id = auth.uid()
+    )
+  )
+);
 drop policy if exists "dolab_notes_update_own" on public.dolab_notes;
-create policy "dolab_notes_update_own" on public.dolab_notes for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "dolab_notes_update_own" on public.dolab_notes for update to authenticated
+using (auth.uid() = user_id)
+with check (
+  auth.uid() = user_id
+  and (
+    dolab_item_id is null
+    or exists (
+      select 1 from public.dolab_items di
+      where di.id = dolab_notes.dolab_item_id
+      and di.user_id = auth.uid()
+    )
+  )
+  and (
+    media_id is null
+    or exists (
+      select 1 from public.dolab_media dm
+      where dm.id = dolab_notes.media_id
+      and dm.user_id = auth.uid()
+    )
+  )
+);
 drop policy if exists "dolab_notes_delete_own" on public.dolab_notes;
 create policy "dolab_notes_delete_own" on public.dolab_notes for delete to authenticated using (auth.uid() = user_id);
 
