@@ -23,6 +23,7 @@ import { fetchHomeDashboardSummary, HomeDashboardSummary } from '@/lib/home-dash
 import { ActiveStorySummary, fetchActiveStoriesForHome } from '@/lib/stories';
 import { fetchRecentItemVideoDiscoveryMoments, ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
 import { PersonalLivingWorldCard } from '@/components/home/PersonalLivingWorldCard';
+import { HomeLivingWorldHero } from '@/components/home/HomeLivingWorldHero';
 import {
   buildPersonalLivingWorldState,
   countActiveStoriesSince,
@@ -342,41 +343,13 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <AppFadeIn delay={0} duration={200} fromY={8}>
-              <LinearGradient
-              colors={['#FFFDF8', '#F4DDCC', '#FFF6E8']}
-              start={{ x: 0.08, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
-            >
-              <View style={[styles.heroOrb, styles.heroOrbPrimary]} />
-              <View style={[styles.heroOrb, styles.heroOrbAccent]} />
-              <View style={styles.heroIconShell}>
-                <Ionicons name="home-outline" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.heroCopy}>
-                <View style={styles.heroTopRow}>
-                  <Pressable style={styles.notificationsEntry} onPress={() => router.push('/notifications')}>
-                    <Ionicons name="notifications-outline" size={18} color={colors.primary} />
-                    {notificationsUnreadCount > 0 ? (
-                      <View style={styles.unreadBadge}>
-                        <AppText weight="bold" style={styles.unreadBadgeText}>{notificationsUnreadCount > 99 ? '99+' : notificationsUnreadCount}</AppText>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                  <Pressable
-                    style={styles.hubEntry}
-                    accessibilityRole="button"
-                    accessibilityLabel="فتح مركز تسوى"
-                    onPress={() => homeHubSheetRef.current?.present()}
-                  >
-                    <Ionicons name="compass-outline" size={18} color={colors.primary} />
-                  </Pressable>
-                </View>
-                <AppText weight="bold" style={styles.title}>أهلاً بك في تِسوى</AppText>
-                <AppText style={styles.heroBody}>هنا تبدأ الحكايات، تتحرك الحاجات، وتفتح المقايضات بابها بهدوء.</AppText>
-                <AppText muted style={styles.heroSupport}>تابع ما يهمك الآن، أو خذ جولة دافئة في الجديد حولك.</AppText>
-              </View>
-              </LinearGradient>
+              <HomeLivingWorldHero
+                unreadCount={notificationsUnreadCount}
+                onOpenNotifications={() => router.push('/notifications')}
+                onOpenHub={() => homeHubSheetRef.current?.present()}
+                onStartSwap={() => router.push('/(tabs)/add')}
+                onDiscover={() => router.push('/(tabs)/discover')}
+              />
             </AppFadeIn>
             {user ? (
               <AppFadeIn delay={40} duration={210} fromY={8}>
