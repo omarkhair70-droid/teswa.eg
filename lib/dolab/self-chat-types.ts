@@ -6,6 +6,7 @@ export type DolabSelfMessage = {
   messageType: DolabSelfMessageType;
   linkedDraftId?: string;
   linkedPendingMediaIds: string[];
+  remoteNoteId?: string;
   createdAt: string;
 };
 
