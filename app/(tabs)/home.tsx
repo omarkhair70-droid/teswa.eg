@@ -356,7 +356,7 @@ export default function HomeScreen() {
                 <View style={styles.dashboardSection}>
                   <View style={styles.sectionHeader}>
                     <AppText weight="bold" style={styles.sectionTitle}>يهمك الآن</AppText>
-                    <AppText muted>نبضة شخصية تجمع لك أقرب خطوة، من غير ضجيج.</AppText>
+                    <AppText muted style={styles.supportMutedText}>نبضة شخصية تجمع لك أقرب خطوة، من غير ضجيج.</AppText>
                   </View>
 
                   {dashboardLoading ? (
@@ -386,12 +386,12 @@ export default function HomeScreen() {
                         </View>
                         <View style={styles.nextActionCopy}>
                           <AppText weight="bold" style={styles.nextActionTitle}>{nextAction.title}</AppText>
-                          <AppText muted>{nextAction.description}</AppText>
+                          <AppText muted style={styles.supportMutedText}>{nextAction.description}</AppText>
                         </View>
                       </View>
                       <AppButton
                         label={nextAction.buttonLabel}
-                        variant={nextAction.variant}
+                        variant={nextAction.kind === 'firstItem' ? 'neutral' : nextAction.variant}
                         onPress={() => router.push(nextAction.route)}
                       />
                     </LinearGradient>
@@ -444,7 +444,7 @@ export default function HomeScreen() {
                 <View style={styles.storiesHeaderRow}>
                   <View style={styles.sectionHeader}>
                     <AppText weight="bold" style={styles.sectionTitle}>القصص</AppText>
-                    <AppText muted>لقطات قريبة من عالم تِسوى الآن.</AppText>
+                    <AppText muted style={styles.supportMutedText}>لقطات قريبة من عالم تِسوى الآن.</AppText>
                   </View>
                   {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
                     <View style={styles.storyCountBadge}>
@@ -518,7 +518,12 @@ export default function HomeScreen() {
                 {!storiesLoading && !storiesError && stories.length === 0 ? (
                   <View style={styles.quietStoryState}>
                     <Ionicons name="moon-outline" size={17} color={colors.textMuted} />
-                    <AppText muted>لا توجد قصص نشطة بعد. كن أول نبضة اليوم.</AppText>
+                    <View style={styles.quietStoryCopy}>
+                      <AppText muted style={styles.supportMutedText}>لا توجد قصص نشطة بعد. كن أول نبضة اليوم.</AppText>
+                      <Pressable onPress={() => router.push('/story/create')} style={styles.compactStoryAction}>
+                        <AppText weight="semibold" style={styles.compactStoryActionText}>انشر قصة</AppText>
+                      </Pressable>
+                    </View>
                   </View>
                 ) : null}
               </View>
@@ -646,7 +651,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  header: { gap: spacing.md, marginBottom: spacing.md },
+  header: { gap: spacing.sm, marginBottom: spacing.md },
   heroCard: {
     minHeight: 190,
     gap: spacing.md,
@@ -718,15 +723,17 @@ const styles = StyleSheet.create({
   heroBody: { fontSize: 16, lineHeight: 24 },
   heroSupport: { lineHeight: 22 },
   sectionHeader: { gap: spacing.xs, flexShrink: 1 },
+  supportMutedText: { color: '#5F5348' },
   sectionTitle: { fontSize: 18 },
-  dashboardSection: { gap: spacing.md },
+  dashboardSection: { gap: spacing.sm },
   dashboardErrorText: { color: '#B42318' },
   nextActionBlock: {
-    gap: spacing.sm,
+    gap: spacing.xs,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.12)',
     borderRadius: radii.lg,
-    padding: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     overflow: 'hidden',
   },
   nextActionTopRow: {
@@ -756,7 +763,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(221,208,197,0.82)',
     borderRadius: radii.lg,
     backgroundColor: 'rgba(255,253,248,0.82)',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
     gap: spacing.xs,
@@ -770,9 +777,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
   metricValue: { fontSize: 22, lineHeight: 27 },
-  storiesSection: {
-    gap: spacing.md,
-  },
+  storiesSection: { gap: spacing.sm },
   storiesHeaderRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
@@ -871,12 +876,24 @@ const styles = StyleSheet.create({
   },
   quietStoryState: {
     flexDirection: 'row-reverse',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     borderRadius: radii.md,
     backgroundColor: 'rgba(249,243,234,0.72)',
-    padding: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
+  quietStoryCopy: { flex: 1, gap: 6 },
+  compactStoryAction: {
+    alignSelf: 'flex-start',
+    borderRadius: radii.round,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.28)',
+    backgroundColor: 'rgba(255,253,248,0.9)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  compactStoryActionText: { color: colors.primary, fontSize: 12 },
   cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   cacheNoticeText: { flex: 1 },
   itemsHeader: {
