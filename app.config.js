@@ -19,9 +19,11 @@ module.exports = {
     },
     android: {
       package: IS_PREVIEW ? 'com.teswa.mobile.preview' : 'com.teswa.mobile',
-      googleServicesFile: IS_PREVIEW && hasPreviewGoogleServices
-        ? './google-services.preview.json'
-        : './google-services.json',
+      ...(IS_PREVIEW
+        ? (hasPreviewGoogleServices
+          ? { googleServicesFile: './google-services.preview.json' }
+          : {})
+        : { googleServicesFile: './google-services.json' }),
       adaptiveIcon: {
         foregroundImage: './assets/branding/adaptive-icon-foreground.png',
         backgroundColor: '#B8623F',
