@@ -35,7 +35,7 @@ type Props = {
   selectedDraftId: string | null;
   linkedMediaIds: string[];
   composerError: string | null;
-  preparedShareSourceIds: string[];
+  shareStatusBySourceId: Record<string, "prepared" | "sent">;
   onChangeBody: (value: string) => void;
   onSelectType: (value: DolabSelfMessageType) => void;
   onSelectDraft: (value: string | null) => void;
@@ -55,7 +55,7 @@ export function DolabSelfChatPanel(props: Props) {
     selectedDraftId,
     linkedMediaIds,
     composerError,
-    preparedShareSourceIds,
+    shareStatusBySourceId,
     onChangeBody,
     onSelectType,
     onSelectDraft,
@@ -126,9 +126,9 @@ export function DolabSelfChatPanel(props: Props) {
               </Pressable>
             </View>
 
-            {preparedShareSourceIds.includes(message.id) ? (
+            {shareStatusBySourceId[message.id] ? (
               <View style={styles.preparedBadge}>
-                <AppText style={styles.preparedBadgeText}>مجهز للمشاركة</AppText>
+                <AppText style={styles.preparedBadgeText}>{shareStatusBySourceId[message.id] === 'sent' ? 'اتشاركت' : 'مجهز للمشاركة'}</AppText>
               </View>
             ) : null}
           </View>
