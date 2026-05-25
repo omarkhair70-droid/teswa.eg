@@ -28,6 +28,10 @@ import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
 import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import { DolabSavedLibrarySection } from '@/components/dolab/DolabSavedLibrarySection';
 import { DolabAudioRecorderSheet } from '@/components/dolab/DolabAudioRecorderSheet';
+import { DolabOrganizationBar } from '@/components/dolab/DolabOrganizationBar';
+import { DolabSearchBar } from '@/components/dolab/DolabSearchBar';
+import { DolabFilterChips } from '@/components/dolab/DolabFilterChips';
+import { DolabEmptyFilteredState } from '@/components/dolab/DolabEmptyFilteredState';
 import type { DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
@@ -37,6 +41,7 @@ import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDo
 import { type DirectConversationSummary, sendDirectMessage } from '@/lib/direct-messages';
 import { buildDolabShareToChatBody } from '@/lib/dolab/share-to-chat';
 import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
+import { byTime, includesQuery, type DolabSortMode, type DolabStatusFilter, type DolabViewMode } from '@/lib/dolab/organization';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -93,6 +98,10 @@ export default function DolabScreen() {
   const [selectedDelete, setSelectedDelete] = useState<{ type: 'item'|'note'|'media'; id: string; storagePath?: string } | null>(null);
   const [isSendingShareToChat, setIsSendingShareToChat] = useState(false);
   const [conversationPickerRefreshKey, setConversationPickerRefreshKey] = useState(0);
+  const [viewMode, setViewMode] = useState<DolabViewMode>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<DolabSortMode>('newest');
+  const [statusFilter, setStatusFilter] = useState<DolabStatusFilter>('all');
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -172,6 +181,57 @@ export default function DolabScreen() {
   const mappedSavedNotes = useMemo(() => savedRemote.notes.map((n) => ({ id: n.id, body: n.body || 'ملاحظة بدون نص', label: n.note_type, createdAt: n.created_at })), [savedRemote.notes]);
 
   const visibleLocalDrafts = useMemo(() => localDrafts.filter((draft) => !draft.remoteDolabItemId), [localDrafts]);
+  const query = searchQuery.trim().toLowerCase();
+  const isStatusMatch = (value: DolabStatusFilter) => statusFilter === 'all' || statusFilter === value;
+  const issuesMedia = useMemo(
+    () => pendingMedia.filter((item) => item.uploadStatus === 'failed' || item.compressionStatus === 'failed'),
+    [pendingMedia],
+  );
+  const visiblePendingMedia = useMemo(
+    () =>
+      byTime(
+        pendingMedia.filter((item) => includesQuery([item.fileName, item.label], query)).filter((item) => {
+          if (statusFilter === 'failed') return item.uploadStatus === 'failed' || item.compressionStatus === 'failed';
+          if (statusFilter === 'temporary') return true;
+          return statusFilter === 'all';
+        }),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [pendingMedia, query, sortMode, statusFilter],
+  );
+  const visibleSavedItems = useMemo(
+    () =>
+      byTime(
+        mappedSavedItems.filter((item) => includesQuery([item.title, item.description], query)).filter((item) => {
+          if (statusFilter === 'saved') return !item.isPublished;
+          if (statusFilter === 'published') return item.isPublished;
+          return statusFilter === 'all';
+        }),
+        () => Date.now(),
+        sortMode,
+        (item) => (item.isPublished ? 2 : 1),
+      ),
+    [mappedSavedItems, query, sortMode, statusFilter],
+  );
+  const visibleSavedNotes = useMemo(
+    () =>
+      byTime(
+        mappedSavedNotes.filter((item) => includesQuery([item.body, item.label], query)).filter(() => isStatusMatch('saved')),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [mappedSavedNotes, query, sortMode, statusFilter],
+  );
+  const visibleSelfMessages = useMemo(
+    () =>
+      byTime(
+        selfMessages.filter((item) => includesQuery([item.body], query)).filter(() => isStatusMatch('temporary')),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [selfMessages, query, sortMode, statusFilter],
+  );
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -860,12 +920,16 @@ export default function DolabScreen() {
         >
           <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
         </Pressable>
+        <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
+        <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
+        <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
 
+        {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
-            items={mappedSavedItems}
-            notes={mappedSavedNotes}
-            media={mappedSavedMedia}
+            items={visibleSavedItems}
+            notes={viewMode === 'drafts' ? [] : visibleSavedNotes}
+            media={viewMode === 'drafts' || viewMode === 'ready' ? [] : mappedSavedMedia}
             onDeleteNote={(id) => requestDelete({ type: 'note', id })}
             onDeleteItem={(id) => requestDelete({ type: 'item', id })}
             onDeleteMedia={(item) =>
@@ -878,9 +942,9 @@ export default function DolabScreen() {
             onPublishItem={routeSavedItemToAdd}
             onOpenPublishedItem={openPublishedItem}
           />
-        </DolabAnimatedSection>
+        </DolabAnimatedSection>)}
 
-        <DolabAnimatedSection delay={30}>
+        {(viewMode === 'all' || viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">ميديا مؤقتة</AppText>
@@ -893,17 +957,17 @@ export default function DolabScreen() {
           <AppText muted style={styles.smallText}>تقدر تعيد محاولة حفظ العناصر الفاشلة.</AppText>
 
           <DolabPendingMediaStrip
-            pendingMedia={pendingMedia}
+            pendingMedia={viewMode === 'issues' ? issuesMedia : visiblePendingMedia}
             mode="preview"
             onRemove={removePendingMedia}
             emptyText="لسه ما أضفتش ميديا محلية."
           />
         </AppCard>
-        </DolabAnimatedSection>
+        </DolabAnimatedSection>}
 
-        <DolabAnimatedSection delay={70}>
+        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
-          messages={selfMessages}
+          messages={visibleSelfMessages}
           localDrafts={localDrafts}
           pendingMedia={pendingMedia}
           composerBody={selfComposerBody}
@@ -927,11 +991,11 @@ export default function DolabScreen() {
           onShareLater={openShareBridge}
           onDelete={deleteSelfMessage}
         />
-        </DolabAnimatedSection>
+        </DolabAnimatedSection>}
 
 
 
-        <DolabAnimatedSection delay={120}><AppCard>
+        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز للمشاركة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
@@ -954,10 +1018,10 @@ export default function DolabScreen() {
               ))}
             </View>
           )}
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
 
 
-        <DolabAnimatedSection delay={170}><AppCard>
+        {(viewMode === 'all' || viewMode === 'ready') && <DolabAnimatedSection delay={170}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">عروض جاهزة للسوق</AppText>
             <AppText muted>تحضيرات محلية لحد ما نربط النشر الحقيقي.</AppText>
@@ -995,9 +1059,9 @@ export default function DolabScreen() {
               ))}
             </View>
           )}
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
 
-        <DolabAnimatedSection delay={220}><AppCard>
+        {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز يتحول لعرض</AppText>
             <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
@@ -1051,9 +1115,9 @@ export default function DolabScreen() {
               </View>
             ))}
           </View>
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
 
-        <DolabAnimatedSection delay={260}><AppCard>
+        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">أفكار التبادل</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
@@ -1066,7 +1130,11 @@ export default function DolabScreen() {
               </View>
             ))}
           </View>
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
+
+        {viewMode === 'issues' && issuesMedia.length === 0 && (
+          <DolabEmptyFilteredState description="مفيش مشاكل حاليًا." />
+        )}
 
         <AppCard>
           <EmptyState
