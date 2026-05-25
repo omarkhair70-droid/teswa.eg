@@ -1606,8 +1606,8 @@ export default function DolabScreen() {
 
         {(viewMode === 'drafts' || viewMode === 'ready') && (viewMode === 'ready' || !isDraftsShelfEmpty) && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">مسودات على الرف</AppText>
-            <AppText muted>حاجات بتتجهز عشان تطلع للسوق.</AppText>
+            <AppText weight="bold">{viewMode === 'ready' ? 'جاهزة للمراجعة' : 'المسودات الحالية'}</AppText>
+            <AppText muted>{viewMode === 'ready' ? 'راجعها قبل ما تطلع للسوق.' : 'كمّل التفاصيل أو جهّزها للعرض.'}</AppText>
           </View>
           <View style={styles.listWrap}>
             {visibleLocalDraftCardsFiltered.map((draft) => (
