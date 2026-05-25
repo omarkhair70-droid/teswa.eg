@@ -1389,6 +1389,11 @@ export default function DolabScreen() {
                   description="الصق نص، اختار ملف، أو ابعت حاجة للدولاب… وهتظهر هنا قبل ما تقرر مكانها."
                   iconName="download-outline"
                 />
+                <View style={styles.mediaActionsRow}>
+                  <AppButton label="اكتب نص سريع" variant="neutral" onPress={() => inboxQuickNoteSheetRef.current?.present()} />
+                  <Pressable style={styles.actionBtnInline} onPress={() => { void captureClipboard(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>الصق من الحافظة</AppText></Pressable>
+                  <Pressable style={styles.actionBtnInline} onPress={() => { void captureDocument(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اختار ملف</AppText></Pressable>
+                </View>
               </AppCard>
             )}
             {!isInboxShelfEmpty && (
