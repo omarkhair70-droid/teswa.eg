@@ -148,3 +148,40 @@ Security rules:
 ### Next step: Stream Direct Chat Pilot
 
 Run an internal pilot route powered by backend-minted Stream tokens while keeping Supabase direct chat as the unchanged production default.
+
+## Internal Stream direct pilot route
+
+A dedicated internal pilot route now exists at:
+
+- `/chat-lab/direct-pilot`
+
+Scope and safety:
+
+- This screen is **internal-only** and does not replace or alter `app/direct/[id].tsx`.
+- It uses backend-minted Stream tokens via `fetchStreamChatToken()`.
+- It does not touch Supabase direct-message tables, schemas, or message history.
+- It does not add global Stream provider wiring or production navigation entries.
+
+Pilot behavior:
+
+- Fetches `{ apiKey, userId, token }` from the existing Supabase Edge Function token flow.
+- Connects one Stream user and watches a stable one-user pilot channel:
+  - type: `messaging`
+  - channel id: `teswa-direct-pilot-{userId}`
+  - members: `[userId]`
+- Renders status cards for:
+  - backend token fetched
+  - user connected
+  - channel ready
+  - UI mode
+- Supports a minimal fallback composer and send flow with `channel.sendMessage({ text })` for runtime SDK validation.
+
+Failure mode requirements:
+
+- If backend token fetch fails (missing/dead function or missing server secrets), the route shows a safe `EmptyState` error and does not crash app startup.
+
+### Next phase (after pilot validation)
+
+- Map real two-user direct conversations to deterministic Stream channel IDs derived from current direct conversation IDs.
+- Keep coexistence with Supabase direct chat until parity and rollout readiness are proven.
+- Evaluate phased opt-in routing only after internal pilot KPIs pass.
