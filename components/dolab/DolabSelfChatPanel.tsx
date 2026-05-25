@@ -68,8 +68,8 @@ export function DolabSelfChatPanel(props: Props) {
   return (
     <AppCard>
       <View style={styles.sectionHeader}>
-        <AppText weight="bold">شات مع نفسك</AppText>
-        <AppText muted>اكتب أفكار التبادل، ملاحظاتك، أو الكلام اللي ممكن تبعته لاحقًا.</AppText>
+        <AppText weight="bold">الكلام مع نفسي</AppText>
+        <AppText muted>اكتب نوت، سجّل ريكورد، أو سيب فكرة ترجع لها قبل ما تطلع الحاجة للسوق.</AppText>
       </View>
 
       {messages.length === 0 ? (
