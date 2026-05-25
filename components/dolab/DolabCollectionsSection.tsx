@@ -5,7 +5,110 @@ import type { DolabCollection } from '@/lib/dolab/collections';
 import { spacing } from '@/constants/spacing';
 import { colors } from '@/constants/colors';
 
-export function DolabCollectionsSection({ collections, counts, selectedCollectionId, onSelectCollection, newCollectionName, onChangeNewCollectionName, onCreateCollection }: { collections: DolabCollection[]; counts: Record<string, number>; selectedCollectionId: string | null; onSelectCollection: (id: string) => void; newCollectionName: string; onChangeNewCollectionName: (value: string) => void; onCreateCollection: () => void }) {
-  return <AppCard><View style={styles.header}><AppText weight="bold">مجموعاتي</AppText><AppText muted>محلي مؤقتًا</AppText></View><View style={styles.row}><TextInput value={newCollectionName} onChangeText={onChangeNewCollectionName} placeholder="اسم مجموعة جديدة" style={styles.input} /><Pressable style={styles.add} onPress={onCreateCollection} accessibilityRole="button" accessibilityLabel="إنشاء مجموعة محلية جديدة"><AppText style={styles.addText}>إضافة</AppText></Pressable></View>{collections.length===0?<AppText muted>اعمل أول مجموعة لدولابك.</AppText>:<View style={styles.list}>{collections.map((collection)=><Pressable key={collection.id} style={[styles.item,selectedCollectionId===collection.id&&styles.active]} onPress={()=>onSelectCollection(collection.id)} accessibilityRole="button" accessibilityLabel={`فتح مجموعة ${collection.name}`}><AppText>{collection.name}</AppText><AppText muted>{counts[collection.id] ?? 0}</AppText></Pressable>)}</View>}</AppCard>;
+type DolabCollectionsSectionProps = {
+  collections: DolabCollection[];
+  counts: Record<string, number>;
+  selectedCollectionId: string | null;
+  onSelectCollection: (id: string) => void;
+  newCollectionName: string;
+  onChangeNewCollectionName: (value: string) => void;
+  onCreateCollection: () => void;
+};
+
+export function DolabCollectionsSection({
+  collections,
+  counts,
+  selectedCollectionId,
+  onSelectCollection,
+  newCollectionName,
+  onChangeNewCollectionName,
+  onCreateCollection,
+}: DolabCollectionsSectionProps) {
+  return (
+    <AppCard>
+      <View style={styles.header}>
+        <AppText weight="bold">مجموعاتي</AppText>
+        <AppText muted>محلي مؤقتًا</AppText>
+      </View>
+
+      <View style={styles.row}>
+        <TextInput
+          value={newCollectionName}
+          onChangeText={onChangeNewCollectionName}
+          placeholder="اسم مجموعة جديدة"
+          style={styles.input}
+        />
+        <Pressable
+          style={styles.add}
+          onPress={onCreateCollection}
+          accessibilityRole="button"
+          accessibilityLabel="إنشاء مجموعة محلية جديدة"
+        >
+          <AppText style={styles.addText}>إضافة</AppText>
+        </Pressable>
+      </View>
+
+      {collections.length === 0 ? (
+        <AppText muted>اعمل أول مجموعة لدولابك.</AppText>
+      ) : (
+        <View style={styles.list}>
+          {collections.map((collection) => (
+            <Pressable
+              key={collection.id}
+              style={[styles.item, selectedCollectionId === collection.id && styles.active]}
+              onPress={() => onSelectCollection(collection.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`فتح مجموعة ${collection.name}`}
+            >
+              <AppText>{collection.name}</AppText>
+              <AppText muted>{counts[collection.id] ?? 0}</AppText>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </AppCard>
+  );
 }
-const styles = StyleSheet.create({ header: { gap: 4, marginBottom: spacing.sm }, row: { flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.sm }, input: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: spacing.sm, color: colors.text }, add: { backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: spacing.md, justifyContent: 'center' }, addText: { color: colors.background }, list: { gap: spacing.xs }, item: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.sm, flexDirection: 'row', justifyContent: 'space-between' }, active: { borderColor: colors.primary } });
+
+const styles = StyleSheet.create({
+  header: {
+    gap: 4,
+    marginBottom: spacing.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: spacing.sm,
+    color: colors.text,
+  },
+  add: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+  },
+  addText: {
+    color: colors.background,
+  },
+  list: {
+    gap: spacing.xs,
+  },
+  item: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  active: {
+    borderColor: colors.primary,
+  },
+});

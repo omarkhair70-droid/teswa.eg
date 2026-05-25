@@ -188,6 +188,7 @@ export default function DolabScreen() {
     id: item.id,
     title: item.title || 'عنصر محفوظ بدون عنوان',
     description: item.description || '',
+    category: item.category || '',
     mediaCount: savedRemote.media.filter((m) => m.dolab_item_id === item.id).length,
     badge: item.status === 'published' ? 'منشور' : (item.status === 'draft' ? 'مسودة محفوظة' : 'محفوظ'),
     isPublished: item.status === 'published',
@@ -334,6 +335,7 @@ export default function DolabScreen() {
     [collectionAssignments],
   );
   const selectedCollectionName = collections.find((item) => item.id === selectedCollectionId)?.name ?? null;
+  const isCollectionFocusActive = Boolean(selectedCollectionId);
   const visibleLocalDraftCardsFiltered = useMemo(() => {
     if (!selectedCollectionId) return visibleLocalDraftCards;
     const assignedIds = new Set(
@@ -661,6 +663,11 @@ export default function DolabScreen() {
   const createCollection = () => {
     const clean = newCollectionName.trim();
     if (!clean) return;
+    const exists = collections.some((collection) => collection.name.trim().toLocaleLowerCase() === clean.toLocaleLowerCase());
+    if (exists) {
+      setInlineFeedback('المجموعة دي موجودة بالفعل.');
+      return;
+    }
     const now = new Date().toISOString();
     setCollections((prev) => [{ id: `collection-${Date.now()}`, name: clean, createdAt: now, updatedAt: now }, ...prev]);
     setNewCollectionName('');
@@ -1069,7 +1076,7 @@ export default function DolabScreen() {
         <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
         <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
         <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
-        <DolabSmartGroupsSection groups={smartGroups} onPressGroup={handleSmartGroupPress} />
+        {!isCollectionFocusActive && <DolabSmartGroupsSection groups={smartGroups} onPressGroup={handleSmartGroupPress} />}
         <DolabCollectionsSection
           collections={collections}
           counts={collectionCountById}
@@ -1088,7 +1095,7 @@ export default function DolabScreen() {
           </View>
         ) : null}
 
-        {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && (
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
             items={visibleSavedItems}
@@ -1108,7 +1115,7 @@ export default function DolabScreen() {
           />
         </DolabAnimatedSection>)}
 
-        {(viewMode === 'all' || viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">ميديا مؤقتة</AppText>
@@ -1129,7 +1136,7 @@ export default function DolabScreen() {
         </AppCard>
         </DolabAnimatedSection>}
 
-        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={70}>
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
           messages={visibleSelfMessages}
           localDrafts={localDrafts}
@@ -1159,7 +1166,7 @@ export default function DolabScreen() {
 
 
 
-        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={120}><AppCard>
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز للمشاركة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
@@ -1185,7 +1192,7 @@ export default function DolabScreen() {
         </AppCard></DolabAnimatedSection>}
 
 
-        {(viewMode === 'all' || viewMode === 'ready') && <DolabAnimatedSection delay={170}><AppCard>
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'ready') && <DolabAnimatedSection delay={170}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">عروض جاهزة للسوق</AppText>
             <AppText muted>تحضيرات محلية لحد ما نربط النشر الحقيقي.</AppText>
@@ -1279,7 +1286,7 @@ export default function DolabScreen() {
             ))}
             {selectedCollectionId && visibleLocalDraftCardsFiltered.length === 0 ? <AppText muted>المجموعة لسه فاضية.</AppText> : null}
 
-            {draftItems.map((item) => (
+            {!selectedCollectionId && !query && statusFilter === 'all' && draftItems.map((item) => (
               <View key={item.id} style={styles.rowCard}>
                 <Ionicons name="cube-outline" size={18} color={colors.primary} />
                 <View style={styles.rowCopy}>
@@ -1293,7 +1300,7 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={260}><AppCard>
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">أفكار التبادل</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
@@ -1308,11 +1315,11 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!hasVisibleContentForCurrentMode && (
+        {!isCollectionFocusActive && !hasVisibleContentForCurrentMode && (
           <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'جرّب تغيّر البحث أو الفلتر.'} />
         )}
 
-        <AppCard>
+        {!isCollectionFocusActive && <AppCard>
           <EmptyState
             title="المساحة الفارغة جاهزة لك"
             description="عند ربط البيانات الحقيقية، ستظهر هنا العناصر والميديا والأفكار الجديدة."
@@ -1323,7 +1330,7 @@ export default function DolabScreen() {
             variant="neutral"
             onPress={() => addSheetRef.current?.present()}
           />
-        </AppCard>
+        </AppCard>}
 
         <View style={styles.ctaWrap}>
           <AppButton label="أضف للدولاب" onPress={() => addSheetRef.current?.present()} />

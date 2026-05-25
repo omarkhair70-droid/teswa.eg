@@ -6,7 +6,15 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { DolabSmartGroup } from '@/lib/dolab/collections';
 
-export function DolabSmartGroupsSection({ groups, onPressGroup }: { groups: DolabSmartGroup[]; onPressGroup: (group: DolabSmartGroup) => void }) {
+type DolabSmartGroupsSectionProps = {
+  groups: DolabSmartGroup[];
+  onPressGroup: (group: DolabSmartGroup) => void;
+};
+
+export function DolabSmartGroupsSection({
+  groups,
+  onPressGroup,
+}: DolabSmartGroupsSectionProps) {
   const hasItems = groups.some((group) => group.count > 0);
 
   return (
@@ -20,8 +28,17 @@ export function DolabSmartGroupsSection({ groups, onPressGroup }: { groups: Dola
       ) : (
         <View style={styles.wrap}>
           {groups.map((group) => (
-            <Pressable key={group.id} style={styles.chip} onPress={() => onPressGroup(group)} accessibilityRole="button" accessibilityLabel={`فتح مجموعة ذكية ${group.title}`}>
-              <View style={styles.row}><AppText weight="semibold">{group.title}</AppText><AppText style={styles.count}>{group.count}</AppText></View>
+            <Pressable
+              key={group.id}
+              style={styles.chip}
+              onPress={() => onPressGroup(group)}
+              accessibilityRole="button"
+              accessibilityLabel={`فتح مجموعة ذكية ${group.title}`}
+            >
+              <View style={styles.row}>
+                <AppText weight="semibold">{group.title}</AppText>
+                <AppText style={styles.count}>{group.count}</AppText>
+              </View>
               <AppText muted style={styles.small}>{group.description}</AppText>
             </Pressable>
           ))}
@@ -31,4 +48,29 @@ export function DolabSmartGroupsSection({ groups, onPressGroup }: { groups: Dola
   );
 }
 
-const styles = StyleSheet.create({ header: { gap: 4, marginBottom: spacing.sm }, wrap: { gap: spacing.sm }, chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.sm, gap: 4 }, row: { flexDirection: 'row', justifyContent: 'space-between' }, count: { color: colors.primary }, small: { fontSize: 12 } });
+const styles = StyleSheet.create({
+  header: {
+    gap: 4,
+    marginBottom: spacing.sm,
+  },
+  wrap: {
+    gap: spacing.sm,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.sm,
+    gap: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  count: {
+    color: colors.primary,
+  },
+  small: {
+    fontSize: 12,
+  },
+});
