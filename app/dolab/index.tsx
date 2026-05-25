@@ -28,6 +28,10 @@ import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
 import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import { DolabSavedLibrarySection } from '@/components/dolab/DolabSavedLibrarySection';
 import { DolabAudioRecorderSheet } from '@/components/dolab/DolabAudioRecorderSheet';
+import { DolabOrganizationBar } from '@/components/dolab/DolabOrganizationBar';
+import { DolabSearchBar } from '@/components/dolab/DolabSearchBar';
+import { DolabFilterChips } from '@/components/dolab/DolabFilterChips';
+import { DolabEmptyFilteredState } from '@/components/dolab/DolabEmptyFilteredState';
 import type { DolabSavedMediaCardModel } from '@/components/dolab/DolabSavedMediaPreviewCard';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
@@ -37,6 +41,7 @@ import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDo
 import { type DirectConversationSummary, sendDirectMessage } from '@/lib/direct-messages';
 import { buildDolabShareToChatBody } from '@/lib/dolab/share-to-chat';
 import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
+import { byTime, includesQuery, type DolabSortMode, type DolabStatusFilter, type DolabViewMode } from '@/lib/dolab/organization';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -93,6 +98,10 @@ export default function DolabScreen() {
   const [selectedDelete, setSelectedDelete] = useState<{ type: 'item'|'note'|'media'; id: string; storagePath?: string } | null>(null);
   const [isSendingShareToChat, setIsSendingShareToChat] = useState(false);
   const [conversationPickerRefreshKey, setConversationPickerRefreshKey] = useState(0);
+  const [viewMode, setViewMode] = useState<DolabViewMode>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<DolabSortMode>('newest');
+  const [statusFilter, setStatusFilter] = useState<DolabStatusFilter>('all');
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -167,11 +176,134 @@ export default function DolabScreen() {
     badge: item.status === 'published' ? 'منشور' : (item.status === 'draft' ? 'مسودة محفوظة' : 'محفوظ'),
     isPublished: item.status === 'published',
     publishedItemId: item.published_item_id ?? null,
+    createdAt: item.created_at ?? null,
+    updatedAt: item.updated_at ?? null,
   })), [savedRemote.items, savedRemote.media]);
 
   const mappedSavedNotes = useMemo(() => savedRemote.notes.map((n) => ({ id: n.id, body: n.body || 'ملاحظة بدون نص', label: n.note_type, createdAt: n.created_at })), [savedRemote.notes]);
 
   const visibleLocalDrafts = useMemo(() => localDrafts.filter((draft) => !draft.remoteDolabItemId), [localDrafts]);
+  const query = searchQuery.trim().toLowerCase();
+  const isStatusMatch = (value: DolabStatusFilter) => statusFilter === 'all' || statusFilter === value;
+  const issuesMedia = useMemo(
+    () => pendingMedia.filter((item) => item.uploadStatus === 'failed' || item.compressionStatus === 'failed'),
+    [pendingMedia],
+  );
+  const visiblePendingMedia = useMemo(
+    () =>
+      byTime(
+        pendingMedia.filter((item) => includesQuery([item.fileName, item.label], query)).filter((item) => {
+          if (statusFilter === 'failed') return item.uploadStatus === 'failed' || item.compressionStatus === 'failed';
+          if (statusFilter === 'temporary') return true;
+          return statusFilter === 'all';
+        }),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [pendingMedia, query, sortMode, statusFilter],
+  );
+  const visibleSavedItems = useMemo(
+    () =>
+      byTime(
+        mappedSavedItems.filter((item) => includesQuery([item.title, item.description], query)).filter((item) => {
+          if (statusFilter === 'saved') return !item.isPublished;
+          if (statusFilter === 'published') return item.isPublished;
+          return statusFilter === 'all';
+        }),
+        (item) => {
+          const raw = item.updatedAt ?? item.createdAt;
+          return raw ? new Date(raw).getTime() : 0;
+        },
+        sortMode,
+        (item) => (item.isPublished ? 2 : 1),
+      ),
+    [mappedSavedItems, query, sortMode, statusFilter],
+  );
+  const visibleSavedNotes = useMemo(
+    () =>
+      byTime(
+        mappedSavedNotes.filter((item) => includesQuery([item.body, item.label], query)).filter(() => isStatusMatch('saved')),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [mappedSavedNotes, query, sortMode, statusFilter],
+  );
+  const visibleSelfMessages = useMemo(
+    () =>
+      byTime(
+        selfMessages.filter((item) => includesQuery([item.body], query)).filter(() => isStatusMatch('temporary')),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [selfMessages, query, sortMode, statusFilter],
+  );
+  const visibleSavedMedia = useMemo(
+    () =>
+      byTime(
+        mappedSavedMedia
+          .filter((item) => includesQuery([item.linkedItemTitle, item.mediaTypeLabel, item.meta, item.storagePath], query))
+          .filter((item) => {
+            if (statusFilter === 'saved') return true;
+            if (statusFilter === 'failed') return item.previewStatus === 'failed';
+            return statusFilter === 'all';
+          }),
+        () => 0,
+        sortMode,
+      ),
+    [mappedSavedMedia, query, statusFilter, sortMode],
+  );
+  const visibleLocalDraftCards = useMemo(
+    () =>
+      byTime(
+        visibleLocalDrafts
+          .filter((item) => includesQuery([item.title, item.description, item.category, item.exchangeIntent], query))
+          .filter(() => statusFilter === 'all' || statusFilter === 'temporary'),
+        (item) => new Date(item.updatedAt ?? item.createdAt).getTime(),
+        sortMode,
+      ),
+    [visibleLocalDrafts, query, statusFilter, sortMode],
+  );
+  const visiblePublishDrafts = useMemo(
+    () =>
+      byTime(
+        publishDrafts
+          .filter((item) => includesQuery([item.title, item.description, item.category, item.exchangeIntent], query))
+          .filter((item) => {
+            if (statusFilter === 'published') return false;
+            if (statusFilter === 'temporary') return true;
+            if (statusFilter === 'failed') return item.readinessStatus === 'incomplete';
+            return statusFilter === 'all' || statusFilter === 'saved';
+          }),
+        (item) => new Date(item.updatedAt ?? item.createdAt).getTime(),
+        sortMode,
+        (item) => (item.readinessStatus === 'ready' ? 3 : item.readinessStatus === 'prepared' ? 2 : 1),
+      ),
+    [publishDrafts, query, statusFilter, sortMode],
+  );
+  const visibleShareDrafts = useMemo(
+    () =>
+      byTime(
+        shareDrafts
+          .filter((item) => includesQuery([item.body], query))
+          .filter((item) => {
+            if (statusFilter === 'published') return item.status === 'sent';
+            if (statusFilter === 'temporary') return item.status !== 'sent';
+            if (statusFilter === 'saved') return false;
+            return statusFilter === 'all';
+          }),
+        (item) => new Date(item.sentAt ?? item.preparedAt ?? item.createdAt).getTime(),
+        sortMode,
+      ),
+    [shareDrafts, query, statusFilter, sortMode],
+  );
+  const hasVisibleContentForCurrentMode = useMemo(() => {
+    if (viewMode === 'media') return visiblePendingMedia.length + visibleSavedMedia.length > 0;
+    if (viewMode === 'drafts') return visibleLocalDraftCards.length + visibleSavedItems.length > 0;
+    if (viewMode === 'notes') return visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length > 0;
+    if (viewMode === 'ready') return visiblePublishDrafts.length + visibleSavedItems.length + visibleLocalDraftCards.length > 0;
+    if (viewMode === 'issues') return issuesMedia.length > 0 || cloudStatus === 'schema_missing';
+    return visiblePendingMedia.length + visibleSavedItems.length + visibleSavedNotes.length + visibleSelfMessages.length + visiblePublishDrafts.length + visibleShareDrafts.length > 0;
+  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus]);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -860,12 +992,16 @@ export default function DolabScreen() {
         >
           <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
         </Pressable>
+        <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
+        <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
+        <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
 
+        {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
-            items={mappedSavedItems}
-            notes={mappedSavedNotes}
-            media={mappedSavedMedia}
+            items={visibleSavedItems}
+            notes={viewMode === 'drafts' ? [] : visibleSavedNotes}
+            media={viewMode === 'drafts' || viewMode === 'ready' ? [] : visibleSavedMedia}
             onDeleteNote={(id) => requestDelete({ type: 'note', id })}
             onDeleteItem={(id) => requestDelete({ type: 'item', id })}
             onDeleteMedia={(item) =>
@@ -878,9 +1014,9 @@ export default function DolabScreen() {
             onPublishItem={routeSavedItemToAdd}
             onOpenPublishedItem={openPublishedItem}
           />
-        </DolabAnimatedSection>
+        </DolabAnimatedSection>)}
 
-        <DolabAnimatedSection delay={30}>
+        {(viewMode === 'all' || viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">ميديا مؤقتة</AppText>
@@ -893,17 +1029,17 @@ export default function DolabScreen() {
           <AppText muted style={styles.smallText}>تقدر تعيد محاولة حفظ العناصر الفاشلة.</AppText>
 
           <DolabPendingMediaStrip
-            pendingMedia={pendingMedia}
+            pendingMedia={viewMode === 'issues' ? issuesMedia : visiblePendingMedia}
             mode="preview"
             onRemove={removePendingMedia}
             emptyText="لسه ما أضفتش ميديا محلية."
           />
         </AppCard>
-        </DolabAnimatedSection>
+        </DolabAnimatedSection>}
 
-        <DolabAnimatedSection delay={70}>
+        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
-          messages={selfMessages}
+          messages={visibleSelfMessages}
           localDrafts={localDrafts}
           pendingMedia={pendingMedia}
           composerBody={selfComposerBody}
@@ -927,20 +1063,20 @@ export default function DolabScreen() {
           onShareLater={openShareBridge}
           onDelete={deleteSelfMessage}
         />
-        </DolabAnimatedSection>
+        </DolabAnimatedSection>}
 
 
 
-        <DolabAnimatedSection delay={120}><AppCard>
+        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز للمشاركة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
           </View>
-          {shareDrafts.length === 0 ? (
+          {visibleShareDrafts.length === 0 ? (
             <AppText muted style={styles.smallText}>مفيش رسائل مجهزة للمشاركة لسه، جهّز واحدة من شاتك.</AppText>
           ) : (
             <View style={styles.listWrap}>
-              {shareDrafts.map((draft) => (
+              {visibleShareDrafts.map((draft) => (
                 <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={() => {}} accessibilityRole="button" accessibilityLabel="عرض حالة مشاركة الرسالة">
                   <View style={styles.localDraftHeader}>
                     <AppText weight="semibold" numberOfLines={2}>{draft.body}</AppText>
@@ -954,19 +1090,19 @@ export default function DolabScreen() {
               ))}
             </View>
           )}
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
 
 
-        <DolabAnimatedSection delay={170}><AppCard>
+        {(viewMode === 'all' || viewMode === 'ready') && <DolabAnimatedSection delay={170}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">عروض جاهزة للسوق</AppText>
             <AppText muted>تحضيرات محلية لحد ما نربط النشر الحقيقي.</AppText>
           </View>
-          {publishDrafts.length === 0 ? (
+          {visiblePublishDrafts.length === 0 ? (
             <AppText muted style={styles.smallText}>لسه مفيش عروض محضرة للسوق، حضّر مسودة أولًا.</AppText>
           ) : (
             <View style={styles.listWrap}>
-              {publishDrafts.map((draft) => (
+              {visiblePublishDrafts.map((draft) => (
                 <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={() => {
                       setInlineFeedback('افتح إضافة عنصر وكمّل النشر هناك.');
                       router.push('/(tabs)/add');
@@ -995,15 +1131,15 @@ export default function DolabScreen() {
               ))}
             </View>
           )}
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
 
-        <DolabAnimatedSection delay={220}><AppCard>
+        {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز يتحول لعرض</AppText>
             <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
           </View>
           <View style={styles.listWrap}>
-            {visibleLocalDrafts.map((draft) => (
+            {visibleLocalDraftCards.map((draft) => (
               <DolabPressableCard
                 key={draft.id}
                 style={styles.localDraftCard}
@@ -1051,9 +1187,9 @@ export default function DolabScreen() {
               </View>
             ))}
           </View>
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
 
-        <DolabAnimatedSection delay={260}><AppCard>
+        {(viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">أفكار التبادل</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
@@ -1066,7 +1202,11 @@ export default function DolabScreen() {
               </View>
             ))}
           </View>
-        </AppCard></DolabAnimatedSection>
+        </AppCard></DolabAnimatedSection>}
+
+        {!hasVisibleContentForCurrentMode && (
+          <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'جرّب تغيّر البحث أو الفلتر.'} />
+        )}
 
         <AppCard>
           <EmptyState
