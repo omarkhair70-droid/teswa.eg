@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   chip: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.full,
+    borderRadius: radii.round,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
