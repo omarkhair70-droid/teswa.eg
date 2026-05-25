@@ -92,6 +92,7 @@ export default function DolabScreen() {
   const [isUploadingCloud, setIsUploadingCloud] = useState(false);
   const [selectedDelete, setSelectedDelete] = useState<{ type: 'item'|'note'|'media'; id: string; storagePath?: string } | null>(null);
   const [isSendingShareToChat, setIsSendingShareToChat] = useState(false);
+  const [conversationPickerRefreshKey, setConversationPickerRefreshKey] = useState(0);
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -504,6 +505,7 @@ export default function DolabScreen() {
       return;
     }
 
+    setConversationPickerRefreshKey((prev) => prev + 1);
     conversationPickerRef.current?.present();
   };
 
@@ -518,13 +520,13 @@ export default function DolabScreen() {
     if (!body.trim()) { setInlineFeedback('نص المشاركة فارغ.'); return; }
 
     setIsSendingShareToChat(true);
-    const sendResult = await sendDirectMessage(conversation.conversationId, body);
-    setIsSendingShareToChat(false);
+    try {
+      const sendResult = await sendDirectMessage(conversation.conversationId, body);
 
-    if (!sendResult.ok) {
-      setInlineFeedback(sendResult.message);
-      return;
-    }
+      if (!sendResult.ok) {
+        setInlineFeedback(sendResult.message);
+        return;
+      }
 
     const now = new Date().toISOString();
     setShareDrafts((prev) => [{
@@ -548,6 +550,11 @@ export default function DolabScreen() {
     conversationPickerRef.current?.dismiss();
     shareBridgeRef.current?.dismiss();
     setInlineFeedback('اترسلت في الشات.');
+    } catch {
+      setInlineFeedback('تعذر إرسال المشاركة للشات حاليًا.');
+    } finally {
+      setIsSendingShareToChat(false);
+    }
   };
 
   const prepareShareDraft = () => {
@@ -942,7 +949,7 @@ export default function DolabScreen() {
                     </View>
                   </View>
                   <AppText muted style={styles.smallText}>ميديا مرتبطة: {draft.linkedPendingMediaIds.length}</AppText>
-                  <AppText muted style={styles.smallText}>{draft.targetConversationId ? `المحادثة: ${draft.targetConversationId}` : 'لسه مش متبعتة في شات.'}</AppText>
+                  <AppText muted style={styles.smallText}>{draft.status === 'sent' ? 'اتشاركت في شات مباشر.' : 'لسه مش متبعتة في شات.'}</AppText>
                 </DolabPressableCard>
               ))}
             </View>
@@ -1116,6 +1123,7 @@ export default function DolabScreen() {
       <DolabConversationPickerSheet
         sheetRef={conversationPickerRef}
         isSending={isSendingShareToChat}
+        refreshKey={conversationPickerRefreshKey}
         onSelectConversation={(conversation) => {
           void sendShareToConversation(conversation);
         }}

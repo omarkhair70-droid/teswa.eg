@@ -14,7 +14,7 @@ export function buildDolabShareToChatBody(input: {
     lines.push(cleanedBody);
   }
 
-  const linkedDraftTitle = input.linkedDraft?.title?.trim();
+  const linkedDraftTitle = input.linkedDraft?.title ? sanitizeShareBody(input.linkedDraft.title) : '';
   if (linkedDraftTitle) {
     lines.push('', `العنوان المرتبط: ${linkedDraftTitle}`);
   }
