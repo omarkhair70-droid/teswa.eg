@@ -30,7 +30,15 @@ export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, on
     <AppCard>
       <View style={styles.listWrap}>
         {items.map((item) => {
-          const emphasizeMedia = item.type === 'image' || item.type === 'video' || item.mimeType?.toLowerCase().startsWith('audio/');
+          const isMediaLike =
+            item.type === 'image' ||
+            item.type === 'video' ||
+            (item.type === 'file' &&
+              Boolean(
+                item.mimeType?.toLowerCase().startsWith('image/') ||
+                  item.mimeType?.toLowerCase().startsWith('video/') ||
+                  item.mimeType?.toLowerCase().startsWith('audio/'),
+              ));
           return (
             <View key={item.id} style={styles.itemCard}>
               <View style={styles.row}>
@@ -44,12 +52,14 @@ export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, on
               <AppText weight="semibold">{item.title}</AppText>
               {item.body ? <AppText muted numberOfLines={2}>{item.body}</AppText> : null}
               <View style={styles.actionsRow}>
-                <Pressable style={emphasizeMedia ? styles.actionBtn : styles.actionBtnPrimary} onPress={() => onConvertToNote(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لنوت">
-                  <AppText style={emphasizeMedia ? styles.actionText : styles.actionTextPrimary}>حوّل لنوت</AppText>
+                <Pressable style={isMediaLike ? styles.actionBtn : styles.actionBtnPrimary} onPress={() => onConvertToNote(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لنوت">
+                  <AppText style={isMediaLike ? styles.actionText : styles.actionTextPrimary}>حوّل لنوت</AppText>
                 </Pressable>
-                <Pressable style={emphasizeMedia ? styles.actionBtnPrimary : styles.actionBtn} onPress={() => onConvertToMedia(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لميديا">
-                  <AppText style={emphasizeMedia ? styles.actionTextPrimary : styles.actionText}>حوّل لميديا</AppText>
-                </Pressable>
+                {isMediaLike ? (
+                  <Pressable style={styles.actionBtnPrimary} onPress={() => onConvertToMedia(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لميديا">
+                    <AppText style={styles.actionTextPrimary}>حوّل لميديا</AppText>
+                  </Pressable>
+                ) : null}
                 <Pressable style={styles.actionBtn} onPress={() => onStartDraft(item)} accessibilityRole="button" accessibilityLabel="ابدأ مسودة من الوارد">
                   <AppText style={styles.actionText}>ابدأ مسودة</AppText>
                 </Pressable>

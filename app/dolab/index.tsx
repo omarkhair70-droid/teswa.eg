@@ -1368,11 +1368,13 @@ export default function DolabScreen() {
                 <AppText muted style={styles.smallText}>ملفات: {visibleInboxItems.filter((item) => item.type === 'file' || item.type === 'image' || item.type === 'video').length}</AppText>
                 <AppText muted style={styles.smallText}>جاهزة للتحويل: {visibleInboxItems.length}</AppText>
               </View>
-              <View style={styles.mediaActionsRow}>
-                <Pressable style={styles.actionBtnInline} onPress={() => { void captureClipboard(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>الصق من الحافظة</AppText></Pressable>
-                <Pressable style={styles.actionBtnInline} onPress={() => { void captureDocument(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اختار ملف</AppText></Pressable>
-                <Pressable style={styles.actionBtnInline} onPress={() => inboxQuickNoteSheetRef.current?.present()} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اكتب نص سريع</AppText></Pressable>
-              </View>
+              {!isInboxShelfEmpty && (
+                <View style={styles.mediaActionsRow}>
+                  <Pressable style={styles.actionBtnInline} onPress={() => { void captureClipboard(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>الصق من الحافظة</AppText></Pressable>
+                  <Pressable style={styles.actionBtnInline} onPress={() => { void captureDocument(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اختار ملف</AppText></Pressable>
+                  <Pressable style={styles.actionBtnInline} onPress={() => inboxQuickNoteSheetRef.current?.present()} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اكتب نص سريع</AppText></Pressable>
+                </View>
+              )}
             </AppCard>
             {isInboxShelfEmpty && (
               <AppCard>
