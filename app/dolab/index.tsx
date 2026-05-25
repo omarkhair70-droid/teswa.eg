@@ -329,6 +329,17 @@ export default function DolabScreen() {
       ),
     [shareDrafts, query, statusFilter, sortMode],
   );
+  const visibleInboxItems = useMemo(
+    () =>
+      byTime(
+        inboxItems
+          .filter((item) => includesQuery([item.title, item.body, item.fileName, item.source, item.type], query))
+          .filter(() => statusFilter === 'all' || statusFilter === 'temporary'),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [inboxItems, query, sortMode, statusFilter],
+  );
   const smartGroups = useMemo<DolabSmartGroup[]>(
     () =>
       buildDolabSmartGroups({
@@ -366,9 +377,18 @@ export default function DolabScreen() {
     if (viewMode === 'notes') return visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length > 0;
     if (viewMode === 'ready') return visiblePublishDrafts.length + visibleSavedItems.length + visibleLocalDraftCards.length > 0;
     if (viewMode === 'issues') return issuesMedia.length > 0 || cloudStatus === 'schema_missing';
-    if (viewMode === 'inbox') return inboxItems.length > 0;
-    return visiblePendingMedia.length + visibleSavedItems.length + visibleSavedNotes.length + visibleSelfMessages.length + visiblePublishDrafts.length + visibleShareDrafts.length > 0;
-  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus, inboxItems.length]);
+    if (viewMode === 'inbox') return visibleInboxItems.length > 0;
+    return (
+      visiblePendingMedia.length +
+        visibleSavedItems.length +
+        visibleSavedNotes.length +
+        visibleSelfMessages.length +
+        visiblePublishDrafts.length +
+        visibleShareDrafts.length +
+        visibleInboxItems.length >
+      0
+    );
+  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus, visibleInboxItems.length]);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -716,25 +736,50 @@ export default function DolabScreen() {
   };
 
   const captureClipboard = async () => {
-    const text = (await Clipboard.getStringAsync()).trim();
-    if (!text) {
-      setInlineFeedback('الحافظة فاضية.');
-      return;
+    try {
+      const text = (await Clipboard.getStringAsync()).trim();
+      if (!text) {
+        setInlineFeedback('الحافظة فاضية.');
+        return;
+      }
+      addInboxItem(createInboxTextItem({ body: text, source: 'clipboard' }));
+    } catch {
+      setInlineFeedback('تعذر قراءة الحافظة حاليًا.');
     }
-    addInboxItem(createInboxTextItem({ body: text, source: 'clipboard' }));
   };
 
   const captureDocument = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true, type: '*/*' });
-    if (result.canceled || result.assets.length === 0) return;
-    const asset = result.assets[0];
-    addInboxItem(createInboxFileItem({ source: 'document_picker', uri: asset.uri, fileName: asset.name, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.size ?? undefined }), 'اتضاف الملف لوارد الدولاب.');
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        copyToCacheDirectory: true,
+        type: '*/*',
+      });
+      if (result.canceled || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      addInboxItem(
+        createInboxFileItem({
+          source: 'document_picker',
+          uri: asset.uri,
+          fileName: asset.name,
+          mimeType: asset.mimeType ?? undefined,
+          sizeBytes: asset.size ?? undefined,
+        }),
+        'اتضاف الملف لوارد الدولاب.',
+      );
+    } catch {
+      setInlineFeedback('تعذر اختيار الملف حاليًا.');
+    }
   };
 
   const captureManualText = (value: string) => {
     const clean = value.trim();
-    if (!clean) return;
+    if (!clean) {
+      setInlineFeedback('اكتب نص الأول.');
+      return false;
+    }
     addInboxItem(createInboxTextItem({ body: clean, source: 'manual' }));
+    return true;
   };
 
   const convertInboxToMedia = (item: DolabInboxItem) => {
@@ -1174,7 +1219,7 @@ export default function DolabScreen() {
         {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'inbox') && (
           <DolabAnimatedSection delay={12}>
             <DolabInboxSection
-              items={inboxItems.filter((item) => includesQuery([item.title, item.body, item.fileName, item.source, item.type], query))}
+              items={visibleInboxItems}
               onConvertToNote={convertInboxToNote}
               onConvertToMedia={convertInboxToMedia}
               onDelete={(id) => setInboxItems((prev) => prev.filter((item) => item.id !== id))}
@@ -1585,7 +1630,10 @@ export default function DolabScreen() {
           <AppButton
             label="احفظ في الوارد"
             onPress={() => {
-              captureManualText(inboxQuickNoteBody);
+              const didSave = captureManualText(inboxQuickNoteBody);
+              if (!didSave) {
+                return;
+              }
               setInboxQuickNoteBody('');
               inboxQuickNoteSheetRef.current?.dismiss();
             }}

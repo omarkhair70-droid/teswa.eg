@@ -36,20 +36,37 @@ export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, on
                 <View style={styles.badge}>
                   <AppText style={styles.badgeText}>{formatInboxTypeLabel(item.type)}</AppText>
                 </View>
-                <AppText muted style={styles.metaText}>{formatInboxSourceLabel(item.source)} · {dateLabel(item.createdAt)}</AppText>
+                <AppText muted style={styles.metaText}>
+                  {formatInboxSourceLabel(item.source)} · {dateLabel(item.createdAt)}
+                </AppText>
               </View>
               <AppText weight="semibold">{item.title}</AppText>
               {item.body ? <AppText muted numberOfLines={2}>{item.body}</AppText> : null}
               <View style={styles.actionsRow}>
-                <Pressable style={styles.actionBtn} onPress={() => onConvertToNote(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لملاحظة">
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={() => onConvertToNote(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel="حوّل الوارد لملاحظة"
+                >
                   <AppText style={styles.actionText}>حوّل لملاحظة</AppText>
                 </Pressable>
-                {(item.type === 'image' || item.type === 'video' || item.type === 'file') ? (
-                  <Pressable style={styles.actionBtn} onPress={() => onConvertToMedia(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لميديا">
+                {(item.type === 'image' || item.type === 'video') ? (
+                  <Pressable
+                    style={styles.actionBtn}
+                    onPress={() => onConvertToMedia(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel="حوّل الوارد لميديا"
+                  >
                     <AppText style={styles.actionText}>حوّل لميديا</AppText>
                   </Pressable>
                 ) : null}
-                <Pressable style={styles.actionBtnDanger} onPress={() => onDelete(item.id)} accessibilityRole="button" accessibilityLabel="احذف الوارد">
+                <Pressable
+                  style={styles.actionBtnDanger}
+                  onPress={() => onDelete(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="احذف الوارد"
+                >
                   <AppText style={styles.actionTextDanger}>احذف</AppText>
                 </Pressable>
               </View>
@@ -62,16 +79,64 @@ export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, on
 }
 
 const styles = StyleSheet.create({
-  sectionHeader: { gap: spacing.xs, marginBottom: spacing.sm },
-  listWrap: { gap: spacing.sm },
-  itemCard: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing.sm, gap: spacing.xs },
-  row: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  badge: { backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 4 },
-  badgeText: { color: colors.primary, fontSize: 12 },
-  metaText: { fontSize: 12 },
-  actionsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
-  actionBtn: { borderWidth: 1, borderColor: colors.primary, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6 },
-  actionText: { color: colors.primary, fontSize: 12 },
-  actionBtnDanger: { borderWidth: 1, borderColor: colors.danger, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6 },
-  actionTextDanger: { color: colors.danger, fontSize: 12 },
+  sectionHeader: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  listWrap: {
+    gap: spacing.sm,
+  },
+  itemCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  row: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badge: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    color: colors.primary,
+    fontSize: 12,
+  },
+  metaText: {
+    fontSize: 12,
+  },
+  actionsRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  actionBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  actionText: {
+    color: colors.primary,
+    fontSize: 12,
+  },
+  actionBtnDanger: {
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  actionTextDanger: {
+    color: colors.danger,
+    fontSize: 12,
+  },
 });
