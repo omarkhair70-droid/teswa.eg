@@ -52,6 +52,8 @@ import { buildDolabSmartGroups, type DolabCollection, type DolabCollectionAssign
 import { consumePendingInboundDolabInboxItems } from '@/lib/inbound-shared-media';
 import { createInboxFileItem, createInboxTextItem, type DolabInboxItem } from '@/lib/dolab/inbox';
 import { DolabInboxSection } from '@/components/dolab/DolabInboxSection';
+import { DolabShelvesOverview } from '@/components/dolab/DolabShelvesOverview';
+import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -413,6 +415,21 @@ export default function DolabScreen() {
       inboxItems.length,
     ],
   );
+  const shelfMeta: Partial<Record<DolabViewMode, { title: string; description: string; iconName: keyof typeof Ionicons.glyphMap }>> = {
+    notes: { title: 'الكلام مع نفسي', description: 'نوتس، ريكوردات، وأفكار سريعة بينك وبين نفسك.', iconName: 'chatbox-ellipses-outline' },
+    media: { title: 'رف الميديا', description: 'صور، فيديوهات، وتسجيلات محفوظة.', iconName: 'images-outline' },
+    drafts: { title: 'مسودات على الرف', description: 'حاجات بتتجهز عشان تطلع للسوق.', iconName: 'cube-outline' },
+    ready: { title: 'جاهز يطلع للسوق', description: 'تحضيرات وعناصر جاهزة للخطوة التالية.', iconName: 'rocket-outline' },
+    inbox: { title: 'وارد الدولاب', description: 'نصوص، روابط، وملفات جاية من برّه التطبيق.', iconName: 'download-outline' },
+    issues: { title: 'مشاكل الرفوف', description: 'العناصر اللي محتاجة متابعة أو إعادة محاولة.', iconName: 'alert-circle-outline' },
+  };
+  const shelvesCounts = {
+    notes: selfMessages.length + mappedSavedNotes.length,
+    media: pendingMedia.length + mappedSavedMedia.length,
+    drafts: localDrafts.length + mappedSavedItems.length,
+    inbox: inboxItems.length,
+    ideas: selfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist').length,
+  };
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -1182,6 +1199,31 @@ export default function DolabScreen() {
     ],
     [],
   );
+  const handleAddHere = () => {
+    if (viewMode === 'notes') {
+      setSelfComposerType('text');
+      setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
+      return;
+    }
+    if (viewMode === 'media') {
+      addSheetRef.current?.present();
+      return;
+    }
+    if (viewMode === 'drafts') {
+      openDraftStudioForNew();
+      return;
+    }
+    if (viewMode === 'inbox') {
+      inboxQuickNoteSheetRef.current?.present();
+      return;
+    }
+    if (viewMode === 'ready') {
+      openDraftStudioForNew();
+      setInlineFeedback('ابدأ مسودة جديدة وجهّزها للعرض.');
+      return;
+    }
+    addSheetRef.current?.present();
+  };
 
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
@@ -1227,21 +1269,49 @@ export default function DolabScreen() {
         >
           <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
         </Pressable>
-        <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
-        <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
-        <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
-        {!isCollectionFocusActive && <DolabSmartGroupsSection groups={smartGroups} onPressGroup={handleSmartGroupPress} />}
-        <DolabCollectionsSection
-          collections={collections}
-          counts={collectionCountById}
-          selectedCollectionId={selectedCollectionId}
-          onSelectCollection={setSelectedCollectionId}
-          newCollectionName={newCollectionName}
-          onChangeNewCollectionName={setNewCollectionName}
-          onCreateCollection={createCollection}
-        />
+        {viewMode === 'all' ? (
+          <DolabShelvesOverview
+            counts={shelvesCounts}
+            onOpenShelf={setViewMode}
+            onQuickNote={() => {
+              setViewMode('notes');
+              setSelfComposerType('text');
+              setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
+            }}
+            onQuickAudio={() => audioRecorderSheetRef.current?.present()}
+            onQuickCamera={() => {
+              void captureImage();
+            }}
+            onQuickDraft={openDraftStudioForNew}
+          />
+        ) : (
+          <>
+            {shelfMeta[viewMode] ? (
+              <DolabShelfHeader
+                title={shelfMeta[viewMode]!.title}
+                description={shelfMeta[viewMode]!.description}
+                iconName={shelfMeta[viewMode]!.iconName}
+                onBack={() => setViewMode('all')}
+                onAddHere={handleAddHere}
+              />
+            ) : null}
+            <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
+            <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
+            <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
+            {!isCollectionFocusActive && <DolabSmartGroupsSection groups={smartGroups} onPressGroup={handleSmartGroupPress} />}
+            <DolabCollectionsSection
+              collections={collections}
+              counts={collectionCountById}
+              selectedCollectionId={selectedCollectionId}
+              onSelectCollection={setSelectedCollectionId}
+              newCollectionName={newCollectionName}
+              onChangeNewCollectionName={setNewCollectionName}
+              onCreateCollection={createCollection}
+            />
+          </>
+        )}
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'inbox') && (
+        {!isCollectionFocusActive && viewMode === 'inbox' && (
           <DolabAnimatedSection delay={12}>
             <DolabInboxSection
               items={visibleInboxItems}
@@ -1261,7 +1331,7 @@ export default function DolabScreen() {
           </View>
         ) : null}
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && (
+        {!isCollectionFocusActive && (viewMode === 'drafts' || viewMode === 'ready') && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
             items={visibleSavedItems}
@@ -1281,7 +1351,7 @@ export default function DolabScreen() {
           />
         </DolabAnimatedSection>)}
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
+        {!isCollectionFocusActive && (viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">رف الميديا</AppText>
@@ -1302,7 +1372,7 @@ export default function DolabScreen() {
         </AppCard>
         </DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={70}>
+        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
           messages={visibleSelfMessages}
           localDrafts={localDrafts}
@@ -1332,7 +1402,7 @@ export default function DolabScreen() {
 
 
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={120}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">رسائل جاهزة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
@@ -1358,7 +1428,7 @@ export default function DolabScreen() {
         </AppCard></DolabAnimatedSection>}
 
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'ready') && <DolabAnimatedSection delay={170}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'ready' && <DolabAnimatedSection delay={170}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز يطلع للسوق</AppText>
             <AppText muted>تحضيرات جاهزة تقدر تطلع للسوق من إضافة عنصر.</AppText>
@@ -1398,7 +1468,7 @@ export default function DolabScreen() {
           )}
         </AppCard></DolabAnimatedSection>}
 
-        {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && <DolabAnimatedSection delay={220}><AppCard>
+        {(viewMode === 'drafts' || viewMode === 'ready') && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">مسودات على الرف</AppText>
             <AppText muted>حاجات جاهزة تطلع للسوق.</AppText>
@@ -1466,7 +1536,7 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={260}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">درج الأفكار</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
@@ -1481,11 +1551,11 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && !hasVisibleContentForCurrentMode && hasAnyDolabContent && (
+        {!isCollectionFocusActive && viewMode !== 'all' && !hasVisibleContentForCurrentMode && hasAnyDolabContent && (
           <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'مفيش نتائج بالفلتر ده. جرّب تفتح رف تاني.'} />
         )}
 
-        {!isCollectionFocusActive && !hasAnyDolabContent && <AppCard>
+        {!isCollectionFocusActive && viewMode !== 'all' && !hasAnyDolabContent && <AppCard>
           <EmptyState
             title="الدولاب لسه فاضي… أول حاجة هتحوله لمكانك."
             description="صوّر حاجة، احفظ فكرة، أو سيب ملاحظة لنفسك لحد ما تقرر تطلعها للسوق."
@@ -1520,8 +1590,20 @@ export default function DolabScreen() {
         sheetRef={audioRecorderSheetRef}
         onFeedback={setInlineFeedback}
         onSave={(recording) => {
-          appendMedia([createPendingAudioMedia(recording)]);
-          setInlineFeedback('تم حفظ الملاحظة الصوتية محليًا في الدولاب.');
+          const pending = createPendingAudioMedia(recording);
+          appendMedia([pending]);
+          const durationLabel = pending.durationMs ? `${Math.max(1, Math.round(pending.durationMs / 1000))}ث` : 'بدون مدة';
+          setSelfMessages((prev) => [
+            {
+              id: `local-self-message-${Date.now()}`,
+              body: `تسجيل صوتي محفوظ في دولابك · ${durationLabel}`,
+              messageType: 'voice_placeholder',
+              linkedPendingMediaIds: [pending.id],
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+          setInlineFeedback('اتحفظ كتسجيل صوتي في الكلام مع نفسك ورف الميديا.');
         }}
       />
       <DolabCollectionPickerSheet sheetRef={collectionPickerSheetRef} collections={collections} onSelect={assignTargetToCollection} />
