@@ -1383,20 +1383,22 @@ export default function DolabScreen() {
               </View>
               <AppText muted style={styles.smallText}>محفوظ سحابيًا: {mediaStats.savedCount} · على الجهاز: {mediaStats.localCount}</AppText>
             </AppCard>
-            <View style={styles.mediaActionsRow}>
-              <Pressable style={styles.actionBtnInline} onPress={() => { void captureImage(); }} accessibilityRole="button">
-                <AppText style={styles.actionBtnInlineText}>صوّر حاجة</AppText>
-              </Pressable>
-              <Pressable style={styles.actionBtnInline} onPress={() => { void pickImages(); }} accessibilityRole="button">
-                <AppText style={styles.actionBtnInlineText}>ارفع صور</AppText>
-              </Pressable>
-              <Pressable style={styles.actionBtnInline} onPress={() => { void pickVideo(); }} accessibilityRole="button">
-                <AppText style={styles.actionBtnInlineText}>ارفع فيديو</AppText>
-              </Pressable>
-              <Pressable style={styles.actionBtnInline} onPress={() => audioRecorderSheetRef.current?.present()} accessibilityRole="button">
-                <AppText style={styles.actionBtnInlineText}>سجل صوت</AppText>
-              </Pressable>
-            </View>
+            {!isMediaShelfEmpty && (
+              <View style={styles.mediaActionsRow}>
+                <Pressable style={styles.actionBtnInline} onPress={() => { void captureImage(); }} accessibilityRole="button">
+                  <AppText style={styles.actionBtnInlineText}>صوّر حاجة</AppText>
+                </Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => { void pickImages(); }} accessibilityRole="button">
+                  <AppText style={styles.actionBtnInlineText}>ارفع صور</AppText>
+                </Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => { void pickVideo(); }} accessibilityRole="button">
+                  <AppText style={styles.actionBtnInlineText}>ارفع فيديو</AppText>
+                </Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => audioRecorderSheetRef.current?.present()} accessibilityRole="button">
+                  <AppText style={styles.actionBtnInlineText}>سجل صوت</AppText>
+                </Pressable>
+              </View>
+            )}
           </DolabAnimatedSection>
         )}
 
