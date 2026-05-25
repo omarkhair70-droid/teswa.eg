@@ -19,6 +19,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-types';
 import { createPendingAudioMedia, createPendingMediaFromInboxItem, toPendingMedia } from '@/lib/dolab/local-media';
+import { makePendingMediaDurable } from '@/lib/dolab/durable-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
@@ -700,7 +701,7 @@ export default function DolabScreen() {
       return;
     }
 
-    const items = result.assets.map((asset) => toPendingMedia(asset, 'image'));
+    const items = await Promise.all(result.assets.map(async (asset) => makePendingMediaDurable(toPendingMedia(asset, 'image'))));
     appendMedia(items);
     setInlineFeedback(`تمت إضافة ${items.length} صورة للدولاب المحلي.`);
   };
@@ -722,7 +723,7 @@ export default function DolabScreen() {
       return;
     }
 
-    const items = result.assets.map((asset) => toPendingMedia(asset, 'video'));
+    const items = await Promise.all(result.assets.map(async (asset) => makePendingMediaDurable(toPendingMedia(asset, 'video'))));
     appendMedia(items);
     setInlineFeedback('تمت إضافة فيديو للدولاب المحلي.');
   };
@@ -744,7 +745,7 @@ export default function DolabScreen() {
       return;
     }
 
-    const items = result.assets.map((asset) => toPendingMedia(asset, 'image'));
+    const items = await Promise.all(result.assets.map(async (asset) => makePendingMediaDurable(toPendingMedia(asset, 'image'))));
     appendMedia(items);
     setViewMode('media');
     setInlineFeedback('تم التقاط صورة واتحفظت في رف الميديا.');
@@ -938,14 +939,14 @@ export default function DolabScreen() {
     return true;
   };
 
-  const convertInboxToMedia = (item: DolabInboxItem) => {
-    if (item.type === 'file') {
-      setInlineFeedback('الملفات العامة محفوظة كوارد فقط حاليًا.');
+  const convertInboxToMedia = async (item: DolabInboxItem) => {
+    const pending = createPendingMediaFromInboxItem(item);
+    if (!pending) {
+      setInlineFeedback('الملف ده يفضل في وارد الدولاب حاليًا.');
       return;
     }
-    const pending = createPendingMediaFromInboxItem(item);
-    if (!pending) return;
-    appendMedia([pending]);
+    const durablePending = item.uri ? await makePendingMediaDurable(pending) : pending;
+    appendMedia([durablePending]);
     setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
     setInlineFeedback('اتحطت في رف الميديا.');
     setViewMode('media');
@@ -1488,7 +1489,7 @@ export default function DolabScreen() {
               <DolabInboxSection
                 items={visibleInboxItems}
                 onConvertToNote={convertInboxToNote}
-                onConvertToMedia={convertInboxToMedia}
+                onConvertToMedia={(item) => { void convertInboxToMedia(item); }}
                 onStartDraft={convertInboxToDraft}
                 onDelete={(id) => setInboxItems((prev) => prev.filter((item) => item.id !== id))}
               />
@@ -1844,21 +1845,24 @@ export default function DolabScreen() {
         sheetRef={audioRecorderSheetRef}
         onFeedback={setInlineFeedback}
         onSave={(recording) => {
-          const pending = createPendingAudioMedia(recording);
-          appendMedia([pending]);
-          const durationLabel = pending.durationMs ? `${Math.max(1, Math.round(pending.durationMs / 1000))}ث` : 'بدون مدة';
+          void (async () => {
+            const pending = createPendingAudioMedia(recording);
+            const durablePending = await makePendingMediaDurable(pending);
+            appendMedia([durablePending]);
+            const durationLabel = durablePending.durationMs ? `${Math.max(1, Math.round(durablePending.durationMs / 1000))}ث` : 'بدون مدة';
           setSelfMessages((prev) => [
             {
               id: `local-self-message-${Date.now()}`,
               body: `تسجيل صوتي محفوظ في دولابك · ${durationLabel}`,
               messageType: 'voice_placeholder',
-              linkedPendingMediaIds: [pending.id],
+              linkedPendingMediaIds: [durablePending.id],
               createdAt: new Date().toISOString(),
             },
             ...prev,
           ]);
-          setInlineFeedback('اتحفظ كتسجيل صوتي في الكلام مع نفسي ورف الميديا.');
-          setViewMode('notes');
+            setInlineFeedback('اتحفظ كتسجيل صوتي في الكلام مع نفسي ورف الميديا.');
+            setViewMode('notes');
+          })();
         }}
       />
       <DolabShelfActionSheet
