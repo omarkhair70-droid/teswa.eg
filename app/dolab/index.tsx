@@ -200,7 +200,7 @@ export default function DolabScreen() {
     description: item.description || '',
     category: item.category || '',
     mediaCount: savedRemote.media.filter((m) => m.dolab_item_id === item.id).length,
-    badge: item.status === 'published' ? 'منشور' : (item.status === 'draft' ? 'مسودة محفوظة' : 'محفوظ'),
+    badge: item.status === 'published' ? 'اتنشرت' : (item.status === 'draft' ? 'مسودة على الرف' : 'محفوظة كمسودة'),
     isPublished: item.status === 'published',
     publishedItemId: item.published_item_id ?? null,
     createdAt: item.created_at ?? null,
@@ -420,6 +420,37 @@ export default function DolabScreen() {
   }, [visiblePendingMedia, visibleSavedMedia]);
   const isInboxShelfEmpty = visibleInboxItems.length === 0;
   const isDraftsShelfEmpty = visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0;
+
+
+  const draftReadinessMeta = (draft: DolabDraftItem) => {
+    const hasTitle = Boolean(draft.title?.trim());
+    const hasDescription = Boolean(draft.description?.trim() || draft.exchangeIntent?.trim());
+    const hasMedia = draft.linkedPendingMediaIds.length > 0;
+    const isPreparedForPublish = publishDrafts.some((item) => item.sourceDraftId === draft.id);
+
+    if (isPreparedForPublish) {
+      return { badge: 'جاهزة', hint: 'جاهزة تطلع للسوق. راجع قبل النشر.' };
+    }
+    if (!hasMedia) {
+      return { badge: 'ناقصة ميديا', hint: 'لسه محتاجة ميديا.' };
+    }
+    if (!hasTitle || !hasDescription) {
+      return { badge: 'ناقصة تفاصيل', hint: 'لسه محتاجة وصف أو تفاصيل أساسية.' };
+    }
+    return { badge: 'جاهزة', hint: 'جاهزة للمراجعة قبل ما تطلع للسوق.' };
+  };
+
+  const draftsShelfCounters = useMemo(() => {
+    const local = visibleLocalDraftCardsFiltered;
+    const readyLocal = local.filter((draft) => draftReadinessMeta(draft).badge === 'جاهزة').length;
+    const missingLocal = local.filter((draft) => draftReadinessMeta(draft).badge !== 'جاهزة').length;
+    return {
+      drafts: local.length,
+      ready: readyLocal,
+      missing: missingLocal,
+      saved: visibleSavedItems.length,
+    };
+  }, [visibleLocalDraftCardsFiltered, visibleSavedItems.length, publishDrafts]);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -1349,9 +1380,34 @@ export default function DolabScreen() {
           </View>
         ) : null}
 
+        {viewMode === 'drafts' && (
+          <DolabAnimatedSection delay={200}>
+            <AppCard>
+              <View style={styles.sectionHeader}>
+                <AppText weight="bold">مسودات على الرف</AppText>
+                <AppText muted>هنا بتجهّز الحاجة قبل ما تطلع للسوق: صور، وصف، حالة، والمقابل اللي يناسبك.</AppText>
+              </View>
+              <View style={styles.mediaCountersRow}>
+                <AppText muted style={styles.smallText}>مسودات: {draftsShelfCounters.drafts}</AppText>
+                <AppText muted style={styles.smallText}>جاهزة: {draftsShelfCounters.ready}</AppText>
+                <AppText muted style={styles.smallText}>ناقصة بيانات: {draftsShelfCounters.missing}</AppText>
+                <AppText muted style={styles.smallText}>محفوظة: {draftsShelfCounters.saved}</AppText>
+              </View>
+              <View style={styles.mediaActionsRow}>
+                <Pressable style={styles.actionBtnInline} onPress={openDraftStudioForNew} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>ابدأ مسودة</AppText></Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => { openDraftStudioForNew(); setInlineFeedback('اختار ميديا من رف الميديا واربطها بالمسودة.'); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>حوّل ميديا لمسودة</AppText></Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => router.push('/(tabs)/add')} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>افتح إضافة عنصر</AppText></Pressable>
+              </View>
+            </AppCard>
+          </DolabAnimatedSection>
+        )}
+
+
         {!isCollectionFocusActive && (viewMode === 'ready' || (viewMode === 'drafts' && !isDraftsShelfEmpty)) && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
+            title={viewMode === 'drafts' ? 'محفوظة كمسودات' : undefined}
+            description={viewMode === 'drafts' ? 'حاجات محفوظة تقدر تكملها أو تراجعها قبل ما تطلع للسوق.' : undefined}
             items={visibleSavedItems}
             notes={viewMode === 'drafts' ? [] : visibleSavedNotes}
             media={viewMode === 'drafts' || viewMode === 'ready' ? [] : visibleSavedMedia}
@@ -1502,8 +1558,9 @@ export default function DolabScreen() {
         </AppCard></DolabAnimatedSection>}
         {!isCollectionFocusActive && viewMode === 'drafts' && isDraftsShelfEmpty && (
           <AppCard>
-            <EmptyState title="مفيش مسودات على الرف." description="مفيش مسودات على الرف. ابدأ مسودة لحاجة ممكن تطلع للسوق." iconName="cube-outline" />
-            <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+            <EmptyState title="مفيش مسودات على الرف." description="ابدأ مسودة من صورة، نوت، أو فكرة… وخليها جاهزة تطلع للسوق." iconName="cube-outline" />
+            <AppButton label="ابدأ مسودة" variant="neutral" onPress={openDraftStudioForNew} />
+            <AppButton label="افتح رف الميديا" variant="ghost" onPress={() => setViewMode('media')} />
           </AppCard>
         )}
 
@@ -1550,8 +1607,8 @@ export default function DolabScreen() {
 
         {(viewMode === 'drafts' || viewMode === 'ready') && (viewMode === 'ready' || !isDraftsShelfEmpty) && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">مسودات على الرف</AppText>
-            <AppText muted>حاجات جاهزة تطلع للسوق.</AppText>
+            <AppText weight="bold">{viewMode === 'ready' ? 'جاهزة للمراجعة' : 'المسودات الحالية'}</AppText>
+            <AppText muted>{viewMode === 'ready' ? 'راجعها قبل ما تطلع للسوق.' : 'كمّل التفاصيل أو جهّزها للعرض.'}</AppText>
           </View>
           <View style={styles.listWrap}>
             {visibleLocalDraftCardsFiltered.map((draft) => (
@@ -1566,12 +1623,12 @@ export default function DolabScreen() {
                   <AppText weight="semibold">{draft.title || 'مسودة بدون اسم'}</AppText>
                   <View style={styles.localBadge}>
                     <AppText style={styles.localBadgeText}>
-                      {publishDrafts.some((item) => item.sourceDraftId === draft.id) ? 'تحضير نشر' : 'مسودة مؤقتة'}
+                      {draftReadinessMeta(draft).badge}
                     </AppText>
                   </View>
                 </View>
                 <AppText muted style={styles.smallText}>
-                  {draft.description || draft.exchangeIntent || 'بدون تفاصيل إضافية حتى الآن.'}
+                  {draft.description || draft.exchangeIntent || draftReadinessMeta(draft).hint}
                 </AppText>
                 <AppText muted style={styles.smallText}>
                   ميديا مرتبطة: {draft.linkedPendingMediaIds.length}
@@ -1580,12 +1637,23 @@ export default function DolabScreen() {
                   style={styles.actionBtnInline}
                   onPress={(event) => {
                     event.stopPropagation();
+                    openDraftStudioForEdit(draft);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="كمّل المسودة"
+                >
+                  <AppText style={styles.actionBtnInlineText}>كمّل المسودة</AppText>
+                </Pressable>
+                <Pressable
+                  style={styles.actionBtnInline}
+                  onPress={(event) => {
+                    event.stopPropagation();
                     openPublishBridge(draft);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="تحويل المسودة إلى تحضير عرض"
+                  accessibilityLabel="جهّز المسودة للعرض"
                 >
-                  <AppText style={styles.actionBtnInlineText}>حوّل لعرض</AppText>
+                  <AppText style={styles.actionBtnInlineText}>{publishDrafts.some((item) => item.sourceDraftId === draft.id) ? 'طلعها للسوق' : 'جهّز للعرض'}</AppText>
                 </Pressable>
                 <Pressable
                   style={styles.actionBtnInline}
