@@ -794,7 +794,22 @@ export default function DolabScreen() {
         </Pressable>
 
         <DolabAnimatedSection delay={20}>
-        <DolabSavedLibrarySection items={mappedSavedItems} notes={mappedSavedNotes} media={mappedSavedMedia} onDeleteNote={(id)=>requestDelete({type:'note',id})} onDeleteItem={(id)=>requestDelete({type:'item',id})} onDeleteMedia={(item)=>requestDelete({type:'media',id:item.id,storagePath:item.storagePath})} onEditItem={editSavedItem} onPublishItem={routeSavedItemToAdd} onOpenPublishedItem={openPublishedItem} />
+          <DolabSavedLibrarySection
+            items={mappedSavedItems}
+            notes={mappedSavedNotes}
+            media={mappedSavedMedia}
+            onDeleteNote={(id) => requestDelete({ type: 'note', id })}
+            onDeleteItem={(id) => requestDelete({ type: 'item', id })}
+            onDeleteMedia={(item) =>
+              requestDelete({
+                type: 'media',
+                id: item.id,
+                storagePath: item.storagePath,
+              })}
+            onEditItem={editSavedItem}
+            onPublishItem={routeSavedItemToAdd}
+            onOpenPublishedItem={openPublishedItem}
+          />
         </DolabAnimatedSection>
 
         <DolabAnimatedSection delay={30}>

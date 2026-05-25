@@ -49,6 +49,7 @@ export default function AddScreen() {
   const [videoTeaser, setVideoTeaser] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [videoTeaserSizeLabel, setVideoTeaserSizeLabel] = useState<string | null>(null);
   const [categories, setCategories] = useState<{ id: string; name_ar: string }[]>([]);
+  const [categoriesSettled, setCategoriesSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState('');
@@ -98,11 +99,16 @@ export default function AddScreen() {
 
 
   useEffect(() => {
+    setCategoriesSettled(false);
     fetchActiveCategories()
-      .then(setCategories)
+      .then((nextCategories) => {
+        setCategories(nextCategories);
+        setCategoriesSettled(true);
+      })
       .catch((err) => {
         if (__DEV__) console.log('[add-item] categories load failed', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
         setCategories([]);
+        setCategoriesSettled(true);
       });
   }, []);
 
@@ -216,9 +222,8 @@ export default function AddScreen() {
 
 
   useEffect(() => {
-    if (!draftHydrated || source !== 'dolab' || !dolabItemId || !user?.id) return;
+    if (!draftHydrated || !categoriesSettled || source !== 'dolab' || !dolabItemId || !user?.id) return;
     if (dolabImportGuardRef.current === dolabItemId) return;
-    dolabImportGuardRef.current = dolabItemId;
 
     const runImport = async () => {
       const publishSource = await fetchDolabPublishSource(user.id, dolabItemId);
@@ -227,26 +232,34 @@ export default function AddScreen() {
         return;
       }
 
+      const hasSourceError = Boolean(publishSource.error);
+      if (hasSourceError) {
+        setDolabNotice('تعذر تجهيز بيانات الدولاب بالكامل. حاول تحديث الدولاب أو افتح العنصر مرة تانية.');
+      }
+
       const applyImport = async () => {
         const mapped = mapDolabItemToAddItemFields(publishSource.data.item!, categories);
-        setTitle((prev) => prev.trim() || mapped.title);
-        setDescription((prev) => prev.trim() || mapped.description);
+        setTitle(mapped.title);
+        setDescription(mapped.description);
         setCondition(mapped.condition);
-        setConditionNotes((prev) => prev.trim() || mapped.conditionNotes);
-        setCategoryId((prev) => prev ?? mapped.categoryId);
-        setDesireText((prev) => prev.trim() || mapped.desireText);
+        setConditionNotes(mapped.conditionNotes);
+        setCategoryId(mapped.categoryId);
+        setDesireText(mapped.desireText);
 
-        const imported = await importDolabImagesToAssets(publishSource.data.media);
-        await appendAssets(imported.assets, 'dolab');
-        const warnings = [...imported.warnings];
-        if (!mapped.categoryMatched) warnings.push('اختار الفئة المناسبة قبل النشر.');
-        if (publishSource.data.media.some((m) => m.media_type === 'video' || m.media_type === 'audio')) {
-          warnings.push('فيديوهات الدولاب محفوظة، لكن لمحة العنصر هتتضاف يدويًا في الخطوة دي.');
+        if (!hasSourceError) {
+          const imported = await importDolabImagesToAssets(publishSource.data.media);
+          await appendAssets(imported.assets, 'dolab');
+          const warnings = [...imported.warnings];
+          if (!mapped.categoryMatched) warnings.push('اختار الفئة المناسبة قبل النشر.');
+          if (publishSource.data.media.some((m) => m.media_type === 'video' || m.media_type === 'audio')) {
+            warnings.push('فيديوهات الدولاب محفوظة، لكن لمحة العنصر هتتضاف يدويًا في الخطوة دي.');
+          }
+          setDolabNotice(['استوردنا بيانات من دولابك. راجع التفاصيل قبل النشر.', ...warnings].join(' '));
         }
-        setDolabNotice(['استوردنا بيانات من دولابك. راجع التفاصيل قبل النشر.', ...warnings].join(' '));
         setDolabImportChoicePending(false);
       };
 
+      dolabImportGuardRef.current = dolabItemId;
       if (hasMeaningfulAddItemDraft(currentDraft)) {
         setDolabImportChoicePending(true);
         setPendingDolabApply(() => applyImport);
@@ -256,7 +269,7 @@ export default function AddScreen() {
     };
 
     void runImport();
-  }, [draftHydrated, source, dolabItemId, user?.id, categories]);
+  }, [draftHydrated, categoriesSettled, source, dolabItemId, user?.id, categories, currentDraft]);
 
   useEffect(() => {
     if (!user?.id) return;
