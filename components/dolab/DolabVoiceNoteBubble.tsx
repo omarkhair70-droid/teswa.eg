@@ -58,7 +58,7 @@ export function DolabVoiceNoteBubble({ message, pendingMedia }: Props) {
           <AppText style={styles.playText}>{playerStatus.playing ? 'إيقاف' : 'تشغيل'}</AppText>
         </Pressable>
       ) : (
-        <AppText muted style={styles.meta}>التسجيل غير متاح للتشغيل الآن.</AppText>
+        <AppText muted style={styles.meta}>التسجيل مش متاح للتشغيل دلوقتي.</AppText>
       )}
       {error ? <AppText style={styles.error}>{error}</AppText> : null}
       {playerStatus.didJustFinish ? <AppText muted style={styles.meta}>انتهى التشغيل.</AppText> : null}
