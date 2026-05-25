@@ -859,7 +859,8 @@ export default function DolabScreen() {
     if (!pending) return;
     appendMedia([pending]);
     setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
-    setInlineFeedback('اتحول لرف الميديا في دولابك.');
+    setInlineFeedback('اتحطت في رف الميديا.');
+    setViewMode('media');
   };
 
   const convertInboxToNote = (item: DolabInboxItem) => {
@@ -867,7 +868,13 @@ export default function DolabScreen() {
     const messageType: DolabSelfMessageType = item.type === 'link' ? 'idea' : 'text';
     setSelfMessages((prev) => [{ id: `local-self-message-${Date.now()}`, body, messageType, linkedPendingMediaIds: [], createdAt: new Date().toISOString() }, ...prev]);
     setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
-    setInlineFeedback('اتحول للكلام مع نفسي في دولابك.');
+    setInlineFeedback('اتحطت في الكلام مع نفسي.');
+    setViewMode('notes');
+  };
+
+  const convertInboxToDraft = (item: DolabInboxItem) => {
+    openDraftStudioForNew();
+    setInlineFeedback('ابدأ مسودة من الحاجة دي.');
   };
 
   const openShareBridge = (messageId: string) => {
@@ -1350,14 +1357,35 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && viewMode === 'inbox' && (
           <DolabAnimatedSection delay={12}>
+            <AppCard>
+              <View style={styles.sectionHeader}>
+                <AppText weight="bold">وارد الدولاب</AppText>
+                <AppText muted>أي حاجة جاية من برّه التطبيق بتدخل هنا الأول: نص، رابط، ملف، أو فكرة سريعة.</AppText>
+              </View>
+              <View style={styles.mediaCountersRow}>
+                <AppText muted style={styles.smallText}>نصوص: {visibleInboxItems.filter((item) => item.type === 'text').length}</AppText>
+                <AppText muted style={styles.smallText}>روابط: {visibleInboxItems.filter((item) => item.type === 'link').length}</AppText>
+                <AppText muted style={styles.smallText}>ملفات: {visibleInboxItems.filter((item) => item.type === 'file' || item.type === 'image' || item.type === 'video').length}</AppText>
+                <AppText muted style={styles.smallText}>جاهزة للتحويل: {visibleInboxItems.length}</AppText>
+              </View>
+              <View style={styles.mediaActionsRow}>
+                <Pressable style={styles.actionBtnInline} onPress={() => { void captureClipboard(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>الصق من الحافظة</AppText></Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => { void captureDocument(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اختار ملف</AppText></Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => inboxQuickNoteSheetRef.current?.present()} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اكتب نص سريع</AppText></Pressable>
+              </View>
+            </AppCard>
             {isInboxShelfEmpty && (
               <AppCard>
                 <EmptyState
                   title="الوارد فاضي."
-                  description="الوارد فاضي. الصق نص، اختار ملف، أو اكتب حاجة سريعة."
+                  description="الصق نص، اختار ملف، أو ابعت حاجة للدولاب… وهتظهر هنا قبل ما تقرر مكانها."
                   iconName="download-outline"
                 />
-                <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+                <View style={styles.mediaActionsRow}>
+                  <AppButton label="اكتب نص سريع" variant="neutral" onPress={() => inboxQuickNoteSheetRef.current?.present()} />
+                  <Pressable style={styles.actionBtnInline} onPress={() => { void captureClipboard(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>الصق من الحافظة</AppText></Pressable>
+                  <Pressable style={styles.actionBtnInline} onPress={() => { void captureDocument(); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>اختار ملف</AppText></Pressable>
+                </View>
               </AppCard>
             )}
             {!isInboxShelfEmpty && (
@@ -1365,6 +1393,7 @@ export default function DolabScreen() {
                 items={visibleInboxItems}
                 onConvertToNote={convertInboxToNote}
                 onConvertToMedia={convertInboxToMedia}
+                onStartDraft={convertInboxToDraft}
                 onDelete={(id) => setInboxItems((prev) => prev.filter((item) => item.id !== id))}
               />
             )}

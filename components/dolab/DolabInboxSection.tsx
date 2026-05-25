@@ -11,6 +11,7 @@ type Props = {
   items: DolabInboxItem[];
   onConvertToNote: (item: DolabInboxItem) => void;
   onConvertToMedia: (item: DolabInboxItem) => void;
+  onStartDraft: (item: DolabInboxItem) => void;
   onDelete: (id: string) => void;
 };
 
@@ -19,22 +20,22 @@ const dateLabel = (createdAt: string) => {
   return delta < 1000 * 60 * 2 ? 'الآن' : 'من شوية';
 };
 
-export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, onDelete }: Props) {
+const resolveTypeLabel = (item: DolabInboxItem) => {
+  if (item.type === 'file' && item.mimeType?.toLowerCase().startsWith('audio/')) return 'تسجيل صوتي';
+  return formatInboxTypeLabel(item.type);
+};
+
+export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, onStartDraft, onDelete }: Props) {
   return (
     <AppCard>
-      <View style={styles.sectionHeader}>
-        <AppText weight="bold">وارد الدولاب</AppText>
-        <AppText muted>حاجات جاية من برّه التطبيق ولسه محتاجة ترتيب.</AppText>
-      </View>
-      {items.length === 0 ? (
-        <AppText muted>مفيش وارد جديد.</AppText>
-      ) : (
-        <View style={styles.listWrap}>
-          {items.map((item) => (
+      <View style={styles.listWrap}>
+        {items.map((item) => {
+          const emphasizeMedia = item.type === 'image' || item.type === 'video' || item.mimeType?.toLowerCase().startsWith('audio/');
+          return (
             <View key={item.id} style={styles.itemCard}>
               <View style={styles.row}>
                 <View style={styles.badge}>
-                  <AppText style={styles.badgeText}>{formatInboxTypeLabel(item.type)}</AppText>
+                  <AppText style={styles.badgeText}>{resolveTypeLabel(item)}</AppText>
                 </View>
                 <AppText muted style={styles.metaText}>
                   {formatInboxSourceLabel(item.source)} · {dateLabel(item.createdAt)}
@@ -43,37 +44,23 @@ export function DolabInboxSection({ items, onConvertToNote, onConvertToMedia, on
               <AppText weight="semibold">{item.title}</AppText>
               {item.body ? <AppText muted numberOfLines={2}>{item.body}</AppText> : null}
               <View style={styles.actionsRow}>
-                <Pressable
-                  style={styles.actionBtn}
-                  onPress={() => onConvertToNote(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel="حوّل الوارد لملاحظة"
-                >
-                  <AppText style={styles.actionText}>حوّل لملاحظة</AppText>
+                <Pressable style={emphasizeMedia ? styles.actionBtn : styles.actionBtnPrimary} onPress={() => onConvertToNote(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لنوت">
+                  <AppText style={emphasizeMedia ? styles.actionText : styles.actionTextPrimary}>حوّل لنوت</AppText>
                 </Pressable>
-                {(item.type === 'image' || item.type === 'video') ? (
-                  <Pressable
-                    style={styles.actionBtn}
-                    onPress={() => onConvertToMedia(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel="حوّل الوارد لميديا"
-                  >
-                    <AppText style={styles.actionText}>حوّل لميديا</AppText>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  style={styles.actionBtnDanger}
-                  onPress={() => onDelete(item.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel="احذف الوارد"
-                >
+                <Pressable style={emphasizeMedia ? styles.actionBtnPrimary : styles.actionBtn} onPress={() => onConvertToMedia(item)} accessibilityRole="button" accessibilityLabel="حوّل الوارد لميديا">
+                  <AppText style={emphasizeMedia ? styles.actionTextPrimary : styles.actionText}>حوّل لميديا</AppText>
+                </Pressable>
+                <Pressable style={styles.actionBtn} onPress={() => onStartDraft(item)} accessibilityRole="button" accessibilityLabel="ابدأ مسودة من الوارد">
+                  <AppText style={styles.actionText}>ابدأ مسودة</AppText>
+                </Pressable>
+                <Pressable style={styles.actionBtnDanger} onPress={() => onDelete(item.id)} accessibilityRole="button" accessibilityLabel="احذف الوارد">
                   <AppText style={styles.actionTextDanger}>احذف</AppText>
                 </Pressable>
               </View>
             </View>
-          ))}
-        </View>
-      )}
+          );
+        })}
+      </View>
     </AppCard>
   );
 }
@@ -124,8 +111,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
   },
+  actionBtnPrimary: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
   actionText: {
     color: colors.primary,
+    fontSize: 12,
+  },
+  actionTextPrimary: {
+    color: colors.white,
     fontSize: 12,
   },
   actionBtnDanger: {
