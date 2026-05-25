@@ -143,6 +143,7 @@ Security rules:
 - Never expose `STREAM_CHAT_SECRET` in `EXPO_PUBLIC_*` variables.
 - Never hardcode Stream user tokens in committed frontend code.
 - App startup must remain safe when Stream env vars are absent; Stream lab should show a missing-config state or fallback status.
+- Edge function should support CORS preflight (`OPTIONS`) and return consistent JSON (`ok: true` success, `ok: false` errors).
 
 ### Next step: Stream Direct Chat Pilot
 

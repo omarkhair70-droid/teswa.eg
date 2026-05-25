@@ -3,6 +3,15 @@ import { supabase } from '@/lib/supabase/client';
 type StreamTokenSuccess = { ok: true; apiKey: string; userId: string; token: string };
 type StreamTokenFailure = { ok: false; message: string };
 
+type TokenResponse = {
+  ok?: unknown;
+  userId?: unknown;
+  token?: unknown;
+  apiKey?: unknown;
+  error?: unknown;
+  message?: unknown;
+};
+
 export async function fetchStreamChatToken(): Promise<StreamTokenSuccess | StreamTokenFailure> {
   try {
     const {
@@ -14,12 +23,7 @@ export async function fetchStreamChatToken(): Promise<StreamTokenSuccess | Strea
       return { ok: false, message: 'Missing authenticated session.' };
     }
 
-    const { data, error } = await supabase.functions.invoke<{
-      userId?: unknown;
-      token?: unknown;
-      apiKey?: unknown;
-      message?: unknown;
-    }>('stream-chat-token', {
+    const { data, error } = await supabase.functions.invoke<TokenResponse>('stream-chat-token', {
       headers: {
         Authorization: `Bearer ${session.access_token}`,
       },
@@ -27,6 +31,11 @@ export async function fetchStreamChatToken(): Promise<StreamTokenSuccess | Strea
 
     if (error) {
       return { ok: false, message: error.message || 'Token endpoint request failed.' };
+    }
+
+    if (data?.ok === false) {
+      const message = typeof data.message === 'string' ? data.message : 'Token endpoint rejected the request.';
+      return { ok: false, message };
     }
 
     if (!data || typeof data.userId !== 'string' || typeof data.token !== 'string' || typeof data.apiKey !== 'string') {
