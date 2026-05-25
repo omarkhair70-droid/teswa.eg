@@ -14,6 +14,7 @@ import {
   STREAM_CHAT_TEST_USER_ID,
   STREAM_CHAT_TEST_USER_TOKEN,
 } from '@/lib/chat/stream-chat-config';
+import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 
 type StreamChatClient = {
   connectUser: (user: { id: string }, token: string) => Promise<unknown>;
@@ -32,6 +33,7 @@ export default function StreamChatLabScreen() {
   const [channelReady, setChannelReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [tokenSource, setTokenSource] = useState<'backend' | 'test' | 'none'>('none');
 
   const effectiveChannelId = useMemo(() => STREAM_CHAT_TEST_CHANNEL_ID.trim() || FALLBACK_TEST_CHANNEL_ID, []);
 
@@ -46,10 +48,11 @@ export default function StreamChatLabScreen() {
       setConnected(false);
       setChannelReady(false);
 
-      if (!STREAM_CHAT_ENABLED || !hasStreamChatLabConfig) return;
+      if (!STREAM_CHAT_ENABLED || !hasStreamChatConfig) return;
 
       setRuntimeError(null);
       setConnecting(true);
+      setTokenSource('none');
 
       try {
         const streamModule = await import('stream-chat-expo');
@@ -62,13 +65,30 @@ export default function StreamChatLabScreen() {
           throw new Error('StreamChat export is unavailable from stream-chat-expo');
         }
 
-        client = StreamChat.getInstance(STREAM_CHAT_API_KEY);
-        await client.connectUser({ id: STREAM_CHAT_TEST_USER_ID }, STREAM_CHAT_TEST_USER_TOKEN);
+        const backendToken = await fetchStreamChatToken();
+        const auth = backendToken.ok
+          ? { userId: backendToken.userId, token: backendToken.token, apiKey: backendToken.apiKey, source: 'backend' as const }
+          : hasStreamChatLabConfig
+            ? {
+              userId: STREAM_CHAT_TEST_USER_ID,
+              token: STREAM_CHAT_TEST_USER_TOKEN,
+              apiKey: STREAM_CHAT_API_KEY,
+              source: 'test' as const,
+            }
+            : null;
+
+        if (!auth) {
+          throw new Error(backendToken.ok ? 'Missing Stream token configuration.' : backendToken.message);
+        }
+
+        client = StreamChat.getInstance(auth.apiKey);
+        await client.connectUser({ id: auth.userId }, auth.token);
         if (!mounted) return;
 
+        setTokenSource(auth.source);
         setConnected(true);
 
-        const channel = client.channel('messaging', effectiveChannelId, { members: [STREAM_CHAT_TEST_USER_ID] });
+        const channel = client.channel('messaging', effectiveChannelId, { members: [auth.userId] });
         await channel.watch();
         if (!mounted) return;
 
@@ -103,21 +123,22 @@ export default function StreamChatLabScreen() {
         ) : null}
 
         {STREAM_CHAT_ENABLED && hasStreamChatConfig && !hasStreamChatLabConfig ? (
-          <EmptyState title="Missing test user config" description="Set EXPO_PUBLIC_STREAM_CHAT_TEST_USER_ID and EXPO_PUBLIC_STREAM_CHAT_TEST_USER_TOKEN for this internal lab." iconName="alert-circle-outline" compact />
+          <EmptyState title="No fallback test token configured" description="Backend token fetch is preferred. Optionally set EXPO_PUBLIC_STREAM_CHAT_TEST_USER_ID and EXPO_PUBLIC_STREAM_CHAT_TEST_USER_TOKEN for local fallback testing." iconName="alert-circle-outline" compact />
         ) : null}
 
         <AppCard>
           <View style={styles.statusList}>
             <StatusRow label="SDK loaded" value={sdkLoaded} />
             <StatusRow label="API key found" value={hasStreamChatConfig} />
-            <StatusRow label="Test user connected" value={connected} />
+            <StatusRow label="User connected" value={connected} />
             <StatusRow label="Channel ready" value={channelReady} />
           </View>
         </AppCard>
 
         <AppCard>
           <View style={styles.infoBlock}>
-            <AppText muted>Test user: {STREAM_CHAT_TEST_USER_ID || 'Not set'}</AppText>
+            <AppText muted>Test user fallback: {STREAM_CHAT_TEST_USER_ID || 'Not set'}</AppText>
+            <AppText muted>Token source: {tokenSource === 'backend' ? 'Backend token fetched' : tokenSource === 'test' ? 'Test token fallback used' : 'No token yet'}</AppText>
             <AppText muted>Channel: {effectiveChannelId}</AppText>
             <AppText muted>Lab config complete: {hasStreamChatLabConfig ? 'Yes' : 'No'}</AppText>
             {runtimeError ? <AppText style={styles.errorText}>Runtime error: {runtimeError}</AppText> : null}
