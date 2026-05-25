@@ -23,6 +23,8 @@ type SavedNote = {
 };
 
 type Props = {
+  title?: string;
+  description?: string;
   items: SavedItem[];
   notes: SavedNote[];
   media: DolabSavedMediaCardModel[];
@@ -35,6 +37,8 @@ type Props = {
 };
 
 export function DolabSavedLibrarySection({
+  title = 'المحفوظ في دولابك',
+  description = 'حاجات محفوظة سحابيًا وتفضل موجودة لما ترجع.',
   items,
   notes,
   media,
@@ -50,8 +54,8 @@ export function DolabSavedLibrarySection({
   return (
     <AppCard>
       <View style={styles.header}>
-        <AppText weight="bold">المحفوظ في دولابك</AppText>
-        <AppText muted>حاجات محفوظة سحابيًا وتفضل موجودة لما ترجع.</AppText>
+        <AppText weight="bold">{title}</AppText>
+        <AppText muted>{description}</AppText>
       </View>
 
       {isEmpty ? (
@@ -76,9 +80,9 @@ export function DolabSavedLibrarySection({
                   <Pressable
                     onPress={() => onPublishItem(item.id)}
                     accessibilityRole="button"
-                    accessibilityLabel="انشر في السوق"
+                    accessibilityLabel="طلعها للسوق"
                   >
-                    <AppText style={styles.action}>انشر في السوق</AppText>
+                    <AppText style={styles.action}>طلعها للسوق</AppText>
                   </Pressable>
                 ) : null}
 
