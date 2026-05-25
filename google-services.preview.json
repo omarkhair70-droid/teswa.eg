@@ -51,6 +51,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "918426406146-h0bupt3bpf8rrdhtnn36oa06ru1nnnn4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.teswa.mobile.preview",
+            "certificate_hash": "f19b9e28a1111d55cd6ebd06eaee3b9fe4824518"
+          }
+        },
+        {
           "client_id": "918426406146-dog29tsebc44ed5nsh71qirkt53l70in.apps.googleusercontent.com",
           "client_type": 3
         }
