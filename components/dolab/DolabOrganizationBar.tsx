@@ -14,14 +14,25 @@ const MODES: Array<{ key: DolabViewMode; label: string }> = [
   { key: 'issues', label: 'مشاكل' },
 ];
 
-export function DolabOrganizationBar({ value, onChange }: { value: DolabViewMode; onChange: (mode: DolabViewMode) => void }) {
+type Props = {
+  value: DolabViewMode;
+  onChange: (mode: DolabViewMode) => void;
+};
+
+export function DolabOrganizationBar({ value, onChange }: Props) {
   return (
     <View style={styles.wrap}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {MODES.map((mode) => {
           const active = mode.key === value;
           return (
-            <Pressable key={mode.key} style={[styles.chip, active && styles.chipActive]} onPress={() => onChange(mode.key)} accessibilityRole="button" accessibilityLabel={`عرض ${mode.label}`}>
+            <Pressable
+              key={mode.key}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => onChange(mode.key)}
+              accessibilityRole="button"
+              accessibilityLabel={`عرض ${mode.label}`}
+            >
               <AppText style={[styles.text, active && styles.textActive]}>{mode.label}</AppText>
             </Pressable>
           );
@@ -34,8 +45,15 @@ export function DolabOrganizationBar({ value, onChange }: { value: DolabViewMode
 const styles = StyleSheet.create({
   wrap: { marginTop: spacing.sm },
   row: { gap: spacing.xs, paddingVertical: spacing.xs },
-  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.full, paddingVertical: spacing.xs, paddingHorizontal: spacing.md, backgroundColor: colors.card },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.full,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+  },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   text: { fontSize: 13, color: colors.text },
-  textActive: { color: colors.onPrimary },
+  textActive: { color: colors.white },
 });
