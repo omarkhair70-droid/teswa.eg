@@ -54,6 +54,7 @@ import { DolabShelvesOverview } from '@/components/dolab/DolabShelvesOverview';
 import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
 import { DolabShelfActionSheet } from '@/components/dolab/DolabShelfActionSheet';
 import { DolabSavedMediaGrid } from '@/components/dolab/DolabSavedMediaGrid';
+import { readLocalDolabPendingMedia, readLocalDolabSelfMessages, writeLocalDolabPendingMedia, writeLocalDolabSelfMessages } from '@/lib/dolab/local-persistence';
 
 const emptyDraftForm: DolabDraftItemInput = {
   title: '',
@@ -77,6 +78,9 @@ export default function DolabScreen() {
   const inboxQuickNoteSheetRef = useRef<BottomSheetModal>(null);
   const collectionPickerSheetRef = useRef<BottomSheetModal>(null);
   const shelfActionSheetRef = useRef<BottomSheetModal>(null);
+
+  const pendingMediaHydratedRef = useRef(false);
+  const selfMessagesHydratedRef = useRef(false);
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
@@ -154,6 +158,46 @@ export default function DolabScreen() {
       setInlineFeedback('تمت إضافة الوارد من خارج التطبيق.');
     }
   }, []);
+
+  useEffect(() => {
+    const hydrateLocalDolab = async () => {
+      const [persistedPendingMedia, persistedSelfMessages] = await Promise.all([
+        readLocalDolabPendingMedia(),
+        readLocalDolabSelfMessages(),
+      ]);
+
+      setPendingMedia((prev) => {
+        const byId = new Map<string, DolabPendingMedia>();
+        for (const item of [...prev, ...persistedPendingMedia]) {
+          byId.set(item.id, item);
+        }
+        return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
+
+      setSelfMessages((prev) => {
+        const byId = new Map<string, DolabSelfMessage>();
+        for (const item of [...prev, ...persistedSelfMessages]) {
+          byId.set(item.id, item);
+        }
+        return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
+
+      pendingMediaHydratedRef.current = true;
+      selfMessagesHydratedRef.current = true;
+    };
+
+    void hydrateLocalDolab();
+  }, []);
+
+  useEffect(() => {
+    if (!pendingMediaHydratedRef.current) return;
+    void writeLocalDolabPendingMedia(pendingMedia);
+  }, [pendingMedia]);
+
+  useEffect(() => {
+    if (!selfMessagesHydratedRef.current) return;
+    void writeLocalDolabSelfMessages(selfMessages);
+  }, [selfMessages]);
 
   useEffect(() => {
     const loadRemoteSnapshot = async () => {
