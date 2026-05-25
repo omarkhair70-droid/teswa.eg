@@ -433,6 +433,10 @@ export default function DolabScreen() {
     inbox: inboxItems.length,
     ideas: selfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist').length,
   };
+  const isMediaShelfEmpty = visiblePendingMedia.length + visibleSavedMedia.length === 0;
+  const isNotesShelfEmpty = visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length === 0;
+  const isInboxShelfEmpty = visibleInboxItems.length === 0;
+  const isDraftsShelfEmpty = visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0;
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -1227,28 +1231,6 @@ export default function DolabScreen() {
         </View>
 
         <DolabVaultHero />
-        <AppCard>
-          <View style={styles.guidanceHead}>
-            <AppText weight="bold">ابدأ من هنا</AppText>
-            <AppText muted>
-              افتح رف وسيب الحاجة في مكانها. صورة في رف الميديا، فكرة في الكلام مع نفسي، ومسودة في مسودات على الرف.
-            </AppText>
-          </View>
-          <View style={styles.guidanceSteps}>
-            <View style={styles.guidanceStep}>
-              <AppText weight="semibold">عندك صورة؟</AppText>
-              <AppText muted>رف الميديا</AppText>
-            </View>
-            <View style={styles.guidanceStep}>
-              <AppText weight="semibold">عندك فكرة؟</AppText>
-              <AppText muted>الكلام مع نفسي</AppText>
-            </View>
-            <View style={styles.guidanceStep}>
-              <AppText weight="semibold">هتنشر حاجة؟</AppText>
-              <AppText muted>مسودات على الرف</AppText>
-            </View>
-          </View>
-        </AppCard>
         <AppText muted style={styles.cloudStatusText}>
           {cloudStatus === 'schema_missing'
             ? 'الحفظ السحابي غير مفعّل بعد'
@@ -1276,23 +1258,47 @@ export default function DolabScreen() {
           <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
         </Pressable>
         {viewMode === 'all' ? (
-          <DolabShelvesOverview
-            counts={shelvesCounts}
-            onOpenShelf={setViewMode}
-            onQuickNote={() => {
-              setViewMode('notes');
-              setSelfComposerType('text');
-              setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
-            }}
-            onQuickAudio={() => audioRecorderSheetRef.current?.present()}
-            onQuickCamera={() => {
-              void captureImage();
-            }}
-            onQuickDraft={() => {
-              setInlineFeedback('ابدأ مسودتك في مسودات على الرف.');
-              openDraftStudioForNew();
-            }}
-          />
+          <>
+            <AppCard>
+              <View style={styles.guidanceHead}>
+                <AppText weight="bold">ابدأ من هنا</AppText>
+                <AppText muted>
+                  افتح رف وسيب الحاجة في مكانها. صورة في رف الميديا، فكرة في الكلام مع نفسي، ومسودة في مسودات على الرف.
+                </AppText>
+              </View>
+              <View style={styles.guidanceSteps}>
+                <View style={styles.guidanceStep}>
+                  <AppText weight="semibold">عندك صورة؟</AppText>
+                  <AppText muted>رف الميديا</AppText>
+                </View>
+                <View style={styles.guidanceStep}>
+                  <AppText weight="semibold">عندك فكرة؟</AppText>
+                  <AppText muted>الكلام مع نفسي</AppText>
+                </View>
+                <View style={styles.guidanceStep}>
+                  <AppText weight="semibold">هتنشر حاجة؟</AppText>
+                  <AppText muted>مسودات على الرف</AppText>
+                </View>
+              </View>
+            </AppCard>
+            <DolabShelvesOverview
+              counts={shelvesCounts}
+              onOpenShelf={setViewMode}
+              onQuickNote={() => {
+                setViewMode('notes');
+                setSelfComposerType('text');
+                setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
+              }}
+              onQuickAudio={() => audioRecorderSheetRef.current?.present()}
+              onQuickCamera={() => {
+                void captureImage();
+              }}
+              onQuickDraft={() => {
+                setInlineFeedback('ابدأ مسودتك في مسودات على الرف.');
+                openDraftStudioForNew();
+              }}
+            />
+          </>
         ) : (
           <>
             {shelfMeta[viewMode] ? (
@@ -1322,7 +1328,7 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && viewMode === 'inbox' && (
           <DolabAnimatedSection delay={12}>
-            {visibleInboxItems.length === 0 && (
+            {isInboxShelfEmpty && (
               <AppCard>
                 <EmptyState
                   title="الوارد فاضي."
@@ -1332,12 +1338,14 @@ export default function DolabScreen() {
                 <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
               </AppCard>
             )}
-            <DolabInboxSection
-              items={visibleInboxItems}
-              onConvertToNote={convertInboxToNote}
-              onConvertToMedia={convertInboxToMedia}
-              onDelete={(id) => setInboxItems((prev) => prev.filter((item) => item.id !== id))}
-            />
+            {!isInboxShelfEmpty && (
+              <DolabInboxSection
+                items={visibleInboxItems}
+                onConvertToNote={convertInboxToNote}
+                onConvertToMedia={convertInboxToMedia}
+                onDelete={(id) => setInboxItems((prev) => prev.filter((item) => item.id !== id))}
+              />
+            )}
           </DolabAnimatedSection>
         )}
 
@@ -1370,7 +1378,7 @@ export default function DolabScreen() {
           />
         </DolabAnimatedSection>)}
 
-        {!isCollectionFocusActive && (viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
+        {!isCollectionFocusActive && (viewMode === 'media' || viewMode === 'issues') && (viewMode === 'issues' || !isMediaShelfEmpty) && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">رف الميديا</AppText>
@@ -1390,14 +1398,14 @@ export default function DolabScreen() {
           />
         </AppCard>
         </DolabAnimatedSection>}
-        {!isCollectionFocusActive && viewMode === 'media' && visiblePendingMedia.length + visibleSavedMedia.length === 0 && (
+        {!isCollectionFocusActive && viewMode === 'media' && isMediaShelfEmpty && (
           <AppCard>
             <EmptyState title="رف الميديا فاضي." description="رف الميديا فاضي. صوّر حاجة أو ارفع صورة تبدأ بيها." iconName="images-outline" />
             <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
           </AppCard>
         )}
 
-        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={70}>
+        {!isCollectionFocusActive && viewMode === 'notes' && !isNotesShelfEmpty && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
           messages={visibleSelfMessages}
           localDrafts={localDrafts}
@@ -1424,7 +1432,7 @@ export default function DolabScreen() {
           onDelete={deleteSelfMessage}
         />
         </DolabAnimatedSection>}
-        {!isCollectionFocusActive && viewMode === 'notes' && visibleSelfMessages.length + visibleSavedNotes.length === 0 && (
+        {!isCollectionFocusActive && viewMode === 'notes' && isNotesShelfEmpty && (
           <AppCard>
             <EmptyState title="لسه مفيش كلام هنا." description="لسه مفيش كلام هنا. اكتب نوت أو سجّل ريكورد لنفسك." iconName="chatbox-ellipses-outline" />
             <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
@@ -1433,7 +1441,7 @@ export default function DolabScreen() {
 
 
 
-        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={120}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'notes' && !isNotesShelfEmpty && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">رسائل جاهزة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
@@ -1457,7 +1465,7 @@ export default function DolabScreen() {
             </View>
           )}
         </AppCard></DolabAnimatedSection>}
-        {!isCollectionFocusActive && viewMode === 'drafts' && visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0 && (
+        {!isCollectionFocusActive && viewMode === 'drafts' && isDraftsShelfEmpty && (
           <AppCard>
             <EmptyState title="مفيش مسودات على الرف." description="مفيش مسودات على الرف. ابدأ مسودة لحاجة ممكن تطلع للسوق." iconName="cube-outline" />
             <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
@@ -1505,7 +1513,7 @@ export default function DolabScreen() {
           )}
         </AppCard></DolabAnimatedSection>}
 
-        {(viewMode === 'drafts' || viewMode === 'ready') && <DolabAnimatedSection delay={220}><AppCard>
+        {(viewMode === 'drafts' || viewMode === 'ready') && (viewMode === 'ready' || !isDraftsShelfEmpty) && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">مسودات على الرف</AppText>
             <AppText muted>حاجات جاهزة تطلع للسوق.</AppText>
@@ -1573,7 +1581,7 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={260}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'notes' && !isNotesShelfEmpty && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">درج الأفكار</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
