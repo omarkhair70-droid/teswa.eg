@@ -42,9 +42,24 @@ export function createPendingAudioMedia(input: { uri: string; durationMs?: numbe
   };
 }
 
+
+function pendingMediaTypeFromInboxItem(item: DolabInboxItem): DolabPendingMediaType | null {
+  if (item.type === 'image') return 'image';
+  if (item.type === 'video') return 'video';
+  if (item.type !== 'file') return null;
+
+  const mime = item.mimeType?.toLowerCase();
+  if (!mime) return null;
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return null;
+}
+
 export function createPendingMediaFromInboxItem(item: DolabInboxItem): DolabPendingMedia | null {
-  if ((item.type !== 'image' && item.type !== 'video') || !item.uri) return null;
-  const mediaType: DolabPendingMediaType = item.type === 'image' ? 'image' : 'video';
+  if (!item.uri) return null;
+  const mediaType = pendingMediaTypeFromInboxItem(item);
+  if (!mediaType) return null;
   return {
     id: `inbox-media-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     uri: item.uri,

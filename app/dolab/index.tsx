@@ -940,12 +940,11 @@ export default function DolabScreen() {
   };
 
   const convertInboxToMedia = async (item: DolabInboxItem) => {
-    if (item.type === 'file') {
-      setInlineFeedback('الملفات العامة محفوظة كوارد فقط حاليًا.');
+    const pending = createPendingMediaFromInboxItem(item);
+    if (!pending) {
+      setInlineFeedback('الملف ده يفضل في وارد الدولاب حاليًا.');
       return;
     }
-    const pending = createPendingMediaFromInboxItem(item);
-    if (!pending) return;
     const durablePending = item.uri ? await makePendingMediaDurable(pending) : pending;
     appendMedia([durablePending]);
     setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
