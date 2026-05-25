@@ -1245,7 +1245,13 @@ export default function DolabScreen() {
         <View style={styles.headerRow}>
           <Pressable
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (viewMode !== 'all') {
+                setViewMode('all');
+                return;
+              }
+              router.back();
+            }}
             accessibilityRole="button"
             accessibilityLabel="الرجوع من شاشة دولاب تسوى"
           >
@@ -1264,7 +1270,7 @@ export default function DolabScreen() {
                 ? 'الحفظ السحابي غير مفعّل بعد'
                 : cloudStatus === 'partial_sync'
                   ? `متزامن جزئيًا · عناصر ${remoteSnapshot.items} · ميديا ${remoteSnapshot.media} · ملاحظات ${remoteSnapshot.notes}`
-                  : 'محلي فقط'}
+                  : 'محفوظة على جهازك الآن'}
             </AppText>
             <Pressable
               style={styles.actionBtnInline}
@@ -1602,7 +1608,11 @@ export default function DolabScreen() {
             <AppText muted>تحضيرات جاهزة تقدر تطلع للسوق من إضافة عنصر.</AppText>
           </View>
           {visiblePublishDrafts.length === 0 ? (
-            <AppText muted style={styles.smallText}>لسه مفيش عروض محضرة للسوق، حضّر مسودة أولًا.</AppText>
+            <EmptyState
+              title="رف الجاهز فاضي حاليًا."
+              description="جهّز مسودة من مسودات على الرف، وبعدها هتلاقيها هنا جاهزة تطلع للسوق."
+              iconName="rocket-outline"
+            />
           ) : (
             <View style={styles.listWrap}>
               {visiblePublishDrafts.map((draft) => (
@@ -1709,7 +1719,7 @@ export default function DolabScreen() {
           <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'مفيش نتائج بالفلتر ده. جرّب تفتح رف تاني.'} />
         )}
 
-        {!isCollectionFocusActive && viewMode !== 'all' && !hasAnyDolabContent && <AppCard>
+        {!isCollectionFocusActive && viewMode === 'issues' && !hasAnyDolabContent && <AppCard>
           <EmptyState
             title="الدولاب لسه فاضي… أول حاجة هتحوله لمكانك."
             description="صوّر حاجة، احفظ فكرة، أو سيب ملاحظة لنفسك لحد ما تقرر تطلعها للسوق."
@@ -1725,7 +1735,7 @@ export default function DolabScreen() {
         <View style={styles.ctaWrap}>
           <AppButton label="أضف للدولاب" onPress={() => addSheetRef.current?.present()} />
           <AppText muted style={styles.feedbackText}>
-            {inlineFeedback ?? 'اختَر طريقة البداية، والباقي قريبًا.'}
+            {inlineFeedback ?? 'اختَر طريقة البداية وسيب كل حاجة على رفّها المناسب.'}
           </AppText>
         </View>
       </ScrollView>
@@ -1757,7 +1767,7 @@ export default function DolabScreen() {
             },
             ...prev,
           ]);
-          setInlineFeedback('اتحفظ كتسجيل صوتي في الكلام مع نفسك ورف الميديا.');
+          setInlineFeedback('اتحفظ كتسجيل صوتي في الكلام مع نفسي ورف الميديا.');
           setViewMode('notes');
         }}
       />
