@@ -81,11 +81,13 @@ export function DolabSelfChatPanel(props: Props) {
       {messages.map((message) => {
         const draftTitle = localDrafts.find((draft) => draft.id === message.linkedDraftId)?.title;
 
+        const isVoice = message.messageType === 'voice_placeholder';
         return (
           <View key={message.id} style={styles.messageCard}>
             <View style={styles.messageHeader}>
-              <View style={styles.badge}>
-                <AppText style={styles.badgeText}>{badgeByType[message.messageType]}</AppText>
+              <View style={[styles.badge, isVoice && styles.voiceBadge]}>
+                {isVoice ? <Ionicons name="mic" size={12} color={colors.primary} /> : null}
+                <AppText style={styles.badgeText}>{isVoice ? 'تسجيل صوتي' : badgeByType[message.messageType]}</AppText>
               </View>
               <AppText muted style={styles.smallText}>
                 الآن
@@ -230,6 +232,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   badge: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.primarySoft,
     borderRadius: radii.round,
     paddingHorizontal: spacing.xs,
@@ -238,6 +243,9 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     color: colors.primary,
+  },
+  voiceBadge: {
+    backgroundColor: '#FFECCF',
   },
   actionsRow: {
     flexDirection: 'row-reverse',

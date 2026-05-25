@@ -415,13 +415,20 @@ export default function DolabScreen() {
       inboxItems.length,
     ],
   );
-  const shelfMeta: Partial<Record<DolabViewMode, { title: string; description: string }>> = {
-    notes: { title: 'الكلام مع نفسي', description: 'نوتس، ريكوردات، وأفكار سريعة بينك وبين نفسك.' },
-    media: { title: 'رف الميديا', description: 'صور، فيديوهات، وتسجيلات محفوظة.' },
-    drafts: { title: 'مسودات على الرف', description: 'حاجات بتتجهز عشان تطلع للسوق.' },
-    ready: { title: 'جاهز يطلع للسوق', description: 'تحضيرات وعناصر جاهزة للخطوة التالية.' },
-    inbox: { title: 'وارد الدولاب', description: 'نصوص، روابط، وملفات جاية من برّه التطبيق.' },
-    issues: { title: 'مشاكل الرفوف', description: 'العناصر اللي محتاجة متابعة أو إعادة محاولة.' },
+  const shelfMeta: Partial<Record<DolabViewMode, { title: string; description: string; iconName: keyof typeof Ionicons.glyphMap }>> = {
+    notes: { title: 'الكلام مع نفسي', description: 'نوتس، ريكوردات، وأفكار سريعة بينك وبين نفسك.', iconName: 'chatbox-ellipses-outline' },
+    media: { title: 'رف الميديا', description: 'صور، فيديوهات، وتسجيلات محفوظة.', iconName: 'images-outline' },
+    drafts: { title: 'مسودات على الرف', description: 'حاجات بتتجهز عشان تطلع للسوق.', iconName: 'cube-outline' },
+    ready: { title: 'جاهز يطلع للسوق', description: 'تحضيرات وعناصر جاهزة للخطوة التالية.', iconName: 'rocket-outline' },
+    inbox: { title: 'وارد الدولاب', description: 'نصوص، روابط، وملفات جاية من برّه التطبيق.', iconName: 'download-outline' },
+    issues: { title: 'مشاكل الرفوف', description: 'العناصر اللي محتاجة متابعة أو إعادة محاولة.', iconName: 'alert-circle-outline' },
+  };
+  const shelvesCounts = {
+    notes: selfMessages.length + mappedSavedNotes.length,
+    media: pendingMedia.length + mappedSavedMedia.length,
+    drafts: localDrafts.length + mappedSavedItems.length,
+    inbox: inboxItems.length,
+    ideas: selfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist').length,
   };
 
   const appendMedia = (items: DolabPendingMedia[]) => {
@@ -1192,6 +1199,31 @@ export default function DolabScreen() {
     ],
     [],
   );
+  const handleAddHere = () => {
+    if (viewMode === 'notes') {
+      setSelfComposerType('text');
+      setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
+      return;
+    }
+    if (viewMode === 'media') {
+      addSheetRef.current?.present();
+      return;
+    }
+    if (viewMode === 'drafts') {
+      openDraftStudioForNew();
+      return;
+    }
+    if (viewMode === 'inbox') {
+      inboxQuickNoteSheetRef.current?.present();
+      return;
+    }
+    if (viewMode === 'ready') {
+      openDraftStudioForNew();
+      setInlineFeedback('ابدأ مسودة جديدة وجهّزها للعرض.');
+      return;
+    }
+    addSheetRef.current?.present();
+  };
 
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
@@ -1239,10 +1271,12 @@ export default function DolabScreen() {
         </Pressable>
         {viewMode === 'all' ? (
           <DolabShelvesOverview
+            counts={shelvesCounts}
             onOpenShelf={setViewMode}
             onQuickNote={() => {
               setViewMode('notes');
               setSelfComposerType('text');
+              setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
             }}
             onQuickAudio={() => audioRecorderSheetRef.current?.present()}
             onQuickCamera={() => {
@@ -1253,7 +1287,13 @@ export default function DolabScreen() {
         ) : (
           <>
             {shelfMeta[viewMode] ? (
-              <DolabShelfHeader title={shelfMeta[viewMode]!.title} description={shelfMeta[viewMode]!.description} onBack={() => setViewMode('all')} />
+              <DolabShelfHeader
+                title={shelfMeta[viewMode]!.title}
+                description={shelfMeta[viewMode]!.description}
+                iconName={shelfMeta[viewMode]!.iconName}
+                onBack={() => setViewMode('all')}
+                onAddHere={handleAddHere}
+              />
             ) : null}
             <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
             <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
