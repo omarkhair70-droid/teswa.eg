@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -20,11 +20,17 @@ export function DolabVoiceNoteBubble({ message, pendingMedia }: Props) {
   const playerStatus = useAudioPlayerStatus(player);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!playerStatus.didJustFinish) return;
+    player.pause();
+    void player.seekTo(0).catch(() => undefined);
+  }, [player, playerStatus.didJustFinish]);
+
   const togglePlayback = async () => {
     if (!linkedAudio?.uri) return;
     try {
       setError(null);
-      if (player.playing) {
+      if (playerStatus.playing) {
         player.pause();
       } else {
         await player.play();
@@ -49,7 +55,7 @@ export function DolabVoiceNoteBubble({ message, pendingMedia }: Props) {
       {durationLabel ? <AppText muted style={styles.meta}>المدة: {durationLabel}</AppText> : null}
       {linkedAudio?.uri ? (
         <Pressable style={styles.playBtn} onPress={() => { void togglePlayback(); }}>
-          <AppText style={styles.playText}>{player.playing ? 'إيقاف' : 'تشغيل'}</AppText>
+          <AppText style={styles.playText}>{playerStatus.playing ? 'إيقاف' : 'تشغيل'}</AppText>
         </Pressable>
       ) : (
         <AppText muted style={styles.meta}>التسجيل غير متاح للتشغيل الآن.</AppText>
