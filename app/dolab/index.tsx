@@ -30,11 +30,9 @@ import { DolabAnimatedSection } from '@/components/dolab/DolabAnimatedSection';
 import { DolabPressableCard } from '@/components/dolab/DolabPressableCard';
 import { DolabSavedLibrarySection } from '@/components/dolab/DolabSavedLibrarySection';
 import { DolabAudioRecorderSheet } from '@/components/dolab/DolabAudioRecorderSheet';
-import { DolabOrganizationBar } from '@/components/dolab/DolabOrganizationBar';
 import { DolabSearchBar } from '@/components/dolab/DolabSearchBar';
 import { DolabFilterChips } from '@/components/dolab/DolabFilterChips';
 import { DolabEmptyFilteredState } from '@/components/dolab/DolabEmptyFilteredState';
-import { DolabSmartGroupsSection } from '@/components/dolab/DolabSmartGroupsSection';
 import { DolabCollectionsSection } from '@/components/dolab/DolabCollectionsSection';
 import { DolabCollectionPickerSheet } from '@/components/dolab/DolabCollectionPickerSheet';
 import { DolabCollectionBadge } from '@/components/dolab/DolabCollectionBadge';
@@ -48,23 +46,13 @@ import { type DirectConversationSummary, sendDirectMessage } from '@/lib/direct-
 import { buildDolabShareToChatBody } from '@/lib/dolab/share-to-chat';
 import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
 import { byTime, includesQuery, type DolabSortMode, type DolabStatusFilter, type DolabViewMode } from '@/lib/dolab/organization';
-import { buildDolabSmartGroups, type DolabCollection, type DolabCollectionAssignment, type DolabSmartGroup } from '@/lib/dolab/collections';
+import { type DolabCollection, type DolabCollectionAssignment } from '@/lib/dolab/collections';
 import { consumePendingInboundDolabInboxItems } from '@/lib/inbound-shared-media';
 import { createInboxFileItem, createInboxTextItem, type DolabInboxItem } from '@/lib/dolab/inbox';
 import { DolabInboxSection } from '@/components/dolab/DolabInboxSection';
 import { DolabShelvesOverview } from '@/components/dolab/DolabShelvesOverview';
 import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
 import { DolabShelfActionSheet } from '@/components/dolab/DolabShelfActionSheet';
-
-const draftItems = [
-  { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
-  { id: 'd2', title: 'طقم قهوة تراثي', hint: 'يحتاج تحديد حالة القطع قبل العرض.' },
-];
-
-const exchangeIdeas = [
-  { id: 'e1', text: 'تبادل الطقم مع جهاز مطبخ صغير بحالة ممتازة.' },
-  { id: 'e2', text: 'دمج عنصرين في عرض واحد لتسريع التبادل.' },
-];
 
 const emptyDraftForm: DolabDraftItemInput = {
   title: '',
@@ -345,20 +333,6 @@ export default function DolabScreen() {
       ),
     [inboxItems, query, sortMode, statusFilter],
   );
-  const smartGroups = useMemo<DolabSmartGroup[]>(
-    () =>
-      buildDolabSmartGroups({
-        localDrafts,
-        savedItems: mappedSavedItems,
-        pendingMedia,
-        savedMedia: mappedSavedMedia,
-        selfMessages,
-        inboxItems,
-        publishDrafts,
-        cloudStatus,
-      }),
-    [localDrafts, mappedSavedItems, pendingMedia, mappedSavedMedia, selfMessages, inboxItems, publishDrafts, cloudStatus],
-  );
   const collectionCountById = useMemo(
     () =>
       collectionAssignments.reduce((acc, item) => {
@@ -435,6 +409,11 @@ export default function DolabScreen() {
   };
   const isMediaShelfEmpty = visiblePendingMedia.length + visibleSavedMedia.length === 0;
   const isNotesShelfEmpty = visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length === 0;
+  const visibleIdeaMessages = useMemo(
+    () => visibleSelfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist'),
+    [visibleSelfMessages],
+  );
+  const hasVisibleIdeaContent = visibleIdeaMessages.length > 0;
   const isInboxShelfEmpty = visibleInboxItems.length === 0;
   const isDraftsShelfEmpty = visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0;
 
@@ -741,11 +720,6 @@ export default function DolabScreen() {
   const deleteSelfMessage = (messageId: string) => {
     setSelfMessages((prev) => prev.filter((message) => message.id !== messageId));
     setShareDrafts((prev) => prev.filter((draft) => draft.sourceMessageId !== messageId));
-  };
-  const handleSmartGroupPress = (group: DolabSmartGroup) => {
-    if (group.targetMode) setViewMode(group.targetMode);
-    if (group.targetStatus) setStatusFilter(group.targetStatus);
-    if (!group.targetMode && !group.targetStatus) setInlineFeedback('المجموعة الذكية دي للعرض فقط حاليًا.');
   };
   const createCollection = () => {
     const clean = newCollectionName.trim();
@@ -1230,35 +1204,34 @@ export default function DolabScreen() {
           </AppText>
         </View>
 
-        <DolabVaultHero />
-        <AppText muted style={styles.cloudStatusText}>
-          {cloudStatus === 'schema_missing'
-            ? 'الحفظ السحابي غير مفعّل بعد'
-            : cloudStatus === 'partial_sync'
-              ? `متزامن جزئيًا · عناصر ${remoteSnapshot.items} · ميديا ${remoteSnapshot.media} · ملاحظات ${remoteSnapshot.notes}`
-              : 'محلي فقط'}
-        </AppText>
-
-        <Pressable
-          style={styles.actionBtnInline}
-          onPress={async () => {
-            if (!user?.id) {
-              setInlineFeedback('سجّل الدخول عشان تجيب دولابك المحفوظ.');
-              return;
-            }
-
-            const refreshed = await refreshRemoteSnapshot(user.id);
-            if (refreshed) {
-              setInlineFeedback('اتحدّث الدولاب.');
-            }
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="تحديث الدولاب المحفوظ"
-        >
-          <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
-        </Pressable>
         {viewMode === 'all' ? (
           <>
+            <DolabVaultHero />
+            <AppText muted style={styles.cloudStatusText}>
+              {cloudStatus === 'schema_missing'
+                ? 'الحفظ السحابي غير مفعّل بعد'
+                : cloudStatus === 'partial_sync'
+                  ? `متزامن جزئيًا · عناصر ${remoteSnapshot.items} · ميديا ${remoteSnapshot.media} · ملاحظات ${remoteSnapshot.notes}`
+                  : 'محلي فقط'}
+            </AppText>
+            <Pressable
+              style={styles.actionBtnInline}
+              onPress={async () => {
+                if (!user?.id) {
+                  setInlineFeedback('سجّل الدخول عشان تجيب دولابك المحفوظ.');
+                  return;
+                }
+
+                const refreshed = await refreshRemoteSnapshot(user.id);
+                if (refreshed) {
+                  setInlineFeedback('اتحدّث الدولاب.');
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="تحديث الدولاب المحفوظ"
+            >
+              <AppText style={styles.actionBtnInlineText}>حدّث الدولاب</AppText>
+            </Pressable>
             <AppCard>
               <View style={styles.guidanceHead}>
                 <AppText weight="bold">ابدأ من هنا</AppText>
@@ -1310,19 +1283,23 @@ export default function DolabScreen() {
                 onAddHere={handleAddHere}
               />
             ) : null}
-            <DolabOrganizationBar value={viewMode} onChange={setViewMode} />
-            <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
-            <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
-            {!isCollectionFocusActive && <DolabSmartGroupsSection groups={smartGroups} onPressGroup={handleSmartGroupPress} />}
-            <DolabCollectionsSection
-              collections={collections}
-              counts={collectionCountById}
-              selectedCollectionId={selectedCollectionId}
-              onSelectCollection={setSelectedCollectionId}
-              newCollectionName={newCollectionName}
-              onChangeNewCollectionName={setNewCollectionName}
-              onCreateCollection={createCollection}
-            />
+            {(['media', 'drafts', 'inbox', 'notes'] as DolabViewMode[]).includes(viewMode) ? (
+              <DolabSearchBar value={searchQuery} onChange={setSearchQuery} />
+            ) : null}
+            {viewMode !== 'notes' ? (
+              <DolabFilterChips sort={sortMode} status={statusFilter} onSortChange={setSortMode} onStatusChange={setStatusFilter} />
+            ) : null}
+            {(viewMode === 'drafts' || viewMode === 'media') && (
+              <DolabCollectionsSection
+                collections={collections}
+                counts={collectionCountById}
+                selectedCollectionId={selectedCollectionId}
+                onSelectCollection={setSelectedCollectionId}
+                newCollectionName={newCollectionName}
+                onChangeNewCollectionName={setNewCollectionName}
+                onCreateCollection={createCollection}
+              />
+            )}
           </>
         )}
 
@@ -1441,15 +1418,12 @@ export default function DolabScreen() {
 
 
 
-        {!isCollectionFocusActive && viewMode === 'notes' && !isNotesShelfEmpty && <DolabAnimatedSection delay={120}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'notes' && visibleShareDrafts.length > 0 && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">رسائل جاهزة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
           </View>
-          {visibleShareDrafts.length === 0 ? (
-            <AppText muted style={styles.smallText}>مفيش رسائل مجهزة للمشاركة لسه، جهّز واحدة من شاتك.</AppText>
-          ) : (
-            <View style={styles.listWrap}>
+          <View style={styles.listWrap}>
               {visibleShareDrafts.map((draft) => (
                 <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={() => {}} accessibilityRole="button" accessibilityLabel="عرض حالة مشاركة الرسالة">
                   <View style={styles.localDraftHeader}>
@@ -1463,7 +1437,6 @@ export default function DolabScreen() {
                 </DolabPressableCard>
               ))}
             </View>
-          )}
         </AppCard></DolabAnimatedSection>}
         {!isCollectionFocusActive && viewMode === 'drafts' && isDraftsShelfEmpty && (
           <AppCard>
@@ -1567,30 +1540,19 @@ export default function DolabScreen() {
             ))}
             {selectedCollectionId && visibleLocalDraftCardsFiltered.length === 0 ? <AppText muted>المجموعة لسه فاضية.</AppText> : null}
 
-            {!selectedCollectionId && !query && statusFilter === 'all' && draftItems.map((item) => (
-              <View key={item.id} style={styles.rowCard}>
-                <Ionicons name="cube-outline" size={18} color={colors.primary} />
-                <View style={styles.rowCopy}>
-                  <AppText weight="semibold">{item.title}</AppText>
-                  <AppText muted style={styles.smallText}>
-                    {item.hint}
-                  </AppText>
-                </View>
-              </View>
-            ))}
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && viewMode === 'notes' && !isNotesShelfEmpty && <DolabAnimatedSection delay={260}><AppCard>
+        {!isCollectionFocusActive && viewMode === 'notes' && hasVisibleIdeaContent && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">درج الأفكار</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
           </View>
           <View style={styles.listWrap}>
-            {exchangeIdeas.map((idea) => (
+            {visibleIdeaMessages.map((idea) => (
               <View key={idea.id} style={styles.noteCard}>
                 <Ionicons name="document-text-outline" size={16} color={colors.primary} />
-                <AppText>{idea.text}</AppText>
+                <AppText>{idea.body}</AppText>
               </View>
             ))}
           </View>
