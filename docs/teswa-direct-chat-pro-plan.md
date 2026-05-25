@@ -80,3 +80,49 @@ During coexistence, Supabase direct messaging remains the active production sour
 - No app-wide `Chat` provider wiring
 - No message migration
 - No navigation behavior changes
+
+## Internal Stream runtime lab route (safe verification)
+
+A dedicated internal lab screen now exists at:
+
+- `/chat-lab/stream`
+
+Purpose:
+
+- Verify Stream Chat SDK runtime loading in-app
+- Verify API key wiring from Expo public env
+- Verify test user connection with a test token
+- Verify channel initialization/watch flow
+
+This lab is intentionally isolated from production direct chat and does not replace or modify `app/direct/[id].tsx`.
+
+### Required env vars for lab validation
+
+These are optional for app startup and only used by the lab route:
+
+- `EXPO_PUBLIC_STREAM_CHAT_API_KEY`
+- `EXPO_PUBLIC_STREAM_CHAT_TEST_USER_ID`
+- `EXPO_PUBLIC_STREAM_CHAT_TEST_USER_TOKEN`
+- `EXPO_PUBLIC_STREAM_CHAT_TEST_CHANNEL_ID` (optional; falls back to an internal test id)
+
+Safety defaults:
+
+- `STREAM_CHAT_ENABLED` remains `false` by default.
+- Without env vars, app startup remains unaffected and the lab route shows safe missing-config states.
+
+### Local test steps
+
+1. Keep current direct chat route unchanged and continue using Supabase-backed chat as the production source of truth.
+2. Add Stream test env vars in local Expo env (do not commit real tokens).
+3. Temporarily enable Stream runtime lab by toggling `STREAM_CHAT_ENABLED` in `lib/chat/stream-chat-config.ts` for local verification only.
+4. Run app and open `/chat-lab/stream`.
+5. Confirm status cards reach ready state:
+   - SDK loaded
+   - API key found
+   - Test user connected
+   - Channel ready
+6. Revert local test token values and keep Stream disabled by default in committed code.
+
+### Next step after lab
+
+Build a secure backend token endpoint that mints short-lived Stream user tokens server-side, then have mobile fetch tokens at runtime instead of relying on static test token env values.
