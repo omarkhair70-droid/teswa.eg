@@ -653,7 +653,8 @@ export default function DolabScreen() {
 
     const items = result.assets.map((asset) => toPendingMedia(asset, 'image'));
     appendMedia(items);
-    setInlineFeedback('تم التقاط صورة وإضافتها للدولاب المحلي.');
+    setViewMode('media');
+    setInlineFeedback('تم التقاط صورة واتحفظت في رف الميديا.');
   };
 
   const openDraftStudioForNew = () => {
@@ -843,7 +844,7 @@ export default function DolabScreen() {
     const messageType: DolabSelfMessageType = item.type === 'link' ? 'idea' : 'text';
     setSelfMessages((prev) => [{ id: `local-self-message-${Date.now()}`, body, messageType, linkedPendingMediaIds: [], createdAt: new Date().toISOString() }, ...prev]);
     setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
-    setInlineFeedback('اتحول لملاحظة في الدولاب.');
+    setInlineFeedback('اتحول للكلام مع نفسي في دولابك.');
   };
 
   const openShareBridge = (messageId: string) => {
@@ -1050,7 +1051,8 @@ export default function DolabScreen() {
     }
 
     draftStudioRef.current?.dismiss();
-    setInlineFeedback('اتحفظت كمسودة محلية داخل دولابك.');
+    setViewMode('drafts');
+    setInlineFeedback('اتحفظت في مسودات على الرف.');
     resetDraftForm();
 
     if (!user?.id) {
@@ -1073,7 +1075,7 @@ export default function DolabScreen() {
       setLocalDrafts((prev) => prev.map((item) => (item.id === nextDraftId ? { ...item, remoteDolabItemId: remoteResult.data?.id } : item)));
       setCloudStatus('partial_sync');
       await refreshRemoteSnapshot(user.id);
-      setInlineFeedback('تم حفظ المسودة محليًا وسحابيًا بشكل جزئي.');
+      setInlineFeedback('تم حفظ المسودة في مسودات على الرف (محليًا وسحابيًا بشكل جزئي).');
     }
   };
 
@@ -1225,6 +1227,28 @@ export default function DolabScreen() {
         </View>
 
         <DolabVaultHero />
+        <AppCard>
+          <View style={styles.guidanceHead}>
+            <AppText weight="bold">ابدأ من هنا</AppText>
+            <AppText muted>
+              افتح رف وسيب الحاجة في مكانها. صورة في رف الميديا، فكرة في الكلام مع نفسي، ومسودة في مسودات على الرف.
+            </AppText>
+          </View>
+          <View style={styles.guidanceSteps}>
+            <View style={styles.guidanceStep}>
+              <AppText weight="semibold">عندك صورة؟</AppText>
+              <AppText muted>رف الميديا</AppText>
+            </View>
+            <View style={styles.guidanceStep}>
+              <AppText weight="semibold">عندك فكرة؟</AppText>
+              <AppText muted>الكلام مع نفسي</AppText>
+            </View>
+            <View style={styles.guidanceStep}>
+              <AppText weight="semibold">هتنشر حاجة؟</AppText>
+              <AppText muted>مسودات على الرف</AppText>
+            </View>
+          </View>
+        </AppCard>
         <AppText muted style={styles.cloudStatusText}>
           {cloudStatus === 'schema_missing'
             ? 'الحفظ السحابي غير مفعّل بعد'
@@ -1264,7 +1288,10 @@ export default function DolabScreen() {
             onQuickCamera={() => {
               void captureImage();
             }}
-            onQuickDraft={openDraftStudioForNew}
+            onQuickDraft={() => {
+              setInlineFeedback('ابدأ مسودتك في مسودات على الرف.');
+              openDraftStudioForNew();
+            }}
           />
         ) : (
           <>
@@ -1295,6 +1322,16 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && viewMode === 'inbox' && (
           <DolabAnimatedSection delay={12}>
+            {visibleInboxItems.length === 0 && (
+              <AppCard>
+                <EmptyState
+                  title="الوارد فاضي."
+                  description="الوارد فاضي. الصق نص، اختار ملف، أو اكتب حاجة سريعة."
+                  iconName="download-outline"
+                />
+                <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+              </AppCard>
+            )}
             <DolabInboxSection
               items={visibleInboxItems}
               onConvertToNote={convertInboxToNote}
@@ -1353,6 +1390,12 @@ export default function DolabScreen() {
           />
         </AppCard>
         </DolabAnimatedSection>}
+        {!isCollectionFocusActive && viewMode === 'media' && visiblePendingMedia.length + visibleSavedMedia.length === 0 && (
+          <AppCard>
+            <EmptyState title="رف الميديا فاضي." description="رف الميديا فاضي. صوّر حاجة أو ارفع صورة تبدأ بيها." iconName="images-outline" />
+            <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+          </AppCard>
+        )}
 
         {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
@@ -1381,6 +1424,12 @@ export default function DolabScreen() {
           onDelete={deleteSelfMessage}
         />
         </DolabAnimatedSection>}
+        {!isCollectionFocusActive && viewMode === 'notes' && visibleSelfMessages.length + visibleSavedNotes.length === 0 && (
+          <AppCard>
+            <EmptyState title="لسه مفيش كلام هنا." description="لسه مفيش كلام هنا. اكتب نوت أو سجّل ريكورد لنفسك." iconName="chatbox-ellipses-outline" />
+            <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+          </AppCard>
+        )}
 
 
 
@@ -1408,6 +1457,12 @@ export default function DolabScreen() {
             </View>
           )}
         </AppCard></DolabAnimatedSection>}
+        {!isCollectionFocusActive && viewMode === 'drafts' && visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0 && (
+          <AppCard>
+            <EmptyState title="مفيش مسودات على الرف." description="مفيش مسودات على الرف. ابدأ مسودة لحاجة ممكن تطلع للسوق." iconName="cube-outline" />
+            <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+          </AppCard>
+        )}
 
 
         {!isCollectionFocusActive && viewMode === 'ready' && <DolabAnimatedSection delay={170}><AppCard>
@@ -1858,6 +1913,18 @@ const styles = StyleSheet.create({
   sectionHeader: {
     gap: 3,
     marginBottom: spacing.xs,
+  },
+  guidanceHead: {
+    gap: 4,
+    marginBottom: spacing.xs,
+  },
+  guidanceSteps: {
+    gap: spacing.xs,
+  },
+  guidanceStep: {
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(184,98,63,0.2)',
   },
   collectionFocusWrap: {
     gap: spacing.xs,
