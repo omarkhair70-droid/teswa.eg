@@ -17,9 +17,10 @@ type Props = {
   linkedPendingMedia: DolabPendingMedia[];
   missingFields: string[];
   onPrepare: () => void;
+  onRouteToAddItem?: () => void;
 };
 
-export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPendingMedia, missingFields, onPrepare }: Props) {
+export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPendingMedia, missingFields, onPrepare, onRouteToAddItem }: Props) {
   const hasMissing = missingFields.length > 0;
   const checklist = [
     { key: 'title', label: 'اسم الحاجة', ready: !missingFields.includes('title') },
@@ -31,7 +32,7 @@ export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPending
     <AppBottomSheet
       ref={sheetRef}
       title="تحويل المسودة لعرض"
-      description="راجع بيانات الحاجة قبل ما تتحول لعنصر في سوق تِسوى."
+      description="الخطوة الحقيقية للنشر هتتم في شاشة إضافة عنصر."
       titleIconName="storefront-outline"
       snapPoints={['70%']}
     >
@@ -63,6 +64,7 @@ export function DolabPublishBridgeSheet({ sheetRef, selectedDraft, linkedPending
           label={hasMissing ? 'احفظ كتحضير ناقص' : 'جهّز العرض'}
           onPress={onPrepare}
         />
+        {onRouteToAddItem ? <AppButton label='انشر في السوق' variant='neutral' onPress={onRouteToAddItem} /> : null}
       </View>
     </AppBottomSheet>
   );

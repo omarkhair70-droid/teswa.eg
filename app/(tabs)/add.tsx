@@ -24,6 +24,8 @@ import { ItemPhotoStudio } from '@/components/item/ItemPhotoStudio';
 import { ItemPhotoComposerSheet } from '@/components/item/ItemPhotoComposerSheet';
 import { trackEvent } from '@/lib/analytics';
 import { isSupportedImageAsset, prepareImageForUpload, validateVideoTeaserAsset } from '@/lib/media/upload-quality';
+import { fetchDolabPublishSource, markDolabItemPublished } from '@/lib/dolab';
+import { importDolabImagesToAssets, mapDolabItemToAddItemFields } from '@/lib/dolab/add-item-handoff';
 
 const steps = ['الصور', 'تعريف الحاجة', 'الحالة', 'القصة', 'المقابل', 'المراجعة'];
 const conditionOptions: { key: ItemCondition; label: string }[] = [
@@ -41,12 +43,13 @@ const MAX_ASSETS = 4;
 
 export default function AddScreen() {
   const { user } = useAuth();
-  const { sharedIntent } = useLocalSearchParams<{ sharedIntent?: string }>();
+  const { sharedIntent, dolabItemId, source } = useLocalSearchParams<{ sharedIntent?: string; dolabItemId?: string; source?: string }>();
   const [step, setStep] = useState(0);
   const [mediaState, setMediaState] = useState<{ assets: ImagePicker.ImagePickerAsset[]; feedback: string | null }>({ assets: [], feedback: null });
   const [videoTeaser, setVideoTeaser] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [videoTeaserSizeLabel, setVideoTeaserSizeLabel] = useState<string | null>(null);
   const [categories, setCategories] = useState<{ id: string; name_ar: string }[]>([]);
+  const [categoriesSettled, setCategoriesSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState('');
@@ -77,6 +80,10 @@ export default function AddScreen() {
   const [locationFillLoading, setLocationFillLoading] = useState(false);
   const [locationFillMessage, setLocationFillMessage] = useState<string | null>(null);
   const [locationFillError, setLocationFillError] = useState<string | null>(null);
+  const [dolabNotice, setDolabNotice] = useState<string | null>(null);
+  const [dolabImportChoicePending, setDolabImportChoicePending] = useState(false);
+  const [pendingDolabApply, setPendingDolabApply] = useState<null | (() => Promise<void>)>(null);
+  const dolabImportGuardRef = useRef<string | null>(null);
   const assets = mediaState.assets;
   const videoTeaserDurationLabel = useMemo(() => {
     if (videoTeaser?.duration == null) return null;
@@ -92,11 +99,16 @@ export default function AddScreen() {
 
 
   useEffect(() => {
+    setCategoriesSettled(false);
     fetchActiveCategories()
-      .then(setCategories)
+      .then((nextCategories) => {
+        setCategories(nextCategories);
+        setCategoriesSettled(true);
+      })
       .catch((err) => {
         if (__DEV__) console.log('[add-item] categories load failed', { code: (err as { code?: string })?.code, message: (err as { message?: string })?.message });
         setCategories([]);
+        setCategoriesSettled(true);
       });
   }, []);
 
@@ -208,6 +220,57 @@ export default function AddScreen() {
     return () => clearTimeout(timer);
   }, [currentDraft, draftHydrated, user?.id]);
 
+
+  useEffect(() => {
+    if (!draftHydrated || !categoriesSettled || source !== 'dolab' || !dolabItemId || !user?.id) return;
+    if (dolabImportGuardRef.current === dolabItemId) return;
+
+    const runImport = async () => {
+      const publishSource = await fetchDolabPublishSource(user.id, dolabItemId);
+      if (!publishSource.data.item) {
+        setDolabNotice('تعذر العثور على عنصر الدولاب المطلوب.');
+        return;
+      }
+
+      const hasSourceError = Boolean(publishSource.error);
+      if (hasSourceError) {
+        setDolabNotice('تعذر تجهيز بيانات الدولاب بالكامل. حاول تحديث الدولاب أو افتح العنصر مرة تانية.');
+      }
+
+      const applyImport = async () => {
+        const mapped = mapDolabItemToAddItemFields(publishSource.data.item!, categories);
+        setTitle(mapped.title);
+        setDescription(mapped.description);
+        setCondition(mapped.condition);
+        setConditionNotes(mapped.conditionNotes);
+        setCategoryId(mapped.categoryId);
+        setDesireText(mapped.desireText);
+
+        if (!hasSourceError) {
+          const imported = await importDolabImagesToAssets(publishSource.data.media);
+          await appendAssets(imported.assets, 'dolab');
+          const warnings = [...imported.warnings];
+          if (!mapped.categoryMatched) warnings.push('اختار الفئة المناسبة قبل النشر.');
+          if (publishSource.data.media.some((m) => m.media_type === 'video' || m.media_type === 'audio')) {
+            warnings.push('فيديوهات الدولاب محفوظة، لكن لمحة العنصر هتتضاف يدويًا في الخطوة دي.');
+          }
+          setDolabNotice(['استوردنا بيانات من دولابك. راجع التفاصيل قبل النشر.', ...warnings].join(' '));
+        }
+        setDolabImportChoicePending(false);
+      };
+
+      dolabImportGuardRef.current = dolabItemId;
+      if (hasMeaningfulAddItemDraft(currentDraft)) {
+        setDolabImportChoicePending(true);
+        setPendingDolabApply(() => applyImport);
+      } else {
+        await applyImport();
+      }
+    };
+
+    void runImport();
+  }, [draftHydrated, categoriesSettled, source, dolabItemId, user?.id, categories, currentDraft]);
+
   useEffect(() => {
     if (!user?.id) return;
     void trackEvent('item_create_started', { route: '/(tabs)/add' });
@@ -228,7 +291,7 @@ export default function AddScreen() {
     };
   };
 
-  const appendAssets = async (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending' | 'shareIntent') => {
+  const appendAssets = async (incoming: ImagePicker.ImagePickerAsset[], source: 'camera' | 'gallery' | 'pending' | 'shareIntent' | 'dolab') => {
     if (!incoming.length) return;
 
     const incomingUniqueByUri = (() => {
@@ -272,7 +335,7 @@ export default function AddScreen() {
 
       const feedbackMessages: string[] = [];
       if (hadRejected) feedbackMessages.push('تم تجاهل بعض الملفات غير المدعومة.');
-      if (wasTrimmed && source !== 'pending') feedbackMessages.push(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
+      if (wasTrimmed && source !== 'pending' && source !== 'dolab') feedbackMessages.push(`يمكنك إضافة ${MAX_ASSETS} صور كحد أقصى، تم إضافة المتاح فقط.`);
 
       return {
         assets: next,
@@ -520,6 +583,10 @@ export default function AddScreen() {
         return;
       }
       setPublishFailure(null);
+      if (source === 'dolab' && dolabItemId && result.itemId) {
+        const markResult = await markDolabItemPublished(user.id, dolabItemId, result.itemId);
+        if (markResult.error && __DEV__) console.log('[add-item] dolab published mark failed', { message: markResult.error.message });
+      }
       await clearAddItemDraft(user.id);
       await clearAddItemDraftMedia(user.id);
       setVideoTeaser(null);
@@ -579,6 +646,8 @@ export default function AddScreen() {
   </LinearGradient>
     <AppCard style={styles.noticeCard}><View style={styles.gap}><AppText weight='semibold'>كل عنصر بتنشره يفتح فرصة تبديل جديدة.</AppText><AppText muted>ابدأ بصورة واضحة، والباقي نساعدك ترتبه خطوة بخطوة.</AppText></View></AppCard>
     {showDraftCard && <AppCard style={styles.noticeCard}><View style={styles.gap}><View style={styles.noticeRow}><Ionicons name='bookmark-outline' size={18} color={colors.primary} /><AppText muted>{draftNotice ?? 'لديك مسودة محفوظة لهذا الإعلان.'}</AppText></View><View style={styles.actions}><AppButton label='ابدأ من جديد' variant='neutral' onPress={() => { void discardDraftAndReset(); }} disabled={submitting} /><AppButton label='كمل المسودة' onPress={() => { setDraftRecoveryDismissed(true); setDraftNotice(null); setError(null); }} disabled={submitting} /></View></View></AppCard>}
+    {dolabNotice && <AppCard style={styles.noticeCard}><View style={styles.noticeRow}><Ionicons name='information-circle-outline' size={18} color={colors.primary} /><AppText>{dolabNotice}</AppText></View></AppCard>}
+    {dolabImportChoicePending && <AppCard style={styles.noticeCard}><View style={styles.gap}><AppText>وجدنا مسودة حالية. اختر الإجراء المناسب.</AppText><View style={styles.actions}><AppButton label='استيراد من الدولاب' onPress={() => { if (pendingDolabApply) void pendingDolabApply(); }} /><AppButton label='كمل المسودة الحالية' variant='neutral' onPress={() => { setDolabImportChoicePending(false); setDolabNotice('تم الإبقاء على المسودة الحالية بدون استيراد بيانات الدولاب.'); }} /></View></View></AppCard>}
     {isDefinitelyOffline && <AppCard style={styles.noticeCard}><View style={styles.gap}><View style={styles.noticeRow}><Ionicons name='cloud-offline-outline' size={18} color={colors.primary} /><AppText weight='bold'>أنت غير متصل بالإنترنت</AppText></View><AppText muted>يمكنك تجهيز الإعلان الآن، لكن النشر سيحتاج اتصالًا بالإنترنت. بيانات المسودة محفوظة.</AppText></View></AppCard>}
     {error && <AppCard style={styles.noticeCard}><View style={styles.noticeRow}><Ionicons name='alert-circle-outline' size={18} color={colors.primary} /><AppText style={styles.error}>{error}</AppText></View></AppCard>}
     {step === 0 && !!mediaState.feedback && <AppCard style={styles.studioCard}><AppText style={styles.error}>{mediaState.feedback}</AppText></AppCard>}

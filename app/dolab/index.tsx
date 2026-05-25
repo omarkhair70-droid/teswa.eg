@@ -158,7 +158,9 @@ export default function DolabScreen() {
     title: item.title || 'عنصر محفوظ بدون عنوان',
     description: item.description || '',
     mediaCount: savedRemote.media.filter((m) => m.dolab_item_id === item.id).length,
-    badge: item.status === 'draft' ? 'مسودة محفوظة' : 'محفوظ',
+    badge: item.status === 'published' ? 'منشور' : (item.status === 'draft' ? 'مسودة محفوظة' : 'محفوظ'),
+    isPublished: item.status === 'published',
+    publishedItemId: item.published_item_id ?? null,
   })), [savedRemote.items, savedRemote.media]);
 
   const mappedSavedNotes = useMemo(() => savedRemote.notes.map((n) => ({ id: n.id, body: n.body || 'ملاحظة بدون نص', label: n.note_type, createdAt: n.created_at })), [savedRemote.notes]);
@@ -670,6 +672,14 @@ export default function DolabScreen() {
     setInlineFeedback('تم الحذف من الدولاب السحابي.');
   };
 
+  const routeSavedItemToAdd = (itemId: string) => {
+    router.push({ pathname: '/(tabs)/add', params: { dolabItemId: itemId, source: 'dolab' } });
+  };
+
+  const openPublishedItem = (publishedItemId: string) => {
+    router.push(`/item/${publishedItemId}`);
+  };
+
   const editSavedItem = (itemId: string) => {
     const remote = savedRemote.items.find((item) => item.id === itemId);
     if (!remote) return;
@@ -784,7 +794,22 @@ export default function DolabScreen() {
         </Pressable>
 
         <DolabAnimatedSection delay={20}>
-        <DolabSavedLibrarySection items={mappedSavedItems} notes={mappedSavedNotes} media={mappedSavedMedia} onDeleteNote={(id)=>requestDelete({type:'note',id})} onDeleteItem={(id)=>requestDelete({type:'item',id})} onDeleteMedia={(item)=>requestDelete({type:'media',id:item.id,storagePath:item.storagePath})} onEditItem={editSavedItem} />
+          <DolabSavedLibrarySection
+            items={mappedSavedItems}
+            notes={mappedSavedNotes}
+            media={mappedSavedMedia}
+            onDeleteNote={(id) => requestDelete({ type: 'note', id })}
+            onDeleteItem={(id) => requestDelete({ type: 'item', id })}
+            onDeleteMedia={(item) =>
+              requestDelete({
+                type: 'media',
+                id: item.id,
+                storagePath: item.storagePath,
+              })}
+            onEditItem={editSavedItem}
+            onPublishItem={routeSavedItemToAdd}
+            onOpenPublishedItem={openPublishedItem}
+          />
         </DolabAnimatedSection>
 
         <DolabAnimatedSection delay={30}>
@@ -1040,6 +1065,14 @@ export default function DolabScreen() {
         linkedPendingMedia={selectedPublishLinkedMedia}
         missingFields={selectedPublishBridgeData?.missingFields ?? []}
         onPrepare={preparePublishDraft}
+        onRouteToAddItem={() => {
+          if (selectedPublishSourceDraft?.remoteDolabItemId) {
+            router.push({ pathname: '/(tabs)/add', params: { dolabItemId: selectedPublishSourceDraft.remoteDolabItemId, source: 'dolab' } });
+            publishBridgeRef.current?.dismiss();
+            return;
+          }
+          setInlineFeedback('احفظ المسودة سحابيًا الأول عشان تتحول لعرض.');
+        }}
       />
 
       <AppActionSheet

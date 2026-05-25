@@ -11,6 +11,8 @@ type SavedItem = {
   description: string;
   mediaCount: number;
   badge: string;
+  publishedItemId?: string | null;
+  isPublished?: boolean;
 };
 
 type SavedNote = {
@@ -18,6 +20,18 @@ type SavedNote = {
   body: string;
   label: string;
   createdAt: string;
+};
+
+type Props = {
+  items: SavedItem[];
+  notes: SavedNote[];
+  media: DolabSavedMediaCardModel[];
+  onDeleteNote?: (id: string) => void;
+  onDeleteItem?: (id: string) => void;
+  onDeleteMedia?: (item: DolabSavedMediaCardModel) => void;
+  onEditItem?: (id: string) => void;
+  onPublishItem?: (id: string) => void;
+  onOpenPublishedItem?: (publishedItemId: string) => void;
 };
 
 export function DolabSavedLibrarySection({
@@ -28,15 +42,9 @@ export function DolabSavedLibrarySection({
   onDeleteItem,
   onDeleteMedia,
   onEditItem,
-}: {
-  items: SavedItem[];
-  notes: SavedNote[];
-  media: DolabSavedMediaCardModel[];
-  onDeleteNote?: (id: string) => void;
-  onDeleteItem?: (id: string) => void;
-  onDeleteMedia?: (item: DolabSavedMediaCardModel) => void;
-  onEditItem?: (id: string) => void;
-}) {
+  onPublishItem,
+  onOpenPublishedItem,
+}: Props) {
   const isEmpty = items.length === 0 && notes.length === 0 && media.length === 0;
 
   return (
@@ -56,6 +64,24 @@ export function DolabSavedLibrarySection({
             <View key={item.id} style={styles.row}>
               <AppText style={styles.smallText}>• {item.title} · {item.badge} · ميديا {item.mediaCount}</AppText>
               <View style={styles.rowActions}>
+                {item.isPublished && item.publishedItemId && onOpenPublishedItem ? (
+                  <Pressable
+                    onPress={() => onOpenPublishedItem(item.publishedItemId!)}
+                    accessibilityRole="button"
+                    accessibilityLabel="افتح العرض المنشور"
+                  >
+                    <AppText style={styles.action}>افتح العرض</AppText>
+                  </Pressable>
+                ) : onPublishItem ? (
+                  <Pressable
+                    onPress={() => onPublishItem(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="انشر في السوق"
+                  >
+                    <AppText style={styles.action}>انشر في السوق</AppText>
+                  </Pressable>
+                ) : null}
+
                 {onEditItem ? (
                   <Pressable
                     onPress={() => onEditItem(item.id)}
@@ -65,6 +91,7 @@ export function DolabSavedLibrarySection({
                     <AppText style={styles.action}>تعديل</AppText>
                   </Pressable>
                 ) : null}
+
                 {onDeleteItem ? (
                   <Pressable
                     onPress={() => onDeleteItem(item.id)}
