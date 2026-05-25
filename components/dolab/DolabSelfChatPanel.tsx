@@ -13,11 +13,10 @@ import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-ch
 import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStrip';
 import { DolabVoiceNoteBubble } from '@/components/dolab/DolabVoiceNoteBubble';
 
-const messageTypeOptions: Array<{ type: DolabSelfMessageType; label: string }> = [
+const messageTypeOptions: Array<{ type: Exclude<DolabSelfMessageType, 'voice_placeholder'>; label: string }> = [
   { type: 'text', label: 'ملاحظة' },
   { type: 'idea', label: 'فكرة' },
   { type: 'checklist', label: 'قائمة' },
-  { type: 'voice_placeholder', label: 'صوت لاحق' },
 ];
 
 const badgeByType: Record<DolabSelfMessageType, string> = {
@@ -44,6 +43,8 @@ type Props = {
   onSave: () => void;
   onShareLater: (id: string) => void;
   onDelete: (id: string) => void;
+  onStartFirstNote: () => void;
+  onRecordVoice: () => void;
 };
 
 export function DolabSelfChatPanel(props: Props) {
@@ -64,6 +65,8 @@ export function DolabSelfChatPanel(props: Props) {
     onSave,
     onShareLater,
     onDelete,
+    onStartFirstNote,
+    onRecordVoice,
   } = props;
 
   return (
@@ -74,9 +77,16 @@ export function DolabSelfChatPanel(props: Props) {
       </View>
 
       {messages.length === 0 ? (
-        <AppText muted style={styles.smallText}>
-          لسه مفيش كلام هنا. اكتب نوت أو سجّل ريكورد لنفسك.
-        </AppText>
+        <View style={styles.emptyWrap}>
+          <AppText weight="semibold">لسه مفيش كلام هنا.</AppText>
+          <AppText muted style={styles.smallText}>
+            اكتب نوت أو سجّل ريكورد لنفسك… أي فكرة صغيرة ممكن تبقى بداية عرض.
+          </AppText>
+          <View style={styles.emptyActions}>
+            <AppButton label="اكتب أول نوت" onPress={onStartFirstNote} />
+            <AppButton label="سجل ريكورد" variant="neutral" onPress={onRecordVoice} />
+          </View>
+        </View>
       ) : null}
 
       {messages.map((message) => {
@@ -138,12 +148,18 @@ export function DolabSelfChatPanel(props: Props) {
         );
       })}
 
-      <AppInput
-        value={composerBody}
-        onChangeText={onChangeBody}
-        placeholder="اكتب لنفسك فكرة أو ملاحظة..."
-        multiline
-      />
+      <View style={styles.composerWrap}>
+        <View style={styles.composerHeader}>
+          <AppText weight="semibold">سيب حاجة لنفسك</AppText>
+          <AppText muted style={styles.smallText}>نوت، فكرة، قائمة، أو ريكورد ترجع له وقت ما تجهّز الحاجة للسوق.</AppText>
+        </View>
+        <AppInput
+          value={composerBody}
+          onChangeText={onChangeBody}
+          placeholder="اكتب لنفسك..."
+          multiline
+        />
+      </View>
 
       {composerError ? <AppText style={styles.error}>{composerError}</AppText> : null}
 
@@ -217,6 +233,30 @@ const styles = StyleSheet.create({
   sectionHeader: {
     gap: 3,
     marginBottom: spacing.xs,
+  },
+  composerWrap: {
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFF9F1',
+    padding: spacing.sm,
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  composerHeader: {
+    gap: 2,
+  },
+  emptyWrap: {
+    borderWidth: 1,
+    borderColor: colors.primarySoft,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFF9F1',
+    padding: spacing.sm,
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  emptyActions: {
+    gap: spacing.xs,
   },
   messageCard: {
     borderWidth: 1,

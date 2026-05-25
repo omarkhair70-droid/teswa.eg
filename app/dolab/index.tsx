@@ -408,12 +408,6 @@ export default function DolabScreen() {
     ideas: selfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist').length,
   };
   const isMediaShelfEmpty = visiblePendingMedia.length + visibleSavedMedia.length === 0;
-  const isNotesShelfEmpty = visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length === 0;
-  const visibleIdeaMessages = useMemo(
-    () => visibleSelfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist'),
-    [visibleSelfMessages],
-  );
-  const hasVisibleIdeaContent = visibleIdeaMessages.length > 0;
   const isInboxShelfEmpty = visibleInboxItems.length === 0;
   const isDraftsShelfEmpty = visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0;
 
@@ -720,6 +714,16 @@ export default function DolabScreen() {
   const deleteSelfMessage = (messageId: string) => {
     setSelfMessages((prev) => prev.filter((message) => message.id !== messageId));
     setShareDrafts((prev) => prev.filter((draft) => draft.sourceMessageId !== messageId));
+  };
+  const openNotesComposer = () => {
+    setViewMode('notes');
+    setSelfComposerType('text');
+    setSelfComposerError(null);
+    setInlineFeedback('سيب نوت صغيرة لنفسك وارجعلها وقت ما تحب.');
+  };
+  const openNotesRecorder = () => {
+    setViewMode('notes');
+    audioRecorderSheetRef.current?.present();
   };
   const createCollection = () => {
     const clean = newCollectionName.trim();
@@ -1382,7 +1386,7 @@ export default function DolabScreen() {
           </AppCard>
         )}
 
-        {!isCollectionFocusActive && viewMode === 'notes' && !isNotesShelfEmpty && <DolabAnimatedSection delay={70}>
+        {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
           messages={visibleSelfMessages}
           localDrafts={localDrafts}
@@ -1407,14 +1411,10 @@ export default function DolabScreen() {
           }}
           onShareLater={openShareBridge}
           onDelete={deleteSelfMessage}
+          onStartFirstNote={openNotesComposer}
+          onRecordVoice={openNotesRecorder}
         />
         </DolabAnimatedSection>}
-        {!isCollectionFocusActive && viewMode === 'notes' && isNotesShelfEmpty && (
-          <AppCard>
-            <EmptyState title="لسه مفيش كلام هنا." description="لسه مفيش كلام هنا. اكتب نوت أو سجّل ريكورد لنفسك." iconName="chatbox-ellipses-outline" />
-            <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
-          </AppCard>
-        )}
 
 
 
@@ -1543,20 +1543,6 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && viewMode === 'notes' && hasVisibleIdeaContent && <DolabAnimatedSection delay={260}><AppCard>
-          <View style={styles.sectionHeader}>
-            <AppText weight="bold">درج الأفكار</AppText>
-            <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
-          </View>
-          <View style={styles.listWrap}>
-            {visibleIdeaMessages.map((idea) => (
-              <View key={idea.id} style={styles.noteCard}>
-                <Ionicons name="document-text-outline" size={16} color={colors.primary} />
-                <AppText>{idea.body}</AppText>
-              </View>
-            ))}
-          </View>
-        </AppCard></DolabAnimatedSection>}
 
         {!isCollectionFocusActive && viewMode !== 'all' && !hasVisibleContentForCurrentMode && hasAnyDolabContent && (
           <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'مفيش نتائج بالفلتر ده. جرّب تفتح رف تاني.'} />
@@ -1931,14 +1917,6 @@ const styles = StyleSheet.create({
   actionBtnInlineText: {
     color: colors.primary,
     fontSize: 13,
-  },
-  noteCard: {
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.sm,
-    backgroundColor: '#FFFEFC',
   },
   pendingRow: {
     gap: spacing.sm,
