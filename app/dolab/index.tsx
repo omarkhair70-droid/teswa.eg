@@ -208,6 +208,25 @@ export default function DolabScreen() {
   })), [savedRemote.items, savedRemote.media]);
 
   const mappedSavedNotes = useMemo(() => savedRemote.notes.map((n) => ({ id: n.id, body: n.body || 'ملاحظة بدون نص', label: n.note_type, createdAt: n.created_at })), [savedRemote.notes]);
+  const remoteNoteMessages = useMemo<DolabSelfMessage[]>(
+    () =>
+      savedRemote.notes.map((note) => ({
+        id: `remote-note-${note.id}`,
+        remoteNoteId: note.id,
+        body: note.body || (note.note_type === 'voice' ? 'التسجيل مش متاح للتشغيل دلوقتي.' : 'ملاحظة بدون نص'),
+        messageType:
+          note.note_type === 'voice'
+            ? 'voice_placeholder'
+            : note.note_type === 'idea'
+              ? 'idea'
+              : note.note_type === 'checklist'
+                ? 'checklist'
+                : 'text',
+        createdAt: note.created_at,
+        linkedPendingMediaIds: [],
+      })),
+    [savedRemote.notes],
+  );
 
   const visibleLocalDrafts = useMemo(() => localDrafts.filter((draft) => !draft.remoteDolabItemId), [localDrafts]);
   const query = searchQuery.trim().toLowerCase();
@@ -263,6 +282,15 @@ export default function DolabScreen() {
         sortMode,
       ),
     [selfMessages, query, sortMode, statusFilter],
+  );
+  const visibleNoteMessages = useMemo(
+    () => {
+      const localRemoteNoteIds = new Set(selfMessages.map((item) => item.remoteNoteId).filter((item): item is string => Boolean(item)));
+      const localIds = new Set(selfMessages.map((item) => item.id));
+      const remoteOnly = remoteNoteMessages.filter((item) => !localRemoteNoteIds.has(item.remoteNoteId ?? '') && !localIds.has(item.id));
+      return byTime([...visibleSelfMessages, ...remoteOnly], (item) => new Date(item.createdAt).getTime(), sortMode);
+    },
+    [selfMessages, remoteNoteMessages, visibleSelfMessages, sortMode],
   );
   const visibleSavedMedia = useMemo(
     () =>
@@ -354,7 +382,7 @@ export default function DolabScreen() {
   const hasVisibleContentForCurrentMode = useMemo(() => {
     if (viewMode === 'media') return visiblePendingMedia.length + visibleSavedMedia.length > 0;
     if (viewMode === 'drafts') return visibleLocalDraftCards.length + visibleSavedItems.length > 0;
-    if (viewMode === 'notes') return visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length > 0;
+    if (viewMode === 'notes') return visibleNoteMessages.length + visibleShareDrafts.length > 0;
     if (viewMode === 'ready') return visiblePublishDrafts.length + visibleSavedItems.length + visibleLocalDraftCards.length > 0;
     if (viewMode === 'issues') return issuesMedia.length > 0 || cloudStatus === 'schema_missing';
     if (viewMode === 'inbox') return visibleInboxItems.length > 0;
@@ -362,13 +390,13 @@ export default function DolabScreen() {
       visiblePendingMedia.length +
         visibleSavedItems.length +
         visibleSavedNotes.length +
-        visibleSelfMessages.length +
+        visibleNoteMessages.length +
         visiblePublishDrafts.length +
         visibleShareDrafts.length +
         visibleInboxItems.length >
       0
     );
-  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus, visibleInboxItems.length]);
+  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleNoteMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus, visibleInboxItems.length]);
   const hasAnyDolabContent = useMemo(
     () =>
       pendingMedia.length +
@@ -402,7 +430,11 @@ export default function DolabScreen() {
     issues: { title: 'مشاكل الرفوف', description: 'العناصر اللي محتاجة متابعة أو إعادة محاولة.', iconName: 'alert-circle-outline' },
   };
   const shelvesCounts = {
-    notes: selfMessages.length + mappedSavedNotes.length,
+    notes: (() => {
+      const localRemoteIds = new Set(selfMessages.map((item) => item.remoteNoteId).filter((item): item is string => Boolean(item)));
+      const remoteOnlyCount = savedRemote.notes.filter((note) => !localRemoteIds.has(note.id)).length;
+      return selfMessages.length + remoteOnlyCount;
+    })(),
     media: pendingMedia.length + mappedSavedMedia.length,
     drafts: localDrafts.length + mappedSavedItems.length,
     inbox: inboxItems.length,
@@ -752,7 +784,20 @@ export default function DolabScreen() {
     }
   };
 
-  const deleteSelfMessage = (messageId: string) => {
+  const deleteSelfMessage = async (messageId: string) => {
+    const targetMessage = visibleNoteMessages.find((message) => message.id === messageId);
+    if (!targetMessage) return;
+
+    if (targetMessage.remoteNoteId && user?.id) {
+      const result = await deleteDolabNote(user.id, targetMessage.remoteNoteId);
+      if (result.error) {
+        setInlineFeedback(result.error.message);
+        if (result.error.kind === 'schema_missing') setCloudStatus('schema_missing');
+        return;
+      }
+      await refreshRemoteSnapshot(user.id);
+    }
+
     setSelfMessages((prev) => prev.filter((message) => message.id !== messageId));
     setShareDrafts((prev) => prev.filter((draft) => draft.sourceMessageId !== messageId));
   };
@@ -1543,7 +1588,7 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={70}>
         <DolabSelfChatPanel
-          messages={visibleSelfMessages}
+          messages={visibleNoteMessages}
           localDrafts={localDrafts}
           pendingMedia={pendingMedia}
           composerBody={selfComposerBody}
@@ -1565,7 +1610,9 @@ export default function DolabScreen() {
             void saveSelfMessage();
           }}
           onShareLater={openShareBridge}
-          onDelete={deleteSelfMessage}
+          onDelete={(id) => {
+            void deleteSelfMessage(id);
+          }}
           onStartFirstNote={openNotesComposer}
           onRecordVoice={openNotesRecorder}
         />
