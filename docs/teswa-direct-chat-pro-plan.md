@@ -123,6 +123,28 @@ Safety defaults:
    - Channel ready
 6. Revert local test token values and keep Stream disabled by default in committed code.
 
-### Next step after lab
+### Supabase Edge Function token flow
 
-Build a secure backend token endpoint that mints short-lived Stream user tokens server-side, then have mobile fetch tokens at runtime instead of relying on static test token env values.
+Edge Function: `supabase/functions/stream-chat-token/index.ts`
+
+Server-side required env vars (Supabase project secrets, never frontend):
+
+- `STREAM_CHAT_API_KEY`
+- `STREAM_CHAT_SECRET`
+
+Setup notes by environment:
+
+- **Local:** set function secrets with `supabase secrets set STREAM_CHAT_API_KEY=... STREAM_CHAT_SECRET=...` before `supabase functions serve stream-chat-token`.
+- **Preview/Staging:** configure the same keys in the preview Supabase project secrets and deploy function there.
+- **Production:** configure production project secrets and deploy function only after pilot readiness signoff.
+
+Security rules:
+
+- Never expose `STREAM_CHAT_SECRET` in `EXPO_PUBLIC_*` variables.
+- Never hardcode Stream user tokens in committed frontend code.
+- App startup must remain safe when Stream env vars are absent; Stream lab should show a missing-config state or fallback status.
+- Edge function should support CORS preflight (`OPTIONS`) and return consistent JSON (`ok: true` success, `ok: false` errors).
+
+### Next step: Stream Direct Chat Pilot
+
+Run an internal pilot route powered by backend-minted Stream tokens while keeping Supabase direct chat as the unchanged production default.
