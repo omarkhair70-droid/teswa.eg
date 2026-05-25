@@ -1380,6 +1380,29 @@ export default function DolabScreen() {
           </View>
         ) : null}
 
+        {viewMode === 'drafts' && (
+          <DolabAnimatedSection delay={200}>
+            <AppCard>
+              <View style={styles.sectionHeader}>
+                <AppText weight="bold">مسودات على الرف</AppText>
+                <AppText muted>هنا بتجهّز الحاجة قبل ما تطلع للسوق: صور، وصف، حالة، والمقابل اللي يناسبك.</AppText>
+              </View>
+              <View style={styles.mediaCountersRow}>
+                <AppText muted style={styles.smallText}>مسودات: {draftsShelfCounters.drafts}</AppText>
+                <AppText muted style={styles.smallText}>جاهزة: {draftsShelfCounters.ready}</AppText>
+                <AppText muted style={styles.smallText}>ناقصة بيانات: {draftsShelfCounters.missing}</AppText>
+                <AppText muted style={styles.smallText}>محفوظة: {draftsShelfCounters.saved}</AppText>
+              </View>
+              <View style={styles.mediaActionsRow}>
+                <Pressable style={styles.actionBtnInline} onPress={openDraftStudioForNew} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>ابدأ مسودة</AppText></Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => { openDraftStudioForNew(); setInlineFeedback('اختار ميديا من رف الميديا واربطها بالمسودة.'); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>حوّل ميديا لمسودة</AppText></Pressable>
+                <Pressable style={styles.actionBtnInline} onPress={() => router.push('/(tabs)/add')} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>افتح إضافة عنصر</AppText></Pressable>
+              </View>
+            </AppCard>
+          </DolabAnimatedSection>
+        )}
+
+
         {!isCollectionFocusActive && (viewMode === 'ready' || (viewMode === 'drafts' && !isDraftsShelfEmpty)) && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
@@ -1581,28 +1604,6 @@ export default function DolabScreen() {
             </View>
           )}
         </AppCard></DolabAnimatedSection>}
-
-        {viewMode === 'drafts' && (
-          <DolabAnimatedSection delay={200}>
-            <AppCard>
-              <View style={styles.sectionHeader}>
-                <AppText weight="bold">مسودات على الرف</AppText>
-                <AppText muted>هنا بتجهّز الحاجة قبل ما تطلع للسوق: صور، وصف، حالة، والمقابل اللي يناسبك.</AppText>
-              </View>
-              <View style={styles.mediaCountersRow}>
-                <AppText muted style={styles.smallText}>مسودات: {draftsShelfCounters.drafts}</AppText>
-                <AppText muted style={styles.smallText}>جاهزة: {draftsShelfCounters.ready}</AppText>
-                <AppText muted style={styles.smallText}>ناقصة بيانات: {draftsShelfCounters.missing}</AppText>
-                <AppText muted style={styles.smallText}>محفوظة: {draftsShelfCounters.saved}</AppText>
-              </View>
-              <View style={styles.mediaActionsRow}>
-                <Pressable style={styles.actionBtnInline} onPress={openDraftStudioForNew} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>ابدأ مسودة</AppText></Pressable>
-                <Pressable style={styles.actionBtnInline} onPress={() => { openDraftStudioForNew(); setInlineFeedback('اختار ميديا من رف الميديا واربطها بالمسودة.'); }} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>حوّل ميديا لمسودة</AppText></Pressable>
-                <Pressable style={styles.actionBtnInline} onPress={() => router.push('/(tabs)/add')} accessibilityRole="button"><AppText style={styles.actionBtnInlineText}>افتح إضافة عنصر</AppText></Pressable>
-              </View>
-            </AppCard>
-          </DolabAnimatedSection>
-        )}
 
         {(viewMode === 'drafts' || viewMode === 'ready') && (viewMode === 'ready' || !isDraftsShelfEmpty) && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
