@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 
 const DOLAB_MEDIA_DIRECTORY_NAME = 'teswa-dolab-media';
@@ -54,9 +54,15 @@ function inferExtension(input: { fileName?: string; mimeType?: string; uri: stri
   );
 }
 
-function dolabMediaDirectoryUri(): string | null {
-  if (!FileSystem.documentDirectory) return null;
-  return `${FileSystem.documentDirectory}${DOLAB_MEDIA_DIRECTORY_NAME}/`;
+function dolabMediaDirectory(): Directory | null {
+  try {
+    const documentDirectory = Paths.document;
+    const directory = new Directory(documentDirectory, DOLAB_MEDIA_DIRECTORY_NAME);
+    directory.create({ idempotent: true, intermediates: true });
+    return directory;
+  } catch {
+    return null;
+  }
 }
 
 function generateDurableFileName(input: { mediaType: 'image' | 'video' | 'audio'; fileName?: string; mimeType?: string; uri: string }): string {
@@ -70,17 +76,17 @@ export async function copyDolabMediaToDurableUri(input: {
   fileName?: string;
   mimeType?: string;
 }): Promise<{ uri: string; fileName?: string; wasCopied: boolean }> {
-  const baseDirectory = dolabMediaDirectoryUri();
-  if (!baseDirectory || !input.uri) {
+  const directory = dolabMediaDirectory();
+  if (!directory || !input.uri) {
     return { uri: input.uri, fileName: input.fileName, wasCopied: false };
   }
 
   try {
     const targetFileName = generateDurableFileName(input);
-    await FileSystem.makeDirectoryAsync(baseDirectory, { intermediates: true });
-    const targetUri = `${baseDirectory}${targetFileName}`;
-    await FileSystem.copyAsync({ from: input.uri, to: targetUri });
-    return { uri: targetUri, fileName: targetFileName, wasCopied: true };
+    const sourceFile = new File(input.uri);
+    const targetFile = new File(directory, targetFileName);
+    sourceFile.copy(targetFile);
+    return { uri: targetFile.uri, fileName: targetFileName, wasCopied: true };
   } catch {
     return { uri: input.uri, fileName: input.fileName, wasCopied: false };
   }
