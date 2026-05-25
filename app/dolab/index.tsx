@@ -791,7 +791,7 @@ export default function DolabScreen() {
     if (!pending) return;
     appendMedia([pending]);
     setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
-    setInlineFeedback('اتحول لميديا مؤقتة في الدولاب.');
+    setInlineFeedback('اتحول لرف الميديا في دولابك.');
   };
 
   const convertInboxToNote = (item: DolabInboxItem) => {
@@ -968,7 +968,7 @@ export default function DolabScreen() {
     });
 
     publishBridgeRef.current?.dismiss();
-    setInlineFeedback('العرض اتجهز محليًا. النشر الحقيقي في PR لاحق.');
+    setInlineFeedback('العرض اتجهز. افتح إضافة عنصر وراجعه قبل النشر.');
   };
 
   const saveLocalDraft = async () => {
@@ -1259,7 +1259,7 @@ export default function DolabScreen() {
         {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'media' || viewMode === 'issues') && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">ميديا مؤقتة</AppText>
+            <AppText weight="bold">رف الميديا</AppText>
             <AppText muted>لسه على جهازك. احفظها سحابيًا عشان تفضل موجودة.</AppText>
             <AppText muted style={styles.smallText}>
               عدد العناصر: {pendingMedia.length}
@@ -1272,7 +1272,7 @@ export default function DolabScreen() {
             pendingMedia={viewMode === 'issues' ? issuesMedia : visiblePendingMedia}
             mode="preview"
             onRemove={removePendingMedia}
-            emptyText="لسه ما أضفتش ميديا محلية."
+            emptyText="رف الميديا لسه فاضي."
           />
         </AppCard>
         </DolabAnimatedSection>}
@@ -1309,7 +1309,7 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">جاهز للمشاركة</AppText>
+            <AppText weight="bold">رسائل جاهزة</AppText>
             <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
           </View>
           {visibleShareDrafts.length === 0 ? (
@@ -1335,8 +1335,8 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'ready') && <DolabAnimatedSection delay={170}><AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">عروض جاهزة للسوق</AppText>
-            <AppText muted>تحضيرات محلية لحد ما نربط النشر الحقيقي.</AppText>
+            <AppText weight="bold">جاهز يطلع للسوق</AppText>
+            <AppText muted>تحضيرات جاهزة تقدر تطلع للسوق من إضافة عنصر.</AppText>
           </View>
           {visiblePublishDrafts.length === 0 ? (
             <AppText muted style={styles.smallText}>لسه مفيش عروض محضرة للسوق، حضّر مسودة أولًا.</AppText>
@@ -1375,8 +1375,8 @@ export default function DolabScreen() {
 
         {(viewMode === 'all' || viewMode === 'drafts' || viewMode === 'ready') && <DolabAnimatedSection delay={220}><AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">جاهز يتحول لعرض</AppText>
-            <AppText muted>مسودات جاهزة لخطوة السوق لاحقًا.</AppText>
+            <AppText weight="bold">مسودات على الرف</AppText>
+            <AppText muted>حاجات جاهزة تطلع للسوق.</AppText>
           </View>
           <View style={styles.listWrap}>
             {visibleLocalDraftCardsFiltered.map((draft) => (
@@ -1443,7 +1443,7 @@ export default function DolabScreen() {
 
         {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'notes') && <DolabAnimatedSection delay={260}><AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">أفكار التبادل</AppText>
+            <AppText weight="bold">درج الأفكار</AppText>
             <AppText muted>ملاحظات خاصة تُجهّز صفقات أذكى.</AppText>
           </View>
           <View style={styles.listWrap}>
@@ -1457,13 +1457,13 @@ export default function DolabScreen() {
         </AppCard></DolabAnimatedSection>}
 
         {!isCollectionFocusActive && !hasVisibleContentForCurrentMode && (
-          <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'جرّب تغيّر البحث أو الفلتر.'} />
+          <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'مفيش نتائج بالفلتر ده. جرّب تفتح رف تاني.'} />
         )}
 
         {!isCollectionFocusActive && <AppCard>
           <EmptyState
-            title="المساحة الفارغة جاهزة لك"
-            description="عند ربط البيانات الحقيقية، ستظهر هنا العناصر والميديا والأفكار الجديدة."
+            title="الدولاب لسه فاضي… أول حاجة هتحوله لمكانك."
+            description="صوّر حاجة، احفظ فكرة، أو سيب ملاحظة لنفسك لحد ما تقرر تطلعها للسوق."
             iconName="folder-open-outline"
           />
           <AppButton

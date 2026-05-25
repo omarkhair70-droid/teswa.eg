@@ -335,6 +335,15 @@ export default function ProfileScreen() {
                   <AppButton label="إضافة قصة" variant="neutral" onPress={() => router.push('/story/create')} />
                   <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.push('/story/manage')} />
                   <AppButton label="إدارة عناصري" variant="neutral" onPress={() => router.push('/item/manage')} />
+                  <Pressable style={styles.accountShortcut} onPress={() => router.push('/dolab')} accessibilityRole="button" accessibilityLabel="فتح دولابي">
+                    <View style={styles.accountShortcutIcon}>
+                      <Ionicons name="archive-outline" size={18} color="#7C2D12" />
+                    </View>
+                    <View style={styles.accountShortcutBody}>
+                      <AppText weight="semibold">دولابي</AppText>
+                      <AppText muted>مساحتك الخاصة للمسودات والميديا والأفكار.</AppText>
+                    </View>
+                  </Pressable>
                   {!myStoriesLoading && myActiveStoriesCount > 0 ? <AppText muted>لديك {myActiveStoriesCount} قصة نشطة الآن</AppText> : null}
                 </View>
               </AppCard>
@@ -471,6 +480,25 @@ const styles = StyleSheet.create({
   followStatLabel: { fontSize: 13 },
   followStatValue: { fontSize: 19 },
   publicProfileAction: { marginTop: spacing.md, gap: spacing.sm },
+  accountShortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  accountShortcutIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDE7D9',
+  },
+  accountShortcutBody: { flex: 1, gap: 2 },
   errorText: { color: '#B00020' },
   securityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   successText: { color: '#7C2D12' },
