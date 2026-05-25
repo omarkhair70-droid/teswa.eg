@@ -217,6 +217,42 @@ export async function deleteDolabMedia(
   }
 }
 
+
+export async function fetchDolabPublishSource(userId: string, dolabItemId: string): Promise<DolabResult<{ item: DolabItem | null; media: DolabMedia[] }>> {
+  try {
+    const [itemResult, mediaResult] = await Promise.all([
+      supabase.from('dolab_items').select('*').eq('user_id', userId).eq('id', dolabItemId).maybeSingle(),
+      supabase.from('dolab_media').select('*').eq('user_id', userId).eq('dolab_item_id', dolabItemId).order('sort_order', { ascending: true }),
+    ]);
+
+    return {
+      data: {
+        item: (itemResult.data as DolabItem | null) ?? null,
+        media: (mediaResult.data as DolabMedia[] | null) ?? [],
+      },
+      error: normalizeDolabPersistenceError(itemResult.error) ?? normalizeDolabPersistenceError(mediaResult.error),
+    };
+  } catch {
+    return { data: { item: null, media: [] }, error: { kind: 'unknown', message: 'تعذر تحميل بيانات النشر من الدولاب.' } };
+  }
+}
+
+export async function markDolabItemPublished(userId: string, dolabItemId: string, publishedItemId: string): Promise<DolabResult<DolabItem | null>> {
+  try {
+    const { data, error } = await supabase
+      .from('dolab_items')
+      .update({ status: 'published', published_item_id: publishedItemId })
+      .eq('user_id', userId)
+      .eq('id', dolabItemId)
+      .select('*')
+      .maybeSingle();
+
+    return { data: (data as DolabItem | null) ?? null, error: normalizeDolabPersistenceError(error) };
+  } catch {
+    return { data: null, error: { kind: 'unknown', message: 'تم نشر العنصر لكن تعذر تحديث حالة الدولاب.' } };
+  }
+}
+
 export const fetchDolabLibrarySnapshot = fetchDolabRemoteSnapshot;
 
 export { buildDolabStoragePath, saveDolabMediaRow, uploadAndSaveDolabMedia, uploadDolabPendingMedia } from '@/lib/dolab/upload';
