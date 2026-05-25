@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
@@ -39,6 +39,7 @@ export default function StreamDirectPilotScreen() {
   const [draft, setDraft] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const channelRef = useRef<StreamChannel | null>(null);
 
   const channelId = useMemo(() => (activeUserId ? `teswa-direct-pilot-${activeUserId}` : null), [activeUserId]);
 
@@ -47,7 +48,6 @@ export default function StreamDirectPilotScreen() {
   useEffect(() => {
     let mounted = true;
     let client: StreamChatClient | null = null;
-    let channel: StreamChannel | null = null;
 
     async function connectPilot() {
       setBusy(true);
@@ -56,6 +56,7 @@ export default function StreamDirectPilotScreen() {
       setConnected(false);
       setChannelReady(false);
       setMessages([]);
+      channelRef.current = null;
 
       try {
         const auth = await fetchStreamChatToken();
@@ -83,10 +84,11 @@ export default function StreamDirectPilotScreen() {
         setConnected(true);
 
         const internalChannelId = `teswa-direct-pilot-${auth.userId}`;
-        channel = client.channel('messaging', internalChannelId, { members: [auth.userId] });
+        const channel = client.channel('messaging', internalChannelId, { members: [auth.userId] });
         await channel.watch();
 
         if (!mounted) return;
+        channelRef.current = channel;
         setChannelReady(true);
         setUiMode('Minimal fallback');
 
@@ -99,21 +101,6 @@ export default function StreamDirectPilotScreen() {
 
         setMessages(initialMessages);
 
-        const send = async (text: string) => {
-          if (!text.trim() || !channel) return;
-          await channel.sendMessage({ text: text.trim() });
-          const refreshedMessages = (channel.state?.messages ?? []).map((message) => ({
-            id: message.id ?? `${message.created_at ?? Date.now()}`,
-            text: message.text ?? '',
-            userId: message.user?.id ?? 'unknown',
-            createdAt: message.created_at ? String(message.created_at) : undefined,
-          }));
-          if (mounted) setMessages(refreshedMessages);
-        };
-
-        if (mounted) {
-          setSendHandler(() => send);
-        }
       } catch (error) {
         if (!mounted) return;
         setErrorMessage(error instanceof Error ? error.message : 'Failed to initialize Stream direct pilot.');
@@ -126,19 +113,29 @@ export default function StreamDirectPilotScreen() {
 
     return () => {
       mounted = false;
-      setSendHandler(() => async () => undefined);
+      channelRef.current = null;
       if (client) void client.disconnectUser().catch(() => undefined);
     };
   }, [refreshToken]);
 
-  const [sendHandler, setSendHandler] = useState<(text: string) => Promise<void>>(() => async () => undefined);
-
   const sendMessage = useCallback(async () => {
     const text = draft.trim();
-    if (!text) return;
-    await sendHandler(text);
+    const channel = channelRef.current;
+
+    if (!text || !channel) return;
+
+    await channel.sendMessage({ text });
+
+    const refreshedMessages = (channel.state?.messages ?? []).map((message) => ({
+      id: message.id ?? `${message.created_at ?? Date.now()}`,
+      text: message.text ?? '',
+      userId: message.user?.id ?? 'unknown',
+      createdAt: message.created_at ? String(message.created_at) : undefined,
+    }));
+
+    setMessages(refreshedMessages);
     setDraft('');
-  }, [draft, sendHandler]);
+  }, [draft]);
 
   if (tokenState === 'failed') {
     return (
