@@ -52,14 +52,15 @@ export default function StreamChatLabScreen() {
       setConnecting(true);
 
       try {
-        const streamModule = await import('stream-chat');
+        const streamModule = await import('stream-chat-expo');
         if (!mounted) return;
 
         setSdkLoaded(true);
 
-        const StreamChat = streamModule.StreamChat as {
-          getInstance: (apiKey: string) => StreamChatClient;
-        };
+        const StreamChat = (streamModule as { StreamChat?: { getInstance: (apiKey: string) => StreamChatClient } }).StreamChat;
+        if (!StreamChat) {
+          throw new Error('StreamChat export is unavailable from stream-chat-expo');
+        }
 
         client = StreamChat.getInstance(STREAM_CHAT_API_KEY);
         await client.connectUser({ id: STREAM_CHAT_TEST_USER_ID }, STREAM_CHAT_TEST_USER_TOKEN);
