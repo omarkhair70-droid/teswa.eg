@@ -1,4 +1,5 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
+import type { DolabInboxItem } from '@/lib/dolab/inbox';
 import type { DolabPendingMedia, DolabPendingMediaType } from '@/lib/dolab/media-types';
 
 function fileNameFromUri(uri: string): string | undefined {
@@ -38,6 +39,24 @@ export function createPendingAudioMedia(input: { uri: string; durationMs?: numbe
     uploadStatus: 'local',
     compressionStatus: 'not_needed',
     originalUri: input.uri,
+  };
+}
+
+export function createPendingMediaFromInboxItem(item: DolabInboxItem): DolabPendingMedia | null {
+  if ((item.type !== 'image' && item.type !== 'video') || !item.uri) return null;
+  const mediaType: DolabPendingMediaType = item.type === 'image' ? 'image' : 'video';
+  return {
+    id: `inbox-media-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    uri: item.uri,
+    mediaType,
+    fileName: item.fileName ?? item.title,
+    mimeType: item.mimeType,
+    sizeBytes: item.sizeBytes,
+    createdAt: new Date().toISOString(),
+    uploadStatus: 'local',
+    compressionStatus: mediaType === 'video' || mediaType === 'image' ? 'pending' : 'not_needed',
+    originalUri: item.uri,
+    originalSizeBytes: item.sizeBytes,
   };
 }
 
