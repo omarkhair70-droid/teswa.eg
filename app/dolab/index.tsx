@@ -54,6 +54,7 @@ import { DolabShelvesOverview } from '@/components/dolab/DolabShelvesOverview';
 import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
 import { DolabShelfActionSheet } from '@/components/dolab/DolabShelfActionSheet';
 import { DolabSavedMediaGrid } from '@/components/dolab/DolabSavedMediaGrid';
+import { readLocalDolabPendingMedia, readLocalDolabSelfMessages, writeLocalDolabPendingMedia, writeLocalDolabSelfMessages } from '@/lib/dolab/local-persistence';
 
 const emptyDraftForm: DolabDraftItemInput = {
   title: '',
@@ -80,10 +81,12 @@ export default function DolabScreen() {
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
+  const [pendingMediaHydrated, setPendingMediaHydrated] = useState(false);
   const [localDrafts, setLocalDrafts] = useState<DolabDraftItem[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [draftForm, setDraftForm] = useState<DolabDraftItemInput>(emptyDraftForm);
   const [selfMessages, setSelfMessages] = useState<DolabSelfMessage[]>([]);
+  const [selfMessagesHydrated, setSelfMessagesHydrated] = useState(false);
   const [selfComposerBody, setSelfComposerBody] = useState('');
   const [selfComposerType, setSelfComposerType] = useState<DolabSelfMessageType>('text');
   const [selfComposerDraftId, setSelfComposerDraftId] = useState<string | null>(null);
@@ -154,6 +157,46 @@ export default function DolabScreen() {
       setInlineFeedback('تمت إضافة الوارد من خارج التطبيق.');
     }
   }, []);
+
+  useEffect(() => {
+    const hydrateLocalDolab = async () => {
+      const [persistedPendingMedia, persistedSelfMessages] = await Promise.all([
+        readLocalDolabPendingMedia(),
+        readLocalDolabSelfMessages(),
+      ]);
+
+      setPendingMedia((prev) => {
+        const byId = new Map<string, DolabPendingMedia>();
+        for (const item of [...prev, ...persistedPendingMedia]) {
+          byId.set(item.id, item);
+        }
+        return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
+
+      setSelfMessages((prev) => {
+        const byId = new Map<string, DolabSelfMessage>();
+        for (const item of [...prev, ...persistedSelfMessages]) {
+          byId.set(item.id, item);
+        }
+        return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
+
+      setPendingMediaHydrated(true);
+      setSelfMessagesHydrated(true);
+    };
+
+    void hydrateLocalDolab();
+  }, []);
+
+  useEffect(() => {
+    if (!pendingMediaHydrated) return;
+    void writeLocalDolabPendingMedia(pendingMedia);
+  }, [pendingMediaHydrated, pendingMedia]);
+
+  useEffect(() => {
+    if (!selfMessagesHydrated) return;
+    void writeLocalDolabSelfMessages(selfMessages);
+  }, [selfMessagesHydrated, selfMessages]);
 
   useEffect(() => {
     const loadRemoteSnapshot = async () => {
