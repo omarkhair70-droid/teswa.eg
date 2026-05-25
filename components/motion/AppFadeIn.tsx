@@ -1,5 +1,6 @@
-import { useEffect, useRef, type PropsWithChildren } from 'react';
-import { Animated, Easing, type StyleProp, type ViewStyle } from 'react-native';
+import type { PropsWithChildren } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
+import { MotiView } from 'moti';
 
 type AppFadeInProps = PropsWithChildren<{
   delay?: number;
@@ -8,52 +9,15 @@ type AppFadeInProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
 }>;
 
-export function AppFadeIn({
-  children,
-  delay = 0,
-  duration = 220,
-  fromY = 8,
-  style,
-}: AppFadeInProps) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(fromY)).current;
-
-  useEffect(() => {
-    const animation = Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration,
-        delay,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration,
-        delay,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]);
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [delay, duration, opacity, translateY]);
-
+export function AppFadeIn({ children, delay = 0, duration = 220, fromY = 8, style }: AppFadeInProps) {
   return (
-    <Animated.View
-      style={[
-        style,
-        {
-          opacity,
-          transform: [{ translateY }],
-        },
-      ]}
+    <MotiView
+      from={{ opacity: 0, translateY: fromY }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', delay, duration }}
+      style={style}
     >
       {children}
-    </Animated.View>
+    </MotiView>
   );
 }
