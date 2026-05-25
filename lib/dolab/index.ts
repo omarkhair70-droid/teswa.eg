@@ -253,6 +253,19 @@ export async function markDolabItemPublished(userId: string, dolabItemId: string
   }
 }
 
+
+export async function markDolabNoteShared(userId: string, noteId: string, conversationId: string): Promise<void> {
+  try {
+    await supabase
+      .from('dolab_notes')
+      .update({ shared_to_conversation_id: conversationId })
+      .eq('id', noteId)
+      .eq('user_id', userId);
+  } catch {
+    // Non-blocking by design.
+  }
+}
+
 export const fetchDolabLibrarySnapshot = fetchDolabRemoteSnapshot;
 
 export { buildDolabStoragePath, saveDolabMediaRow, uploadAndSaveDolabMedia, uploadDolabPendingMedia } from '@/lib/dolab/upload';

@@ -20,6 +20,7 @@ import { createPendingAudioMedia, toPendingMedia } from '@/lib/dolab/local-media
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
+import { DolabConversationPickerSheet } from '@/components/dolab/DolabConversationPickerSheet';
 import { DolabPublishBridgeSheet } from '@/components/dolab/DolabPublishBridgeSheet';
 import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStrip';
 import { DolabVaultHero } from '@/components/dolab/DolabVaultHero';
@@ -32,7 +33,9 @@ import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-ch
 import type { DolabShareDraft, DolabShareDraftTargetMode } from '@/lib/dolab/share-bridge-types';
 import { buildPublishDraftFromDolabDraft, type DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import { useAuth } from '@/lib/auth';
-import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDolabNote, fetchDolabLibrarySnapshot, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, updateDolabSavedItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
+import { createDolabMediaSignedUrls, deleteDolabItem, deleteDolabMedia, deleteDolabNote, fetchDolabLibrarySnapshot, markDolabNoteShared, saveDolabDraftItem, saveDolabSelfNote, updateDolabDraftItem, updateDolabSavedItem, uploadAndSaveDolabMedia } from '@/lib/dolab';
+import { type DirectConversationSummary, sendDirectMessage } from '@/lib/direct-messages';
+import { buildDolabShareToChatBody } from '@/lib/dolab/share-to-chat';
 import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
 
 const draftItems = [
@@ -61,6 +64,7 @@ export default function DolabScreen() {
   const draftStudioRef = useRef<BottomSheetModal>(null);
   const shareBridgeRef = useRef<BottomSheetModal>(null);
   const publishBridgeRef = useRef<BottomSheetModal>(null);
+  const conversationPickerRef = useRef<BottomSheetModal>(null);
   const confirmDeleteRef = useRef<BottomSheetModal>(null);
   const audioRecorderSheetRef = useRef<BottomSheetModal>(null);
 
@@ -87,6 +91,8 @@ export default function DolabScreen() {
   const [savedMediaSignedUrls, setSavedMediaSignedUrls] = useState<Record<string, string | null>>({});
   const [isUploadingCloud, setIsUploadingCloud] = useState(false);
   const [selectedDelete, setSelectedDelete] = useState<{ type: 'item'|'note'|'media'; id: string; storagePath?: string } | null>(null);
+  const [isSendingShareToChat, setIsSendingShareToChat] = useState(false);
+  const [conversationPickerRefreshKey, setConversationPickerRefreshKey] = useState(0);
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -485,10 +491,70 @@ export default function DolabScreen() {
     shareBridgeRef.current?.present();
   };
 
-  const openMessagesHub = () => {
-    setShareBridgeTargetMode('direct_chat_placeholder');
+
+  const openConversationPicker = () => {
+    const sourceMessage = selfMessages.find((item) => item.id === shareBridgeMessageId);
+    const cleanBody = (shareBridgeBody.trim() || sourceMessage?.body || '').trim();
+
+    if (!user?.id) {
+      setInlineFeedback('سجل الدخول الأول عشان تشارك في الشات.');
+      return;
+    }
+    if (!cleanBody) {
+      setInlineFeedback('اكتب نص المشاركة الأول.');
+      return;
+    }
+
+    setConversationPickerRefreshKey((prev) => prev + 1);
+    conversationPickerRef.current?.present();
+  };
+
+  const sendShareToConversation = async (conversation: DirectConversationSummary) => {
+    if (!conversation?.conversationId || isSendingShareToChat) return;
+    const sourceMessage = selfMessages.find((item) => item.id === shareBridgeMessageId);
+    if (!sourceMessage) { setInlineFeedback('الرسالة المختارة غير متاحة الآن.'); return; }
+
+    const linkedDraft = localDrafts.find((draft) => draft.id === sourceMessage.linkedDraftId);
+    const shareText = shareBridgeBody.trim() || sourceMessage.body;
+    const body = buildDolabShareToChatBody({ shareText, linkedDraft, linkedMediaCount: sourceMessage.linkedPendingMediaIds.length });
+    if (!body.trim()) { setInlineFeedback('نص المشاركة فارغ.'); return; }
+
+    setIsSendingShareToChat(true);
+    try {
+      const sendResult = await sendDirectMessage(conversation.conversationId, body);
+
+      if (!sendResult.ok) {
+        setInlineFeedback(sendResult.message);
+        return;
+      }
+
+    const now = new Date().toISOString();
+    setShareDrafts((prev) => [{
+      id: `local-share-draft-${Date.now()}`,
+      sourceMessageId: sourceMessage.id,
+      body: shareText,
+      linkedDraftId: sourceMessage.linkedDraftId,
+      linkedPendingMediaIds: sourceMessage.linkedPendingMediaIds,
+      targetMode: 'direct_chat',
+      targetConversationId: conversation.conversationId,
+      createdAt: now,
+      preparedAt: now,
+      sentAt: now,
+      status: 'sent',
+    }, ...prev.filter((item) => item.sourceMessageId !== sourceMessage.id)]);
+
+    if (user?.id && sourceMessage.remoteNoteId) {
+      void markDolabNoteShared(user.id, sourceMessage.remoteNoteId, conversation.conversationId);
+    }
+
+    conversationPickerRef.current?.dismiss();
     shareBridgeRef.current?.dismiss();
-    router.push('/(tabs)/messages');
+    setInlineFeedback('اترسلت في الشات.');
+    } catch {
+      setInlineFeedback('تعذر إرسال المشاركة للشات حاليًا.');
+    } finally {
+      setIsSendingShareToChat(false);
+    }
   };
 
   const prepareShareDraft = () => {
@@ -511,11 +577,13 @@ export default function DolabScreen() {
       linkedPendingMediaIds: sourceMessage.linkedPendingMediaIds,
       targetMode: shareBridgeTargetMode,
       createdAt: new Date().toISOString(),
+      preparedAt: new Date().toISOString(),
+      status: 'prepared',
     };
 
     setShareDrafts((prev) => [draft, ...prev.filter((item) => item.sourceMessageId !== sourceMessage.id)]);
     shareBridgeRef.current?.dismiss();
-    setInlineFeedback('اتجهزت للمشاركة. الربط بالشات الحقيقي في PR لاحق.');
+    setInlineFeedback('مجهز للمشاركة.');
   };
 
   const selectedShareMessage = useMemo(
@@ -843,7 +911,7 @@ export default function DolabScreen() {
           selectedDraftId={selfComposerDraftId}
           linkedMediaIds={selfComposerMediaIds}
           composerError={selfComposerError}
-          preparedShareSourceIds={shareDrafts.map((draft) => draft.sourceMessageId)}
+          shareStatusBySourceId={shareDrafts.reduce((acc, draft) => { acc[draft.sourceMessageId] = draft.status; return acc; }, {} as Record<string, 'prepared' | 'sent'>)}
           onChangeBody={(value) => {
             setSelfComposerBody(value);
             if (selfComposerError) {
@@ -866,29 +934,22 @@ export default function DolabScreen() {
         <DolabAnimatedSection delay={120}><AppCard>
           <View style={styles.sectionHeader}>
             <AppText weight="bold">جاهز للمشاركة</AppText>
-            <AppText muted>مسودات مشاركة محلية فقط لحد PR الربط الحقيقي.</AppText>
+            <AppText muted>مسودات دولاب المجهزة واللي اتبعتت في شات مباشر.</AppText>
           </View>
           {shareDrafts.length === 0 ? (
             <AppText muted style={styles.smallText}>مفيش رسائل مجهزة للمشاركة لسه، جهّز واحدة من شاتك.</AppText>
           ) : (
             <View style={styles.listWrap}>
               {shareDrafts.map((draft) => (
-                <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={openMessagesHub} accessibilityRole="button" accessibilityLabel="فتح الرسائل لاستكمال المشاركة">
+                <DolabPressableCard key={draft.id} style={styles.localDraftCard} onPress={() => {}} accessibilityRole="button" accessibilityLabel="عرض حالة مشاركة الرسالة">
                   <View style={styles.localDraftHeader}>
                     <AppText weight="semibold" numberOfLines={2}>{draft.body}</AppText>
                     <View style={styles.localBadge}>
-                      <AppText style={styles.localBadgeText}>مجهز</AppText>
+                      <AppText style={styles.localBadgeText}>{draft.status === 'sent' ? 'اتشاركت' : 'مجهز'}</AppText>
                     </View>
                   </View>
                   <AppText muted style={styles.smallText}>ميديا مرتبطة: {draft.linkedPendingMediaIds.length}</AppText>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="فتح الرسائل لإكمال المشاركة لاحقًا"
-                    onPress={openMessagesHub}
-                    style={styles.actionBtnInline}
-                  >
-                    <AppText style={styles.actionBtnInlineText}>افتح الرسائل</AppText>
-                  </Pressable>
+                  <AppText muted style={styles.smallText}>{draft.status === 'sent' ? 'اتشاركت في شات مباشر.' : 'لسه مش متبعتة في شات.'}</AppText>
                 </DolabPressableCard>
               ))}
             </View>
@@ -1056,7 +1117,16 @@ export default function DolabScreen() {
         onChangeBody={setShareBridgeBody}
         onSelectTargetMode={setShareBridgeTargetMode}
         onPrepareShare={prepareShareDraft}
-        onOpenMessages={openMessagesHub}
+        onSendToChat={openConversationPicker}
+      />
+
+      <DolabConversationPickerSheet
+        sheetRef={conversationPickerRef}
+        isSending={isSendingShareToChat}
+        refreshKey={conversationPickerRefreshKey}
+        onSelectConversation={(conversation) => {
+          void sendShareToConversation(conversation);
+        }}
       />
 
       <DolabPublishBridgeSheet

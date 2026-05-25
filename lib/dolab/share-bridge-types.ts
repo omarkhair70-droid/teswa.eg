@@ -1,4 +1,6 @@
-export type DolabShareDraftTargetMode = 'choose_later' | 'direct_chat_placeholder';
+export type DolabShareDraftTargetMode = 'choose_later' | 'direct_chat';
+
+export type DolabShareDraftStatus = 'prepared' | 'sent';
 
 export type DolabShareDraft = {
   id: string;
@@ -7,5 +9,9 @@ export type DolabShareDraft = {
   linkedDraftId?: string;
   linkedPendingMediaIds: string[];
   targetMode: DolabShareDraftTargetMode;
+  targetConversationId?: string;
   createdAt: string;
+  preparedAt?: string;
+  sentAt?: string;
+  status: DolabShareDraftStatus;
 };

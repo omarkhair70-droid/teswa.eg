@@ -21,7 +21,7 @@ type Props = {
   onChangeBody: (value: string) => void;
   onSelectTargetMode: (value: DolabShareDraftTargetMode) => void;
   onPrepareShare: () => void;
-  onOpenMessages: () => void;
+  onSendToChat: () => void;
 };
 
 const messageTypeBadge: Record<DolabSelfMessage['messageType'], string> = {
@@ -32,20 +32,17 @@ const messageTypeBadge: Record<DolabSelfMessage['messageType'], string> = {
 };
 
 export function DolabShareBridgeSheet(props: Props) {
-  const { sheetRef, selectedMessage, linkedDraft, shareBody, targetMode, onChangeBody, onSelectTargetMode, onPrepareShare, onOpenMessages } = props;
+  const { sheetRef, selectedMessage, linkedDraft, shareBody, targetMode, onChangeBody, onSelectTargetMode, onPrepareShare, onSendToChat } = props;
 
   return (
     <AppBottomSheet
       ref={sheetRef}
       title="مشاركة من الدولاب"
-      description="جهّز الرسالة دي عشان تبعتها في شات حقيقي لاحقًا."
+      description="جهّز الرسالة دي للمشاركة أو ابعتها مباشرة في شات حقيقي."
       titleIconName="share-social-outline"
       snapPoints={['72%']}
     >
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.localHint}>
-          <AppText style={styles.localHintText}>محلي فقط • بدون إرسال فعلي</AppText>
-        </View>
         {!selectedMessage ? (
           <AppText muted>اختار رسالة من شات نفسك الأول.</AppText>
         ) : (
@@ -74,11 +71,11 @@ export function DolabShareBridgeSheet(props: Props) {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="فتح الرسائل لاختيار شات"
-                  onPress={onOpenMessages}
-                  style={[styles.chip, targetMode === 'direct_chat_placeholder' && styles.chipSelected]}
+                  accessibilityLabel="اختيار وضع المشاركة في شات مباشر"
+                  onPress={() => onSelectTargetMode('direct_chat')}
+                  style={[styles.chip, targetMode === 'direct_chat' && styles.chipSelected]}
                 >
-                  <AppText style={[styles.chipText, targetMode === 'direct_chat_placeholder' && styles.chipTextSelected]}>افتح الرسائل</AppText>
+                  <AppText style={[styles.chipText, targetMode === 'direct_chat' && styles.chipTextSelected]}>شات مباشر</AppText>
                 </Pressable>
               </View>
             </View>
@@ -93,7 +90,10 @@ export function DolabShareBridgeSheet(props: Props) {
               />
             </View>
 
-            <AppButton label="جهّز للمشاركة" onPress={onPrepareShare} />
+            <View style={styles.section}>
+              <AppButton label="جهّز للمشاركة" onPress={onPrepareShare} />
+              <AppButton label="اختار شات وأرسل" variant="neutral" onPress={onSendToChat} />
+            </View>
           </>
         )}
       </ScrollView>
