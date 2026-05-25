@@ -11,6 +11,7 @@ import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import { DolabPendingMediaStrip } from '@/components/dolab/DolabPendingMediaStrip';
+import { DolabVoiceNoteBubble } from '@/components/dolab/DolabVoiceNoteBubble';
 
 const messageTypeOptions: Array<{ type: DolabSelfMessageType; label: string }> = [
   { type: 'text', label: 'ملاحظة' },
@@ -74,7 +75,7 @@ export function DolabSelfChatPanel(props: Props) {
 
       {messages.length === 0 ? (
         <AppText muted style={styles.smallText}>
-          ابدأ بأول فكرة في دولابك، وهتظهر هنا فورًا بشكل محلي.
+          لسه مفيش كلام هنا. اكتب نوت أو سجّل ريكورد لنفسك.
         </AppText>
       ) : null}
 
@@ -94,7 +95,7 @@ export function DolabSelfChatPanel(props: Props) {
               </AppText>
             </View>
 
-            <AppText>{message.body}</AppText>
+            {isVoice ? <DolabVoiceNoteBubble message={message} pendingMedia={pendingMedia} /> : <AppText>{message.body}</AppText>}
 
             {draftTitle ? (
               <AppText muted style={styles.smallText}>
@@ -102,7 +103,7 @@ export function DolabSelfChatPanel(props: Props) {
               </AppText>
             ) : null}
 
-            {message.linkedPendingMediaIds.length > 0 ? (
+            {!isVoice && message.linkedPendingMediaIds.length > 0 ? (
               <AppText muted style={styles.smallText}>
                 ميديا مرتبطة: {message.linkedPendingMediaIds.length}
               </AppText>

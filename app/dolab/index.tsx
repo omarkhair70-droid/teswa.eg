@@ -54,6 +54,7 @@ import { createInboxFileItem, createInboxTextItem, type DolabInboxItem } from '@
 import { DolabInboxSection } from '@/components/dolab/DolabInboxSection';
 import { DolabShelvesOverview } from '@/components/dolab/DolabShelvesOverview';
 import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
+import { DolabShelfActionSheet } from '@/components/dolab/DolabShelfActionSheet';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -86,6 +87,7 @@ export default function DolabScreen() {
   const audioRecorderSheetRef = useRef<BottomSheetModal>(null);
   const inboxQuickNoteSheetRef = useRef<BottomSheetModal>(null);
   const collectionPickerSheetRef = useRef<BottomSheetModal>(null);
+  const shelfActionSheetRef = useRef<BottomSheetModal>(null);
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
@@ -128,6 +130,7 @@ export default function DolabScreen() {
   const [collectionAssignTarget, setCollectionAssignTarget] = useState<{ type: 'local_draft'; id: string } | null>(null);
   const [inboxItems, setInboxItems] = useState<DolabInboxItem[]>([]);
   const [inboxQuickNoteBody, setInboxQuickNoteBody] = useState('');
+  const [activeShelfForActions, setActiveShelfForActions] = useState<DolabViewMode>('all');
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -1200,29 +1203,8 @@ export default function DolabScreen() {
     [],
   );
   const handleAddHere = () => {
-    if (viewMode === 'notes') {
-      setSelfComposerType('text');
-      setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
-      return;
-    }
-    if (viewMode === 'media') {
-      addSheetRef.current?.present();
-      return;
-    }
-    if (viewMode === 'drafts') {
-      openDraftStudioForNew();
-      return;
-    }
-    if (viewMode === 'inbox') {
-      inboxQuickNoteSheetRef.current?.present();
-      return;
-    }
-    if (viewMode === 'ready') {
-      openDraftStudioForNew();
-      setInlineFeedback('ابدأ مسودة جديدة وجهّزها للعرض.');
-      return;
-    }
-    addSheetRef.current?.present();
+    setActiveShelfForActions(viewMode);
+    shelfActionSheetRef.current?.present();
   };
 
   return (
@@ -1367,7 +1349,7 @@ export default function DolabScreen() {
             pendingMedia={viewMode === 'issues' ? issuesMedia : visiblePendingMedia}
             mode="preview"
             onRemove={removePendingMedia}
-            emptyText="رف الميديا لسه فاضي."
+            emptyText="رف الميديا فاضي. صوّر حاجة أو ارفع صورة تبدأ بيها."
           />
         </AppCard>
         </DolabAnimatedSection>}
@@ -1604,7 +1586,29 @@ export default function DolabScreen() {
             ...prev,
           ]);
           setInlineFeedback('اتحفظ كتسجيل صوتي في الكلام مع نفسك ورف الميديا.');
+          setViewMode('notes');
         }}
+      />
+      <DolabShelfActionSheet
+        sheetRef={shelfActionSheetRef}
+        activeShelf={activeShelfForActions}
+        onCaptureImage={() => { void captureImage(); }}
+        onPickImages={() => { void pickImages(); }}
+        onPickVideo={() => { void pickVideo(); }}
+        onRecordAudio={() => audioRecorderSheetRef.current?.present()}
+        onOpenDraftStudio={openDraftStudioForNew}
+        onOpenQuickNote={() => {
+          if (activeShelfForActions === 'inbox') {
+            inboxQuickNoteSheetRef.current?.present();
+            return;
+          }
+          setViewMode('notes');
+          setSelfComposerType('text');
+          setInlineFeedback('اكتب نوتك في الكلام مع نفسي.');
+        }}
+        onCaptureClipboard={() => { void captureClipboard(); }}
+        onCaptureDocument={() => { void captureDocument(); }}
+        onFeedback={setInlineFeedback}
       />
       <DolabCollectionPickerSheet sheetRef={collectionPickerSheetRef} collections={collections} onSelect={assignTargetToCollection} />
 
