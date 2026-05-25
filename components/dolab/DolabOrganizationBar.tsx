@@ -12,6 +12,7 @@ const MODES: Array<{ key: DolabViewMode; label: string }> = [
   { key: 'notes', label: 'ملاحظات' },
   { key: 'ready', label: 'جاهز للنشر' },
   { key: 'issues', label: 'مشاكل' },
+  { key: 'inbox', label: 'وارد' },
 ];
 
 type Props = {

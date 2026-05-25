@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +18,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { DolabDraftItem, DolabDraftItemInput } from '@/lib/dolab/draft-types';
-import { createPendingAudioMedia, toPendingMedia } from '@/lib/dolab/local-media';
+import { createPendingAudioMedia, createPendingMediaFromInboxItem, toPendingMedia } from '@/lib/dolab/local-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import { DolabSelfChatPanel } from '@/components/dolab/DolabSelfChatPanel';
 import { DolabShareBridgeSheet } from '@/components/dolab/DolabShareBridgeSheet';
@@ -47,6 +49,9 @@ import { buildDolabShareToChatBody } from '@/lib/dolab/share-to-chat';
 import { compressDolabMedia, maxUploadBytesForType, resolveDolabMediaSize, shouldCompressDolabMedia } from '@/lib/dolab/media-compression';
 import { byTime, includesQuery, type DolabSortMode, type DolabStatusFilter, type DolabViewMode } from '@/lib/dolab/organization';
 import { buildDolabSmartGroups, type DolabCollection, type DolabCollectionAssignment, type DolabSmartGroup } from '@/lib/dolab/collections';
+import { consumePendingInboundDolabInboxItems } from '@/lib/inbound-shared-media';
+import { createInboxFileItem, createInboxTextItem, type DolabInboxItem } from '@/lib/dolab/inbox';
+import { DolabInboxSection } from '@/components/dolab/DolabInboxSection';
 
 const draftItems = [
   { id: 'd1', title: 'جاكيت شتوي نظيف', hint: 'جاهز للتصوير النهائي والنشر لاحقًا.' },
@@ -77,6 +82,7 @@ export default function DolabScreen() {
   const conversationPickerRef = useRef<BottomSheetModal>(null);
   const confirmDeleteRef = useRef<BottomSheetModal>(null);
   const audioRecorderSheetRef = useRef<BottomSheetModal>(null);
+  const inboxQuickNoteSheetRef = useRef<BottomSheetModal>(null);
   const collectionPickerSheetRef = useRef<BottomSheetModal>(null);
 
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
@@ -118,6 +124,8 @@ export default function DolabScreen() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [collectionAssignTarget, setCollectionAssignTarget] = useState<{ type: 'local_draft'; id: string } | null>(null);
+  const [inboxItems, setInboxItems] = useState<DolabInboxItem[]>([]);
+  const [inboxQuickNoteBody, setInboxQuickNoteBody] = useState('');
 
   const refreshRemoteSnapshot = async (targetUserId: string): Promise<boolean> => {
     const result = await fetchDolabLibrarySnapshot(targetUserId);
@@ -144,6 +152,14 @@ export default function DolabScreen() {
 
     return true;
   };
+
+  useEffect(() => {
+    const inbound = consumePendingInboundDolabInboxItems();
+    if (inbound.length > 0) {
+      setInboxItems((prev) => [...inbound, ...prev]);
+      setInlineFeedback('تمت إضافة الوارد من خارج التطبيق.');
+    }
+  }, []);
 
   useEffect(() => {
     const loadRemoteSnapshot = async () => {
@@ -313,6 +329,17 @@ export default function DolabScreen() {
       ),
     [shareDrafts, query, statusFilter, sortMode],
   );
+  const visibleInboxItems = useMemo(
+    () =>
+      byTime(
+        inboxItems
+          .filter((item) => includesQuery([item.title, item.body, item.fileName, item.source, item.type], query))
+          .filter(() => statusFilter === 'all' || statusFilter === 'temporary'),
+        (item) => new Date(item.createdAt).getTime(),
+        sortMode,
+      ),
+    [inboxItems, query, sortMode, statusFilter],
+  );
   const smartGroups = useMemo<DolabSmartGroup[]>(
     () =>
       buildDolabSmartGroups({
@@ -321,10 +348,11 @@ export default function DolabScreen() {
         pendingMedia,
         savedMedia: mappedSavedMedia,
         selfMessages,
+        inboxItems,
         publishDrafts,
         cloudStatus,
       }),
-    [localDrafts, mappedSavedItems, pendingMedia, mappedSavedMedia, selfMessages, publishDrafts, cloudStatus],
+    [localDrafts, mappedSavedItems, pendingMedia, mappedSavedMedia, selfMessages, inboxItems, publishDrafts, cloudStatus],
   );
   const collectionCountById = useMemo(
     () =>
@@ -349,8 +377,18 @@ export default function DolabScreen() {
     if (viewMode === 'notes') return visibleSelfMessages.length + visibleSavedNotes.length + visibleShareDrafts.length > 0;
     if (viewMode === 'ready') return visiblePublishDrafts.length + visibleSavedItems.length + visibleLocalDraftCards.length > 0;
     if (viewMode === 'issues') return issuesMedia.length > 0 || cloudStatus === 'schema_missing';
-    return visiblePendingMedia.length + visibleSavedItems.length + visibleSavedNotes.length + visibleSelfMessages.length + visiblePublishDrafts.length + visibleShareDrafts.length > 0;
-  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus]);
+    if (viewMode === 'inbox') return visibleInboxItems.length > 0;
+    return (
+      visiblePendingMedia.length +
+        visibleSavedItems.length +
+        visibleSavedNotes.length +
+        visibleSelfMessages.length +
+        visiblePublishDrafts.length +
+        visibleShareDrafts.length +
+        visibleInboxItems.length >
+      0
+    );
+  }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus, visibleInboxItems.length]);
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -691,6 +729,79 @@ export default function DolabScreen() {
   };
 
 
+
+  const addInboxItem = (item: DolabInboxItem, feedback = 'اتضاف لوارد الدولاب.') => {
+    setInboxItems((prev) => [item, ...prev]);
+    setInlineFeedback(feedback);
+  };
+
+  const captureClipboard = async () => {
+    try {
+      const text = (await Clipboard.getStringAsync()).trim();
+      if (!text) {
+        setInlineFeedback('الحافظة فاضية.');
+        return;
+      }
+      addInboxItem(createInboxTextItem({ body: text, source: 'clipboard' }));
+    } catch {
+      setInlineFeedback('تعذر قراءة الحافظة حاليًا.');
+    }
+  };
+
+  const captureDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        copyToCacheDirectory: true,
+        type: '*/*',
+      });
+      if (result.canceled || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      addInboxItem(
+        createInboxFileItem({
+          source: 'document_picker',
+          uri: asset.uri,
+          fileName: asset.name,
+          mimeType: asset.mimeType ?? undefined,
+          sizeBytes: asset.size ?? undefined,
+        }),
+        'اتضاف الملف لوارد الدولاب.',
+      );
+    } catch {
+      setInlineFeedback('تعذر اختيار الملف حاليًا.');
+    }
+  };
+
+  const captureManualText = (value: string) => {
+    const clean = value.trim();
+    if (!clean) {
+      setInlineFeedback('اكتب نص الأول.');
+      return false;
+    }
+    addInboxItem(createInboxTextItem({ body: clean, source: 'manual' }));
+    return true;
+  };
+
+  const convertInboxToMedia = (item: DolabInboxItem) => {
+    if (item.type === 'file') {
+      setInlineFeedback('الملفات العامة محفوظة كوارد فقط حاليًا.');
+      return;
+    }
+    const pending = createPendingMediaFromInboxItem(item);
+    if (!pending) return;
+    appendMedia([pending]);
+    setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
+    setInlineFeedback('اتحول لميديا مؤقتة في الدولاب.');
+  };
+
+  const convertInboxToNote = (item: DolabInboxItem) => {
+    const body = item.type === 'file' ? `ملف محفوظ: ${item.fileName ?? item.title}` : (item.body ?? item.title);
+    const messageType: DolabSelfMessageType = item.type === 'link' ? 'idea' : 'text';
+    setSelfMessages((prev) => [{ id: `local-self-message-${Date.now()}`, body, messageType, linkedPendingMediaIds: [], createdAt: new Date().toISOString() }, ...prev]);
+    setInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
+    setInlineFeedback('اتحول لملاحظة في الدولاب.');
+  };
+
   const openShareBridge = (messageId: string) => {
     const message = selfMessages.find((item) => item.id === messageId);
     if (!message) {
@@ -1008,6 +1119,24 @@ export default function DolabScreen() {
         },
       },
       {
+        label: 'الصق من الحافظة',
+        iconName: 'clipboard-outline' as const,
+        description: 'التقط نص أو رابط من الحافظة لوارد الدولاب.',
+        onPress: () => { addSheetRef.current?.dismiss(); void captureClipboard(); },
+      },
+      {
+        label: 'اختار ملف',
+        iconName: 'document-attach-outline' as const,
+        description: 'اختَر أي ملف واحفظه كوارد بدون رفع.',
+        onPress: () => { addSheetRef.current?.dismiss(); void captureDocument(); },
+      },
+      {
+        label: 'اكتب نص سريع',
+        iconName: 'create-outline' as const,
+        description: 'سجل فكرة سريعة في وارد الدولاب.',
+        onPress: () => { addSheetRef.current?.dismiss(); inboxQuickNoteSheetRef.current?.present(); },
+      },
+      {
         label: 'سجل صوت',
         iconName: 'mic-outline' as const,
         description: 'احفظ ملاحظة صوتية لنفسك لاحقًا.',
@@ -1086,6 +1215,18 @@ export default function DolabScreen() {
           onChangeNewCollectionName={setNewCollectionName}
           onCreateCollection={createCollection}
         />
+
+        {!isCollectionFocusActive && (viewMode === 'all' || viewMode === 'inbox') && (
+          <DolabAnimatedSection delay={12}>
+            <DolabInboxSection
+              items={visibleInboxItems}
+              onConvertToNote={convertInboxToNote}
+              onConvertToMedia={convertInboxToMedia}
+              onDelete={(id) => setInboxItems((prev) => prev.filter((item) => item.id !== id))}
+            />
+          </DolabAnimatedSection>
+        )}
+
         {selectedCollectionName ? (
           <View style={styles.collectionFocusWrap}>
             <DolabCollectionBadge name={selectedCollectionName} />
@@ -1475,6 +1616,29 @@ export default function DolabScreen() {
             void saveLocalDraft();
           }} />
         </ScrollView>
+      </AppBottomSheet>
+
+      <AppBottomSheet
+        ref={inboxQuickNoteSheetRef}
+        title="اكتب نص سريع"
+        description="سجل حاجة لسه جاية من برّه التطبيق."
+        titleIconName="create-outline"
+        snapPoints={['45%']}
+      >
+        <View style={styles.studioBody}>
+          <AppInput value={inboxQuickNoteBody} onChangeText={setInboxQuickNoteBody} placeholder="اكتب النص هنا" multiline />
+          <AppButton
+            label="احفظ في الوارد"
+            onPress={() => {
+              const didSave = captureManualText(inboxQuickNoteBody);
+              if (!didSave) {
+                return;
+              }
+              setInboxQuickNoteBody('');
+              inboxQuickNoteSheetRef.current?.dismiss();
+            }}
+          />
+        </View>
       </AppBottomSheet>
     </AppScreen>
   );

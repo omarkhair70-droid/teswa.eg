@@ -2,6 +2,7 @@ import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import type { DolabPublishDraft } from '@/lib/dolab/publish-bridge-types';
 import type { DolabSelfMessage } from '@/lib/dolab/self-chat-types';
+import type { DolabInboxItem } from '@/lib/dolab/inbox';
 import type { DolabStatusFilter, DolabViewMode } from '@/lib/dolab/organization';
 
 export type DolabCollectionTargetType =
@@ -48,6 +49,7 @@ export function buildDolabSmartGroups(input: {
   pendingMedia: DolabPendingMedia[];
   savedMedia: Array<{ id: string; linkedItemTitle?: string }>;
   selfMessages: DolabSelfMessage[];
+  inboxItems: DolabInboxItem[];
   publishDrafts: DolabPublishDraft[];
   cloudStatus: 'local_only' | 'partial_sync' | 'schema_missing';
 }) {
@@ -67,6 +69,7 @@ export function buildDolabSmartGroups(input: {
 
   const mediaFailures = input.pendingMedia.filter((media) => media.uploadStatus === 'failed' || media.compressionStatus === 'failed').length;
   const cloudFallback = input.cloudStatus === 'schema_missing' ? 1 : 0;
+  const inboxNew = input.inboxItems.filter((item) => !item.convertedAt).length;
 
   return [
     {
@@ -101,6 +104,14 @@ export function buildDolabSmartGroups(input: {
       count: exchangeIdeas,
       severity: 'normal',
       targetMode: 'notes',
+    },
+    {
+      id: 'inbox_new',
+      title: 'وارد جديد',
+      description: 'حاجات جايالك من خارج التطبيق.',
+      count: inboxNew,
+      severity: 'normal',
+      targetMode: 'inbox',
     },
     {
       id: 'needs_review',

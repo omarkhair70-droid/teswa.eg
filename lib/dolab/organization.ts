@@ -1,4 +1,4 @@
-export type DolabViewMode = 'all' | 'media' | 'drafts' | 'notes' | 'ready' | 'issues';
+export type DolabViewMode = 'all' | 'media' | 'drafts' | 'notes' | 'ready' | 'issues' | 'inbox';
 export type DolabSortMode = 'newest' | 'oldest' | 'ready';
 export type DolabStatusFilter = 'all' | 'saved' | 'temporary' | 'failed' | 'published';
 
