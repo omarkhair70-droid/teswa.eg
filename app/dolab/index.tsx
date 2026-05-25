@@ -1358,7 +1358,7 @@ export default function DolabScreen() {
           </View>
         ) : null}
 
-        {!isCollectionFocusActive && (viewMode === 'drafts' || viewMode === 'ready') && (
+        {!isCollectionFocusActive && (viewMode === 'ready' || (viewMode === 'drafts' && !isDraftsShelfEmpty)) && (
         <DolabAnimatedSection delay={20}>
           <DolabSavedLibrarySection
             items={visibleSavedItems}
