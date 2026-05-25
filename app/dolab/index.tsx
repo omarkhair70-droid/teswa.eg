@@ -192,7 +192,7 @@ export default function DolabScreen() {
   const visiblePendingMedia = useMemo(
     () =>
       byTime(
-        pendingMedia.filter((item) => includesQuery([item.fileName, item.label], query)).filter((item) => {
+        pendingMedia.filter((item) => includesQuery([item.fileName, item.mediaType, item.mimeType, item.uploadStatus, item.compressionStatus], query)).filter((item) => {
           if (statusFilter === 'failed') return item.uploadStatus === 'failed' || item.compressionStatus === 'failed';
           if (statusFilter === 'temporary') return true;
           return statusFilter === 'all';
