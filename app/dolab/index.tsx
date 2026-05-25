@@ -389,6 +389,30 @@ export default function DolabScreen() {
       0
     );
   }, [viewMode, visiblePendingMedia.length, visibleSavedMedia.length, visibleLocalDraftCards.length, visibleSavedItems.length, visibleSelfMessages.length, visibleSavedNotes.length, visibleShareDrafts.length, visiblePublishDrafts.length, issuesMedia.length, cloudStatus, visibleInboxItems.length]);
+  const hasAnyDolabContent = useMemo(
+    () =>
+      pendingMedia.length +
+        mappedSavedItems.length +
+        mappedSavedMedia.length +
+        savedRemote.notes.length +
+        localDrafts.length +
+        selfMessages.length +
+        publishDrafts.length +
+        shareDrafts.length +
+        inboxItems.length >
+      0,
+    [
+      pendingMedia.length,
+      mappedSavedItems.length,
+      mappedSavedMedia.length,
+      savedRemote.notes.length,
+      localDrafts.length,
+      selfMessages.length,
+      publishDrafts.length,
+      shareDrafts.length,
+      inboxItems.length,
+    ],
+  );
 
   const appendMedia = (items: DolabPendingMedia[]) => {
     setPendingMedia((prev) => [...items, ...prev]);
@@ -1115,7 +1139,8 @@ export default function DolabScreen() {
         description: 'سجّل فكرة تبادل أو وصف سريع.',
         onPress: () => {
           addSheetRef.current?.dismiss();
-          setInlineFeedback('ملاحظات الدولاب في PR لاحق.');
+          setInlineFeedback('اكتب نص سريع وسيبه في وارد الدولاب.');
+          inboxQuickNoteSheetRef.current?.present();
         },
       },
       {
@@ -1456,11 +1481,11 @@ export default function DolabScreen() {
           </View>
         </AppCard></DolabAnimatedSection>}
 
-        {!isCollectionFocusActive && !hasVisibleContentForCurrentMode && (
+        {!isCollectionFocusActive && !hasVisibleContentForCurrentMode && hasAnyDolabContent && (
           <DolabEmptyFilteredState description={viewMode === 'issues' ? 'مفيش مشاكل حاليًا.' : 'مفيش نتائج بالفلتر ده. جرّب تفتح رف تاني.'} />
         )}
 
-        {!isCollectionFocusActive && <AppCard>
+        {!isCollectionFocusActive && !hasAnyDolabContent && <AppCard>
           <EmptyState
             title="الدولاب لسه فاضي… أول حاجة هتحوله لمكانك."
             description="صوّر حاجة، احفظ فكرة، أو سيب ملاحظة لنفسك لحد ما تقرر تطلعها للسوق."
