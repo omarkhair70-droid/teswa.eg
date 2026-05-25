@@ -79,15 +79,14 @@ export default function DolabScreen() {
   const collectionPickerSheetRef = useRef<BottomSheetModal>(null);
   const shelfActionSheetRef = useRef<BottomSheetModal>(null);
 
-  const pendingMediaHydratedRef = useRef(false);
-  const selfMessagesHydratedRef = useRef(false);
-
   const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [pendingMedia, setPendingMedia] = useState<DolabPendingMedia[]>([]);
+  const [pendingMediaHydrated, setPendingMediaHydrated] = useState(false);
   const [localDrafts, setLocalDrafts] = useState<DolabDraftItem[]>([]);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [draftForm, setDraftForm] = useState<DolabDraftItemInput>(emptyDraftForm);
   const [selfMessages, setSelfMessages] = useState<DolabSelfMessage[]>([]);
+  const [selfMessagesHydrated, setSelfMessagesHydrated] = useState(false);
   const [selfComposerBody, setSelfComposerBody] = useState('');
   const [selfComposerType, setSelfComposerType] = useState<DolabSelfMessageType>('text');
   const [selfComposerDraftId, setSelfComposerDraftId] = useState<string | null>(null);
@@ -182,22 +181,22 @@ export default function DolabScreen() {
         return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       });
 
-      pendingMediaHydratedRef.current = true;
-      selfMessagesHydratedRef.current = true;
+      setPendingMediaHydrated(true);
+      setSelfMessagesHydrated(true);
     };
 
     void hydrateLocalDolab();
   }, []);
 
   useEffect(() => {
-    if (!pendingMediaHydratedRef.current) return;
+    if (!pendingMediaHydrated) return;
     void writeLocalDolabPendingMedia(pendingMedia);
-  }, [pendingMedia]);
+  }, [pendingMediaHydrated, pendingMedia]);
 
   useEffect(() => {
-    if (!selfMessagesHydratedRef.current) return;
+    if (!selfMessagesHydrated) return;
     void writeLocalDolabSelfMessages(selfMessages);
-  }, [selfMessages]);
+  }, [selfMessagesHydrated, selfMessages]);
 
   useEffect(() => {
     const loadRemoteSnapshot = async () => {
