@@ -42,7 +42,7 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
         ? 'محفوظ'
         : item.uploadStatus === 'failed'
           ? 'فشل الحفظ'
-          : 'محلي';
+          : 'على الجهاز';
 
   return (
     <DolabPressableCard
@@ -63,11 +63,12 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
         <DolabAudioPlaceholderCard title={item.fileName ?? 'ملاحظة صوتية محلية'} subtitle={formatMediaDuration(item.durationMs) ?? 'بدون مدة'} />
       )}
 
-      <View style={styles.badge}><AppText style={styles.badgeText}>{item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'صوت'}</AppText></View>
+      <View style={styles.badge}><AppText style={styles.badgeText}>{item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'تسجيل صوتي'}</AppText></View>
       <View style={styles.statusBadge}><AppText style={styles.statusBadgeText}>{uploadLabel}</AppText></View>
       <View style={styles.compressionBadge}><AppText style={styles.compressionBadgeText}>{compressionLabel}</AppText></View>
       {savingsResult.data ? <AppText muted style={styles.meta} numberOfLines={1}>{savingsResult.data}</AppText> : null}
       {details ? <AppText muted style={styles.meta} numberOfLines={1}>{details}</AppText> : null}
+      {item.mediaType === 'audio' ? <AppText muted style={styles.meta}>تقدر تلاقيه كمان في الكلام مع نفسي.</AppText> : null}
 
       {onRemove ? (
         <Pressable style={styles.removeButton} onPress={onRemove} accessibilityRole="button" accessibilityLabel="حذف عنصر ميديا محلي">

@@ -30,7 +30,7 @@ export function DolabSavedMediaPreviewCard({ item, onDelete }: DolabSavedMediaPr
     }
 
     const iconName = item.mediaType === 'video' ? 'play-circle-outline' : 'mic-outline';
-    const text = item.mediaType === 'video' ? 'فيديو محفوظ' : item.mediaType === 'audio' ? 'صوت محفوظ' : 'صورة محفوظة';
+    const text = item.mediaType === 'video' ? 'فيديو محفوظ' : item.mediaType === 'audio' ? 'تسجيل صوتي محفوظ' : 'صورة محفوظة';
 
     return (
       <View style={styles.previewFallback}>
@@ -45,11 +45,12 @@ export function DolabSavedMediaPreviewCard({ item, onDelete }: DolabSavedMediaPr
       {renderPreview()}
       <View style={styles.body}>
         <View style={styles.rowBetween}>
-          <AppText weight="semibold">{item.mediaTypeLabel}</AppText>
+          <AppText weight="semibold">{item.mediaType === 'audio' ? 'تسجيل صوتي' : item.mediaTypeLabel}</AppText>
           <DolabSyncBadge state="saved" />
         </View>
         {item.linkedItemTitle ? <AppText muted style={styles.small}>مرتبط: {item.linkedItemTitle}</AppText> : null}
         <AppText muted style={styles.small}>{item.meta}</AppText>
+        {item.mediaType === 'audio' ? <AppText muted style={styles.small}>تقدر تلاقيه كمان في الكلام مع نفسي.</AppText> : null}
         {onDelete ? (
           <Pressable onPress={() => onDelete(item)} accessibilityRole="button" accessibilityLabel="حذف ميديا محفوظة من الدولاب">
             <AppText style={styles.deleteText}>حذف</AppText>

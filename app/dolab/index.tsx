@@ -53,6 +53,7 @@ import { DolabInboxSection } from '@/components/dolab/DolabInboxSection';
 import { DolabShelvesOverview } from '@/components/dolab/DolabShelvesOverview';
 import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
 import { DolabShelfActionSheet } from '@/components/dolab/DolabShelfActionSheet';
+import { DolabSavedMediaGrid } from '@/components/dolab/DolabSavedMediaGrid';
 
 const emptyDraftForm: DolabDraftItemInput = {
   title: '',
@@ -173,7 +174,7 @@ export default function DolabScreen() {
     () =>
       savedRemote.media.map((m) => {
         const signedUrl = savedMediaSignedUrls[m.id] ?? undefined;
-        const mediaTypeLabel = m.media_type === 'image' ? 'صورة' : m.media_type === 'video' ? 'فيديو' : 'صوت';
+        const mediaTypeLabel = m.media_type === 'image' ? 'صورة' : m.media_type === 'video' ? 'فيديو' : 'تسجيل صوتي';
         const previewStatus = !m.storage_path ? 'unavailable' : signedUrl ? 'ready' : 'failed';
         return {
           id: m.id,
@@ -408,6 +409,15 @@ export default function DolabScreen() {
     ideas: selfMessages.filter((item) => item.messageType === 'idea' || item.messageType === 'checklist').length,
   };
   const isMediaShelfEmpty = visiblePendingMedia.length + visibleSavedMedia.length === 0;
+  const mediaStats = useMemo(() => {
+    const allMedia = [...visiblePendingMedia, ...visibleSavedMedia];
+    const photos = allMedia.filter((item) => item.mediaType === 'image').length;
+    const videos = allMedia.filter((item) => item.mediaType === 'video').length;
+    const recordings = allMedia.filter((item) => item.mediaType === 'audio').length;
+    const localCount = visiblePendingMedia.length;
+    const savedCount = visibleSavedMedia.length;
+    return { photos, videos, recordings, localCount, savedCount };
+  }, [visiblePendingMedia, visibleSavedMedia]);
   const isInboxShelfEmpty = visibleInboxItems.length === 0;
   const isDraftsShelfEmpty = visibleLocalDraftCardsFiltered.length + visibleSavedItems.length === 0;
 
@@ -1359,16 +1369,44 @@ export default function DolabScreen() {
           />
         </DolabAnimatedSection>)}
 
+        {!isCollectionFocusActive && viewMode === 'media' && (
+          <DolabAnimatedSection delay={24}>
+            <AppCard>
+              <View style={styles.sectionHeader}>
+                <AppText weight="bold">رف الميديا</AppText>
+                <AppText muted>صور، فيديوهات، وتسجيلات محفوظة لحد ما تقرر تعمل بيها إيه.</AppText>
+              </View>
+              <View style={styles.mediaCountersRow}>
+                <AppText muted style={styles.smallText}>صور: {mediaStats.photos}</AppText>
+                <AppText muted style={styles.smallText}>فيديوهات: {mediaStats.videos}</AppText>
+                <AppText muted style={styles.smallText}>تسجيلات: {mediaStats.recordings}</AppText>
+              </View>
+              <AppText muted style={styles.smallText}>محفوظ سحابيًا: {mediaStats.savedCount} · على الجهاز: {mediaStats.localCount}</AppText>
+            </AppCard>
+            <View style={styles.mediaActionsRow}>
+              <Pressable style={styles.actionBtnInline} onPress={() => { void captureImage(); }} accessibilityRole="button">
+                <AppText style={styles.actionBtnInlineText}>صوّر حاجة</AppText>
+              </Pressable>
+              <Pressable style={styles.actionBtnInline} onPress={() => { void pickImages(); }} accessibilityRole="button">
+                <AppText style={styles.actionBtnInlineText}>ارفع صور</AppText>
+              </Pressable>
+              <Pressable style={styles.actionBtnInline} onPress={() => { void pickVideo(); }} accessibilityRole="button">
+                <AppText style={styles.actionBtnInlineText}>ارفع فيديو</AppText>
+              </Pressable>
+              <Pressable style={styles.actionBtnInline} onPress={() => audioRecorderSheetRef.current?.present()} accessibilityRole="button">
+                <AppText style={styles.actionBtnInlineText}>سجل صوت</AppText>
+              </Pressable>
+            </View>
+          </DolabAnimatedSection>
+        )}
+
         {!isCollectionFocusActive && (viewMode === 'media' || viewMode === 'issues') && (viewMode === 'issues' || !isMediaShelfEmpty) && <DolabAnimatedSection delay={30}>
         <AppCard>
           <View style={styles.sectionHeader}>
-            <AppText weight="bold">رف الميديا</AppText>
-            <AppText muted>لسه على جهازك. احفظها سحابيًا عشان تفضل موجودة.</AppText>
-            <AppText muted style={styles.smallText}>
-              عدد العناصر: {pendingMedia.length}
-            </AppText>
+            <AppText weight="bold">على الرف الآن</AppText>
+            <AppText muted>الحاجات دي على الرف. احفظ المهم منها عشان تفضل معاك.</AppText>
           </View>
-          <AppButton label="احفظ الميديا سحابيًا" variant="neutral" onPress={() => { void uploadPendingMediaToCloud(); }} />
+          <AppButton label="احفظ المهم سحابيًا" variant="neutral" onPress={() => { void uploadPendingMediaToCloud(); }} />
           <AppText muted style={styles.smallText}>تقدر تعيد محاولة حفظ العناصر الفاشلة.</AppText>
 
           <DolabPendingMediaStrip
@@ -1381,9 +1419,31 @@ export default function DolabScreen() {
         </DolabAnimatedSection>}
         {!isCollectionFocusActive && viewMode === 'media' && isMediaShelfEmpty && (
           <AppCard>
-            <EmptyState title="رف الميديا فاضي." description="رف الميديا فاضي. صوّر حاجة أو ارفع صورة تبدأ بيها." iconName="images-outline" />
-            <AppButton label="أضف هنا" variant="neutral" onPress={handleAddHere} />
+            <EmptyState title="رف الميديا فاضي." description="صوّر حاجة، ارفع صورة، أو سجّل صوت… وسيبها هنا لحد ما تقرر تطلعها للسوق." iconName="images-outline" />
+            <AppButton label="صوّر حاجة" variant="neutral" onPress={() => { void captureImage(); }} />
+            <View style={styles.mediaEmptyActions}>
+              <AppButton label="ارفع صور" variant="ghost" onPress={() => { void pickImages(); }} />
+              <AppButton label="سجل صوت" variant="ghost" onPress={() => audioRecorderSheetRef.current?.present()} />
+            </View>
           </AppCard>
+        )}
+        {!isCollectionFocusActive && viewMode === 'media' && visibleSavedMedia.length > 0 && (
+          <DolabAnimatedSection delay={40}>
+            <AppCard>
+              <View style={styles.sectionHeader}>
+                <AppText weight="bold">محفوظة في دولابك</AppText>
+              </View>
+              <DolabSavedMediaGrid
+                media={visibleSavedMedia}
+                onDeleteMedia={(item) =>
+                  requestDelete({
+                    type: 'media',
+                    id: item.id,
+                    storagePath: item.storagePath,
+                  })}
+              />
+            </AppCard>
+          </DolabAnimatedSection>
         )}
 
         {!isCollectionFocusActive && viewMode === 'notes' && <DolabAnimatedSection delay={70}>
@@ -1917,6 +1977,22 @@ const styles = StyleSheet.create({
   actionBtnInlineText: {
     color: colors.primary,
     fontSize: 13,
+  },
+  mediaCountersRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  mediaActionsRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  mediaEmptyActions: {
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   pendingRow: {
     gap: spacing.sm,
