@@ -150,7 +150,8 @@ export default function DirectScreen() {
   const isReceiverOnRequest = convo?.status === 'requested' && convo?.requestedBy !== user?.id;
   const isRequesterOnRequest = convo?.status === 'requested' && convo?.requestedBy === user?.id;
   const hasRequesterAlreadySent = useMemo(() => isRequesterOnRequest && messages.some((m) => m.senderId === user?.id), [isRequesterOnRequest, messages, user?.id]);
-  const usingStreamChat = DIRECT_CHAT_PRO_ENABLED && convo?.status === 'accepted' && streamReady && !streamError;
+  const acceptedDirectProActive = DIRECT_CHAT_PRO_ENABLED && convo?.status === 'accepted';
+  const usingStreamChat = acceptedDirectProActive && streamReady && !streamError;
 
   const composerState = useMemo(() => {
     if (convo?.status === 'ignored') return { disabled: true, note: 'تم تجاهل طلب المراسلة.' };
@@ -161,6 +162,7 @@ export default function DirectScreen() {
   }, [convo?.status, hasRequesterAlreadySent, isReceiverOnRequest, isRequesterOnRequest]);
 
   const statusLabel = convo?.status === 'requested' ? 'طلب مراسلة' : convo?.status === 'accepted' ? 'Direct Chat Pro' : convo?.status === 'ignored' ? 'تم التجاهل' : convo?.status === 'blocked' ? 'محظور' : null;
+  const composerDisabled = composerState.disabled || sending || (acceptedDirectProActive && (!streamReady || streamConnecting));
 
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
@@ -194,11 +196,15 @@ export default function DirectScreen() {
     </KeyboardAwareScrollView>
 
     <KeyboardStickyView offset={{ opened: 6, closed: 0 }}>
-      <View style={styles.composer}><TextInput value={body} onChangeText={setBody} placeholder={usingStreamChat ? 'اكتب رسالة في Direct Chat Pro...' : 'اكتب رسالة بسيطة...'} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerState.disabled && !sending} multiline /><Pressable disabled={composerState.disabled || sending} style={[styles.send, (composerState.disabled || sending) && styles.sendDisabled]} onPress={async () => {
+      <View style={styles.composer}><TextInput value={body} onChangeText={setBody} placeholder={usingStreamChat ? 'اكتب رسالة في Direct Chat Pro...' : 'اكتب رسالة بسيطة...'} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline /><Pressable disabled={composerDisabled} style={[styles.send, composerDisabled && styles.sendDisabled]} onPress={async () => {
         const trimmed = body.trim(); if (!trimmed) return;
         setSending(true);
         try {
-          if (usingStreamChat && streamChannelRef.current) {
+          if (acceptedDirectProActive) {
+            if (!streamReady || !streamChannelRef.current || streamError) {
+              setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.');
+              return;
+            }
             await streamChannelRef.current.sendMessage({ text: trimmed });
             hydrateFromChannel();
           } else {
