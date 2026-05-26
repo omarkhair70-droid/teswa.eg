@@ -185,3 +185,42 @@ Failure mode requirements:
 - Map real two-user direct conversations to deterministic Stream channel IDs derived from current direct conversation IDs.
 - Keep coexistence with Supabase direct chat until parity and rollout readiness are proven.
 - Evaluate phased opt-in routing only after internal pilot KPIs pass.
+
+## Real conversation mapping lab (internal-only)
+
+A second internal lab route is added for real Supabase direct conversations:
+
+- `/chat-lab/direct-conversation?conversationId=...`
+
+This route is for mapping verification only and keeps production direct chat unchanged.
+
+Mapping contract:
+
+- Stream channel type: `messaging`
+- Stream channel id format: `teswa-direct-{conversationId}`
+- Channel id is sanitized deterministically from `conversationId` (trimmed, lowercased, safe chars only)
+- Members are mapped as:
+  - current authenticated user id (from backend-minted Stream token)
+  - `otherUserId` returned by `fetchDirectConversation(conversationId)`
+
+Safety and behavior:
+
+- If `conversationId` query param is missing, the route shows a safe empty state.
+- If the Supabase conversation is missing, the route shows a safe empty state.
+- If status is `ignored` or `blocked`, show safe state copy and do not enable sending.
+- If status is `requested`, watch is allowed for internal mapping validation but composer stays disabled.
+- Composer is enabled only when status is `accepted`.
+
+Explicit non-goals for this phase:
+
+- No replacement of `app/direct/[id].tsx`
+- No changes to existing `sendDirectMessage` production behavior
+- No database migrations for Stream mapping
+- No message backfill from Supabase to Stream
+- No global Stream provider wiring
+- No production navigation entry
+
+### Next phase
+
+- Add a dev-only entry point from the existing direct screen to launch the two-user Stream pilot behind a local flag/button.
+- Continue coexistence until parity and rollout readiness are proven.
