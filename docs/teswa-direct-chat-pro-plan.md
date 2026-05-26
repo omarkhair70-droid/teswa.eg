@@ -224,3 +224,48 @@ Explicit non-goals for this phase:
 
 - Add a dev-only entry point from the existing direct screen to launch the two-user Stream pilot behind a local flag/button.
 - Continue coexistence until parity and rollout readiness are proven.
+
+## Direct Chat Pro V1 (real integration in `app/direct/[id].tsx`)
+
+This phase is now the first real user-facing Direct Chat Pro implementation.
+
+### Responsibility split (authoritative)
+
+- **Supabase remains source of truth for:**
+  - direct conversation existence/lookup
+  - participant identity/profile preview
+  - direct status lifecycle (`requested`, `accepted`, `ignored`, `blocked`)
+  - request accept/ignore and block/unblock logic
+- **Stream powers accepted-conversation chat runtime for:**
+  - new text messages
+  - realtime channel state and message list rendering foundation
+
+### Runtime behavior in V1
+
+- Route: `app/direct/[id].tsx`.
+- Feature flag: `DIRECT_CHAT_PRO_ENABLED` local constant.
+- Conversation metadata is always fetched first from Supabase.
+- For `requested`, `ignored`, or `blocked`:
+  - no Stream token fetch
+  - no Stream user connect
+  - no Stream channel watch
+  - existing request/status UX remains active.
+- For `accepted` and feature flag enabled:
+  - fetch backend-minted Stream token (`fetchStreamChatToken()`)
+  - connect Stream user via dynamic SDK import (`import('stream-chat-expo')`)
+  - map/watch deterministic direct channel `messaging:teswa-direct-{conversationId}` via direct mapping helper
+  - render Direct Chat Pro text list/composer from Stream channel state.
+
+### Fallback and safety
+
+- If Stream token/connect/watch fails, app does not crash.
+- User sees soft notice: `الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.`
+- Screen keeps Supabase message fallback flow available for resilience.
+
+### Deferred to next PRs
+
+- attachments/media composer
+- voice messaging in Stream composer
+- typing indicators
+- read receipts
+- reactions/replies and richer premium polish
