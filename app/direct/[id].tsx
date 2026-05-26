@@ -105,12 +105,12 @@ export default function DirectScreen() {
     setStreamError(null);
     try {
       const creds = await fetchStreamChatToken();
-      if (!creds) throw new Error('missing_creds');
+      if (!creds.ok) throw new Error(creds.message);
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
       const streamExpo = await import('stream-chat-expo');
       const client = streamExpo.StreamChat.getInstance(creds.apiKey);
       await client.connectUser({ id: creds.userId }, creds.token);
-      const channel = client.channel(cfg.type, cfg.id, cfg.data);
+      const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
       streamClientRef.current = client;
       streamChannelRef.current = channel;
