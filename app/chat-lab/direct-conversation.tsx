@@ -8,7 +8,7 @@ import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { DirectConversationSummary } from '@/lib/direct-messages';
 import { fetchDirectConversation } from '@/lib/direct-messages';
-import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
+import { getStreamDirectChannelConfig, getStreamDirectChannelId } from '@/lib/chat/stream-direct-mapping';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 
 type PilotMessage = {
@@ -94,6 +94,11 @@ export default function StreamDirectConversationLabScreen() {
         }
 
         setConversation(convo);
+
+        if (convo.status !== 'accepted') {
+          setChannelReady(false);
+          return;
+        }
 
         const streamModule = await import('stream-chat-expo');
         const StreamChat = (streamModule as { StreamChat?: { getInstance: (apiKey: string) => StreamChatClient } }).StreamChat;
@@ -202,7 +207,7 @@ export default function StreamDirectConversationLabScreen() {
               <AppText muted>Conversation ID: {conversation.conversationId}</AppText>
               <AppText muted>Current User ID: {currentUserId ?? 'unknown'}</AppText>
               <AppText muted>Other User ID: {conversation.otherUserId}</AppText>
-              <AppText muted>Channel ID: {`teswa-direct-${conversation.conversationId.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '')}`}</AppText>
+              <AppText muted>Channel ID: {getStreamDirectChannelId(conversation.conversationId)}</AppText>
               <AppText muted>Members: {currentUserId ?? 'unknown'}, {conversation.otherUserId}</AppText>
               {statusCopy ? <AppText style={styles.noticeText}>{statusCopy}</AppText> : null}
             </View>
