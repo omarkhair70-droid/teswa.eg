@@ -80,6 +80,17 @@ export default function DirectScreen() {
   const status = (convo?.status && statusMeta[convo.status as keyof typeof statusMeta]) || null;
   const composerDisabled = composerState.disabled || sending || (acceptedDirectProActive && (!streamReady || streamConnecting));
 
+  const composerPlaceholder = useMemo(() => {
+    if (acceptedDirectProActive) {
+      if (streamConnecting) return 'بنجهز Direct Chat Pro...';
+      if (streamError || !streamReady) return 'الشات الجديد غير متاح الآن';
+      return 'اكتب رسالة في Direct Chat Pro...';
+    }
+
+    if (composerState.disabled) return 'المحادثة غير متاحة للإرسال الآن';
+    return 'اكتب رسالة بسيطة...';
+  }, [acceptedDirectProActive, composerState.disabled, streamConnecting, streamError, streamReady]);
+
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
@@ -130,7 +141,7 @@ export default function DirectScreen() {
       <View style={styles.composerWrap}>
         <View style={styles.composer}>
           <Pressable style={styles.plus} disabled><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
-          <TextInput value={body} onChangeText={setBody} placeholder={acceptedDirectProActive ? 'اكتب رسالة في Direct Chat Pro...' : 'المحادثة غير متاحة للإرسال الآن'} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
+          <TextInput value={body} onChangeText={setBody} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
           <Pressable disabled={composerDisabled} style={[styles.send, composerDisabled && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed) return; setSending(true); try { if (acceptedDirectProActive) { if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; } await streamChannelRef.current.sendMessage({ text: trimmed }); hydrateFromChannel(); } else { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); } setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
         </View>
         <AppText muted style={styles.comingSoon}>قريبًا: ميديا، صوت، ودولابك.</AppText>
