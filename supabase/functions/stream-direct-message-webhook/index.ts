@@ -89,7 +89,17 @@ Deno.serve(async (req: Request) => {
       .select("id")
       .or(`and(blocker_id.eq.${senderUserId},blocked_user_id.eq.${receiverUserId}),and(blocker_id.eq.${receiverUserId},blocked_user_id.eq.${senderUserId})`)
       .limit(1);
-    if (blockError) return jsonResponse(500, { ok: false, error: "block_query_failed" });
+    if (blockError) {
+      console.error("stream_direct_message_webhook_block_query_failed", {
+        conversationId,
+        messageId,
+        senderUserId,
+        receiverUserId,
+        code: blockError.code ?? null,
+        details: blockError.details ?? null,
+      });
+      return jsonResponse(500, { ok: false, error: "block_query_failed" });
+    }
     if ((blockRows ?? []).length > 0) return jsonResponse(200, { ok: true, skipped: true, reason: "blocked_relationship" });
 
     const { data: eventInsert, error: eventInsertError } = await supabase
@@ -100,6 +110,14 @@ Deno.serve(async (req: Request) => {
 
     if (eventInsertError) {
       if (eventInsertError.code === "23505") return jsonResponse(200, { ok: true, skipped: true, reason: "duplicate_stream_message" });
+      console.error("stream_direct_message_webhook_event_insert_failed", {
+        conversationId,
+        messageId,
+        senderUserId,
+        receiverUserId,
+        code: eventInsertError.code ?? null,
+        details: eventInsertError.details ?? null,
+      });
       return jsonResponse(500, { ok: false, error: "event_insert_failed" });
     }
 
@@ -109,6 +127,14 @@ Deno.serve(async (req: Request) => {
       .select("id")
       .single();
     if (notificationError) {
+      console.error("stream_direct_message_webhook_notification_insert_failed", {
+        conversationId,
+        messageId,
+        senderUserId,
+        receiverUserId,
+        code: notificationError.code ?? null,
+        details: notificationError.details ?? null,
+      });
       await supabase.from("direct_push_events").delete().eq("id", eventInsert.id as string);
       return jsonResponse(500, { ok: false, error: "notification_insert_failed" });
     }

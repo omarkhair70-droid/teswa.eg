@@ -58,6 +58,7 @@
 - Webhook retry behavior is dedupe-safe and recoverable: duplicate Stream message ids are skipped, and if notification insert fails the event row is removed so retries are not permanently blocked.
 - Existing `send-notification-push` now allowlists `direct_message_received` and sends Expo push payload including the `/direct/{conversationId}` route from the notification row.
 - Notification tap routing remains on existing mobile push route resolver path and opens `/direct/{conversationId}`.
+- `public.notifications.route` is the deep-link routing field for direct-message pushes and is now part of the required DB contract for Sprint 2 delivery.
 
 ### Manual setup required
 - Deploy Edge Function: `stream-direct-message-webhook`.
