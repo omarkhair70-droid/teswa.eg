@@ -8,7 +8,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
+import { useAuth } from '@/lib/auth';
 import { fetchMyDirectConversations, type DirectConversationSummary } from '@/lib/direct-messages';
+import { AppButton } from '@/components/ui/AppButton';
+import { acceptDirectMessageRequest, ignoreDirectMessageRequest } from '@/lib/direct-messages';
 
 type InboxFilter = 'all' | 'requested' | 'accepted';
 
@@ -38,10 +41,13 @@ function formatTime(value: string | null): string | null {
 }
 
 export default function DirectInboxScreen() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [items, setItems] = useState<DirectConversationSummary[]>([]);
+  const [requestBusyById, setRequestBusyById] = useState<Record<string, boolean>>({});
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
@@ -103,9 +109,22 @@ export default function DirectInboxScreen() {
           </AppCard>
         ) : null}
 
+        {!loading && !error && filter === 'requested' ? (
+          <AppCard>
+            <View style={styles.requestCenterInfo}>
+              <AppText weight="bold">طلبات المراسلة</AppText>
+              <AppText muted>الطلبات دي من أشخاص لسه ما بدأش بينكم شات مباشر. اقبل الطلب لو حابب تكملوا الكلام.</AppText>
+            </View>
+          </AppCard>
+        ) : null}
+
+        {!loading && !error && feedback ? (
+          <AppCard><AppText muted>{feedback}</AppText></AppCard>
+        ) : null}
+
         {!loading && !error && !filtered.length ? (
           <AppCard>
-            <EmptyState title="لسه مفيش محادثات" description="لما تبدأ تبادل أو حد يبعتلك طلب، هتلاقي المحادثات هنا." />
+            <EmptyState title={filter === 'requested' ? 'مفيش طلبات مراسلة' : 'لسه مفيش محادثات'} description={filter === 'requested' ? 'أي طلب جديد هيظهر هنا قبل ما يتحول لمحادثة مباشرة.' : 'لما تبدأ تبادل أو حد يبعتلك طلب، هتلاقي المحادثات هنا.'} />
           </AppCard>
         ) : null}
 
@@ -115,6 +134,12 @@ export default function DirectInboxScreen() {
               const status = STATUS_META[item.status] ?? { label: 'في الانتظار', tone: 'neutral' as const };
               const openable = item.status === 'accepted' || item.status === 'requested';
               const preview = getLastMessagePreview(item.lastMessageBody);
+              const isRequested = item.status === 'requested';
+              const isRequester = !!user?.id && !!item.requestedBy && item.requestedBy === user.id;
+              const isReceiver = isRequested && !isRequester;
+              const requestHint = isRequested ? (isReceiver ? 'اقبل الطلب لو حابب تفتح المحادثة.' : 'مستني قبول الطرف التاني.') : null;
+              const requestChip = isRequested ? (isReceiver ? 'طلب جديد' : 'في الانتظار') : status.label;
+              const isRowBusy = !!requestBusyById[item.conversationId];
               return (
                 <Pressable key={item.conversationId} onPress={() => openConversation(item)} disabled={!openable} style={[styles.rowCard, !openable && styles.rowDisabled]}>
                   <View style={styles.rowTop}>
@@ -124,7 +149,7 @@ export default function DirectInboxScreen() {
                       {item.otherUsername ? <AppText muted numberOfLines={1}>@{item.otherUsername}</AppText> : null}
                     </View>
                     <View style={[styles.statusChip, status.tone === 'highlight' ? styles.statusHighlight : status.tone === 'warn' ? styles.statusWarn : null]}>
-                      <AppText style={styles.statusText}>{status.label}</AppText>
+                      <AppText style={styles.statusText}>{requestChip}</AppText>
                     </View>
                   </View>
                   <View style={styles.metaRow}>
@@ -134,6 +159,46 @@ export default function DirectInboxScreen() {
                       {item.lastMessageAt ? <AppText muted style={styles.timeText}>{formatTime(item.lastMessageAt)}</AppText> : null}
                     </View>
                   </View>
+                  {requestHint ? <AppText muted style={styles.requestHint}>{requestHint}</AppText> : null}
+                  {filter === 'requested' && isReceiver ? (
+                    <View style={styles.inlineActions}>
+                      <AppButton
+                        label={isRowBusy ? 'جاري التنفيذ...' : 'قبول'}
+                        disabled={isRowBusy}
+                        onPress={async () => {
+                          setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: true }));
+                          try {
+                            const result = await acceptDirectMessageRequest(item.conversationId);
+                            if (!result.ok) { setFeedback('تعذر تنفيذ الطلب حالياً.'); return; }
+                            setFeedback('تم قبول الطلب.');
+                            await load({ silent: true });
+                          } catch {
+                            setFeedback('تعذر تنفيذ الطلب حالياً.');
+                          } finally {
+                            setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: false }));
+                          }
+                        }}
+                      />
+                      <AppButton
+                        label={isRowBusy ? 'جاري التنفيذ...' : 'تجاهل'}
+                        variant="neutral"
+                        disabled={isRowBusy}
+                        onPress={async () => {
+                          setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: true }));
+                          try {
+                            const result = await ignoreDirectMessageRequest(item.conversationId);
+                            if (!result.ok) { setFeedback('تعذر تنفيذ الطلب حالياً.'); return; }
+                            setFeedback('تم تجاهل الطلب.');
+                            await load({ silent: true });
+                          } catch {
+                            setFeedback('تعذر تنفيذ الطلب حالياً.');
+                          } finally {
+                            setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: false }));
+                          }
+                        }}
+                      />
+                    </View>
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -146,6 +211,7 @@ export default function DirectInboxScreen() {
 
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
+  requestCenterInfo: { gap: spacing.xs },
   heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroTextBlock: { flex: 1, gap: spacing.xs },
   title: { fontSize: 20 },
@@ -171,6 +237,8 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   preview: { flex: 1 },
   trailingMeta: { alignItems: 'flex-end', gap: 4 },
+  requestHint: { fontSize: 12 },
+  inlineActions: { flexDirection: 'row-reverse', gap: spacing.xs },
   unreadBadge: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, paddingHorizontal: 6 },
   unreadText: { color: colors.white, fontSize: 12 },
   timeText: { fontSize: 11 },

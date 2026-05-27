@@ -497,3 +497,19 @@ Notes:
 ### Next PR
 
 Direct Chat System PR 3 — Message Requests Center + Accept/Ignore/Block Polish
+
+## Direct Chat System PR 3 — Message Requests Center + Accept/Ignore/Block Polish
+
+Delivered scope:
+
+- Requests center polish in inbox `الطلبات` tab with dedicated explainer card and a requests-specific empty state.
+- Receiver/requester distinction in requested rows using `requestedBy` and current user id, with clearer chips and guidance copy.
+- Inline `قبول` / `تجاهل` actions for receiver-side requested rows only, with safe busy state, refresh after success, and guarded failure messaging.
+- Requester-side requested rows keep waiting state and do not show accept/ignore actions.
+- Requested/ignored/blocked conversation copy polish while preserving non-sendable behavior for ignored/blocked states.
+- Block/unblock action feedback polish in direct conversation actions (`تم حظر المستخدم.` / `تم إلغاء الحظر.`), with existing backend behavior intact.
+- No Stream runtime/token/channel flow changes.
+
+### Next PR
+
+Direct Chat System PR 4 — Direct Privacy Settings
