@@ -16,6 +16,7 @@ import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 
 type InboxFilter = 'all' | 'requested' | 'accepted';
+type StreamPreviewAttachment = { type?: string; mime_type?: string };
 
 const FILTER_LABELS: Record<InboxFilter, string> = { all: 'الكل', requested: 'الطلبات', accepted: 'المقبولة' };
 const STATUS_META: Record<string, { label: string; tone: 'neutral' | 'highlight' | 'warn' }> = {
@@ -50,7 +51,11 @@ function getConversationSortTimestamp(item: DirectConversationSummary): number {
 function mapStreamMessagePreview(message: any): string | null {
   const metaType = typeof message?.teswa_type === 'string' ? message.teswa_type : '';
   if (metaType === 'exchange_offer_draft' || metaType === 'exchange_draft') return 'عرض تبادل مبدئي';
-  const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+  const attachments: StreamPreviewAttachment[] = Array.isArray(message?.attachments)
+    ? message.attachments
+      .filter((attachment: unknown): attachment is StreamPreviewAttachment => Boolean(attachment) && typeof attachment === 'object')
+      .map((attachment) => attachment as StreamPreviewAttachment)
+    : [];
   if (attachments.some((a) => typeof a?.mime_type === 'string' && a.mime_type.startsWith('audio/'))) return 'رسالة صوتية';
   if (attachments.some((a) => a?.type === 'image')) return 'صورة';
   if (attachments.some((a) => a?.type === 'video')) return 'فيديو';
