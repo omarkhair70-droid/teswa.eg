@@ -652,3 +652,29 @@ Next PR:
 
 ### Next phase
 Direct Chat System Stabilization + QA Pass
+
+## Direct Chat System Stabilization — Inbox Stream Sync + Push Reality Check
+
+- Verified accepted Direct Pro runtime in `app/direct/[id].tsx` still keeps:
+  - Stream typing listeners (`typing.start` / `typing.stop`) for accepted channels.
+  - Reactions, reply quoting, delete-own actions, media attachments, voice messaging, and exchange draft message rendering/handoff behavior.
+  - Guardrail that non-accepted conversations do not initialize Stream runtime.
+- Stabilized inbox behavior in `app/direct/index.tsx`:
+  - after Supabase inbox fetch, accepted rows are safely hydrated from Stream latest message when Stream token/connect/query succeeds,
+  - inbox preview + latest activity timestamp are merged conservatively per conversation,
+  - resulting rows are re-sorted by latest activity so accepted Stream-active chats move to top on inbox refocus,
+  - Supabase summary remains fallback when Stream is unavailable or a channel query fails.
+- Added conservative latest-message preview mapping for Stream messages:
+  - text → text body,
+  - audio attachment → `رسالة صوتية`,
+  - image → `صورة`,
+  - video → `فيديو`,
+  - file → `ملف`,
+  - exchange draft metadata (`teswa_type = exchange_draft`) → `عرض تبادل مبدئي`.
+- Push reality check:
+  - **Implemented foundation:** Expo token registration on device + Supabase token registration (`register_push_device`) + notification tap routing to `/direct/{conversationId}` via payload parsing.
+  - **Not implemented in this codebase for Stream-direct sends:** no Stream message-triggered push webhook/provider path that guarantees delivery for each Stream direct message.
+  - Existing edge push sender function (`send-notification-push`) operates on inserts into `public.notifications`; it is not automatically wired to Stream direct message events.
+  - Therefore current status is **push receiving/tap routing foundation only**. Real Stream-direct delivery requires Stream Push Provider/FCM configuration or a dedicated secure server-side webhook bridge in a follow-up.
+  - Android note: reliable push behavior may require a fresh EAS build when native/app config changes are involved; OTA updates alone are not always sufficient.
+- Next phase: **Direct Chat System QA Pass** (end-to-end runtime checks for accepted/requested fallback paths, inbox ordering, and final push delivery integration path).
