@@ -25,7 +25,8 @@ export type NotificationType =
   | 'nudge_listing_refresh_or_media'
   | 'digest_local_activity_pulse'
   | 'nudge_return_to_teswa'
-  | 'user_followed_you';
+  | 'user_followed_you'
+  | 'direct_message_received';
 
 export type AppNotification = {
   id: string;
@@ -37,6 +38,7 @@ export type AppNotification = {
   dealId: string | null;
   contextualConversationId: string | null;
   actorUserId: string | null;
+  route: string | null;
   readAt: string | null;
   createdAt: string;
   isRead: boolean;
@@ -59,6 +61,7 @@ function mapNotificationRow(row: {
   deal_id: string | null;
   contextual_conversation_id: string | null;
   actor_user_id: string | null;
+  route: string | null;
   read_at: string | null;
   created_at: string;
 }): AppNotification {
@@ -72,6 +75,7 @@ function mapNotificationRow(row: {
     dealId: row.deal_id,
     contextualConversationId: row.contextual_conversation_id,
     actorUserId: row.actor_user_id,
+    route: row.route ?? null,
     readAt: row.read_at,
     createdAt: row.created_at,
     isRead: Boolean(row.read_at),
@@ -81,7 +85,7 @@ function mapNotificationRow(row: {
 export async function fetchMyNotifications(userId: string): Promise<{ ok: true; data: AppNotification[] } | { ok: false; message: string; error?: PostgrestError | null }> {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, type, title, body, item_id, offer_id, deal_id, contextual_conversation_id, actor_user_id, read_at, created_at')
+    .select('id, type, title, body, item_id, offer_id, deal_id, contextual_conversation_id, actor_user_id, route, read_at, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -126,7 +130,8 @@ export async function markAllNotificationsRead(userId: string): Promise<Notifica
   return { ok: true };
 }
 
-export function resolveNotificationRoute(notification: Pick<AppNotification, 'type' | 'actorUserId' | 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId'>): string | null {
+export function resolveNotificationRoute(notification: Pick<AppNotification, 'type' | 'actorUserId' | 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId' | 'route'>): string | null {
+  if (notification.route?.startsWith('/direct/')) return notification.route;
   if (notification.type === 'user_followed_you' && notification.actorUserId) return `/profile/${notification.actorUserId}`;
   if (notification.contextualConversationId) return `/contextual/${notification.contextualConversationId}`;
   if (notification.dealId) return `/deal/${notification.dealId}`;
@@ -160,4 +165,5 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   digest_local_activity_pulse: 'نبض جديد قريب منك',
   nudge_return_to_teswa: 'تحديث مهم في تِسوى',
   user_followed_you: 'متابعة جديدة',
+  direct_message_received: 'رسالة مباشرة جديدة',
 };
