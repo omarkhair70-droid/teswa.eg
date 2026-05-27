@@ -24,6 +24,7 @@ import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { connectStreamClientWithToken, getWarmStreamClientIfReady } from '@/lib/chat/stream-client';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
+import { reportDirectMessage, SUCCESS_MESSAGE } from '@/lib/reports';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
 import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
@@ -335,7 +336,12 @@ export default function DirectScreen() {
       setActionFeedback('تم تفعيل الرد على الرسالة.');
       return;
     }
-    if (action === 'report') { setActionFeedback('تم تسجيل البلاغ للمراجعة.'); return; }
+    if (action === 'report') {
+      if (!convo?.otherUserId) { setActionFeedback('تعذر إرسال البلاغ حالياً.'); return; }
+      const result = await reportDirectMessage({ conversationId, streamMessageId: target.id, reportedUserId: convo.otherUserId, reason: 'harassment' });
+      setActionFeedback(result.ok ? SUCCESS_MESSAGE : result.message);
+      return;
+    }
     if (action === 'save_dolab') {
       const result = await saveDirectMessageToDolab({ conversationId, messageId: target.id, text: target.text, attachments: target.attachments });
       if (!result.ok) { setActionFeedback(result.message); return; }
@@ -355,7 +361,7 @@ export default function DirectScreen() {
     const reactionType = action === 'love' ? 'love' : 'thumbs_up';
     if (typeof channel.sendReaction !== 'function') { setActionFeedback('ميزة التفاعل غير متاحة حالياً.'); return; }
     try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); setActionFeedback('تم إضافة التفاعل.'); } catch { setActionFeedback('تعذر إضافة التفاعل حالياً.'); }
-  }, [conversationId, hydrateFromChannel, selectedStreamMessage, user?.id]);
+  }, [conversationId, convo?.otherUserId, hydrateFromChannel, selectedStreamMessage, user?.id]);
   const pickImage = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
