@@ -12,7 +12,13 @@ type TokenResponse = {
   message?: unknown;
 };
 
-export async function fetchStreamChatToken(): Promise<StreamTokenSuccess | StreamTokenFailure> {
+type StreamTokenInput = {
+  otherUserId?: string;
+  displayName?: string;
+  avatarUrl?: string;
+};
+
+export async function fetchStreamChatToken(input?: StreamTokenInput): Promise<StreamTokenSuccess | StreamTokenFailure> {
   try {
     const {
       data: { session },
@@ -27,6 +33,7 @@ export async function fetchStreamChatToken(): Promise<StreamTokenSuccess | Strea
       headers: {
         Authorization: `Bearer ${session.access_token}`,
       },
+      body: input ?? {},
     });
 
     if (error) {

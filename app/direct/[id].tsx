@@ -151,7 +151,14 @@ export default function DirectScreen() {
     setStreamError(null);
     try {
       clearStreamSubs();
-      const creds = await fetchStreamChatToken();
+      const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
+      const displayName = typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.full_name === 'string' ? metadata.full_name : null;
+      const avatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : null;
+      const creds = await fetchStreamChatToken({
+        otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
+        displayName: displayName ?? undefined,
+        avatarUrl: avatarUrl ?? undefined,
+      });
       if (!creds.ok) throw new Error(creds.message);
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
       const { StreamChat } = await import('stream-chat');
