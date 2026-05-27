@@ -26,8 +26,8 @@ import { getOrCreateStreamClient, getWarmStreamClientIfReady } from '@/lib/chat/
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
+import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
 
-const DIRECT_CHAT_PRO_ENABLED = true;
 type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
 type PendingVoice = { uri: string; fileName: string; mimeType: string; durationSeconds?: number };
@@ -42,6 +42,9 @@ const statusMeta = {
   ignored: { label: 'تم التجاهل', sub: 'المحادثة غير متاحة' },
   blocked: { label: 'محظور', sub: 'المحادثة غير متاحة' },
 } as const;
+
+const DIRECT_CHAT_PRO_ENABLED = isDirectChatProEnabled();
+const DIRECT_VIDEO_PLAYER_ENABLED = isDirectVideoPlayerEnabled();
 
 function DirectViewerVideo({ uri }: { uri: string }) {
   const source = buildCachedVideoSource(uri);
@@ -756,7 +759,7 @@ ${note}
           {imageViewerLoading ? <AppText muted>جاري تحميل الصورة...</AppText> : null}
           {imageViewerError ? <AppText muted>تعذر فتح الصورة حالياً.</AppText> : null}
         </View> : null}
-        {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}{selectedVideoHasValidUrl ? <DirectViewerVideo uri={selectedMediaViewer.url} /> : <AppText muted>تعذر تشغيل الفيديو حالياً.</AppText>}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
+        {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}{DIRECT_VIDEO_PLAYER_ENABLED ? (selectedVideoHasValidUrl ? <DirectViewerVideo uri={selectedMediaViewer.url} /> : <AppText muted>تعذر تشغيل الفيديو حالياً.</AppText>) : <AppText muted>تشغيل الفيديو داخل التطبيق غير مفعّل حالياً.</AppText>}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
         {selectedMediaViewer?.kind === 'file' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>{selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="حفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: `viewer-file-${Date.now()}`, text: selectedMediaViewer.title, attachments: [{ type: 'file', title: selectedMediaViewer.title, name: selectedMediaViewer.title, assetUrl: selectedMediaViewer.url, mimeType: selectedMediaViewer.mimeType, fileSize: selectedMediaViewer.fileSize }] }); setActionFeedback(result.ok ? 'اتحفظت الميديا في الدولاب.' : result.message); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
       </View>
     </Modal>
