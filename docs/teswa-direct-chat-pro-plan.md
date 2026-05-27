@@ -456,3 +456,26 @@ This phase introduces lightweight exchange foundations inside accepted Direct Ch
   4. production EAS build
 - No manual QA is required in this PR.
 - After the checks pass, the **next step is the production build**.
+
+## Direct Chat System PR 1 — Inbox Pro Foundation
+
+This PR introduces the Direct Chat inbox foundation route at `app/direct/index.tsx` with Arabic-first premium list UX while keeping the existing Direct Chat Pro runtime in `app/direct/[id].tsx` unchanged.
+
+Scope delivered:
+
+- Main inbox list with conversation rows (avatar, display name, username, preview, activity time, unread placeholder, status chip).
+- Local client-side filter chips: `الكل` / `الطلبات` / `المقبولة`.
+- Safe data load via existing `fetchMyDirectConversations()` helper.
+- Empty, loading, and recoverable error states with retry.
+- Navigation from accepted/requested rows to existing `/direct/{conversationId}` route.
+- No Story Thread changes.
+- No Deal Chat changes.
+- No Direct Chat Pro runtime rewrite.
+- No push notification or unread-sync implementation in this PR.
+
+### Next PR
+
+- **Direct Chat System PR 2 — Unread + Last Message Sync**
+  - Accurate unread count sync and read markers.
+  - Reliable last-message and last-activity synchronization.
+  - Additional inbox freshness and reconciliation passes.
