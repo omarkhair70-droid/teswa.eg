@@ -21,6 +21,15 @@ const STATUS_META: Record<string, { label: string; tone: 'neutral' | 'highlight'
   pending: { label: 'في الانتظار', tone: 'neutral' },
 };
 
+
+function getLastMessagePreview(body: string | null): string {
+  const trimmed = body?.trim();
+  if (!trimmed) return 'ابدأ المحادثة';
+  if (trimmed === 'رسالة صوتية') return 'رسالة صوتية';
+  // TODO: when direct conversation summary includes explicit message/attachment type, map image/video/file/exchange-draft previews here.
+  return trimmed;
+}
+
 function formatTime(value: string | null): string | null {
   if (!value) return null;
   const parsed = new Date(value);
@@ -105,7 +114,7 @@ export default function DirectInboxScreen() {
             {filtered.map((item) => {
               const status = STATUS_META[item.status] ?? { label: 'في الانتظار', tone: 'neutral' as const };
               const openable = item.status === 'accepted' || item.status === 'requested';
-              const preview = item.lastMessageBody?.trim() ? item.lastMessageBody : 'ابدأ المحادثة';
+              const preview = getLastMessagePreview(item.lastMessageBody);
               return (
                 <Pressable key={item.conversationId} onPress={() => openConversation(item)} disabled={!openable} style={[styles.rowCard, !openable && styles.rowDisabled]}>
                   <View style={styles.rowTop}>

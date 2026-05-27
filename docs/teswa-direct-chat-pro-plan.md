@@ -479,3 +479,21 @@ Scope delivered:
   - Accurate unread count sync and read markers.
   - Reliable last-message and last-activity synchronization.
   - Additional inbox freshness and reconciliation passes.
+
+## Direct Chat System PR 2 — Unread + Last Message Sync
+
+Delivered scope:
+
+- Inbox last message preview now uses normalized summary data and shows a friendly empty-state fallback when no messages exist.
+- Inbox conversation ordering is reinforced by latest activity (`lastMessageAt`) descending from normalized summaries.
+- Unread count foundation is wired from Supabase direct-message unread fields (non-faked values only).
+- Conversation open now triggers legacy direct-message read marking via helper to keep unread badges in sync.
+- Inbox refresh-on-focus remains active so returning from conversation updates preview/unread rows.
+
+Notes:
+
+- Current legacy summary RPC exposes reliable text/voice body only; richer media/exchange preview labels should map from explicit message/attachment type fields when included in summary payload.
+
+### Next PR
+
+Direct Chat System PR 3 — Message Requests Center + Accept/Ignore/Block Polish

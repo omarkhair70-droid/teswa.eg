@@ -8,7 +8,8 @@ export type DirectConversationStatus = 'requested' | 'accepted' | 'ignored' | 'b
 export type DirectConversationSummary = {
   conversationId: string; status: DirectConversationStatus; requestedBy: string; otherUserId: string;
   otherDisplayName: string | null; otherUsername: string | null; otherAvatarUrl: string | null;
-  lastMessageBody: string | null; lastMessageSenderId: string | null; lastMessageAt: string | null; unreadCount: number; requiresAction: boolean;
+  lastMessageBody: string | null; lastMessageSenderId: string | null; lastMessageAt: string | null;
+  unreadCount: number; requiresAction: boolean;
 };
 export type DirectMessage = { id: string; senderId: string; body: string; messageType: 'text' | 'voice'; audioStoragePath: string | null; audioDurationMs: number | null; audioMimeType: string | null; audioSizeBytes: number | null; createdAt: string; readAt: string | null };
 export type FetchDirectMessagesResult =
@@ -34,14 +35,37 @@ async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
+
+function normalizeConversationSummaryRow(r: any): DirectConversationSummary {
+  return {
+    conversationId: r.conversation_id,
+    status: r.status,
+    requestedBy: r.requested_by,
+    otherUserId: r.other_user_id,
+    otherDisplayName: r.other_display_name ?? null,
+    otherUsername: r.other_username ?? null,
+    otherAvatarUrl: r.other_avatar_url ?? null,
+    lastMessageBody: r.last_message_body ?? null,
+    lastMessageSenderId: r.last_message_sender_id ?? null,
+    lastMessageAt: r.last_message_at ?? null,
+    unreadCount: Number(r.unread_count ?? 0),
+    requiresAction: !!r.requires_action,
+  };
+}
+
+function getConversationSortTimestamp(item: DirectConversationSummary): number {
+  const ms = item.lastMessageAt ? Date.parse(item.lastMessageAt) : Number.NaN;
+  return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
+}
+
 export async function startOrGetDirectConversation(targetUserId: string): Promise<StartDirectConversationResult> { const { data, error } = await supabase.rpc('start_or_get_direct_conversation', { p_target_user_id: targetUserId }); if (error) return { ok: false, conversationId: null, status: null, requiresRequest: false, message: 'تعذر فتح المراسلة حالياً.' }; const row = Array.isArray(data) ? data[0] : null; return { ok: !!row?.ok, conversationId: row?.conversation_id ?? null, status: row?.status ?? null, requiresRequest: !!row?.requires_request, message: row?.message ?? 'تعذر فتح المراسلة حالياً.' }; }
-export async function fetchMyDirectConversations(): Promise<DirectConversationSummary[]> { const { data, error } = await supabase.rpc('get_my_direct_conversations'); if (error) return []; return (data ?? []).map((r: any) => ({ conversationId: r.conversation_id, status: r.status, requestedBy: r.requested_by, otherUserId: r.other_user_id, otherDisplayName: r.other_display_name ?? null, otherUsername: r.other_username ?? null, otherAvatarUrl: r.other_avatar_url ?? null, lastMessageBody: r.last_message_body ?? null, lastMessageSenderId: r.last_message_sender_id ?? null, lastMessageAt: r.last_message_at ?? null, unreadCount: Number(r.unread_count ?? 0), requiresAction: !!r.requires_action })); }
+export async function fetchMyDirectConversations(): Promise<DirectConversationSummary[]> { const { data, error } = await supabase.rpc('get_my_direct_conversations'); if (error) return []; return (data ?? []).map(normalizeConversationSummaryRow).sort((a, b) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a)); }
 export async function fetchDirectConversation(conversationId: string): Promise<DirectConversationSummary | null> {
   const { data, error } = await supabase.rpc('get_direct_conversation', { p_conversation_id: conversationId });
   if (error) return null;
   const row = Array.isArray(data) ? data[0] : null;
   if (!row) return null;
-  return { conversationId: row.conversation_id, status: row.status, requestedBy: row.requested_by, otherUserId: row.other_user_id, otherDisplayName: row.other_display_name ?? null, otherUsername: row.other_username ?? null, otherAvatarUrl: row.other_avatar_url ?? null, lastMessageBody: row.last_message_body ?? null, lastMessageSenderId: row.last_message_sender_id ?? null, lastMessageAt: row.last_message_at ?? null, unreadCount: Number(row.unread_count ?? 0), requiresAction: !!row.requires_action };
+  return normalizeConversationSummaryRow(row);
 }
 export async function fetchDirectConversationMessages(conversationId: string): Promise<FetchDirectMessagesResult> {
   const { data, error } = await supabase.rpc('get_direct_conversation_messages', { p_conversation_id: conversationId });
@@ -88,3 +112,11 @@ async function runRequestAction(rpc: 'accept_direct_message_request' | 'ignore_d
 
 export async function acceptDirectMessageRequest(conversationId: string): Promise<DirectRequestActionResult> { return runRequestAction('accept_direct_message_request', conversationId); }
 export async function ignoreDirectMessageRequest(conversationId: string): Promise<DirectRequestActionResult> { return runRequestAction('ignore_direct_message_request', conversationId); }
+
+
+export async function markDirectConversationRead(conversationId: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!conversationId) return { ok: false, message: 'تعذر تحديث حالة القراءة حالياً.' };
+  const { error } = await supabase.rpc('get_direct_conversation_messages', { p_conversation_id: conversationId });
+  if (error) return { ok: false, message: 'تعذر تحديث حالة القراءة حالياً.' };
+  return { ok: true };
+}

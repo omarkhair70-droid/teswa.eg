@@ -3,7 +3,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,7 +18,7 @@ import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { radii } from '@/constants/radii';
 import { useAuth } from '@/lib/auth';
-import { acceptDirectMessageRequest, fetchDirectConversation, fetchDirectConversationMessages, ignoreDirectMessageRequest, sendDirectMessage } from '@/lib/direct-messages';
+import { acceptDirectMessageRequest, fetchDirectConversation, fetchDirectConversationMessages, ignoreDirectMessageRequest, markDirectConversationRead, sendDirectMessage } from '@/lib/direct-messages';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
@@ -205,6 +205,11 @@ export default function DirectScreen() {
   }, [cleanupStream, clearStreamSubs, conversationId, convo, hydrateFromChannel, user?.id]);
 
   useEffect(() => { void load(); }, [load]);
+  useFocusEffect(useCallback(() => {
+    if (!conversationId) return;
+    void markDirectConversationRead(conversationId);
+    void load({ background: true });
+  }, [conversationId, load]));
   useEffect(() => { const otherUserId = convo?.otherUserId; if (!user?.id || !otherUserId) return; let active = true; void (async () => { const state = await fetchUserBlockState(user.id, otherUserId); if (!active || !state.ok) return; setBlockedByMe(state.state.blockedByMe); })(); return () => { active = false; }; }, [convo?.otherUserId, user?.id]);
   useEffect(() => { if (!convo) return; if (!DIRECT_CHAT_PRO_ENABLED || convo.status !== 'accepted') return; void connectStream(); return () => { void cleanupStream(); }; }, [cleanupStream, connectStream, convo]);
 
