@@ -4,6 +4,7 @@ import { Image, Linking, Modal, Pressable, StyleSheet, TextInput, View } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +24,7 @@ import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
+import { buildCachedVideoSource } from '@/lib/media/media-performance';
 
 const DIRECT_CHAT_PRO_ENABLED = true;
 type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
@@ -39,6 +41,16 @@ const statusMeta = {
   ignored: { label: 'تم التجاهل', sub: 'المحادثة غير متاحة' },
   blocked: { label: 'محظور', sub: 'المحادثة غير متاحة' },
 } as const;
+
+function DirectViewerVideo({ uri }: { uri: string }) {
+  const source = buildCachedVideoSource(uri);
+  const player = useVideoPlayer(source, (instance) => {
+    instance.loop = false;
+    instance.play();
+  });
+
+  return <VideoView style={styles.viewerVideo} player={player} nativeControls fullscreenOptions={{ enable: true }} allowsPictureInPicture={false} />;
+}
 
 export default function DirectScreen() {
   const { user } = useAuth();
@@ -239,6 +251,15 @@ export default function DirectScreen() {
   const canUseVoice = acceptedDirectProActive && streamReady && !streamError && !!streamChannelRef.current && !composerDisabled && !mediaSending && !voiceSending;
   const formatDuration = useCallback((seconds: number) => `${String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, '0')}:${String(Math.max(0, seconds) % 60).padStart(2, '0')}`, []);
   const currentVoicePositionSeconds = useMemo(() => Math.floor((voicePlayerStatus.currentTime ?? 0) / 1000), [voicePlayerStatus.currentTime]);
+  const selectedVideoHasValidUrl = useMemo(() => {
+    if (selectedMediaViewer?.kind !== 'video') return false;
+    try {
+      const parsed = new URL(selectedMediaViewer.url);
+      return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !!parsed.host;
+    } catch {
+      return false;
+    }
+  }, [selectedMediaViewer]);
 
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
@@ -728,7 +749,7 @@ ${note}
           {imageViewerLoading ? <AppText muted>جاري تحميل الصورة...</AppText> : null}
           {imageViewerError ? <AppText muted>تعذر فتح الصورة حالياً.</AppText> : null}
         </View> : null}
-        {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppText muted>تشغيل الفيديو داخل التطبيق جاي قريبًا.</AppText><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
+        {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}{selectedVideoHasValidUrl ? <DirectViewerVideo uri={selectedMediaViewer.url} /> : <AppText muted>تعذر تشغيل الفيديو حالياً.</AppText>}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
         {selectedMediaViewer?.kind === 'file' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>{selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="حفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: `viewer-file-${Date.now()}`, text: selectedMediaViewer.title, attachments: [{ type: 'file', title: selectedMediaViewer.title, name: selectedMediaViewer.title, assetUrl: selectedMediaViewer.url, mimeType: selectedMediaViewer.mimeType, fileSize: selectedMediaViewer.fileSize }] }); setActionFeedback(result.ok ? 'اتحفظت الميديا في الدولاب.' : result.message); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
       </View>
     </Modal>
@@ -812,5 +833,6 @@ const styles = StyleSheet.create({
   viewerTitle: { color: colors.background },
   viewerClose: { width: 36, height: 36, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.textMuted },
   viewerImage: { width: '100%', height: '75%', borderRadius: radii.md },
+  viewerVideo: { width: '100%', height: 240, borderRadius: radii.md, backgroundColor: '#000' },
   viewerCard: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs },
 });
