@@ -19,6 +19,7 @@ import { QueryClientProvider, focusManager, onlineManager } from '@tanstack/reac
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { queryClient } from '@/lib/query/query-client';
 import { getAdventureEntranceSeen } from '@/lib/adventure-entrance';
+import { isPushRegistrationEnabled } from '@/lib/feature-flags';
 
 
 
@@ -139,6 +140,7 @@ const ACCOUNT_STATE_CHECK_STALL_TIMEOUT_MS = 6_000;
 const DEFERRED_PUSH_SYNC_DELAY_MS = 7_000;
 const DEFERRED_STARTUP_WORK_DELAY_MS = 2_000;
 const nativeGoogleTestModeEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_TEST_MODE === 'true';
+const pushRegistrationEnabled = isPushRegistrationEnabled();
 
 function AccountGateLoadingState({
   title,
@@ -206,7 +208,7 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
   }, [user?.id, hasSatisfiedAccountGate]);
 
   useEffect(() => {
-    if (!bootstrapReady || !hasSatisfiedAccountGate || !user?.id) return;
+    if (!pushRegistrationEnabled || !bootstrapReady || !hasSatisfiedAccountGate || !user?.id) return;
     const userIdAtSchedule = user.id;
     const timer = setTimeout(() => {
       if (!user?.id || user.id !== userIdAtSchedule) return;
@@ -218,7 +220,7 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     }, DEFERRED_PUSH_SYNC_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [bootstrapReady, hasSatisfiedAccountGate, user?.id]);
+  }, [bootstrapReady, hasSatisfiedAccountGate, pushRegistrationEnabled, user?.id]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {

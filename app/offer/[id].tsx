@@ -14,6 +14,7 @@ import { spacing } from '@/constants/spacing';
 import { acceptOfferFromMobile, fetchOfferById, getOfferStatusLabel, markOfferThinkingFromMobile, OfferDetail, softRejectOfferFromMobile } from '@/lib/offers';
 import { useAuth } from '@/lib/auth';
 import { trackEvent } from '@/lib/analytics';
+import { isSwapCeremonyEnabled } from '@/lib/feature-flags';
 
 function ItemSummary({ title, item }: { title: string; item: OfferDetail['requestedItem'] }) {
   return <AppCard><View style={styles.group}><AppText weight="semibold">{title}</AppText>{item ? <><AppText weight="semibold">{item.title}</AppText><AppText muted>{[item.category, item.condition, item.location].filter(Boolean).join(' • ') || 'بدون تفاصيل إضافية'}</AppText></> : <AppText muted>تعذر تحميل بيانات هذا العنصر حالياً.</AppText>}</View></AppCard>;
@@ -81,12 +82,13 @@ export default function OfferDetailScreen() {
   const showReceiverNoActionCard = offer.viewerRole === 'receiver' && !receiverCanRespond;
 
   const showSentMoment = moment === 'sent';
+  const swapCeremonyEnabled = isSwapCeremonyEnabled();
 
 
   return <AppScreen scrollable>
     {actionMoment === 'thinking' ? <TeswaMomentCard eyebrow="تم إرسال ردك" title="الطرف الآخر عرف إنك محتاج وقت" body="العرض ما زال مفتوحًا، وردك اتسجل بوضوح." icon="hourglass-outline" tone="waiting" /> : null}
     {actionMoment === 'rejected' ? <TeswaMomentCard eyebrow="ردك وصل" title="تم رفض العرض بلطف" body="قفلنا هذا العرض بهدوء، ويمكن لصاحبه متابعة فرص أخرى." icon="heart-dislike-outline" tone="calm" /> : null}
-    {showSentMoment ? <SwapCeremony status="sent" requestedItemTitle={offer.requestedItem?.title} offeredItemTitle={offer.offeredItem?.title} requestedItemImageUrl={offer.requestedItem?.imageUrl ?? undefined} offeredItemImageUrl={offer.offeredItem?.imageUrl ?? undefined} onClose={() => router.replace(`/offer/${offer.id}`)} /> : null}
+    {showSentMoment && swapCeremonyEnabled ? <SwapCeremony status="sent" requestedItemTitle={offer.requestedItem?.title} offeredItemTitle={offer.offeredItem?.title} requestedItemImageUrl={offer.requestedItem?.imageUrl ?? undefined} offeredItemImageUrl={offer.offeredItem?.imageUrl ?? undefined} onClose={() => router.replace(`/offer/${offer.id}`)} /> : null}
     <AppCard><View style={styles.group}><AppText weight="bold" style={styles.title}>تفاصيل العرض</AppText><AppText muted>حالة العرض: {getOfferStatusLabel(offer.status)}</AppText>{!!offer.createdAt && <AppText muted>تاريخ الإرسال: {new Date(offer.createdAt).toLocaleString('ar-EG')}</AppText>}</View></AppCard>
     <OfferTimeline status={offer.status} viewerRole={offer.viewerRole} createdAt={offer.createdAt} dealId={offer.dealId} />
     <ItemSummary title="العنصر المطلوب" item={offer.requestedItem} />

@@ -44,6 +44,7 @@ import {
   fetchUserBlockState,
   unblockUserFromMobile,
 } from '@/lib/user-blocks';
+import { isSwapCeremonyEnabled } from '@/lib/feature-flags';
 
 type VoiceDraft = {
   uri: string;
@@ -53,6 +54,7 @@ type VoiceDraft = {
   mimeType: string;
 };
 const MAX_VOICE_DURATION_MS = 120_000;
+const SWAP_CEREMONY_ENABLED = isSwapCeremonyEnabled();
 const formatVoiceDuration = (durationMs: number) =>
   `${String(Math.floor(Math.max(0, Math.floor(durationMs / 1000)) / 60)).padStart(2, "0")}:${String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, "0")}`;
 const formatResponseRate = (responseRate: number | null) =>
@@ -731,7 +733,7 @@ export default function Screen() {
               <AppText muted>{voiceMessage}</AppText>
             </AppCard>
           ) : null}
-          {moment === "accepted" ? (
+          {moment === "accepted" && SWAP_CEREMONY_ENABLED ? (
             <SwapCeremony
               status="accepted"
               requestedItemTitle={deal.requestedItem?.title}
@@ -752,14 +754,14 @@ export default function Screen() {
           ) : null}
           {completionMoment === "completed" ? (
             <View style={styles.groupGap}>
-              <SwapCeremony
+              {SWAP_CEREMONY_ENABLED ? <SwapCeremony
                 status="completed"
                 requestedItemTitle={deal.requestedItem?.title}
                 offeredItemTitle={deal.offeredItem?.title}
                 requestedItemImageUrl={deal.requestedItem?.imageUrl ?? undefined}
                 offeredItemImageUrl={deal.offeredItem?.imageUrl ?? undefined}
                 onClose={() => router.push(`/review/deal/${deal.id}`)}
-              />
+              /> : null}
               <AppButton label="كمل المحادثة" onPress={() => setCompletionMoment(null)} />
             </View>
           ) : null}
