@@ -49,3 +49,37 @@
 - [ ] Unrelated user cannot mint token for a conversation they do not participate in (`غير مسموح بفتح هذه المحادثة.`).
 - [ ] `otherUserId` mismatch vs derived participant fails (`تعذر تحديد الطرف الآخر في المحادثة.`).
 - [ ] Warmup call with no `conversationId` succeeds for current user token and does not upsert arbitrary other users.
+
+## Direct Chat Push Delivery (Sprint 2)
+
+### Implemented
+- Added Edge Function `stream-direct-message-webhook` to receive Stream direct-message webhook events, validate accepted direct conversation membership server-side, enforce block safety, dedupe by Stream message id, and create one Supabase notification for the recipient.
+- Added internal-only `direct_push_events` dedupe table (service-role usage only; RLS enabled and anon/authenticated revoked).
+- Webhook retry behavior is dedupe-safe and recoverable: duplicate Stream message ids are skipped, and if notification insert fails the event row is removed so retries are not permanently blocked.
+- Existing `send-notification-push` now allowlists `direct_message_received` and sends Expo push payload including the `/direct/{conversationId}` route from the notification row.
+- Notification tap routing remains on existing mobile push route resolver path and opens `/direct/{conversationId}`.
+
+### Manual setup required
+- Deploy Edge Function: `stream-direct-message-webhook`.
+- Set secret: `TESWA_STREAM_WEBHOOK_SECRET`.
+- Configure Stream dashboard webhook URL to the deployed Supabase Edge Function URL.
+- Configure custom header `x-teswa-stream-webhook-secret` if Stream webhook supports custom headers.
+- If custom headers are unavailable in the Stream webhook surface you use, follow-up with signed webhook verification strategy (HMAC signature verification) before production enablement.
+
+### Required secrets
+- `TESWA_STREAM_WEBHOOK_SECRET`
+- `TESWA_PUSH_WEBHOOK_SECRET`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL`
+- `STREAM_CHAT_API_KEY` / `STREAM_CHAT_SECRET` (remain scoped to Stream token function)
+
+### Manual QA
+- [ ] User B has push permission enabled and an active Expo push token saved.
+- [ ] User A sends a direct Stream text message in an `accepted` conversation.
+- [ ] A `notifications` row is created for User B with route `/direct/{conversationId}`.
+- [ ] `send-notification-push` processes the row.
+- [ ] User B receives push in background/killed state.
+- [ ] Push tap opens `/direct/{conversationId}`.
+- [ ] `requested` / non-accepted direct conversations do not notify.
+- [ ] Blocked user pairs do not notify.
+- [ ] Duplicate webhook retry for same `streamMessageId` does not create duplicate notification.
