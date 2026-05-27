@@ -3,6 +3,7 @@ import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 type WarmStreamClient = {
   client: any;
   userId: string;
+  apiKey: string;
 };
 
 let warmClientState: WarmStreamClient | null = null;
@@ -26,7 +27,7 @@ async function createOrReuseConnectedClient() {
   const alreadyConnectedUser = typeof client.userID === 'string' ? client.userID : null;
 
   if (alreadyConnectedUser === creds.userId) {
-    warmClientState = { client, userId: creds.userId };
+    warmClientState = { client, userId: creds.userId, apiKey: creds.apiKey };
     devLog('[direct/stream] warmup reused existing client');
     return warmClientState;
   }
@@ -36,7 +37,7 @@ async function createOrReuseConnectedClient() {
   }
 
   await client.connectUser({ id: creds.userId }, creds.token);
-  warmClientState = { client, userId: creds.userId };
+  warmClientState = { client, userId: creds.userId, apiKey: creds.apiKey };
   devLog('[direct/stream] warmup connected');
   return warmClientState;
 }
@@ -69,4 +70,24 @@ export async function warmupDirectStreamClient() {
   });
 
   return warmupPromise;
+}
+
+
+export async function connectStreamClientWithToken(input: { apiKey: string; userId: string; token: string }) {
+  const { StreamChat } = await import('stream-chat');
+  const client = StreamChat.getInstance(input.apiKey);
+  const alreadyConnectedUser = typeof client.userID === 'string' ? client.userID : null;
+
+  if (alreadyConnectedUser === input.userId) {
+    warmClientState = { client, userId: input.userId, apiKey: input.apiKey };
+    return client;
+  }
+
+  if (alreadyConnectedUser && alreadyConnectedUser !== input.userId && typeof client.disconnectUser === 'function') {
+    await client.disconnectUser();
+  }
+
+  await client.connectUser({ id: input.userId }, input.token);
+  warmClientState = { client, userId: input.userId, apiKey: input.apiKey };
+  return client;
 }

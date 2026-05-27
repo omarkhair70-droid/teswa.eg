@@ -13,6 +13,7 @@ type TokenResponse = {
 };
 
 type StreamTokenInput = {
+  conversationId?: string;
   otherUserId?: string;
   displayName?: string;
   avatarUrl?: string;

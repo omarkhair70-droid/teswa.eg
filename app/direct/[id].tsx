@@ -22,7 +22,7 @@ import { useAuth } from '@/lib/auth';
 import { acceptDirectMessageRequest, fetchDirectConversation, fetchDirectConversationMessages, ignoreDirectMessageRequest, markDirectConversationRead, sendDirectMessage } from '@/lib/direct-messages';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
-import { getOrCreateStreamClient, getWarmStreamClientIfReady } from '@/lib/chat/stream-client';
+import { connectStreamClientWithToken, getWarmStreamClientIfReady } from '@/lib/chat/stream-client';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
@@ -172,26 +172,28 @@ export default function DirectScreen() {
     setStreamError(null);
     try {
       clearStreamSubs();
-      const warmClient = getWarmStreamClientIfReady();
-      let client: any = warmClient;
-      let currentUserId = typeof warmClient?.userID === 'string' ? warmClient.userID : '';
+      const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
+      const displayName = typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.full_name === 'string' ? metadata.full_name : null;
+      const avatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : null;
 
-      if (warmClient && currentUserId) {
-        if (__DEV__) console.log('[direct/stream] direct screen reused warm client');
-      } else {
-        const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
-        const displayName = typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.full_name === 'string' ? metadata.full_name : null;
-        const avatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : null;
-        const creds = await fetchStreamChatToken({
-          otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
-          displayName: displayName ?? undefined,
-          avatarUrl: avatarUrl ?? undefined,
-        });
-        if (!creds.ok) throw new Error(creds.message);
-        if (__DEV__) console.log('[direct/stream] direct screen performed cold connect');
-        client = await getOrCreateStreamClient();
-        currentUserId = creds.userId;
-      }
+      const creds = await fetchStreamChatToken({
+        conversationId,
+        otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
+        displayName: displayName ?? undefined,
+        avatarUrl: avatarUrl ?? undefined,
+      });
+      if (!creds.ok) throw new Error(creds.message);
+
+      const warmClient = getWarmStreamClientIfReady();
+      const warmUserId = typeof warmClient?.userID === 'string' ? warmClient.userID : '';
+      const client: any = warmClient && warmUserId === creds.userId
+        ? warmClient
+        : await connectStreamClientWithToken({ apiKey: creds.apiKey, userId: creds.userId, token: creds.token });
+      const currentUserId = creds.userId;
+
+      if (__DEV__) console.log(warmClient && warmUserId === creds.userId
+        ? '[direct/stream] direct screen validated + reused warm client'
+        : '[direct/stream] direct screen validated + connected client');
 
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId, otherUserId: convo.otherUserId });
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
