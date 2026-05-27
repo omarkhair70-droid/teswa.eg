@@ -49,7 +49,7 @@ function getConversationSortTimestamp(item: DirectConversationSummary): number {
 
 function mapStreamMessagePreview(message: any): string | null {
   const metaType = typeof message?.teswa_type === 'string' ? message.teswa_type : '';
-  if (metaType === 'exchange_draft') return 'عرض تبادل مبدئي';
+  if (metaType === 'exchange_offer_draft' || metaType === 'exchange_draft') return 'عرض تبادل مبدئي';
   const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
   if (attachments.some((a) => typeof a?.mime_type === 'string' && a.mime_type.startsWith('audio/'))) return 'رسالة صوتية';
   if (attachments.some((a) => a?.type === 'image')) return 'صورة';
