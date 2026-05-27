@@ -269,3 +269,29 @@ This phase is now the first real user-facing Direct Chat Pro implementation.
 - typing indicators
 - read receipts
 - reactions/replies and richer premium polish
+
+## Direct Chat Pro V1.1 — Premium Chat Shell UI
+
+This phase upgrades the visual shell and interaction polish of `app/direct/[id].tsx` while keeping the existing Direct Chat Pro V1 runtime contract unchanged.
+
+Scope in V1.1:
+
+- UI/UX polish only (header, context strip, status cards, message bubbles, composer presentation)
+- Arabic-first premium shell for accepted conversations
+- Non-accepted states (`requested`, `ignored`, `blocked`) remain governed by existing conversation status logic
+
+Explicitly unchanged in V1.1:
+
+- Stream runtime logic for accepted conversations
+- Supabase as source of truth for direct conversation metadata/status
+- Message storage behavior
+- No attachments, no voice sending, no reactions
+- No typing/read/delivery/presence rollout in this phase
+- No Story Thread or Deal Chat changes
+
+## Next phase
+
+- **Direct Chat Pro V1.2 — Stream realtime features**
+  - typing indicators
+  - read/delivery status surfaces
+  - basic presence signals
