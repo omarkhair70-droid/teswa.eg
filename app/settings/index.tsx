@@ -24,6 +24,11 @@ export default function SettingsScreen() {
             <AppText muted>تحكم في أنواع التنبيهات اللي توصلك من التطبيق.</AppText>
           </AppCard>
         </Pressable>
+
+        <AppCard>
+          <AppText weight="semibold">إشعارات الرسائل</AppText>
+          <AppText muted>استقبل تنبيه لما توصلك رسالة مباشرة.</AppText>
+        </AppCard>
       </View>
     </AppScreen>
   );

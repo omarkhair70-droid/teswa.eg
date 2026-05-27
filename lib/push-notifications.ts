@@ -7,6 +7,10 @@ import { supabase } from '@/lib/supabase/client';
 const PUSH_TOKEN_KEY = 'teswa.push.expo_token';
 const ANDROID_CHANNEL_ID = 'teswa-activity';
 
+export type PushRegistrationResult =
+  | { ok: true; expoPushToken: string }
+  | { ok: false; message: string; reason?: 'permission_denied' | 'unsupported' | 'missing_project_id' | 'unknown' };
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -24,6 +28,7 @@ export async function ensureAndroidNotificationChannel() {
   });
 }
 
+
 export async function getNotificationPermissionStatus() {
   if (Platform.OS === 'web') return 'unsupported' as const;
   const settings = await Notifications.getPermissionsAsync();
@@ -35,67 +40,77 @@ export async function hasStoredPushToken() {
   return Boolean(token?.trim());
 }
 
+export async function requestAndRegisterPushDevice(_userId: string) {
+  const registration = await registerForPushNotifications();
+  if (!registration.ok) {
+    return { ok: false as const, reason: registration.reason ?? 'unknown' };
+  }
+  const saved = await saveUserPushToken(registration.expoPushToken);
+  if (!saved.ok) return { ok: false as const, reason: 'unknown' as const };
+  return { ok: true as const, token: registration.expoPushToken };
+}
+
 function resolveProjectId() {
   return Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? null;
 }
 
-export async function requestAndRegisterPushDevice(userId: string) {
-  if (Platform.OS === 'web') return { ok: false as const, reason: 'unsupported' as const };
+export async function registerForPushNotifications(): Promise<PushRegistrationResult> {
+  if (Platform.OS === 'web') {
+    return { ok: false, message: 'الإشعارات غير متاحة على هذا الجهاز حالياً.', reason: 'unsupported' };
+  }
 
   try {
     await ensureAndroidNotificationChannel();
-    let perms = await Notifications.getPermissionsAsync();
-    if (!perms.granted) perms = await Notifications.requestPermissionsAsync();
-    if (!perms.granted) return { ok: false as const, reason: 'permission_denied' as const };
+    const existing = await Notifications.getPermissionsAsync();
+    let finalStatus = existing;
+    if (!existing.granted && existing.canAskAgain) {
+      finalStatus = await Notifications.requestPermissionsAsync();
+    }
+
+    if (!finalStatus.granted) {
+      return { ok: false, message: 'الإذن بالإشعارات غير مفعّل.', reason: 'permission_denied' };
+    }
 
     const projectId = resolveProjectId();
     if (!projectId) {
-      if (__DEV__) console.log('[Push] missing projectId');
-      return { ok: false as const, reason: 'missing_project_id' as const };
+      return { ok: false, message: 'تعذر تفعيل الإشعارات حالياً.', reason: 'missing_project_id' };
     }
 
-    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    const { data, error } = await supabase.rpc('register_push_device', { p_expo_push_token: token, p_platform: Platform.OS });
-    if (error) {
-      if (__DEV__) console.log('[Push] register RPC failed', { userId, code: error.code, message: error.message });
-      return { ok: false as const, reason: 'rpc_failed' as const };
-    }
-    await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-    if (__DEV__) console.log('[Push] register success', { userId, platform: Platform.OS, deviceId: data as string, tokenPreview: `${token.slice(0, 12)}...` });
-    return { ok: true as const, token, deviceId: data as string };
+    const expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, expoPushToken);
+    return { ok: true, expoPushToken };
   } catch (error) {
-    if (__DEV__) console.log('[Push] register failed', { userId, message: (error as { message?: string })?.message });
-    return { ok: false as const, reason: 'register_failed' as const };
+    if (__DEV__) console.log('[Push] registerForPushNotifications failed', { message: (error as Error)?.message });
+    return { ok: false, message: 'تعذر تفعيل الإشعارات حالياً.', reason: 'unknown' };
   }
 }
 
-export async function syncPushDeviceRegistrationIfPermitted(userId: string) {
-  if (Platform.OS === 'web') return { ok: true as const, skipped: 'unsupported' as const };
-
+export async function saveUserPushToken(expoPushToken: string): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
-    await ensureAndroidNotificationChannel();
-    const perms = await Notifications.getPermissionsAsync();
-    if (!perms.granted) return { ok: true as const, skipped: 'not_granted' as const };
+    const { error } = await supabase.rpc('register_push_device', {
+      p_expo_push_token: expoPushToken,
+      p_platform: Platform.OS,
+    });
 
-    const projectId = resolveProjectId();
-    if (!projectId) {
-      if (__DEV__) console.log('[Push] missing projectId');
-      return { ok: false as const, reason: 'missing_project_id' as const };
-    }
-
-    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    const { error } = await supabase.rpc('register_push_device', { p_expo_push_token: token, p_platform: Platform.OS });
     if (error) {
-      if (__DEV__) console.log('[Push] passive register RPC failed', { userId, code: error.code, message: error.message });
-      return { ok: false as const, reason: 'rpc_failed' as const };
+      if (__DEV__) console.log('[Push] saveUserPushToken failed', { code: error.code, message: error.message });
+      return { ok: false, message: 'تعذر حفظ جهاز الإشعارات حالياً.' };
     }
-    await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
-    if (__DEV__) console.log('[Push] passive register success', { userId, platform: Platform.OS, tokenPreview: `${token.slice(0, 12)}...` });
-    return { ok: true as const };
+
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, expoPushToken);
+    return { ok: true };
   } catch (error) {
-    if (__DEV__) console.log('[Push] passive register failed', { userId, message: (error as { message?: string })?.message });
-    return { ok: false as const, reason: 'register_failed' as const };
+    if (__DEV__) console.log('[Push] saveUserPushToken crashed', { message: (error as Error)?.message });
+    return { ok: false, message: 'تعذر حفظ جهاز الإشعارات حالياً.' };
   }
+}
+
+export async function syncPushDeviceRegistrationIfPermitted(_userId: string) {
+  const registration = await registerForPushNotifications();
+  if (!registration.ok) {
+    return { ok: registration.reason === 'permission_denied' || registration.reason === 'unsupported', skipped: registration.reason };
+  }
+  return saveUserPushToken(registration.expoPushToken);
 }
 
 export async function disableRegisteredPushDeviceIfPossible() {
@@ -103,35 +118,26 @@ export async function disableRegisteredPushDeviceIfPossible() {
     const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
     if (!token) return { ok: true as const, skipped: 'no_token' as const };
     const { data, error } = await supabase.rpc('disable_my_push_device', { p_expo_push_token: token });
-    if (error) {
-      if (__DEV__) console.log('[Push] disable RPC failed', { code: error.code, message: error.message });
-      return { ok: false as const };
-    }
+    if (error) return { ok: false as const };
     if (data) await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
     return { ok: true as const };
-  } catch (error) {
-    if (__DEV__) console.log('[Push] disable failed', { message: (error as { message?: string })?.message });
+  } catch {
     return { ok: false as const };
   }
 }
 
-const SAFE_PREFIXES = ['/deal/', '/offer/', '/item/', '/contextual/', '/profile/'] as const;
+const SAFE_PREFIXES = ['/deal/', '/offer/', '/item/', '/contextual/', '/profile/', '/direct/'] as const;
+
 export function resolvePushNotificationRoute(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const payload = data as Record<string, unknown>;
+
+  const conversationId = typeof payload.conversationId === 'string' ? payload.conversationId.trim() : '';
+  if (conversationId) return `/direct/${conversationId}`;
+
   const route = typeof payload.route === 'string' ? payload.route.trim() : '';
   if (route === '/notifications' || SAFE_PREFIXES.some((p) => route.startsWith(p))) return route;
-  const actorUserId = typeof payload.actorUserId === 'string' ? payload.actorUserId : null;
-  const notificationType = typeof payload.notificationType === 'string' ? payload.notificationType : null;
-  const contextualConversationId = typeof payload.contextualConversationId === 'string' ? payload.contextualConversationId : null;
-  const dealId = typeof payload.dealId === 'string' ? payload.dealId : null;
-  const offerId = typeof payload.offerId === 'string' ? payload.offerId : null;
-  const itemId = typeof payload.itemId === 'string' ? payload.itemId : null;
-  if (notificationType === 'user_followed_you' && actorUserId) return `/profile/${actorUserId}`;
-  if (contextualConversationId) return `/contextual/${contextualConversationId}`;
-  if (dealId) return `/deal/${dealId}`;
-  if (offerId) return `/offer/${offerId}`;
-  if (itemId) return `/item/${itemId}`;
+
   return null;
 }
 

@@ -550,3 +550,36 @@ This phase adds a focused privacy-control foundation for who can start **new** d
 ### Next PR
 
 - **Direct Chat System PR 5 — Direct Push Notifications**
+
+## Direct Chat System PR 5 — Direct Push Notifications
+
+Delivered in this PR (foundation only):
+
+- Added safe direct push registration helper in `lib/push-notifications.ts` using `expo-notifications` with non-crashing fallbacks for unsupported devices, denied permission, missing EAS project id, and unknown runtime errors.
+- Reused existing Supabase push-device foundation (`public.push_devices` + `register_push_device` RPC) to persist Expo push tokens per authenticated user; no new DB schema required.
+- Hooked post-login push sync in app bootstrap (`app/_layout.tsx`) as a deferred, non-blocking background step so startup/auth flows stay stable.
+- Added safe notification tap routing support for direct conversations:
+  - `conversationId` payload -> `/direct/{conversationId}`
+  - `route` payload -> allowed only for safe internal prefixes, unknown payloads are ignored.
+- Listener cleanup remains in place to avoid leaks.
+
+Important reality check (Stream direct runtime):
+
+- Accepted Direct Chat Pro conversations are Stream-powered runtime, but production push delivery for Stream messages still requires external Stream push provider setup (Stream dashboard + platform credentials like FCM/APNs).
+- This PR does **not** claim end-to-end production push delivery for Stream messages is complete without that external configuration.
+- This PR does **not** expose Stream secret or any server secret to mobile.
+
+Build/runtime notes:
+
+- Current Android notification channel setup is reused (`teswa-activity`) and remains compatible with existing Expo configuration.
+- If notification credentials or native notification config change later (FCM/APNs/provider wiring), a new native build may be required for full live push verification.
+
+Scope safety:
+
+- No Story Thread changes.
+- No Deal Chat changes.
+- No Direct Chat runtime rewrite.
+
+Next PR:
+
+- Direct Chat System PR 6 — Media Viewer.
