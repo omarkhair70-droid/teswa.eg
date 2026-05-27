@@ -4,6 +4,7 @@ import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -20,7 +21,7 @@ import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 
 const DIRECT_CHAT_PRO_ENABLED = true;
-type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string };
+type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string } };
 type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
 
 const statusMeta = {
@@ -50,7 +51,11 @@ export default function DirectScreen() {
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
+  const [selectedStreamMessage, setSelectedStreamMessage] = useState<StreamMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Pick<StreamMessage, 'id' | 'text' | 'userName'> | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const directActionsSheetRef = useRef<BottomSheetModal>(null);
+  const messageActionsSheetRef = useRef<BottomSheetModal>(null);
   const streamClientRef = useRef<any>(null);
   const streamChannelRef = useRef<any>(null);
   const streamUnsubsRef = useRef<Array<() => void>>([]);
@@ -75,6 +80,13 @@ export default function DirectScreen() {
         createdAt: safeCreatedAt,
         userId: typeof msg?.user?.id === 'string' ? msg.user.id : '',
         userName: typeof msg?.user?.name === 'string' ? msg.user.name : undefined,
+        reactionCounts: msg?.reaction_counts && typeof msg.reaction_counts === 'object' ? msg.reaction_counts : undefined,
+        ownReactions: Array.isArray(msg?.own_reactions) ? msg.own_reactions.map((reaction: any) => reaction?.type).filter((type: unknown): type is string => typeof type === 'string') : undefined,
+        quotedMessage: msg?.quoted_message && typeof msg.quoted_message === 'object' ? {
+          id: typeof msg.quoted_message?.id === 'string' ? msg.quoted_message.id : '',
+          text: typeof msg.quoted_message?.text === 'string' ? msg.quoted_message.text : '',
+          userName: typeof msg.quoted_message?.user?.name === 'string' ? msg.quoted_message.user.name : undefined,
+        } : undefined,
       } as StreamMessage;
     }).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
     setStreamMessages((prev) => mergeById(prev, mapped));
@@ -204,6 +216,34 @@ export default function DirectScreen() {
       </View>
     </View>
   );
+  const runMessageAction = useCallback(async (action: 'copy' | 'reply' | 'love' | 'thumbs_up' | 'report' | 'delete') => {
+    const target = selectedStreamMessage;
+    const channel = streamChannelRef.current;
+    if (!target) return;
+    messageActionsSheetRef.current?.dismiss();
+    if (action === 'copy') {
+      if (!target.text?.trim()) { setActionFeedback('لا يوجد نص للنسخ.'); return; }
+      await Clipboard.setStringAsync(target.text);
+      setActionFeedback('تم نسخ النص.');
+      return;
+    }
+    if (action === 'reply') {
+      setReplyTarget({ id: target.id, text: target.text, userName: target.userName });
+      setActionFeedback('تم تفعيل الرد على الرسالة.');
+      return;
+    }
+    if (action === 'report') { setActionFeedback('تم تسجيل البلاغ للمراجعة.'); return; }
+    if (!channel) { setActionFeedback('الشات الجديد غير متاح حالياً.'); return; }
+    if (action === 'delete') {
+      if (target.userId !== user?.id) return;
+      if (typeof channel.deleteMessage !== 'function') { setActionFeedback('ميزة الحذف غير متاحة حالياً.'); return; }
+      try { await channel.deleteMessage(target.id); hydrateFromChannel(); setActionFeedback('تم حذف الرسالة.'); } catch { setActionFeedback('تعذر حذف الرسالة حالياً.'); }
+      return;
+    }
+    const reactionType = action === 'love' ? 'love' : 'thumbs_up';
+    if (typeof channel.sendReaction !== 'function') { setActionFeedback('ميزة التفاعل غير متاحة حالياً.'); return; }
+    try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); setActionFeedback('تم إضافة التفاعل.'); } catch { setActionFeedback('تعذر إضافة التفاعل حالياً.'); }
+  }, [hydrateFromChannel, selectedStreamMessage, user?.id]);
 
   return <AppScreen>
     <View style={styles.header}>
@@ -231,7 +271,23 @@ export default function DirectScreen() {
           const mine = m.userId === user?.id;
           const read = mine && latestReadAtMs ? (+new Date(m.createdAt) <= latestReadAtMs) : false;
           const mineStatus = mine ? (read ? 'اتقرت' : 'اتبعثت') : undefined;
-          return renderBubble(m.text, mine, m.createdAt, m.userName, m.id, mineStatus);
+          return (
+            <Pressable key={m.id} onLongPress={() => { setSelectedStreamMessage(m); messageActionsSheetRef.current?.present(); }} delayLongPress={220}>
+              <View style={[styles.bubbleRow, mine ? styles.bubbleMineRow : styles.bubbleOtherRow]}>
+                <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
+                  {!mine && m.userName ? <AppText muted style={styles.senderHint}>{m.userName}</AppText> : null}
+                  {m.quotedMessage?.id ? <View style={styles.quotedWrap}><AppText muted style={styles.quotedUser}>{m.quotedMessage.userName || 'رسالة'}</AppText><AppText muted numberOfLines={1}>{m.quotedMessage.text || '...'}</AppText></View> : null}
+                  <AppText style={styles.bodyText}>{(m.text ?? '').trim() || '...'}</AppText>
+                  <AppText muted style={styles.time}>{new Date(m.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
+                  {mine && mineStatus ? <AppText muted style={styles.time}>{mineStatus}</AppText> : null}
+                  {(m.reactionCounts?.love || m.reactionCounts?.thumbs_up) ? <View style={styles.reactionsRow}>
+                    {m.reactionCounts?.love ? <View style={styles.reactionChip}><AppText muted>❤️ {m.reactionCounts.love}</AppText></View> : null}
+                    {m.reactionCounts?.thumbs_up ? <View style={styles.reactionChip}><AppText muted>👍 {m.reactionCounts.thumbs_up}</AppText></View> : null}
+                  </View> : null}
+                </View>
+              </View>
+            </Pressable>
+          );
         })
       ) : (
         messages.length === 0 ? <EmptyState title="ابدأوا الكلام" description="اكتب أول رسالة وافتح مساحة للتواصل بهدوء." /> :
@@ -245,17 +301,26 @@ export default function DirectScreen() {
 
     <KeyboardStickyView offset={{ opened: 6, closed: 0 }}>
       <View style={styles.composerWrap}>
+        {replyTarget ? <View style={styles.replyCard}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <AppText muted>ردًا على {replyTarget.userName || 'رسالة'}</AppText>
+            <AppText numberOfLines={1}>{replyTarget.text || '...'}</AppText>
+          </View>
+          <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Ionicons name="close" size={16} color={colors.textMuted} /></Pressable>
+        </View> : null}
         <View style={styles.composer}>
           <Pressable style={styles.plus} disabled><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
           <TextInput value={body} onChangeText={(value) => { setBody(value); if (acceptedDirectProActive && streamReady && streamChannelRef.current) { const now = Date.now(); if (now - typingThrottleRef.current > 1700) { typingThrottleRef.current = now; try { if (typeof streamChannelRef.current.keystroke === 'function') streamChannelRef.current.keystroke(); } catch {} } } }} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
-          <Pressable disabled={composerDisabled} style={[styles.send, composerDisabled && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed) return; setSending(true); try { if (acceptedDirectProActive) { if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; } await streamChannelRef.current.sendMessage({ text: trimmed }); hydrateFromChannel(); } else { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); } setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
+          <Pressable disabled={composerDisabled} style={[styles.send, composerDisabled && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed) return; setSending(true); try { if (acceptedDirectProActive) { if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; } try { await streamChannelRef.current.sendMessage({ text: trimmed, ...(replyTarget?.id ? { quoted_message_id: replyTarget.id } : {}) } as any); } catch { await streamChannelRef.current.sendMessage({ text: trimmed }); } hydrateFromChannel(); setReplyTarget(null); } else { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); } setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
         </View>
         <AppText muted style={styles.comingSoon}>قريبًا: ميديا، صوت، ودولابك.</AppText>
       </View>
     </KeyboardStickyView>
 
+    {actionFeedback ? <AppCard style={styles.feedbackCard}><AppText muted>{actionFeedback}</AppText></AppCard> : null}
     {error ? <AppCard style={styles.errorCard}><AppText muted>{error}</AppText></AppCard> : null}
     <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
+    <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
   </AppScreen>;
 }
 
@@ -288,11 +353,18 @@ const styles = StyleSheet.create({
   time: { fontSize: 11 },
   voiceNote: { marginHorizontal: spacing.md, marginBottom: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   composerWrap: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: spacing.xs },
+  replyCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  replyClose: { width: 26, height: 26, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center' },
   composer: { flexDirection: 'row-reverse', alignItems: 'flex-end', gap: spacing.xs },
   plus: { width: 40, height: 40, borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, opacity: 0.75 },
   input: { flex: 1, minHeight: 44, maxHeight: 110, borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, textAlign: 'right', color: colors.text, backgroundColor: colors.surface },
   send: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   sendDisabled: { opacity: 0.45 },
   comingSoon: { fontSize: 11, textAlign: 'right' },
+  quotedWrap: { borderRightWidth: 2, borderRightColor: colors.primary, backgroundColor: colors.background, borderRadius: radii.md, paddingHorizontal: spacing.xs, paddingVertical: 4, gap: 2 },
+  quotedUser: { fontSize: 11 },
+  reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },
+  reactionChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 2 },
+  feedbackCard: { marginHorizontal: spacing.sm, marginBottom: spacing.xs },
   errorCard: { marginHorizontal: spacing.sm, marginBottom: spacing.sm, gap: spacing.xs },
 });

@@ -314,9 +314,41 @@ Explicitly unchanged in V1.2:
 - No Story Thread or Deal Chat changes
 - Accepted Direct Chat Pro send path remains Stream-only (no Supabase fallback)
 
+## Direct Chat Pro V1.3 — Message Actions
+
+This phase adds a polished message-actions layer for accepted Direct Chat Pro conversations in `app/direct/[id].tsx` using Stream capabilities where available, with defensive API checks.
+
+Implemented in V1.3:
+
+- Long-press message actions (Arabic-first) for Stream messages:
+  - `نسخ النص`
+  - `رد على الرسالة`
+  - `تفاعل ❤️`
+  - `تفاعل 👍`
+  - `إبلاغ عن الرسالة`
+  - `حذف الرسالة` (own messages only)
+- Reactions foundation:
+  - send `love` and `thumbs_up` via Stream reaction API when available
+  - compact reaction chips under bubbles (`❤️`, `👍`) from Stream reaction counts
+- Reply foundation:
+  - set reply target from action sheet
+  - composer-level reply preview card with clear/close affordance
+  - attempt quoted send with `quoted_message_id` on Stream message send
+  - safe fallback to plain Stream send when quoted payload typing/runtime shape is unavailable
+- Copy/report/delete safe handling:
+  - text copy via `expo-clipboard`
+  - report action currently surfaces safe local feedback (`تم تسجيل البلاغ للمراجعة.`) without backend moderation wiring
+  - delete action hidden/disabled for non-owner messages and guarded by Stream API availability checks
+- Inline action feedback state (soft local UX) to avoid alert spam.
+
+Explicitly unchanged in V1.3:
+
+- No DB/schema changes
+- No request/accept/ignore/block behavior changes
+- No Stream init for non-accepted conversations
+- Accepted Direct Chat Pro sends remain Stream-only (no Supabase fallback)
+- No attachments, no voice rollout, no Deal Chat changes, no Story Thread changes
+
 ## Next phase
 
-- **Direct Chat Pro V1.3 — Message Actions**
-  - reactions
-  - reply
-  - copy/report/delete
+- **Direct Chat Pro V1.4 — Attachments & Media**
