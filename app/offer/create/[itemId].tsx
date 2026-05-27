@@ -20,12 +20,16 @@ function SummaryCard({ item }: { item: OfferItemSummary }) {
 }
 
 export default function CreateOfferScreen() {
-  const { itemId } = useLocalSearchParams<{ itemId: string }>();
+  const { itemId, note } = useLocalSearchParams<{ itemId: string; note?: string | string[] }>();
   const { user } = useAuth();
   const [context, setContext] = useState<OfferCreationContextResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOfferedItemId, setSelectedOfferedItemId] = useState<string | null>(null);
+  const initialNote = useMemo(() => {
+    if (Array.isArray(note)) return (note[0] ?? '').slice(0, 500);
+    return (note ?? '').slice(0, 500);
+  }, [note]);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -48,6 +52,11 @@ export default function CreateOfferScreen() {
   useEffect(() => {
     loadContext();
   }, [loadContext]);
+
+  useEffect(() => {
+    if (!initialNote) return;
+    setMessage((prev) => (prev.trim() ? prev : initialNote));
+  }, [initialNote]);
 
   useEffect(() => {
     if (!user?.id || !itemId) return;
