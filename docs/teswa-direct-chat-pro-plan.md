@@ -606,3 +606,37 @@ Scope safety:
 Next PR:
 
 - Direct Chat System PR 7 — Voice Polish.
+
+## Direct Chat System PR 7 — Voice Polish
+
+Delivered in this PR (Direct Chat Pro voice UX polish only):
+
+- Polished voice bubble UI in `app/direct/[id].tsx` with clearer play/pause control, `رسالة صوتية` label, duration visibility, and a lightweight waveform/progress foundation built with core `View` elements only (no new waveform library).
+- Improved playback clarity with explicit single-active-message behavior:
+  - tapping a playing voice message stops and resets it,
+  - tapping another voice message stops previous playback before starting new playback,
+  - playback finish resets active playing state,
+  - playback failures show: `تعذر تشغيل الرسالة الصوتية.`
+- Added safe progress/duration foundation:
+  - when active playback timing is available from `expo-audio` status, show `current / total`,
+  - otherwise keep static visual foundation and duration-only behavior.
+- Polished recording card with calmer premium layout:
+  - `جاري التسجيل...`
+  - live duration counter
+  - `إلغاء` and `إرسال` actions
+  - small recording red dot (style-only `View`).
+- Hardened voice recording/send cleanup safety:
+  - starting a new recording resets previous pending voice safely,
+  - cancel always clears recording UI state and pending voice metadata,
+  - voice sending prevents duplicate sends and shows `جاري إرسال الرسالة الصوتية...`,
+  - send failure shows `تعذر إرسال الرسالة الصوتية حالياً.` while restoring usable UI state without silently discarding recorded voice unless user canceled or send succeeded.
+- Kept Direct Pro architecture unchanged:
+  - no Stream runtime/token/channel rewrite,
+  - no sending architecture changes for text/media,
+  - no Story Thread or Deal Chat impact,
+  - no DB/schema/migration changes,
+  - no new libraries.
+
+Next PR:
+
+- Direct Chat System PR 8 — Real Exchange Offer Flow + Deal Handoff.
