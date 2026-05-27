@@ -235,6 +235,7 @@ export default function DirectScreen() {
   const canOpenAttachments = acceptedDirectProActive && streamReady && !streamError && !!streamChannelRef.current && !composerDisabled;
   const canUseVoice = acceptedDirectProActive && streamReady && !streamError && !!streamChannelRef.current && !composerDisabled && !mediaSending && !voiceSending;
   const formatDuration = useCallback((seconds: number) => `${String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, '0')}:${String(Math.max(0, seconds) % 60).padStart(2, '0')}`, []);
+  const currentVoicePositionSeconds = useMemo(() => Math.floor((voicePlayerStatus.currentTime ?? 0) / 1000), [voicePlayerStatus.currentTime]);
 
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
@@ -398,15 +399,18 @@ export default function DirectScreen() {
       if (!permission.granted) { setActionFeedback('محتاجين إذن الميكروفون لتسجيل رسالة صوتية.'); return; }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       setVoiceRecordingDurationSeconds(0);
+      setPendingVoice(null);
       recordingStoppedRef.current = false;
       await voiceRecorder.prepareToRecordAsync();
       voiceRecorder.record();
       setIsRecordingVoice(true);
       setActionFeedback('بدأ التسجيل.');
-    } catch { setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.'); }
+    } catch { setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.'); setIsRecordingVoice(false); }
   }, [canUseVoice, isRecordingVoice, voiceRecorder]);
   const sendVoiceMessage = useCallback(async () => {
+    if (voiceSending) return;
     if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    if (!voiceRecorderState.isRecording && !voiceRecorder.uri) { setActionFeedback('سجل رسالة صوتية الأول.'); return; }
     setVoiceSending(true);
     setActionFeedback('جاري إرسال الرسالة الصوتية...');
     try {
@@ -433,18 +437,22 @@ export default function DirectScreen() {
       setVoiceRecordingDurationSeconds(0);
       setBody('');
       setReplyTarget(null);
-    } catch { setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.'); }
-    finally { setVoiceSending(false); }
-  }, [acceptedDirectProActive, body, hydrateFromChannel, replyTarget?.id, streamError, streamReady, voiceRecorder, voiceRecorderState.durationMillis, voiceRecorderState.isRecording, voiceRecordingDurationSeconds]);
+    } catch {
+      setIsRecordingVoice(false);
+      setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.');
+    } finally { setVoiceSending(false); }
+  }, [acceptedDirectProActive, body, hydrateFromChannel, replyTarget?.id, streamError, streamReady, voiceRecorder, voiceRecorderState.durationMillis, voiceRecorderState.isRecording, voiceRecorder.uri, voiceRecordingDurationSeconds, voiceSending]);
   const togglePlayVoice = useCallback(async (messageId: string, url?: string) => {
     if (!url) { setActionFeedback('تعذر تشغيل الرسالة الصوتية.'); return; }
     try {
       if (playingVoiceId === messageId && voicePlayer.playing) {
-        voicePlayer.pause();
+        await voicePlayer.pause();
+        await voicePlayer.seekTo(0);
         setPlayingVoiceId(null);
         return;
       }
       await voicePlayer.pause();
+      await voicePlayer.seekTo(0);
       await voicePlayer.replace(url);
       voicePlayer.play();
       setPlayingVoiceId(messageId);
@@ -607,7 +615,33 @@ ${note}
                     const label = attachment.title || attachment.name || (isImage ? 'صورة' : isVideo ? 'فيديو' : 'ملف');
                     if (isAudio) {
                       const voiceId = `${m.id}-att-${idx}`;
-                      return <Pressable key={voiceId} style={styles.voiceBubble} onPress={() => { void togglePlayVoice(voiceId, attachment.assetUrl); }}><Ionicons name={playingVoiceId === voiceId ? 'pause-circle' : 'play-circle'} size={22} color={colors.primary} /><View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">رسالة صوتية</AppText>{typeof attachment.durationSeconds === 'number' ? <AppText muted>{formatDuration(Math.floor(attachment.durationSeconds))}</AppText> : null}</View></Pressable>;
+                      const totalDuration = typeof attachment.durationSeconds === 'number' && attachment.durationSeconds > 0 ? Math.floor(attachment.durationSeconds) : 0;
+                      const isPlayingThisVoice = playingVoiceId === voiceId;
+                      const safePosition = isPlayingThisVoice ? Math.max(0, currentVoicePositionSeconds) : 0;
+                      const progressRatio = totalDuration > 0 && isPlayingThisVoice ? Math.min(1, safePosition / totalDuration) : 0;
+                      return <View key={voiceId} style={styles.voiceBubble}>
+                        <Pressable
+                          style={styles.voicePlayButton}
+                          onPress={() => { void togglePlayVoice(voiceId, attachment.assetUrl); }}
+                          accessibilityRole="button"
+                          accessibilityLabel={isPlayingThisVoice ? 'إيقاف الرسالة الصوتية' : 'تشغيل الرسالة الصوتية'}
+                          hitSlop={8}
+                        >
+                          <Ionicons name={isPlayingThisVoice ? 'pause' : 'play'} size={18} color={colors.background} />
+                        </Pressable>
+                        <View style={styles.voiceBody}>
+                          <View style={styles.voiceHead}>
+                            <AppText weight="semibold">رسالة صوتية</AppText>
+                            {totalDuration > 0 ? <AppText muted>{isPlayingThisVoice ? `${formatDuration(safePosition)} / ${formatDuration(totalDuration)}` : formatDuration(totalDuration)}</AppText> : null}
+                          </View>
+                          <View style={styles.voiceWaveRow}>
+                            {[0, 1, 2, 3, 4, 5, 6, 7].map((bar) => <View key={`${voiceId}-bar-${bar}`} style={[styles.voiceWaveBar, isPlayingThisVoice && progressRatio > ((bar + 1) / 8) ? styles.voiceWaveBarActive : null]} />)}
+                          </View>
+                          <View style={styles.voiceProgressTrack}>
+                            <View style={[styles.voiceProgressFill, { width: `${Math.round(progressRatio * 100)}%` }]} />
+                          </View>
+                        </View>
+                      </View>;
                     }
                     const previewUrl = resolveAttachmentUrl(attachment, 'image');
                     if (isImage && previewUrl) {
@@ -635,7 +669,7 @@ ${note}
       )}
     </KeyboardAwareScrollView>
 
-    {isRecordingVoice && acceptedDirectProActive ? <View style={styles.recordingCard}><AppText weight="semibold">جاري التسجيل...</AppText><AppText muted>{formatDuration(voiceRecordingDurationSeconds)}</AppText><View style={styles.recordingActions}><AppButton label="إلغاء" variant="neutral" onPress={() => { void cancelVoiceRecording(); }} /><AppButton label={voiceSending ? 'جاري الإرسال...' : 'إرسال'} disabled={voiceSending} onPress={() => { void sendVoiceMessage(); }} /></View></View> : null}
+    {isRecordingVoice && acceptedDirectProActive ? <View style={styles.recordingCard}><View style={styles.recordingHeader}><View style={styles.recordingDot} /><AppText weight="semibold">جاري التسجيل...</AppText></View><AppText muted>{formatDuration(voiceRecordingDurationSeconds)}</AppText><View style={styles.recordingActions}><AppButton label="إلغاء" variant="neutral" onPress={() => { void cancelVoiceRecording(); }} /><AppButton label={voiceSending ? 'جاري إرسال الرسالة الصوتية...' : 'إرسال'} disabled={voiceSending} onPress={() => { void sendVoiceMessage(); }} /></View></View> : null}
     {typingText && usingStreamChat ? <AppText muted style={styles.info}>{typingText}</AppText> : null}
     {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
@@ -722,6 +756,8 @@ const styles = StyleSheet.create({
   senderHint: { fontSize: 11 },
   time: { fontSize: 11 },
   recordingCard: { marginHorizontal: spacing.md, marginBottom: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: spacing.xs },
+  recordingHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
+  recordingDot: { width: 8, height: 8, borderRadius: radii.round, backgroundColor: '#ef4444' },
   recordingActions: { flexDirection: 'row-reverse', gap: spacing.xs },
   composerWrap: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: spacing.xs },
   replyCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
@@ -736,7 +772,15 @@ const styles = StyleSheet.create({
   quotedUser: { fontSize: 11 },
   inlineImage: { width: 160, height: 120, borderRadius: radii.md, marginTop: 6, marginBottom: 3 },
   fileCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, gap: 2 },
-  voiceBubble: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  voiceBubble: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.lg, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  voicePlayButton: { width: 38, height: 38, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  voiceBody: { flex: 1, gap: 4 },
+  voiceHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  voiceWaveRow: { flexDirection: 'row-reverse', alignItems: 'flex-end', gap: 3, height: 12 },
+  voiceWaveBar: { flex: 1, borderRadius: radii.sm, backgroundColor: colors.border, minHeight: 3, height: 7 },
+  voiceWaveBarActive: { backgroundColor: colors.primary },
+  voiceProgressTrack: { width: '100%', height: 3, borderRadius: radii.round, backgroundColor: colors.border, overflow: 'hidden' },
+  voiceProgressFill: { height: '100%', backgroundColor: colors.primary },
   exchangeMessageCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, marginTop: 6, padding: spacing.xs, gap: spacing.xs },
   exchangeDraftCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.sm, gap: spacing.xs },
   exchangeDraftInput: { minHeight: 58, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, textAlign: 'right', color: colors.text, backgroundColor: colors.background },
