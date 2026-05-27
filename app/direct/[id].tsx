@@ -178,11 +178,6 @@ export default function DirectScreen() {
     if (composerState.disabled) return 'المحادثة غير متاحة للإرسال الآن';
     return 'اكتب رسالة بسيطة...';
   }, [acceptedDirectProActive, composerState.disabled, directConnectionState, streamConnecting, streamError, streamReady]);
-
-  if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
-  if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
-  if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
-
   const latestReadAtMs = useMemo(() => {
     const channel = streamChannelRef.current;
     const reads = channel?.state?.read;
@@ -195,6 +190,10 @@ export default function DirectScreen() {
     }, 0);
     return max > 0 ? max : null;
   }, [streamMessages, user?.id]);
+
+  if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
+  if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
+  if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
   const renderBubble = (text: string, isMine: boolean, createdAt: string, userName?: string, key?: string, mineStatus?: string) => (
     <View key={key} style={[styles.bubbleRow, isMine ? styles.bubbleMineRow : styles.bubbleOtherRow]}>
       <View style={[styles.bubble, isMine ? styles.mine : styles.other]}>
@@ -210,7 +209,7 @@ export default function DirectScreen() {
     <View style={styles.header}>
       <Pressable style={styles.headerIdentity} onPress={() => { if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); }} disabled={!convo?.otherUserId}>
         <View style={styles.avatarWrap}>{convo?.otherAvatarUrl ? <Image source={{ uri: convo.otherAvatarUrl }} style={styles.avatar} /> : <Ionicons name="person-circle" size={34} color={colors.textMuted} />}</View>
-        <View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">{convo?.otherDisplayName ?? 'رسالة من تِسوى'}</AppText><AppText muted>@{convo?.otherUsername ?? 'teswa'}</AppText>{status ? <AppText muted style={styles.subtleLine}>{acceptedDirectProActive && convo?.otherUserOnline === true ? 'متصل الآن' : status.sub}</AppText> : null}</View>
+        <View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">{convo?.otherDisplayName ?? 'رسالة من تِسوى'}</AppText><AppText muted>@{convo?.otherUsername ?? 'teswa'}</AppText>{status ? <AppText muted style={styles.subtleLine}>{status.sub}</AppText> : null}</View>
         {status ? <View style={styles.pill}><AppText muted>{status.label}</AppText></View> : null}
       </Pressable>
       <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
@@ -231,7 +230,7 @@ export default function DirectScreen() {
         streamMessages.map((m) => {
           const mine = m.userId === user?.id;
           const read = mine && latestReadAtMs ? (+new Date(m.createdAt) <= latestReadAtMs) : false;
-          const mineStatus = mine ? (sending && body.trim() ? 'جارٍ الإرسال' : (read ? 'اتقرت' : 'اتبعثت')) : undefined;
+          const mineStatus = mine ? (read ? 'اتقرت' : 'اتبعثت') : undefined;
           return renderBubble(m.text, mine, m.createdAt, m.userName, m.id, mineStatus);
         })
       ) : (
