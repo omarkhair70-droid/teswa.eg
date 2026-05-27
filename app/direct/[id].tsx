@@ -21,6 +21,7 @@ import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from 
 
 const DIRECT_CHAT_PRO_ENABLED = true;
 type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string };
+type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
 
 const statusMeta = {
   accepted: { label: 'Direct Chat Pro', sub: 'مساحة تفاوض مباشرة' },
@@ -44,12 +45,16 @@ export default function DirectScreen() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamConnecting, setStreamConnecting] = useState(false);
   const [streamReady, setStreamReady] = useState(false);
+  const [directConnectionState, setDirectConnectionState] = useState<DirectConnectionState>('idle');
+  const [typingText, setTypingText] = useState<string | null>(null);
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const directActionsSheetRef = useRef<BottomSheetModal>(null);
   const streamClientRef = useRef<any>(null);
   const streamChannelRef = useRef<any>(null);
+  const streamUnsubsRef = useRef<Array<() => void>>([]);
+  const typingThrottleRef = useRef<number>(0);
 
   const mergeById = useCallback((prev: any[], next: any[]) => {
     const map = new Map<string, any>();
@@ -57,9 +62,92 @@ export default function DirectScreen() {
     return Array.from(map.values()).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
   }, []);
   const load = useCallback(async (opts?: { background?: boolean }) => { if (!conversationId) return; const background = !!opts?.background; if (!background) setLoading(true); const [messageResult, directConvo] = await Promise.all([fetchDirectConversationMessages(conversationId), fetchDirectConversation(conversationId)]); if (messageResult.ok) { setMessages((prev) => mergeById(prev, messageResult.messages)); if (background) setError(null); } else setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message); setConvo((prev: any) => directConvo ?? prev); if (!directConvo) setInitialLoadFailed((prev) => (background ? prev : true)); if (!background) { setInitialLoadFailed(!directConvo); setLoading(false); } }, [conversationId, mergeById]);
-  const hydrateFromChannel = useCallback(() => { const channel = streamChannelRef.current; if (!channel) return; const mapped = (channel.state.messages ?? []).map((msg: any) => ({ id: msg.id, text: msg.text ?? '', createdAt: msg.created_at ?? new Date().toISOString(), userId: msg.user?.id ?? '', userName: msg.user?.name })); setStreamMessages(mapped); }, []);
-  const cleanupStream = useCallback(async () => { streamChannelRef.current = null; setStreamReady(false); if (streamClientRef.current) { try { await streamClientRef.current.disconnectUser(); } catch {} streamClientRef.current = null; } }, []);
-  const connectStream = useCallback(async () => { if (!DIRECT_CHAT_PRO_ENABLED || !convo || convo.status !== 'accepted') return; setStreamConnecting(true); setStreamError(null); try { const creds = await fetchStreamChatToken(); if (!creds.ok) throw new Error(creds.message); const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId }); const streamExpo = await import('stream-chat-expo'); const client = streamExpo.StreamChat.getInstance(creds.apiKey); await client.connectUser({ id: creds.userId }, creds.token); const channel = client.channel(cfg.type, cfg.id, { members: cfg.members }); await channel.watch(); streamClientRef.current = client; streamChannelRef.current = channel; hydrateFromChannel(); channel.on('message.new', () => hydrateFromChannel()); channel.on('message.updated', () => hydrateFromChannel()); channel.on('message.deleted', () => hydrateFromChannel()); setStreamReady(true); } catch { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); await cleanupStream(); } finally { setStreamConnecting(false); } }, [cleanupStream, conversationId, convo, hydrateFromChannel]);
+  const hydrateFromChannel = useCallback(() => {
+    const channel = streamChannelRef.current;
+    if (!channel) return;
+    const rawMessages = Array.isArray(channel.state?.messages) ? channel.state.messages : [];
+    const mapped = rawMessages.map((msg: any, idx: number) => {
+      const safeCreatedAt = typeof msg?.created_at === 'string' ? msg.created_at : new Date().toISOString();
+      const safeId = typeof msg?.id === 'string' && msg.id.length > 0 ? msg.id : `fallback-${safeCreatedAt}-${idx}`;
+      return {
+        id: safeId,
+        text: typeof msg?.text === 'string' ? msg.text : '',
+        createdAt: safeCreatedAt,
+        userId: typeof msg?.user?.id === 'string' ? msg.user.id : '',
+        userName: typeof msg?.user?.name === 'string' ? msg.user.name : undefined,
+      } as StreamMessage;
+    }).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+    setStreamMessages((prev) => mergeById(prev, mapped));
+  }, [mergeById]);
+  const clearStreamSubs = useCallback(() => {
+    streamUnsubsRef.current.forEach((unsub) => {
+      try { unsub(); } catch {}
+    });
+    streamUnsubsRef.current = [];
+  }, []);
+  const cleanupStream = useCallback(async () => {
+    clearStreamSubs();
+    setTypingText(null);
+    streamChannelRef.current = null;
+    setStreamReady(false);
+    setDirectConnectionState('idle');
+    if (streamClientRef.current) {
+      try { await streamClientRef.current.disconnectUser(); } catch {}
+      streamClientRef.current = null;
+    }
+  }, [clearStreamSubs]);
+  const connectStream = useCallback(async () => {
+    if (!DIRECT_CHAT_PRO_ENABLED || !convo || convo.status !== 'accepted') return;
+    setStreamConnecting(true);
+    setDirectConnectionState('connecting');
+    setStreamError(null);
+    try {
+      clearStreamSubs();
+      const creds = await fetchStreamChatToken();
+      if (!creds.ok) throw new Error(creds.message);
+      const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
+      const streamExpo = await import('stream-chat-expo');
+      const client = streamExpo.StreamChat.getInstance(creds.apiKey);
+      await client.connectUser({ id: creds.userId }, creds.token);
+      const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
+      await channel.watch();
+      streamClientRef.current = client;
+      streamChannelRef.current = channel;
+      hydrateFromChannel();
+      const onMessageChange = () => hydrateFromChannel();
+      const onTypingStart = (event: any) => {
+        const typistId = event?.user?.id;
+        if (!typistId || typistId === user?.id) return;
+        const typistName = event?.user?.name || convo?.otherDisplayName;
+        setTypingText(typistName ? `${typistName} بيكتب...` : 'بيكتب...');
+      };
+      const onTypingStop = (event: any) => {
+        const typistId = event?.user?.id;
+        if (!typistId || typistId === user?.id) return;
+        setTypingText(null);
+      };
+      const subs = [
+        channel.on('message.new', onMessageChange),
+        channel.on('message.updated', onMessageChange),
+        channel.on('message.deleted', onMessageChange),
+        channel.on('typing.start', onTypingStart),
+        channel.on('typing.stop', onTypingStop),
+      ];
+      streamUnsubsRef.current = subs.map((s: any) => {
+        if (typeof s?.unsubscribe === 'function') return () => s.unsubscribe();
+        if (typeof s === 'function') return s;
+        // Stream SDK unsubscribe shapes vary between versions; fallback is no-op to avoid crashes.
+        return () => {};
+      });
+      setStreamReady(true);
+      setDirectConnectionState('ready');
+    } catch {
+      setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.');
+      setDirectConnectionState('unavailable');
+      await cleanupStream();
+      setDirectConnectionState('unavailable');
+    } finally { setStreamConnecting(false); }
+  }, [cleanupStream, clearStreamSubs, conversationId, convo, hydrateFromChannel, user?.id]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const otherUserId = convo?.otherUserId; if (!user?.id || !otherUserId) return; let active = true; void (async () => { const state = await fetchUserBlockState(user.id, otherUserId); if (!active || !state.ok) return; setBlockedByMe(state.state.blockedByMe); })(); return () => { active = false; }; }, [convo?.otherUserId, user?.id]);
@@ -82,25 +170,38 @@ export default function DirectScreen() {
 
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
-      if (streamConnecting) return 'بنجهز Direct Chat Pro...';
+      if (directConnectionState === 'connecting' || streamConnecting) return 'بنجهز Direct Chat Pro...';
       if (streamError || !streamReady) return 'الشات الجديد غير متاح الآن';
       return 'اكتب رسالة في Direct Chat Pro...';
     }
 
     if (composerState.disabled) return 'المحادثة غير متاحة للإرسال الآن';
     return 'اكتب رسالة بسيطة...';
-  }, [acceptedDirectProActive, composerState.disabled, streamConnecting, streamError, streamReady]);
+  }, [acceptedDirectProActive, composerState.disabled, directConnectionState, streamConnecting, streamError, streamReady]);
 
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
 
-  const renderBubble = (text: string, isMine: boolean, createdAt: string, userName?: string, key?: string) => (
+  const latestReadAtMs = useMemo(() => {
+    const channel = streamChannelRef.current;
+    const reads = channel?.state?.read;
+    if (!reads || typeof reads !== 'object') return null;
+    const values = Object.values(reads) as any[];
+    const otherReads = values.filter((r) => r?.user?.id && r.user.id !== user?.id);
+    const max = otherReads.reduce((acc, r) => {
+      const dt = r?.last_read ? +new Date(r.last_read) : 0;
+      return dt > acc ? dt : acc;
+    }, 0);
+    return max > 0 ? max : null;
+  }, [streamMessages, user?.id]);
+  const renderBubble = (text: string, isMine: boolean, createdAt: string, userName?: string, key?: string, mineStatus?: string) => (
     <View key={key} style={[styles.bubbleRow, isMine ? styles.bubbleMineRow : styles.bubbleOtherRow]}>
       <View style={[styles.bubble, isMine ? styles.mine : styles.other]}>
         {!isMine && userName ? <AppText muted style={styles.senderHint}>{userName}</AppText> : null}
         <AppText style={styles.bodyText}>{(text ?? '').trim() || '...'}</AppText>
         <AppText muted style={styles.time}>{new Date(createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
+        {isMine && mineStatus ? <AppText muted style={styles.time}>{mineStatus}</AppText> : null}
       </View>
     </View>
   );
@@ -109,7 +210,7 @@ export default function DirectScreen() {
     <View style={styles.header}>
       <Pressable style={styles.headerIdentity} onPress={() => { if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); }} disabled={!convo?.otherUserId}>
         <View style={styles.avatarWrap}>{convo?.otherAvatarUrl ? <Image source={{ uri: convo.otherAvatarUrl }} style={styles.avatar} /> : <Ionicons name="person-circle" size={34} color={colors.textMuted} />}</View>
-        <View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">{convo?.otherDisplayName ?? 'رسالة من تِسوى'}</AppText><AppText muted>@{convo?.otherUsername ?? 'teswa'}</AppText>{status ? <AppText muted style={styles.subtleLine}>{status.sub}</AppText> : null}</View>
+        <View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">{convo?.otherDisplayName ?? 'رسالة من تِسوى'}</AppText><AppText muted>@{convo?.otherUsername ?? 'teswa'}</AppText>{status ? <AppText muted style={styles.subtleLine}>{acceptedDirectProActive && convo?.otherUserOnline === true ? 'متصل الآن' : status.sub}</AppText> : null}</View>
         {status ? <View style={styles.pill}><AppText muted>{status.label}</AppText></View> : null}
       </Pressable>
       <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
@@ -125,9 +226,14 @@ export default function DirectScreen() {
     <KeyboardAwareScrollView bottomOffset={102} contentContainerStyle={styles.messagesWrap}>
       {streamError ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> : null}
       {usingStreamChat ? (
-        streamConnecting && streamMessages.length === 0 ? <EmptyState title="بنجهز Direct Chat Pro..." description="بنفتح مساحة المحادثة الآمنة." /> :
+        directConnectionState === 'connecting' && streamMessages.length === 0 ? <EmptyState title="بنجهز Direct Chat Pro..." description="بنفتح مساحة المحادثة الآمنة." /> :
         streamMessages.length === 0 ? <EmptyState title="ابدأوا الاتفاق" description="اسأل سؤال بسيط أو وضّح تفاصيل الحاجة اللي بتتكلموا عليها." /> :
-        streamMessages.map((m) => renderBubble(m.text, m.userId === user?.id, m.createdAt, m.userName, m.id))
+        streamMessages.map((m) => {
+          const mine = m.userId === user?.id;
+          const read = mine && latestReadAtMs ? (+new Date(m.createdAt) <= latestReadAtMs) : false;
+          const mineStatus = mine ? (sending && body.trim() ? 'جارٍ الإرسال' : (read ? 'اتقرت' : 'اتبعثت')) : undefined;
+          return renderBubble(m.text, mine, m.createdAt, m.userName, m.id, mineStatus);
+        })
       ) : (
         messages.length === 0 ? <EmptyState title="ابدأوا الكلام" description="اكتب أول رسالة وافتح مساحة للتواصل بهدوء." /> :
         messages.map((m) => renderBubble(m.body, m.senderId === user?.id, m.createdAt, undefined, m.id))
@@ -135,13 +241,14 @@ export default function DirectScreen() {
     </KeyboardAwareScrollView>
 
     {convo?.status === 'accepted' && DIRECT_CHAT_PRO_ENABLED ? <View style={styles.voiceNote}><Ionicons name="mic-outline" size={14} color={colors.textMuted} /><AppText muted>الرسائل الصوتية راجعة قريبًا في Direct Chat Pro.</AppText></View> : null}
+    {typingText && usingStreamChat ? <AppText muted style={styles.info}>{typingText}</AppText> : null}
     {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
     <KeyboardStickyView offset={{ opened: 6, closed: 0 }}>
       <View style={styles.composerWrap}>
         <View style={styles.composer}>
           <Pressable style={styles.plus} disabled><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
-          <TextInput value={body} onChangeText={setBody} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
+          <TextInput value={body} onChangeText={(value) => { setBody(value); if (acceptedDirectProActive && streamReady && streamChannelRef.current) { const now = Date.now(); if (now - typingThrottleRef.current > 1700) { typingThrottleRef.current = now; try { if (typeof streamChannelRef.current.keystroke === 'function') streamChannelRef.current.keystroke(); } catch {} } } }} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
           <Pressable disabled={composerDisabled} style={[styles.send, composerDisabled && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed) return; setSending(true); try { if (acceptedDirectProActive) { if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; } await streamChannelRef.current.sendMessage({ text: trimmed }); hydrateFromChannel(); } else { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); } setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
         </View>
         <AppText muted style={styles.comingSoon}>قريبًا: ميديا، صوت، ودولابك.</AppText>
