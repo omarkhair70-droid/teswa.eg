@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -23,8 +24,9 @@ import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 
 const DIRECT_CHAT_PRO_ENABLED = true;
-type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number }> };
+type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }> };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
+type PendingVoice = { uri: string; fileName: string; mimeType: string; durationSeconds?: number };
 type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
 
 const statusMeta = {
@@ -59,6 +61,11 @@ export default function DirectScreen() {
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [mediaSending, setMediaSending] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [pendingVoice, setPendingVoice] = useState<PendingVoice | null>(null);
+  const [voiceRecordingDurationSeconds, setVoiceRecordingDurationSeconds] = useState(0);
+  const [voiceSending, setVoiceSending] = useState(false);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const directActionsSheetRef = useRef<BottomSheetModal>(null);
   const messageActionsSheetRef = useRef<BottomSheetModal>(null);
   const attachmentSheetRef = useRef<BottomSheetModal>(null);
@@ -66,6 +73,11 @@ export default function DirectScreen() {
   const streamChannelRef = useRef<any>(null);
   const streamUnsubsRef = useRef<Array<() => void>>([]);
   const typingThrottleRef = useRef<number>(0);
+  const recordingStoppedRef = useRef(false);
+  const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
+  const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
+  const voiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const voiceRecorderState = useAudioRecorderState(voiceRecorder, 250);
 
   const mergeById = useCallback((prev: any[], next: any[]) => {
     const map = new Map<string, any>();
@@ -97,6 +109,7 @@ export default function DirectScreen() {
           thumbUrl: typeof attachment?.thumb_url === 'string' ? attachment.thumb_url : undefined,
           mimeType: typeof attachment?.mime_type === 'string' ? attachment.mime_type : undefined,
           fileSize: typeof attachment?.file_size === 'number' ? attachment.file_size : undefined,
+          durationSeconds: typeof attachment?.duration === 'number' ? attachment.duration : typeof attachment?.duration_seconds === 'number' ? attachment.duration_seconds : typeof attachment?.extraData?.duration === 'number' ? attachment.extraData.duration : undefined,
         })) : undefined,
         quotedMessage: msg?.quoted_message && typeof msg.quoted_message === 'object' ? {
           id: typeof msg.quoted_message?.id === 'string' ? msg.quoted_message.id : '',
@@ -194,8 +207,10 @@ export default function DirectScreen() {
     return { disabled: false, note: null as string | null };
   }, [convo?.status, hasRequesterAlreadySent, isReceiverOnRequest, isRequesterOnRequest]);
   const status = (convo?.status && statusMeta[convo.status as keyof typeof statusMeta]) || null;
-  const composerDisabled = composerState.disabled || sending || mediaSending || (acceptedDirectProActive && (!streamReady || streamConnecting));
+  const composerDisabled = composerState.disabled || sending || mediaSending || voiceSending || (acceptedDirectProActive && (!streamReady || streamConnecting));
   const canOpenAttachments = acceptedDirectProActive && streamReady && !streamError && !!streamChannelRef.current && !composerDisabled;
+  const canUseVoice = acceptedDirectProActive && streamReady && !streamError && !!streamChannelRef.current && !composerDisabled && !mediaSending && !voiceSending;
+  const formatDuration = useCallback((seconds: number) => `${String(Math.floor(Math.max(0, seconds) / 60)).padStart(2, '0')}:${String(Math.max(0, seconds) % 60).padStart(2, '0')}`, []);
 
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
@@ -207,6 +222,20 @@ export default function DirectScreen() {
     if (composerState.disabled) return 'المحادثة غير متاحة للإرسال الآن';
     return 'اكتب رسالة بسيطة...';
   }, [acceptedDirectProActive, composerState.disabled, directConnectionState, streamConnecting, streamError, streamReady]);
+  useEffect(() => { setVoiceRecordingDurationSeconds(Math.floor((voiceRecorderState.durationMillis ?? 0) / 1000)); }, [voiceRecorderState.durationMillis]);
+  useEffect(() => {
+    if (!voicePlayerStatus.didJustFinish) return;
+    voicePlayer.pause();
+    void voicePlayer.seekTo(0).catch(() => undefined);
+    setPlayingVoiceId(null);
+  }, [voicePlayer, voicePlayerStatus.didJustFinish]);
+  useEffect(() => () => {
+    void (async () => {
+      try { if (voiceRecorderState.isRecording && !recordingStoppedRef.current) await voiceRecorder.stop(); } catch {}
+      try { await voicePlayer.pause(); } catch {}
+      try { await voicePlayer.seekTo(0); } catch {}
+    })();
+  }, [voicePlayer, voiceRecorder, voiceRecorderState.isRecording]);
   const latestReadAtMs = useMemo(() => {
     const channel = streamChannelRef.current;
     const reads = channel?.state?.read;
@@ -322,6 +351,72 @@ export default function DirectScreen() {
     } catch { setActionFeedback('تعذر إرسال الميديا حالياً.'); }
     finally { setMediaSending(false); setSending(false); }
   }, [body, hydrateFromChannel, pendingAttachment, replyTarget?.id, streamError, streamReady]);
+  const cancelVoiceRecording = useCallback(async () => {
+    try { if (voiceRecorderState.isRecording) { recordingStoppedRef.current = true; await voiceRecorder.stop(); } } catch {}
+    setIsRecordingVoice(false);
+    setPendingVoice(null);
+    setVoiceRecordingDurationSeconds(0);
+    setActionFeedback('تم إلغاء التسجيل.');
+  }, [voiceRecorder, voiceRecorderState.isRecording]);
+  const startVoiceRecording = useCallback(async () => {
+    if (!canUseVoice || isRecordingVoice) return;
+    try {
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (!permission.granted) { setActionFeedback('محتاجين إذن الميكروفون لتسجيل رسالة صوتية.'); return; }
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      setVoiceRecordingDurationSeconds(0);
+      recordingStoppedRef.current = false;
+      await voiceRecorder.prepareToRecordAsync();
+      voiceRecorder.record();
+      setIsRecordingVoice(true);
+      setActionFeedback('بدأ التسجيل.');
+    } catch { setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.'); }
+  }, [canUseVoice, isRecordingVoice, voiceRecorder]);
+  const sendVoiceMessage = useCallback(async () => {
+    if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    setVoiceSending(true);
+    setActionFeedback('جاري إرسال الرسالة الصوتية...');
+    try {
+      recordingStoppedRef.current = true;
+      if (voiceRecorderState.isRecording) await voiceRecorder.stop();
+      const uri = voiceRecorder.uri;
+      if (!uri) throw new Error('missing voice uri');
+      const channel = streamChannelRef.current;
+      if (typeof channel.sendFile !== 'function') throw new Error('send file unavailable');
+      const fileName = `voice-${Date.now()}.m4a`;
+      const mimeType = 'audio/m4a';
+      const durationSeconds = Math.max(1, voiceRecordingDurationSeconds || Math.floor((voiceRecorderState.durationMillis ?? 0) / 1000));
+      setPendingVoice({ uri, fileName, mimeType, durationSeconds });
+      const uploaded = await channel.sendFile(uri, fileName, mimeType);
+      const assetUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
+      if (!assetUrl || assetUrl.startsWith('file://')) throw new Error('voice upload failed');
+      const attachments = [{ type: 'audio', asset_url: assetUrl, title: fileName, name: fileName, mime_type: mimeType, duration: durationSeconds }];
+      const trimmed = body.trim();
+      const payload: any = { ...(trimmed ? { text: trimmed } : {}), attachments, ...(replyTarget?.id ? { quoted_message_id: replyTarget.id } : {}) };
+      try { await channel.sendMessage(payload); } catch { await channel.sendMessage({ ...(trimmed ? { text: trimmed } : {}), attachments }); }
+      hydrateFromChannel();
+      setIsRecordingVoice(false);
+      setPendingVoice(null);
+      setVoiceRecordingDurationSeconds(0);
+      setBody('');
+      setReplyTarget(null);
+    } catch { setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.'); }
+    finally { setVoiceSending(false); }
+  }, [acceptedDirectProActive, body, hydrateFromChannel, replyTarget?.id, streamError, streamReady, voiceRecorder, voiceRecorderState.durationMillis, voiceRecorderState.isRecording, voiceRecordingDurationSeconds]);
+  const togglePlayVoice = useCallback(async (messageId: string, url?: string) => {
+    if (!url) { setActionFeedback('تعذر تشغيل الرسالة الصوتية.'); return; }
+    try {
+      if (playingVoiceId === messageId && voicePlayer.playing) {
+        voicePlayer.pause();
+        setPlayingVoiceId(null);
+        return;
+      }
+      await voicePlayer.pause();
+      await voicePlayer.replace(url);
+      voicePlayer.play();
+      setPlayingVoiceId(messageId);
+    } catch { setActionFeedback('تعذر تشغيل الرسالة الصوتية.'); }
+  }, [playingVoiceId, voicePlayer]);
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
@@ -362,7 +457,12 @@ export default function DirectScreen() {
                   {m.attachments?.map((attachment, idx) => {
                     const isImage = attachment.type === 'image' || !!attachment.imageUrl;
                     const isVideo = attachment.type === 'video';
+                    const isAudio = attachment.type === 'audio' || !!attachment.mimeType?.startsWith('audio/') || /\.(m4a|mp3|aac|wav|ogg)$/i.test(`${attachment.assetUrl || attachment.name || ''}`);
                     const label = attachment.title || attachment.name || (isImage ? 'صورة' : isVideo ? 'فيديو' : 'ملف');
+                    if (isAudio) {
+                      const voiceId = `${m.id}-att-${idx}`;
+                      return <Pressable key={voiceId} style={styles.voiceBubble} onPress={() => { void togglePlayVoice(voiceId, attachment.assetUrl); }}><Ionicons name={playingVoiceId === voiceId ? 'pause-circle' : 'play-circle'} size={22} color={colors.primary} /><View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">رسالة صوتية</AppText>{typeof attachment.durationSeconds === 'number' ? <AppText muted>{formatDuration(Math.floor(attachment.durationSeconds))}</AppText> : null}</View></Pressable>;
+                    }
                     if (isImage && (attachment.imageUrl || attachment.thumbUrl || attachment.assetUrl)) {
                       return <Pressable key={`${m.id}-att-${idx}`} onPress={() => setActionFeedback('فتح الصورة قريباً')}><Image source={{ uri: attachment.imageUrl || attachment.thumbUrl || attachment.assetUrl }} style={styles.inlineImage} /><AppText muted>{label}</AppText></Pressable>;
                     }
@@ -385,7 +485,7 @@ export default function DirectScreen() {
       )}
     </KeyboardAwareScrollView>
 
-    {convo?.status === 'accepted' && DIRECT_CHAT_PRO_ENABLED ? <View style={styles.voiceNote}><Ionicons name="mic-outline" size={14} color={colors.textMuted} /><AppText muted>الرسائل الصوتية راجعة قريبًا في Direct Chat Pro.</AppText></View> : null}
+    {isRecordingVoice && acceptedDirectProActive ? <View style={styles.recordingCard}><AppText weight="semibold">جاري التسجيل...</AppText><AppText muted>{formatDuration(voiceRecordingDurationSeconds)}</AppText><View style={styles.recordingActions}><AppButton label="إلغاء" variant="neutral" onPress={() => { void cancelVoiceRecording(); }} /><AppButton label={voiceSending ? 'جاري الإرسال...' : 'إرسال'} disabled={voiceSending} onPress={() => { void sendVoiceMessage(); }} /></View></View> : null}
     {typingText && usingStreamChat ? <AppText muted style={styles.info}>{typingText}</AppText> : null}
     {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
@@ -400,6 +500,7 @@ export default function DirectScreen() {
         </View> : null}
         <View style={styles.composer}>
           <Pressable style={styles.plus} disabled={!canOpenAttachments} onPress={() => attachmentSheetRef.current?.present()}><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
+          {acceptedDirectProActive ? <Pressable style={[styles.plus, !canUseVoice && styles.sendDisabled]} disabled={!canUseVoice || isRecordingVoice} onPress={() => { void startVoiceRecording(); }}><Ionicons name="mic" size={18} color={canUseVoice ? colors.primary : colors.textMuted} /></Pressable> : null}
           <TextInput value={body} onChangeText={(value) => { setBody(value); if (acceptedDirectProActive && streamReady && streamChannelRef.current) { const now = Date.now(); if (now - typingThrottleRef.current > 1700) { typingThrottleRef.current = now; try { if (typeof streamChannelRef.current.keystroke === 'function') streamChannelRef.current.keystroke(); } catch {} } } }} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
           <Pressable disabled={composerDisabled || (!body.trim() && !pendingAttachment)} style={[styles.send, (composerDisabled || (!body.trim() && !pendingAttachment)) && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed && !pendingAttachment) return; if (acceptedDirectProActive) { await sendViaStream(); return; } if (!trimmed) return; setSending(true); try { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
         </View>
@@ -412,6 +513,7 @@ export default function DirectScreen() {
           </View>
           <Pressable onPress={() => setPendingAttachment(null)}><Ionicons name="close-circle-outline" size={20} color={colors.textMuted} /></Pressable>
         </View> : null}
+        {pendingVoice ? <AppText muted style={styles.comingSoon}>🎙️ {pendingVoice.fileName}</AppText> : null}
       </View>
     </KeyboardStickyView>
 
@@ -450,7 +552,8 @@ const styles = StyleSheet.create({
   bodyText: { textAlign: 'right' },
   senderHint: { fontSize: 11 },
   time: { fontSize: 11 },
-  voiceNote: { marginHorizontal: spacing.md, marginBottom: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  recordingCard: { marginHorizontal: spacing.md, marginBottom: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: spacing.xs },
+  recordingActions: { flexDirection: 'row-reverse', gap: spacing.xs },
   composerWrap: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: spacing.xs },
   replyCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   replyClose: { width: 26, height: 26, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center' },
@@ -464,6 +567,7 @@ const styles = StyleSheet.create({
   quotedUser: { fontSize: 11 },
   inlineImage: { width: 160, height: 120, borderRadius: radii.md, marginTop: 6, marginBottom: 3 },
   fileCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, gap: 2 },
+  voiceBubble: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   pendingCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   pendingImage: { width: 52, height: 52, borderRadius: radii.md },
   reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },

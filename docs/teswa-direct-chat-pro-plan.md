@@ -399,3 +399,16 @@ Explicitly unchanged in V1.4:
 ## Next phase
 
 - **Direct Chat Pro V1.5 — Voice Messages**
+
+## Direct Chat Pro V1.5 — Voice Messages
+
+- Added voice recording in accepted Direct Chat Pro composer with clear recording state (`جاري التسجيل...`) and timer.
+- Added safe cancel and send controls for recording (`إلغاء` / `إرسال`) with cleanup-first behavior.
+- Voice upload/send now goes through Stream only using file upload + audio attachment payload (no Supabase fallback).
+- Stream message hydration now parses audio attachment metadata defensively (`type`, `asset_url`, `mime_type`, `file_size`, `duration`).
+- Audio attachments render as dedicated voice bubbles (not generic files) with `رسالة صوتية`, play/pause icon, and duration when available.
+- Added safe playback handling with single-active playback and user-friendly error feedback.
+- Added permission/error feedback for mic denial and send/play failures without alert spam.
+
+### Next Phase
+- Direct Chat Pro V1.6 — Composer Actions + Dolab Bridge
