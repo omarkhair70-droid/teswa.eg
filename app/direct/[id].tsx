@@ -166,9 +166,10 @@ export default function DirectScreen() {
   }, [clearStreamSubs]);
   const connectStream = useCallback(async () => {
     if (!DIRECT_CHAT_PRO_ENABLED || !convo || convo.status !== 'accepted') return;
+    setStreamError(null);
+    setStreamReady(false);
     setStreamConnecting(true);
     setDirectConnectionState('connecting');
-    setStreamError(null);
     try {
       clearStreamSubs();
       const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
@@ -179,16 +180,26 @@ export default function DirectScreen() {
         displayName: displayName ?? undefined,
         avatarUrl: avatarUrl ?? undefined,
       });
-      if (!creds.ok) throw new Error(creds.message);
+      if (!creds.ok) {
+        if (__DEV__) console.log('[direct-stream] token fail');
+        throw new Error(creds.message);
+      }
+      if (__DEV__) console.log('[direct-stream] token ok');
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
+      if (__DEV__) console.log('[direct-stream] channel config', { channelType: cfg.type, channelId: cfg.id });
       const { StreamChat } = await import('stream-chat');
       const client = StreamChat.getInstance(creds.apiKey);
       await client.connectUser({ id: creds.userId }, creds.token);
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
+      if (__DEV__) console.log('[direct-stream] watch success', { channelType: cfg.type, channelId: cfg.id });
       streamClientRef.current = client;
       streamChannelRef.current = channel;
       hydrateFromChannel();
+      setStreamError(null);
+      setStreamReady(true);
+      setDirectConnectionState('ready');
+      if (__DEV__) console.log('[direct-stream] ready state set');
       const onMessageChange = () => hydrateFromChannel();
       const onTypingStart = (event: any) => {
         const typistId = event?.user?.id;
@@ -214,11 +225,11 @@ export default function DirectScreen() {
         // Stream SDK unsubscribe shapes vary between versions; fallback is no-op to avoid crashes.
         return () => {};
       });
-      setStreamReady(true);
-      setDirectConnectionState('ready');
     } catch {
-      setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.');
+      if (__DEV__) console.log('[direct-stream] watch fail');
+      setStreamReady(false);
       setDirectConnectionState('unavailable');
+      setStreamError('تعذر تجهيز Direct Chat Pro حالياً. جرّب تاني بعد لحظات.');
       await cleanupStream();
       setDirectConnectionState('unavailable');
     } finally { setStreamConnecting(false); }
