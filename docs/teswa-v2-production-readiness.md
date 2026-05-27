@@ -54,6 +54,8 @@
 
 ### Implemented
 - Added Edge Function `stream-direct-message-webhook` to receive Stream direct-message webhook events, validate accepted direct conversation membership server-side, enforce block safety, dedupe by Stream message id, and create one Supabase notification for the recipient.
+- Added internal-only `direct_push_events` dedupe table (service-role usage only; RLS enabled and anon/authenticated revoked).
+- Webhook retry behavior is dedupe-safe and recoverable: duplicate Stream message ids are skipped, and if notification insert fails the event row is removed so retries are not permanently blocked.
 - Existing `send-notification-push` now allowlists `direct_message_received` and sends Expo push payload including the `/direct/{conversationId}` route from the notification row.
 - Notification tap routing remains on existing mobile push route resolver path and opens `/direct/{conversationId}`.
 

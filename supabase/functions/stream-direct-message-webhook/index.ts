@@ -108,7 +108,10 @@ Deno.serve(async (req: Request) => {
       .insert({ user_id: receiverUserId, actor_user_id: senderUserId, type: "direct_message_received", title: "رسالة جديدة على تِسوى", body: buildBodyPreview(payload.message), route: `/direct/${conversationId}` })
       .select("id")
       .single();
-    if (notificationError) return jsonResponse(500, { ok: false, error: "notification_insert_failed" });
+    if (notificationError) {
+      await supabase.from("direct_push_events").delete().eq("id", eventInsert.id as string);
+      return jsonResponse(500, { ok: false, error: "notification_insert_failed" });
+    }
 
     await supabase.from("direct_push_events").update({ notification_id: notification.id }).eq("id", eventInsert.id as string);
 
