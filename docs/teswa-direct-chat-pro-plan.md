@@ -718,3 +718,11 @@ Non-goals and guardrails remain unchanged:
 - No Story Thread changes.
 - No Deal Chat changes.
 - No DB/schema changes.
+
+
+## Teswa Swap Ceremony + Shareable Moment
+- Added a premium visual swap moment to celebrate real exchange milestones without changing backend contracts.
+- Offer sent is supported through `/offer/[id]?moment=sent` with the new Swap Ceremony UI.
+- Accepted/completed ceremony variants are only shown when real route/status signals exist (`moment=accepted` and confirmed completion), with no fake deal creation or status fabrication.
+- Share foundation is wired to existing `react-native-view-shot` + `expo-sharing` to export the ceremony image when available.
+- No Direct Chat runtime or Stream logic changed.

@@ -22,6 +22,7 @@ import { AppButton } from "@/components/ui/AppButton";
 import { AppCard } from "@/components/ui/AppCard";
 import { AppText } from "@/components/ui/AppText";
 import { TeswaMomentCard } from "@/components/ui/TeswaMomentCard";
+import { SwapCeremony } from "@/components/exchange/SwapCeremony";
 import { colors } from "@/constants/colors";
 import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
@@ -731,12 +732,13 @@ export default function Screen() {
             </AppCard>
           ) : null}
           {moment === "accepted" ? (
-            <TeswaMomentCard
-              eyebrow="الصفقة بدأت"
-              title="العرض اتقبل"
-              body="اتفتحت دردشة الصفقة. اتفقوا براحتكم."
-              icon="chatbubble-ellipses-outline"
-              tone="success"
+            <SwapCeremony
+              status="accepted"
+              requestedItemTitle={deal.requestedItem?.title}
+              offeredItemTitle={deal.offeredItem?.title}
+              requestedItemImageUrl={deal.requestedItem?.imageUrl ?? undefined}
+              offeredItemImageUrl={deal.offeredItem?.imageUrl ?? undefined}
+              onClose={() => router.replace(`/deal/${deal.id}`)}
             />
           ) : null}
           {completionMoment === "confirmed_waiting" ? (
@@ -749,15 +751,17 @@ export default function Screen() {
             />
           ) : null}
           {completionMoment === "completed" ? (
-            <TeswaMomentCard
-              eyebrow="لحظة مكتملة"
-              title="المقايضة تمت"
-              body="المقايضة تمت. تقدر تقيّم التجربة."
-              icon="checkmark-circle-outline"
-              tone="success"
-              primaryActionLabel="قيّم التجربة"
-              onPrimaryAction={() => router.push(`/review/deal/${deal.id}`)}
-            />
+            <View style={styles.groupGap}>
+              <SwapCeremony
+                status="completed"
+                requestedItemTitle={deal.requestedItem?.title}
+                offeredItemTitle={deal.offeredItem?.title}
+                requestedItemImageUrl={deal.requestedItem?.imageUrl ?? undefined}
+                offeredItemImageUrl={deal.offeredItem?.imageUrl ?? undefined}
+                onClose={() => router.push(`/review/deal/${deal.id}`)}
+              />
+              <AppButton label="كمل المحادثة" onPress={() => setCompletionMoment(null)} />
+            </View>
           ) : null}
           {["coordinating", "completed_pending_confirmation"].includes(deal.status) ? (
             <AppCard style={styles.compactActionGroup}>
