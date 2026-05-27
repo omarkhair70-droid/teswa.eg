@@ -83,10 +83,15 @@ export async function saveDirectMessageToDolab(input: {
     }
 
     const mapped = attachments.map(mapAttachmentToPendingMedia).filter((item): item is DolabPendingMedia => !!item);
+    const hasUnsupportedAttachments = attachments.length > mapped.length;
     if (mapped.length > 0) {
       const prevMedia = await readLocalDolabPendingMedia();
       await writeLocalDolabPendingMedia([...mapped, ...prevMedia]);
       savedMediaCount = mapped.length;
+    }
+
+    if (!savedText && savedMediaCount === 0 && hasUnsupportedAttachments) {
+      return { ok: false, message: 'نوع الملف ده لسه مش جاهز للحفظ في الدولاب.' };
     }
 
     return { ok: true, savedText, savedMediaCount };
@@ -126,7 +131,11 @@ export async function saveComposerDraftToDolab(input: { text?: string; attachmen
       await writeLocalDolabSelfMessages([{ id: uid('composer-draft'), body: text, messageType: 'text', linkedPendingMediaIds: [], createdAt: new Date().toISOString() }, ...prev]);
       savedText = true;
     }
-    if (attachment && attachment.kind !== 'file') {
+    if (attachment?.kind === 'file') {
+      if (!savedText) return { ok: false, message: 'حفظ الملفات في الدولاب جاي قريبًا.' };
+      return { ok: true, savedText, savedMedia: false };
+    }
+    if (attachment) {
       const prev = await readLocalDolabPendingMedia();
       await writeLocalDolabPendingMedia([{ id: uid('composer-media'), uri: attachment.uri, mediaType: attachment.kind, fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes, createdAt: new Date().toISOString(), uploadStatus: 'local', compressionStatus: attachment.kind === 'video' || attachment.kind === 'image' ? 'pending' : 'not_needed', originalUri: attachment.uri, originalSizeBytes: attachment.sizeBytes }, ...prev]);
       savedMedia = true;
