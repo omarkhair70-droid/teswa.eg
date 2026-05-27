@@ -202,10 +202,6 @@ export default function DirectScreen() {
     }, 0);
     return max > 0 ? max : null;
   }, [streamMessages, user?.id]);
-
-  if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
-  if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
-  if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
   const renderBubble = (text: string, isMine: boolean, createdAt: string, userName?: string, key?: string, mineStatus?: string) => (
     <View key={key} style={[styles.bubbleRow, isMine ? styles.bubbleMineRow : styles.bubbleOtherRow]}>
       <View style={[styles.bubble, isMine ? styles.mine : styles.other]}>
@@ -244,6 +240,9 @@ export default function DirectScreen() {
     if (typeof channel.sendReaction !== 'function') { setActionFeedback('ميزة التفاعل غير متاحة حالياً.'); return; }
     try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); setActionFeedback('تم إضافة التفاعل.'); } catch { setActionFeedback('تعذر إضافة التفاعل حالياً.'); }
   }, [hydrateFromChannel, selectedStreamMessage, user?.id]);
+  if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
+  if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
+  if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
 
   return <AppScreen>
     <View style={styles.header}>
