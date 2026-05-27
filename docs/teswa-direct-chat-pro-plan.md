@@ -349,6 +349,53 @@ Explicitly unchanged in V1.3:
 - Accepted Direct Chat Pro sends remain Stream-only (no Supabase fallback)
 - No attachments, no voice rollout, no Deal Chat changes, no Story Thread changes
 
+## Direct Chat Pro V1.4 — Attachments & Media
+
+This phase adds production-safe attachments/media UX for accepted Direct Chat Pro conversations in `app/direct/[id].tsx`, while preserving all existing architecture boundaries.
+
+Implemented in V1.4:
+
+- Composer attachment entry is now active only in accepted+ready Stream state (no activation for non-accepted conversations).
+- Attachment picker actions (Arabic-first):
+  - `صورة`
+  - `فيديو`
+  - `ملف`
+  - `إلغاء`
+- Image pick + preview + send:
+  - one-image selection via `expo-image-picker`
+  - local pending preview before send
+  - Stream upload/send flow only for accepted Direct Chat Pro
+- Video pick + preview + send:
+  - one-video selection via `expo-image-picker`
+  - pending preview card and send controls
+  - Stream upload/send flow with defensive method checks
+- Document/file pick + preview + send:
+  - one-file selection via `expo-document-picker`
+  - compact pending file card
+  - Stream upload/send flow with safe error handling
+- Stream message mapping now includes defensive attachment parsing (`type`, URLs, title/name, mime, size).
+- Media bubble rendering in chat:
+  - image thumbnails (compact premium style)
+  - video/file compact cards with Arabic labels
+  - safe tap feedback for not-yet-implemented open/view flows
+- Upload/send failure handling:
+  - Arabic-friendly feedback copy
+  - pending attachment retained on failure for retry/remove
+  - media sending state (`جاري إرسال الميديا...`) and composer send disabling while upload/send is in progress
+- Reply + media/text behavior:
+  - attempt quoted Stream send first when reply target exists
+  - safe Stream-only fallback to non-quoted send on quoted-send failure
+  - no Supabase fallback for accepted Direct Chat Pro
+
+Explicitly unchanged in V1.4:
+
+- No DB/schema changes
+- No request/accept/ignore/block behavior changes
+- No Stream init for non-accepted conversations
+- No voice message implementation in this phase
+- No Dolab bridge / Offer Cards rollout
+- No Story Thread or Deal Chat changes
+
 ## Next phase
 
-- **Direct Chat Pro V1.4 — Attachments & Media**
+- **Direct Chat Pro V1.5 — Voice Messages**

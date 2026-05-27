@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppScreen } from '@/components/ui/AppScreen';
@@ -21,7 +23,8 @@ import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 
 const DIRECT_CHAT_PRO_ENABLED = true;
-type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string } };
+type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number }> };
+type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
 type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
 
 const statusMeta = {
@@ -54,8 +57,11 @@ export default function DirectScreen() {
   const [selectedStreamMessage, setSelectedStreamMessage] = useState<StreamMessage | null>(null);
   const [replyTarget, setReplyTarget] = useState<Pick<StreamMessage, 'id' | 'text' | 'userName'> | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [mediaSending, setMediaSending] = useState(false);
   const directActionsSheetRef = useRef<BottomSheetModal>(null);
   const messageActionsSheetRef = useRef<BottomSheetModal>(null);
+  const attachmentSheetRef = useRef<BottomSheetModal>(null);
   const streamClientRef = useRef<any>(null);
   const streamChannelRef = useRef<any>(null);
   const streamUnsubsRef = useRef<Array<() => void>>([]);
@@ -71,7 +77,7 @@ export default function DirectScreen() {
     const channel = streamChannelRef.current;
     if (!channel) return;
     const rawMessages = Array.isArray(channel.state?.messages) ? channel.state.messages : [];
-    const mapped = rawMessages.map((msg: any, idx: number) => {
+    const mapped: StreamMessage[] = rawMessages.map((msg: any, idx: number): StreamMessage => {
       const safeCreatedAt = typeof msg?.created_at === 'string' ? msg.created_at : new Date().toISOString();
       const safeId = typeof msg?.id === 'string' && msg.id.length > 0 ? msg.id : `fallback-${safeCreatedAt}-${idx}`;
       return {
@@ -82,13 +88,23 @@ export default function DirectScreen() {
         userName: typeof msg?.user?.name === 'string' ? msg.user.name : undefined,
         reactionCounts: msg?.reaction_counts && typeof msg.reaction_counts === 'object' ? msg.reaction_counts : undefined,
         ownReactions: Array.isArray(msg?.own_reactions) ? msg.own_reactions.map((reaction: any) => reaction?.type).filter((type: unknown): type is string => typeof type === 'string') : undefined,
+        attachments: Array.isArray(msg?.attachments) ? msg.attachments.map((attachment: any) => ({
+          type: typeof attachment?.type === 'string' ? attachment.type : undefined,
+          title: typeof attachment?.title === 'string' ? attachment.title : undefined,
+          name: typeof attachment?.name === 'string' ? attachment.name : undefined,
+          assetUrl: typeof attachment?.asset_url === 'string' ? attachment.asset_url : undefined,
+          imageUrl: typeof attachment?.image_url === 'string' ? attachment.image_url : undefined,
+          thumbUrl: typeof attachment?.thumb_url === 'string' ? attachment.thumb_url : undefined,
+          mimeType: typeof attachment?.mime_type === 'string' ? attachment.mime_type : undefined,
+          fileSize: typeof attachment?.file_size === 'number' ? attachment.file_size : undefined,
+        })) : undefined,
         quotedMessage: msg?.quoted_message && typeof msg.quoted_message === 'object' ? {
           id: typeof msg.quoted_message?.id === 'string' ? msg.quoted_message.id : '',
           text: typeof msg.quoted_message?.text === 'string' ? msg.quoted_message.text : '',
           userName: typeof msg.quoted_message?.user?.name === 'string' ? msg.quoted_message.user.name : undefined,
         } : undefined,
-      } as StreamMessage;
-    }).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+      };
+    }).sort((a: StreamMessage, b: StreamMessage) => +new Date(a.createdAt) - +new Date(b.createdAt));
     setStreamMessages((prev) => mergeById(prev, mapped));
   }, [mergeById]);
   const clearStreamSubs = useCallback(() => {
@@ -118,8 +134,8 @@ export default function DirectScreen() {
       const creds = await fetchStreamChatToken();
       if (!creds.ok) throw new Error(creds.message);
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
-      const streamExpo = await import('stream-chat-expo');
-      const client = streamExpo.StreamChat.getInstance(creds.apiKey);
+      const { StreamChat } = await import('stream-chat');
+      const client = StreamChat.getInstance(creds.apiKey);
       await client.connectUser({ id: creds.userId }, creds.token);
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
@@ -178,7 +194,8 @@ export default function DirectScreen() {
     return { disabled: false, note: null as string | null };
   }, [convo?.status, hasRequesterAlreadySent, isReceiverOnRequest, isRequesterOnRequest]);
   const status = (convo?.status && statusMeta[convo.status as keyof typeof statusMeta]) || null;
-  const composerDisabled = composerState.disabled || sending || (acceptedDirectProActive && (!streamReady || streamConnecting));
+  const composerDisabled = composerState.disabled || sending || mediaSending || (acceptedDirectProActive && (!streamReady || streamConnecting));
+  const canOpenAttachments = acceptedDirectProActive && streamReady && !streamError && !!streamChannelRef.current && !composerDisabled;
 
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
@@ -240,6 +257,71 @@ export default function DirectScreen() {
     if (typeof channel.sendReaction !== 'function') { setActionFeedback('ميزة التفاعل غير متاحة حالياً.'); return; }
     try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); setActionFeedback('تم إضافة التفاعل.'); } catch { setActionFeedback('تعذر إضافة التفاعل حالياً.'); }
   }, [hydrateFromChannel, selectedStreamMessage, user?.id]);
+  const pickImage = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { setActionFeedback('تعذر اختيار الصورة.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: false, quality: 0.8 });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) { setActionFeedback('تعذر اختيار الصورة.'); return; }
+      setPendingAttachment({ kind: 'image', uri: asset.uri, fileName: asset.fileName ?? undefined, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.fileSize ?? undefined });
+    } catch { setActionFeedback('تعذر اختيار الصورة.'); }
+  }, []);
+  const pickVideo = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { setActionFeedback('تعذر اختيار الفيديو.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsMultipleSelection: false });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) { setActionFeedback('تعذر اختيار الفيديو.'); return; }
+      setPendingAttachment({ kind: 'video', uri: asset.uri, fileName: asset.fileName ?? undefined, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.fileSize ?? undefined });
+    } catch { setActionFeedback('تعذر اختيار الفيديو.'); }
+  }, []);
+  const pickFile = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ multiple: false });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) { setActionFeedback('تعذر اختيار الملف.'); return; }
+      setPendingAttachment({ kind: 'file', uri: asset.uri, fileName: asset.name, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.size ?? undefined });
+    } catch { setActionFeedback('تعذر اختيار الملف.'); }
+  }, []);
+  const sendViaStream = useCallback(async () => {
+    const trimmed = body.trim();
+    if (!trimmed && !pendingAttachment) return;
+    if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    setSending(true);
+    if (pendingAttachment) setMediaSending(true);
+    try {
+      let attachments: any[] | undefined;
+      if (pendingAttachment) {
+        const channel = streamChannelRef.current;
+        if (pendingAttachment.kind === 'image') {
+          if (typeof channel.sendImage !== 'function') { setActionFeedback('إرسال الميديا غير متاح حالياً.'); return; }
+          const uploaded = await channel.sendImage(pendingAttachment.uri);
+          const imageUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
+          if (!imageUrl) throw new Error('image upload failed');
+          attachments = [{ type: 'image', image_url: imageUrl, title: pendingAttachment.fileName, name: pendingAttachment.fileName, mime_type: pendingAttachment.mimeType, file_size: pendingAttachment.sizeBytes }];
+        } else {
+          if (typeof channel.sendFile !== 'function') { setActionFeedback('إرسال الميديا غير متاح حالياً.'); return; }
+          const uploaded = await channel.sendFile(pendingAttachment.uri, pendingAttachment.fileName, pendingAttachment.mimeType);
+          const fileUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
+          if (!fileUrl) throw new Error('file upload failed');
+          attachments = [{ type: pendingAttachment.kind === 'video' ? 'video' : 'file', asset_url: fileUrl, title: pendingAttachment.fileName, name: pendingAttachment.fileName, mime_type: pendingAttachment.mimeType, file_size: pendingAttachment.sizeBytes }];
+        }
+      }
+      const payload: any = { text: trimmed, ...(attachments ? { attachments } : {}), ...(replyTarget?.id ? { quoted_message_id: replyTarget.id } : {}) };
+      try { await streamChannelRef.current.sendMessage(payload); } catch { await streamChannelRef.current.sendMessage({ text: trimmed, ...(attachments ? { attachments } : {}) }); }
+      hydrateFromChannel();
+      setBody('');
+      setPendingAttachment(null);
+      setReplyTarget(null);
+      setError(null);
+    } catch { setActionFeedback('تعذر إرسال الميديا حالياً.'); }
+    finally { setMediaSending(false); setSending(false); }
+  }, [body, hydrateFromChannel, pendingAttachment, replyTarget?.id, streamError, streamReady]);
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
@@ -276,7 +358,16 @@ export default function DirectScreen() {
                 <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
                   {!mine && m.userName ? <AppText muted style={styles.senderHint}>{m.userName}</AppText> : null}
                   {m.quotedMessage?.id ? <View style={styles.quotedWrap}><AppText muted style={styles.quotedUser}>{m.quotedMessage.userName || 'رسالة'}</AppText><AppText muted numberOfLines={1}>{m.quotedMessage.text || '...'}</AppText></View> : null}
-                  <AppText style={styles.bodyText}>{(m.text ?? '').trim() || '...'}</AppText>
+                  <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>
+                  {m.attachments?.map((attachment, idx) => {
+                    const isImage = attachment.type === 'image' || !!attachment.imageUrl;
+                    const isVideo = attachment.type === 'video';
+                    const label = attachment.title || attachment.name || (isImage ? 'صورة' : isVideo ? 'فيديو' : 'ملف');
+                    if (isImage && (attachment.imageUrl || attachment.thumbUrl || attachment.assetUrl)) {
+                      return <Pressable key={`${m.id}-att-${idx}`} onPress={() => setActionFeedback('فتح الصورة قريباً')}><Image source={{ uri: attachment.imageUrl || attachment.thumbUrl || attachment.assetUrl }} style={styles.inlineImage} /><AppText muted>{label}</AppText></Pressable>;
+                    }
+                    return <Pressable key={`${m.id}-att-${idx}`} style={styles.fileCard} onPress={() => setActionFeedback(isVideo ? 'فتح الفيديو قريباً' : 'فتح الملفات قريباً')}><AppText>{isVideo ? '🎬 فيديو' : '📎 ملف'}</AppText><AppText muted>{label}</AppText>{attachment.mimeType ? <AppText muted>{attachment.mimeType}</AppText> : null}</Pressable>;
+                  })}
                   <AppText muted style={styles.time}>{new Date(m.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
                   {mine && mineStatus ? <AppText muted style={styles.time}>{mineStatus}</AppText> : null}
                   {(m.reactionCounts?.love || m.reactionCounts?.thumbs_up) ? <View style={styles.reactionsRow}>
@@ -308,11 +399,19 @@ export default function DirectScreen() {
           <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Ionicons name="close" size={16} color={colors.textMuted} /></Pressable>
         </View> : null}
         <View style={styles.composer}>
-          <Pressable style={styles.plus} disabled><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
+          <Pressable style={styles.plus} disabled={!canOpenAttachments} onPress={() => attachmentSheetRef.current?.present()}><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
           <TextInput value={body} onChangeText={(value) => { setBody(value); if (acceptedDirectProActive && streamReady && streamChannelRef.current) { const now = Date.now(); if (now - typingThrottleRef.current > 1700) { typingThrottleRef.current = now; try { if (typeof streamChannelRef.current.keystroke === 'function') streamChannelRef.current.keystroke(); } catch {} } } }} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
-          <Pressable disabled={composerDisabled} style={[styles.send, composerDisabled && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed) return; setSending(true); try { if (acceptedDirectProActive) { if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; } try { await streamChannelRef.current.sendMessage({ text: trimmed, ...(replyTarget?.id ? { quoted_message_id: replyTarget.id } : {}) } as any); } catch { await streamChannelRef.current.sendMessage({ text: trimmed }); } hydrateFromChannel(); setReplyTarget(null); } else { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); } setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
+          <Pressable disabled={composerDisabled || (!body.trim() && !pendingAttachment)} style={[styles.send, (composerDisabled || (!body.trim() && !pendingAttachment)) && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed && !pendingAttachment) return; if (acceptedDirectProActive) { await sendViaStream(); return; } if (!trimmed) return; setSending(true); try { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
         </View>
-        <AppText muted style={styles.comingSoon}>قريبًا: ميديا، صوت، ودولابك.</AppText>
+        {pendingAttachment ? <View style={styles.pendingCard}>
+          {pendingAttachment.kind === 'image' ? <Image source={{ uri: pendingAttachment.uri }} style={styles.pendingImage} /> : null}
+          <View style={{ flex: 1, gap: 2 }}>
+            <AppText>{pendingAttachment.kind === 'image' ? 'صورة جاهزة للإرسال' : pendingAttachment.kind === 'video' ? 'فيديو جاهز للإرسال' : 'ملف جاهز للإرسال'}</AppText>
+            {pendingAttachment.fileName ? <AppText muted numberOfLines={1}>{pendingAttachment.fileName}</AppText> : null}
+            {mediaSending ? <AppText muted>جاري إرسال الميديا...</AppText> : null}
+          </View>
+          <Pressable onPress={() => setPendingAttachment(null)}><Ionicons name="close-circle-outline" size={20} color={colors.textMuted} /></Pressable>
+        </View> : null}
       </View>
     </KeyboardStickyView>
 
@@ -320,6 +419,7 @@ export default function DirectScreen() {
     {error ? <AppCard style={styles.errorCard}><AppText muted>{error}</AppText></AppCard> : null}
     <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
+    <AppActionSheet ref={attachmentSheetRef} title="إرفاق ميديا" actions={[{ label: 'صورة', onPress: () => { attachmentSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { attachmentSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { attachmentSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'إلغاء', onPress: () => { attachmentSheetRef.current?.dismiss(); } }]} />
   </AppScreen>;
 }
 
@@ -362,6 +462,10 @@ const styles = StyleSheet.create({
   comingSoon: { fontSize: 11, textAlign: 'right' },
   quotedWrap: { borderRightWidth: 2, borderRightColor: colors.primary, backgroundColor: colors.background, borderRadius: radii.md, paddingHorizontal: spacing.xs, paddingVertical: 4, gap: 2 },
   quotedUser: { fontSize: 11 },
+  inlineImage: { width: 160, height: 120, borderRadius: radii.md, marginTop: 6, marginBottom: 3 },
+  fileCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, gap: 2 },
+  pendingCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  pendingImage: { width: 52, height: 52, borderRadius: radii.md },
   reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },
   reactionChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 2 },
   feedbackCard: { marginHorizontal: spacing.sm, marginBottom: spacing.xs },
