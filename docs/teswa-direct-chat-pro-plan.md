@@ -422,3 +422,34 @@ Explicitly unchanged in V1.4:
 
 ### Next phase
 - Direct Chat Pro V1.7 — Exchange Cards + Offer Flow.
+
+## Direct Chat Pro V1.7 — Exchange Cards + Offer Flow
+
+This phase introduces lightweight exchange foundations inside accepted Direct Chat Pro without schema changes.
+
+- Added composer action: **"جهّز عرض تبادل"** in Direct Chat Pro accepted conversations.
+- Added local exchange draft state and compact draft card (`عرض تبادل مبدئي`) with:
+  - note field (`اكتب تفاصيل العرض...`)
+  - actions: `إرسال كرسالة` / `كمّل كعرض` / `إلغاء`
+- Sending draft now goes through Stream message send only for accepted Direct Chat Pro conversations, with safe custom metadata:
+  - `teswa_type: exchange_offer_draft`
+  - `teswa_offer_note`
+  - `teswa_conversation_id`
+- Stream message rendering now supports a compact Exchange Card when metadata is present, with safe actions:
+  - `كمّل العرض`
+  - `احفظ في الدولاب`
+- Added safe context-card foundation under `غرفة التبادل` when item metadata is available in conversation payload:
+  - `الحاجة محل الكلام`
+  - `عرض التفاصيل`
+- Added safe Deal Chat boundary placeholder:
+  - `كمّل في Deal Chat`
+  - fallback feedback only, no fake deal creation.
+
+Final note:
+**Direct Chat Pro core is now complete.**
+
+Next phase order:
+1. Direct Chat Pro Stabilization + QA
+2. Dolab QA
+3. Followers/Following settings QA
+4. Production build

@@ -25,10 +25,11 @@ import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from 
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 
 const DIRECT_CHAT_PRO_ENABLED = true;
-type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }> };
+type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
 type PendingVoice = { uri: string; fileName: string; mimeType: string; durationSeconds?: number };
 type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
+type ExchangeDraft = { mode: 'idle' | 'drafting'; title?: string; note?: string; selectedItemId?: string; selectedDolabItemId?: string };
 
 const statusMeta = {
   accepted: { label: 'Direct Chat Pro', sub: 'مساحة تفاوض مباشرة' },
@@ -68,6 +69,7 @@ export default function DirectScreen() {
   const [voiceSending, setVoiceSending] = useState(false);
   const [recentDolabItems, setRecentDolabItems] = useState<Array<{ id: string; kind: 'text' | 'image' | 'video' | 'audio' | 'file'; title: string; body?: string; uri?: string; mimeType?: string; fileName?: string; sizeBytes?: number }>>([]);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [exchangeDraft, setExchangeDraft] = useState<ExchangeDraft>({ mode: 'idle' });
   const directActionsSheetRef = useRef<BottomSheetModal>(null);
   const messageActionsSheetRef = useRef<BottomSheetModal>(null);
   const composerActionsSheetRef = useRef<BottomSheetModal>(null);
@@ -114,6 +116,8 @@ export default function DirectScreen() {
           fileSize: typeof attachment?.file_size === 'number' ? attachment.file_size : undefined,
           durationSeconds: typeof attachment?.duration === 'number' ? attachment.duration : typeof attachment?.duration_seconds === 'number' ? attachment.duration_seconds : typeof attachment?.extraData?.duration === 'number' ? attachment.extraData.duration : undefined,
         })) : undefined,
+        teswaType: typeof msg?.teswa_type === 'string' ? msg.teswa_type : undefined,
+        offerNote: typeof msg?.teswa_offer_note === 'string' ? msg.teswa_offer_note : undefined,
         quotedMessage: msg?.quoted_message && typeof msg.quoted_message === 'object' ? {
           id: typeof msg.quoted_message?.id === 'string' ? msg.quoted_message.id : '',
           text: typeof msg.quoted_message?.text === 'string' ? msg.quoted_message.text : '',
@@ -458,6 +462,38 @@ ${item.body}` : item.body ?? ''));
     setActionFeedback('العنصر ده لسه مش جاهز للإرسال من الشات.');
   }, []);
 
+
+  const openExchangeDraft = useCallback(() => {
+    setExchangeDraft((prev) => ({ ...prev, mode: 'drafting' }));
+  }, []);
+  const continueAsFormalOffer = useCallback(() => {
+    if (convo?.itemId && typeof convo.itemId === 'string') { router.push(`/offer/create/${convo.itemId}`); return; }
+    setActionFeedback('ربط العرض الرسمي جاي في الخطوة الجاية.');
+  }, [convo?.itemId]);
+  const continueToDealChat = useCallback(() => {
+    setActionFeedback('الانتقال لـ Deal Chat جاي بعد تجهيز العرض الرسمي.');
+  }, []);
+  const sendExchangeDraftMessage = useCallback(async () => {
+    const note = exchangeDraft.note?.trim();
+    if (!note) { setActionFeedback('اكتب تفاصيل العرض الأول.'); return; }
+    if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) {
+      setActionFeedback('إرسال عرض التبادل متاح داخل Direct Chat Pro المقبول فقط.');
+      return;
+    }
+    setSending(true);
+    try {
+      const text = `عرض تبادل مبدئي:
+${note}
+
+لو مناسب، نكمل العرض الرسمي.`;
+      await streamChannelRef.current.sendMessage({ text, teswa_type: 'exchange_offer_draft', teswa_offer_note: note, teswa_conversation_id: conversationId });
+      hydrateFromChannel();
+      setExchangeDraft({ mode: 'idle' });
+      setActionFeedback('اترسل عرض التبادل كرسالة.');
+    } catch {
+      setActionFeedback('تعذر إرسال عرض التبادل حالياً.');
+    } finally { setSending(false); }
+  }, [acceptedDirectProActive, conversationId, exchangeDraft.note, hydrateFromChannel, streamError, streamReady]);
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
@@ -472,7 +508,7 @@ ${item.body}` : item.body ?? ''));
       <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
     </View>
 
-    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText></AppCard> : null}
+    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText>{convo?.itemId ? <View style={styles.itemContextCard}><AppText weight="semibold">الحاجة محل الكلام</AppText><AppText muted>{convo?.itemTitle || 'عنصر مرتبط بالمحادثة'}</AppText><AppButton label="عرض التفاصيل" variant="neutral" onPress={() => router.push(`/item/${convo.itemId}`)} /></View> : null}</AppCard> : null}
 
     {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); setError(r.ok?null:r.message); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
     {isRequesterOnRequest ? <AppCard style={styles.infoCard}><AppText muted>طلب المراسلة اتبعت. هتكملوا الكلام لما الطرف التاني يقبل.</AppText></AppCard> : null}
@@ -494,7 +530,7 @@ ${item.body}` : item.body ?? ''));
                 <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
                   {!mine && m.userName ? <AppText muted style={styles.senderHint}>{m.userName}</AppText> : null}
                   {m.quotedMessage?.id ? <View style={styles.quotedWrap}><AppText muted style={styles.quotedUser}>{m.quotedMessage.userName || 'رسالة'}</AppText><AppText muted numberOfLines={1}>{m.quotedMessage.text || '...'}</AppText></View> : null}
-                  <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>
+                  {m.teswaType === 'exchange_offer_draft' ? <View style={styles.exchangeMessageCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText style={styles.bodyText}>{(m.offerNote ?? m.text ?? '').trim() || 'عرض تبادل مبدئي.'}</AppText><View style={styles.exchangeActions}><AppButton label="كمّل العرض" variant="neutral" onPress={continueAsFormalOffer} /><AppButton label="احفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: m.id, text: m.offerNote ?? m.text, attachments: m.attachments }); setActionFeedback(result.ok ? 'اتحفظ في الدولاب.' : result.message); }} /></View><AppButton label="كمّل في Deal Chat" variant="neutral" onPress={continueToDealChat} /></View> : <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>}
                   {m.attachments?.map((attachment, idx) => {
                     const isImage = attachment.type === 'image' || !!attachment.imageUrl;
                     const isVideo = attachment.type === 'video';
@@ -539,6 +575,7 @@ ${item.body}` : item.body ?? ''));
           </View>
           <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Ionicons name="close" size={16} color={colors.textMuted} /></Pressable>
         </View> : null}
+        {exchangeDraft.mode === 'drafting' ? <View style={styles.exchangeDraftCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText muted>اختار الحاجة أو اكتب تفاصيل الاتفاق، وبعدها نكمّلها كعرض واضح.</AppText><TextInput value={exchangeDraft.note ?? ''} onChangeText={(value) => setExchangeDraft((prev) => ({ ...prev, note: value }))} placeholder="اكتب تفاصيل العرض..." placeholderTextColor={colors.textMuted} style={styles.exchangeDraftInput} multiline /><View style={styles.exchangeActions}><AppButton label="إرسال كرسالة" onPress={() => { void sendExchangeDraftMessage(); }} /><AppButton label="كمّل كعرض" variant="neutral" onPress={continueAsFormalOffer} /><AppButton label="إلغاء" variant="neutral" onPress={() => setExchangeDraft({ mode: 'idle' })} /></View></View> : null}
         <View style={styles.composer}>
           <Pressable style={styles.plus} disabled={!canOpenAttachments} onPress={() => composerActionsSheetRef.current?.present()}><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
           {acceptedDirectProActive ? <Pressable style={[styles.plus, !canUseVoice && styles.sendDisabled]} disabled={!canUseVoice || isRecordingVoice} onPress={() => { void startVoiceRecording(); }}><Ionicons name="mic" size={18} color={canUseVoice ? colors.primary : colors.textMuted} /></Pressable> : null}
@@ -562,7 +599,7 @@ ${item.body}` : item.body ?? ''));
     {error ? <AppCard style={styles.errorCard}><AppText muted>{error}</AppText></AppCard> : null}
     <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
-    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.savedText) setActionFeedback('اتحفظت كمسودة في الدولاب.'); else if (result.savedMedia) setActionFeedback('اتحفظت الميديا في الدولاب.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
+    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.savedText) setActionFeedback('اتحفظت كمسودة في الدولاب.'); else if (result.savedMedia) setActionFeedback('اتحفظت الميديا في الدولاب.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={dolabShareSheetRef} title="من دولابي" actions={[...(recentDolabItems.length > 0 ? recentDolabItems.map((item) => ({ label: item.kind === 'text' ? `📝 ${item.title}` : item.kind === 'image' ? `🖼️ ${item.title}` : item.kind === 'video' ? `🎬 ${item.title}` : item.kind === 'audio' ? `🎙️ ${item.title}` : `📎 ${item.title}`, onPress: () => { onSelectDolabShareable(item); } })) : [{ label: 'اختيار حاجة من دولابك جاي قريبًا.', disabled: true, onPress: () => {} }]), { label: 'إلغاء', onPress: () => { dolabShareSheetRef.current?.dismiss(); } }]} />
   </AppScreen>;
 }
@@ -578,6 +615,7 @@ const styles = StyleSheet.create({
   contextStrip: { marginHorizontal: spacing.sm, marginTop: spacing.sm, gap: spacing.xs },
   contextHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   streamBadge: { borderRadius: radii.round, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.xs, paddingVertical: 2 },
+  itemContextCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.lg, padding: spacing.xs, gap: spacing.xs },
   requestCard: { margin: spacing.sm, gap: spacing.sm },
   requestHead: { gap: spacing.xs },
   requestActions: { flexDirection: 'row-reverse', gap: spacing.xs },
@@ -610,6 +648,10 @@ const styles = StyleSheet.create({
   inlineImage: { width: 160, height: 120, borderRadius: radii.md, marginTop: 6, marginBottom: 3 },
   fileCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, gap: 2 },
   voiceBubble: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  exchangeMessageCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, marginTop: 6, padding: spacing.xs, gap: spacing.xs },
+  exchangeDraftCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.sm, gap: spacing.xs },
+  exchangeDraftInput: { minHeight: 58, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, textAlign: 'right', color: colors.text, backgroundColor: colors.background },
+  exchangeActions: { flexDirection: 'row-reverse', gap: spacing.xs, flexWrap: 'wrap' },
   pendingCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   pendingImage: { width: 52, height: 52, borderRadius: radii.md },
   reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },
