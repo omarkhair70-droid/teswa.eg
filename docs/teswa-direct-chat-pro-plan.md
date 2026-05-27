@@ -289,9 +289,34 @@ Explicitly unchanged in V1.1:
 - No typing/read/delivery/presence rollout in this phase
 - No Story Thread or Deal Chat changes
 
+## Direct Chat Pro V1.2 — Stream Realtime Layer
+
+This phase upgrades realtime behavior in `app/direct/[id].tsx` for accepted Direct Chat Pro conversations, while keeping existing architecture and guardrails intact.
+
+Implemented in V1.2:
+
+- Safer Stream event subscription lifecycle with explicit unsubscribe handling on cleanup/reconnect to avoid duplicate handlers.
+- Better channel hydration from `channel.state?.messages ?? []` with defensive mapping, stable sort, and malformed-payload tolerance.
+- Typing indicator support (when SDK shape supports typing events/methods) with throttled keystroke signaling.
+- Clear internal connection states (`idle`, `connecting`, `ready`, `unavailable`) for more accurate user-facing copy.
+- Conservative delivery/read awareness for my messages:
+  - `جارٍ الإرسال`
+  - `اتبعثت`
+  - `اتقرت` (only when safely inferable from Stream read state)
+- Presence basics in header secondary line when online availability is exposed safely (`متصل الآن`), with existing fallback copy otherwise.
+
+Explicitly unchanged in V1.2:
+
+- No DB schema changes
+- No request/accept/ignore/block behavior changes
+- No Stream initialization for non-accepted conversations
+- No attachments/voice/reactions/replies rollout
+- No Story Thread or Deal Chat changes
+- Accepted Direct Chat Pro send path remains Stream-only (no Supabase fallback)
+
 ## Next phase
 
-- **Direct Chat Pro V1.2 — Stream realtime features**
-  - typing indicators
-  - read/delivery status surfaces
-  - basic presence signals
+- **Direct Chat Pro V1.3 — Message Actions**
+  - reactions
+  - reply
+  - copy/report/delete
