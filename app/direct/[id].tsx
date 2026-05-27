@@ -25,7 +25,7 @@ import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from 
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 
 const DIRECT_CHAT_PRO_ENABLED = true;
-type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string };
+type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
 type PendingVoice = { uri: string; fileName: string; mimeType: string; durationSeconds?: number };
 type StreamAttachment = NonNullable<StreamMessage['attachments']>[number];
@@ -123,6 +123,9 @@ export default function DirectScreen() {
         })) : undefined,
         teswaType: typeof msg?.teswa_type === 'string' ? msg.teswa_type : undefined,
         offerNote: typeof msg?.teswa_offer_note === 'string' ? msg.teswa_offer_note : undefined,
+        teswaConversationId: typeof msg?.teswa_conversation_id === 'string' ? msg.teswa_conversation_id : undefined,
+        teswaItemId: typeof msg?.teswa_item_id === 'string' ? msg.teswa_item_id : undefined,
+        teswaDolabItemId: typeof msg?.teswa_dolab_item_id === 'string' ? msg.teswa_dolab_item_id : undefined,
         quotedMessage: msg?.quoted_message && typeof msg.quoted_message === 'object' ? {
           id: typeof msg.quoted_message?.id === 'string' ? msg.quoted_message.id : '',
           text: typeof msg.quoted_message?.text === 'string' ? msg.quoted_message.text : '',
@@ -523,15 +526,17 @@ export default function DirectScreen() {
     dolabShareSheetRef.current?.present();
   }, []);
 
-  const onSelectDolabShareable = useCallback((item: { kind: 'text' | 'image' | 'video' | 'audio' | 'file'; body?: string; uri?: string; fileName?: string; mimeType?: string; sizeBytes?: number }) => {
+  const onSelectDolabShareable = useCallback((item: { id: string; kind: 'text' | 'image' | 'video' | 'audio' | 'file'; body?: string; uri?: string; fileName?: string; mimeType?: string; sizeBytes?: number }) => {
     if (item.kind === 'text' && item.body?.trim()) {
       setBody((prev) => (prev?.trim() ? `${prev}
 ${item.body}` : item.body ?? ''));
+      if (exchangeDraft.mode === 'drafting') setExchangeDraft((prev) => ({ ...prev, selectedDolabItemId: item.id }));
       dolabShareSheetRef.current?.dismiss();
       return;
     }
     if ((item.kind === 'image' || item.kind === 'video' || item.kind === 'file') && item.uri) {
       setPendingAttachment({ kind: item.kind, uri: item.uri, fileName: item.fileName, mimeType: item.mimeType, sizeBytes: item.sizeBytes });
+      if (exchangeDraft.mode === 'drafting') setExchangeDraft((prev) => ({ ...prev, selectedDolabItemId: item.id }));
       dolabShareSheetRef.current?.dismiss();
       return;
     }
@@ -543,12 +548,20 @@ ${item.body}` : item.body ?? ''));
   const openExchangeDraft = useCallback(() => {
     setExchangeDraft((prev) => ({ ...prev, mode: 'drafting' }));
   }, []);
-  const continueAsFormalOffer = useCallback(() => {
-    if (convo?.itemId && typeof convo.itemId === 'string') { router.push(`/offer/create/${convo.itemId}`); return; }
-    setActionFeedback('ربط العرض الرسمي جاي في الخطوة الجاية.');
-  }, [convo?.itemId]);
-  const continueToDealChat = useCallback(() => {
-    setActionFeedback('الانتقال لـ Deal Chat جاي بعد تجهيز العرض الرسمي.');
+  const continueExchangeDraftAsFormalOffer = useCallback((input?: { note?: string; itemId?: string; conversationId?: string }) => {
+    const safeItemId = (input?.itemId?.trim() || (typeof convo?.itemId === 'string' ? convo.itemId.trim() : ''));
+    const safeConversationId = (input?.conversationId?.trim() || conversationId || '');
+    const safeNote = (input?.note ?? exchangeDraft.note ?? '').trim();
+    if (!safeItemId) {
+      setActionFeedback('اختار الحاجة الأول عشان نكمل العرض الرسمي.');
+      return;
+    }
+    router.push({ pathname: '/offer/create/[itemId]', params: { itemId: safeItemId, source: 'direct', conversationId: safeConversationId, note: safeNote.slice(0, 400) } });
+  }, [conversationId, convo?.itemId, exchangeDraft.note]);
+  const continueToDealChat = useCallback((dealId?: string | null) => {
+    const safeDealId = typeof dealId === 'string' ? dealId.trim() : '';
+    if (safeDealId) { router.push(`/deal/${safeDealId}`); return; }
+    setActionFeedback('Deal Chat بيتفتح بعد ما العرض الرسمي يتقبل.');
   }, []);
   const sendExchangeDraftMessage = useCallback(async () => {
     const note = exchangeDraft.note?.trim();
@@ -563,14 +576,14 @@ ${item.body}` : item.body ?? ''));
 ${note}
 
 لو مناسب، نكمل العرض الرسمي.`;
-      await streamChannelRef.current.sendMessage({ text, teswa_type: 'exchange_offer_draft', teswa_offer_note: note, teswa_conversation_id: conversationId });
+      await streamChannelRef.current.sendMessage({ text, teswa_type: 'exchange_offer_draft', teswa_offer_note: note, teswa_conversation_id: conversationId, teswa_item_id: typeof convo?.itemId === 'string' ? convo.itemId : undefined, teswa_dolab_item_id: exchangeDraft.selectedDolabItemId });
       hydrateFromChannel();
       setExchangeDraft({ mode: 'idle' });
       setActionFeedback('اترسل عرض التبادل كرسالة.');
     } catch {
       setActionFeedback('تعذر إرسال عرض التبادل حالياً.');
     } finally { setSending(false); }
-  }, [acceptedDirectProActive, conversationId, exchangeDraft.note, hydrateFromChannel, streamError, streamReady]);
+  }, [acceptedDirectProActive, conversationId, convo?.itemId, exchangeDraft.note, exchangeDraft.selectedDolabItemId, hydrateFromChannel, streamError, streamReady]);
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
@@ -585,7 +598,7 @@ ${note}
       <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
     </View>
 
-    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText>{convo?.itemId ? <View style={styles.itemContextCard}><AppText weight="semibold">الحاجة محل الكلام</AppText><AppText muted>{convo?.itemTitle || 'عنصر مرتبط بالمحادثة'}</AppText><AppButton label="عرض التفاصيل" variant="neutral" onPress={() => router.push(`/item/${convo.itemId}`)} /></View> : null}</AppCard> : null}
+    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText>{convo?.itemId ? <View style={styles.itemContextCard}><AppText weight="semibold">الحاجة محل الكلام</AppText><AppText muted>{convo?.itemTitle || 'عنصر مرتبط بالمحادثة'}</AppText><AppButton label="عرض التفاصيل" variant="neutral" onPress={() => { if (convo?.itemId) router.push(`/item/${convo.itemId}`); else setActionFeedback('تفاصيل الحاجة جايه قريبًا.'); }} /></View> : null}</AppCard> : null}
 
     {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); if (r.ok) { setError(null); setActionFeedback('تم قبول الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); if (r.ok) { setError(null); setActionFeedback('تم تجاهل الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
     {isRequesterOnRequest ? <AppCard style={styles.infoCard}><AppText muted>طلب المراسلة اتبعت. هتكملوا الكلام لما الطرف التاني يقبل.</AppText></AppCard> : null}
@@ -607,7 +620,7 @@ ${note}
                 <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
                   {!mine && m.userName ? <AppText muted style={styles.senderHint}>{m.userName}</AppText> : null}
                   {m.quotedMessage?.id ? <View style={styles.quotedWrap}><AppText muted style={styles.quotedUser}>{m.quotedMessage.userName || 'رسالة'}</AppText><AppText muted numberOfLines={1}>{m.quotedMessage.text || '...'}</AppText></View> : null}
-                  {m.teswaType === 'exchange_offer_draft' ? <View style={styles.exchangeMessageCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText style={styles.bodyText}>{(m.offerNote ?? m.text ?? '').trim() || 'عرض تبادل مبدئي.'}</AppText><View style={styles.exchangeActions}><AppButton label="كمّل العرض" variant="neutral" onPress={continueAsFormalOffer} /><AppButton label="احفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: m.id, text: m.offerNote ?? m.text, attachments: m.attachments }); setActionFeedback(result.ok ? 'اتحفظ في الدولاب.' : result.message); }} /></View><AppButton label="كمّل في Deal Chat" variant="neutral" onPress={continueToDealChat} /></View> : <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>}
+                  {m.teswaType === 'exchange_offer_draft' ? <View style={styles.exchangeMessageCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText style={styles.bodyText}>{(m.offerNote ?? m.text ?? '').trim() || 'عرض تبادل مبدئي.'}</AppText><View style={styles.exchangeMeta}>{m.teswaDolabItemId ? <AppText muted>مرتبط بحاجة من دولابك</AppText> : null}{m.teswaItemId ? <AppText muted>مرتبط بالحاجة محل الكلام</AppText> : null}{m.teswaConversationId ? <AppText muted>سياق المحادثة: {m.teswaConversationId}</AppText> : null}</View><View style={styles.exchangeActions}><AppButton label="كمّل العرض" variant="neutral" onPress={() => continueExchangeDraftAsFormalOffer({ itemId: m.teswaItemId, note: m.offerNote ?? m.text, conversationId: m.teswaConversationId })} /><AppButton label="احفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: m.id, text: m.offerNote ?? m.text, attachments: m.attachments }); setActionFeedback(result.ok ? 'اتحفظ في الدولاب.' : result.message); }} /><AppButton label="انسخ التفاصيل" variant="neutral" onPress={async () => { const value = (m.offerNote ?? m.text ?? '').trim(); if (!value) { setActionFeedback('مفيش تفاصيل للنسخ.'); return; } try { await Clipboard.setStringAsync(value); setActionFeedback('اتنسخت التفاصيل.'); } catch { setActionFeedback('تعذر نسخ التفاصيل حالياً.'); } }} /></View><AppButton label="كمّل في Deal Chat" variant="neutral" onPress={() => continueToDealChat((m as any).dealId)} /></View> : <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>}
                   {m.attachments?.map((attachment, idx) => {
                     const isImage = attachment.type === 'image' || !!attachment.imageUrl;
                     const isVideo = attachment.type === 'video';
@@ -682,7 +695,7 @@ ${note}
           </View>
           <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Ionicons name="close" size={16} color={colors.textMuted} /></Pressable>
         </View> : null}
-        {exchangeDraft.mode === 'drafting' ? <View style={styles.exchangeDraftCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText muted>اختار الحاجة أو اكتب تفاصيل الاتفاق، وبعدها نكمّلها كعرض واضح.</AppText><TextInput value={exchangeDraft.note ?? ''} onChangeText={(value) => setExchangeDraft((prev) => ({ ...prev, note: value }))} placeholder="اكتب تفاصيل العرض..." placeholderTextColor={colors.textMuted} style={styles.exchangeDraftInput} multiline /><View style={styles.exchangeActions}><AppButton label="إرسال كرسالة" onPress={() => { void sendExchangeDraftMessage(); }} /><AppButton label="كمّل كعرض" variant="neutral" onPress={continueAsFormalOffer} /><AppButton label="إلغاء" variant="neutral" onPress={() => setExchangeDraft({ mode: 'idle' })} /></View></View> : null}
+        {exchangeDraft.mode === 'drafting' ? <View style={styles.exchangeDraftCard}><AppText weight="semibold">جهّز عرض التبادل</AppText><AppText muted>اكتب تفاصيل الاتفاق أو اختار حاجة من دولابك، وبعدها ابعته كرسالة أو كمّل العرض الرسمي.</AppText>{exchangeDraft.selectedDolabItemId ? <AppText muted>مرتبط بحاجة من دولابك.</AppText> : null}{(exchangeDraft.selectedItemId || convo?.itemId) ? <AppText muted>مرتبط بالحاجة محل الكلام.</AppText> : null}<TextInput value={exchangeDraft.note ?? ''} onChangeText={(value) => setExchangeDraft((prev) => ({ ...prev, note: value }))} placeholder="اكتب تفاصيل العرض..." placeholderTextColor={colors.textMuted} style={styles.exchangeDraftInput} multiline /><View style={styles.exchangeActions}><AppButton label="إرسال كرسالة" onPress={() => { void sendExchangeDraftMessage(); }} /><AppButton label="كمّل كعرض رسمي" variant="neutral" onPress={() => continueExchangeDraftAsFormalOffer({ itemId: exchangeDraft.selectedItemId, note: exchangeDraft.note, conversationId })} /><AppButton label="اختار من دولابي" variant="neutral" onPress={() => { void openDolabShareables(); }} /><AppButton label="إلغاء" variant="neutral" onPress={() => setExchangeDraft({ mode: 'idle' })} /></View></View> : null}
         <View style={styles.composer}>
           <Pressable style={styles.plus} disabled={!canOpenAttachments} onPress={() => composerActionsSheetRef.current?.present()}><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
           {acceptedDirectProActive ? <Pressable style={[styles.plus, !canUseVoice && styles.sendDisabled]} disabled={!canUseVoice || isRecordingVoice} onPress={() => { void startVoiceRecording(); }}><Ionicons name="mic" size={18} color={canUseVoice ? colors.primary : colors.textMuted} /></Pressable> : null}
@@ -782,6 +795,7 @@ const styles = StyleSheet.create({
   voiceProgressTrack: { width: '100%', height: 3, borderRadius: radii.round, backgroundColor: colors.border, overflow: 'hidden' },
   voiceProgressFill: { height: '100%', backgroundColor: colors.primary },
   exchangeMessageCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, marginTop: 6, padding: spacing.xs, gap: spacing.xs },
+  exchangeMeta: { gap: 2 },
   exchangeDraftCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.sm, gap: spacing.xs },
   exchangeDraftInput: { minHeight: 58, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, textAlign: 'right', color: colors.text, backgroundColor: colors.background },
   exchangeActions: { flexDirection: 'row-reverse', gap: spacing.xs, flexWrap: 'wrap' },

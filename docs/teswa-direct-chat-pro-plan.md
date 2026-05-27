@@ -640,3 +640,15 @@ Delivered in this PR (Direct Chat Pro voice UX polish only):
 Next PR:
 
 - Direct Chat System PR 8 — Real Exchange Offer Flow + Deal Handoff.
+
+## Direct Chat System PR 8 — Real Exchange Offer Flow + Deal Handoff
+
+- Upgraded exchange draft composer card with clearer Arabic guidance, details input, and Dolab-driven context pick path.
+- Exchange draft Stream messages now carry structured metadata (`teswa_type`, `teswa_offer_note`, `teswa_conversation_id`, optional `teswa_item_id`, optional `teswa_dolab_item_id`) with defensive rendering fallback.
+- Added safe formal handoff from direct chat to existing offer route (`/offer/create/[itemId]`) using only real item context and bounded query params.
+- Added explicit item/context requirement: if no safe `itemId` exists, direct chat shows polished Arabic feedback instead of broken navigation.
+- Added Deal Chat boundary: direct chat navigates to `/deal/[id]` only with a real deal id; otherwise it shows that Deal Chat opens after official offer acceptance.
+- No fake deals created, no placeholder ids, and no Stream runtime changes.
+
+### Next phase
+Direct Chat System Stabilization + QA Pass
