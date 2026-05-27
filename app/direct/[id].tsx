@@ -77,7 +77,7 @@ export default function DirectScreen() {
     const channel = streamChannelRef.current;
     if (!channel) return;
     const rawMessages = Array.isArray(channel.state?.messages) ? channel.state.messages : [];
-    const mapped = rawMessages.map((msg: any, idx: number) => {
+    const mapped: StreamMessage[] = rawMessages.map((msg: any, idx: number): StreamMessage => {
       const safeCreatedAt = typeof msg?.created_at === 'string' ? msg.created_at : new Date().toISOString();
       const safeId = typeof msg?.id === 'string' && msg.id.length > 0 ? msg.id : `fallback-${safeCreatedAt}-${idx}`;
       return {
@@ -103,8 +103,8 @@ export default function DirectScreen() {
           text: typeof msg.quoted_message?.text === 'string' ? msg.quoted_message.text : '',
           userName: typeof msg.quoted_message?.user?.name === 'string' ? msg.quoted_message.user.name : undefined,
         } : undefined,
-      } as StreamMessage;
-    }).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+      };
+    }).sort((a: StreamMessage, b: StreamMessage) => +new Date(a.createdAt) - +new Date(b.createdAt));
     setStreamMessages((prev) => mergeById(prev, mapped));
   }, [mergeById]);
   const clearStreamSubs = useCallback(() => {
@@ -134,8 +134,8 @@ export default function DirectScreen() {
       const creds = await fetchStreamChatToken();
       if (!creds.ok) throw new Error(creds.message);
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
-      const streamExpo = await import('stream-chat-expo');
-      const client = streamExpo.StreamChat.getInstance(creds.apiKey);
+      const { StreamChat } = await import('stream-chat');
+      const client = StreamChat.getInstance(creds.apiKey);
       await client.connectUser({ id: creds.userId }, creds.token);
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
