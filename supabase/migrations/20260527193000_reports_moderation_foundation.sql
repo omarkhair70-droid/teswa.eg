@@ -13,11 +13,69 @@ alter table public.reports
   add column if not exists reviewed_at timestamptz null,
   add column if not exists status text not null default 'open';
 
--- Backward-compatible aliases for legacy columns (if they exist).
-update public.reports set reported_item_id = coalesce(reported_item_id, item_id) where reported_item_id is null;
-update public.reports set reported_offer_id = coalesce(reported_offer_id, offer_id) where reported_offer_id is null;
-update public.reports set reported_deal_id = coalesce(reported_deal_id, deal_id) where reported_deal_id is null;
-update public.reports set reported_deal_message_id = coalesce(reported_deal_message_id, deal_message_id) where reported_deal_message_id is null;
+-- Ensure story compatibility exists for target-required checks.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema='public' and table_name='stories'
+  ) then
+    alter table public.reports
+      add column if not exists story_id uuid null references public.stories(id) on delete set null;
+  else
+    alter table public.reports
+      add column if not exists story_id uuid null;
+  end if;
+end $$;
+
+-- Backward-compatible aliases for legacy columns, only when each legacy column exists.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='reports' and column_name='item_id'
+  ) then
+    update public.reports
+    set reported_item_id = coalesce(reported_item_id, item_id)
+    where reported_item_id is null;
+  end if;
+end $$;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='reports' and column_name='offer_id'
+  ) then
+    update public.reports
+    set reported_offer_id = coalesce(reported_offer_id, offer_id)
+    where reported_offer_id is null;
+  end if;
+end $$;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='reports' and column_name='deal_id'
+  ) then
+    update public.reports
+    set reported_deal_id = coalesce(reported_deal_id, deal_id)
+    where reported_deal_id is null;
+  end if;
+end $$;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='reports' and column_name='deal_message_id'
+  ) then
+    update public.reports
+    set reported_deal_message_id = coalesce(reported_deal_message_id, deal_message_id)
+    where reported_deal_message_id is null;
+  end if;
+end $$;
 
 alter table public.reports drop constraint if exists reports_status_check;
 alter table public.reports add constraint reports_status_check check (status in ('open','reviewing','actioned','dismissed'));
@@ -41,6 +99,12 @@ create index if not exists reports_reported_direct_conversation_id_idx on public
 create index if not exists reports_reported_deal_message_id_idx on public.reports(reported_deal_message_id);
 create index if not exists reports_status_created_idx on public.reports(status, created_at desc);
 
+alter table public.profiles
+  add column if not exists role text not null default 'user';
+
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check check (role in ('user','admin','moderator'));
+
 create or replace function public.is_admin_user()
 returns boolean
 language sql
@@ -60,15 +124,18 @@ as $$
   );
 $$;
 
-create policy if not exists reports_insert_own on public.reports
+drop policy if exists reports_insert_own on public.reports;
+create policy reports_insert_own on public.reports
 for insert to authenticated
 with check (reporter_id = auth.uid());
 
-create policy if not exists reports_select_own on public.reports
+drop policy if exists reports_select_own on public.reports;
+create policy reports_select_own on public.reports
 for select to authenticated
 using (reporter_id = auth.uid() or public.is_admin_user());
 
-create policy if not exists reports_update_admin on public.reports
+drop policy if exists reports_update_admin on public.reports;
+create policy reports_update_admin on public.reports
 for update to authenticated
 using (public.is_admin_user())
 with check (public.is_admin_user());
@@ -168,7 +235,20 @@ create or replace function public.hide_item_for_moderation(p_item_id uuid, p_rep
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if auth.role() <> 'service_role' and not public.is_admin_user() then raise exception 'not_allowed' using errcode='42501'; end if;
-  update public.items set status = 'hidden', updated_at = now()
+  update public.items
+  set status = case
+      when exists (
+        select 1
+        from pg_constraint c
+        join pg_class t on t.oid = c.conrelid
+        join pg_namespace n on n.oid = t.relnamespace
+        where n.nspname='public'
+          and t.relname='items'
+          and pg_get_constraintdef(c.oid) ilike '%status%hidden%'
+      ) then 'hidden'
+      else 'paused'
+    end,
+    updated_at = now()
   where id = p_item_id and status in ('active','paused');
   if not found then raise exception 'item_not_mutable' using errcode='P0001'; end if;
   if p_report_id is not null then
