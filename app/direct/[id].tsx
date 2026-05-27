@@ -183,6 +183,7 @@ export default function DirectScreen() {
         const displayName = typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.full_name === 'string' ? metadata.full_name : null;
         const avatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : null;
         const creds = await fetchStreamChatToken({
+          conversationId,
           otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
           displayName: displayName ?? undefined,
           avatarUrl: avatarUrl ?? undefined,

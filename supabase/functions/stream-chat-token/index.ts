@@ -33,6 +33,7 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseAnonKey) {
       return jsonResponse(500, { ok: false, error: "server_misconfigured", message: "Supabase auth configuration is missing." });
@@ -64,9 +65,57 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
+    const conversationId = typeof body?.conversationId === "string" && body.conversationId.trim().length > 0 ? body.conversationId.trim() : null;
     const otherUserId = typeof body?.otherUserId === "string" && body.otherUserId.trim().length > 0 ? body.otherUserId.trim() : null;
     const displayName = typeof body?.displayName === "string" && body.displayName.trim().length > 0 ? body.displayName.trim() : null;
     const avatarUrl = typeof body?.avatarUrl === "string" && body.avatarUrl.trim().length > 0 ? body.avatarUrl.trim() : null;
+
+
+    let validatedOtherUserId: string | null = null;
+
+    if (conversationId) {
+      if (!supabaseServiceRoleKey) {
+        return jsonResponse(500, {
+          ok: false,
+          error: "server_misconfigured",
+          message: "Supabase service role key is missing.",
+        });
+      }
+
+      const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: { persistSession: false },
+      });
+
+      const { data: convo, error: convoError } = await adminClient
+        .from("direct_conversations")
+        .select("id, status, participant_a, participant_b")
+        .eq("id", conversationId)
+        .maybeSingle();
+
+      if (convoError || !convo) {
+        return jsonResponse(403, { ok: false, error: "conversation_unauthorized", message: "غير مسموح بفتح هذه المحادثة." });
+      }
+
+      const participantA = convo.participant_a;
+      const participantB = convo.participant_b;
+      const isParticipant = participantA === user.id || participantB === user.id;
+      if (!isParticipant) {
+        return jsonResponse(403, { ok: false, error: "conversation_unauthorized", message: "غير مسموح بفتح هذه المحادثة." });
+      }
+
+      if (convo.status !== "accepted") {
+        return jsonResponse(403, { ok: false, error: "conversation_not_accepted", message: "المحادثة غير جاهزة للشات الجديد." });
+      }
+
+      validatedOtherUserId = participantA === user.id ? participantB : participantA;
+      if (!validatedOtherUserId || validatedOtherUserId === user.id) {
+        return jsonResponse(403, { ok: false, error: "invalid_other_user", message: "تعذر تحديد الطرف الآخر في المحادثة." });
+      }
+
+      if (otherUserId && otherUserId !== validatedOtherUserId) {
+        return jsonResponse(403, { ok: false, error: "invalid_other_user", message: "تعذر تحديد الطرف الآخر في المحادثة." });
+      }
+    }
 
     const streamClient = StreamChat.getInstance(streamApiKey, streamSecret);
 
@@ -78,12 +127,12 @@ Deno.serve(async (req: Request) => {
       if (avatarUrl) currentUserPayload.image = avatarUrl;
 
       const usersToUpsert: Array<Record<string, string>> = [currentUserPayload];
-      if (otherUserId && otherUserId !== user.id) usersToUpsert.push({ id: otherUserId });
+      if (validatedOtherUserId && validatedOtherUserId !== user.id) usersToUpsert.push({ id: validatedOtherUserId });
 
       await streamClient.upsertUsers(usersToUpsert);
     } catch (upsertError) {
       const message = upsertError instanceof Error ? upsertError.message : "unknown_stream_upsert_error";
-      console.error("stream-chat-token upsert failed", { message, userId: user.id, hasOtherUserId: !!otherUserId });
+      console.error("stream-chat-token upsert failed", { message, userId: user.id, hasConversationId: !!conversationId, hasValidatedOtherUserId: !!validatedOtherUserId });
       return jsonResponse(500, {
         ok: false,
         error: "stream_user_upsert_failed",
