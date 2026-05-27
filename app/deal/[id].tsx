@@ -1043,6 +1043,7 @@ export default function Screen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   group: { gap: spacing.sm },
+  groupGap: { gap: spacing.sm },
   row: { flexDirection: "row", gap: spacing.sm },
   chatHeaderWrap: {
     paddingHorizontal: spacing.md,
