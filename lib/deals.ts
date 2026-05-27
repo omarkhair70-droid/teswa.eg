@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
 import { supabase } from '@/lib/supabase/client';
 import { fetchUserBlockState } from '@/lib/user-blocks';
+import { canTransitionDealStatus } from '@/lib/exchange-state-machine';
 
 export type DealStatus = 'coordinating' | 'completed_pending_confirmation' | 'completed' | 'cancelled' | 'disputed' | string;
 export type DealViewerRole = 'requester' | 'offerer';
@@ -199,8 +200,8 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بالمراسلة في الصفقة دي.' };
   }
 
-  if (!['coordinating', 'completed_pending_confirmation'].includes(deal.status as string)) {
-    return { ok: false as const, reason: 'invalid_status' as const, message: 'المراسلة متاحة فقط أثناء التنسيق أو انتظار التأكيد.' };
+  if (!canTransitionDealStatus(deal.status as string, 'completed_pending_confirmation') && deal.status !== 'completed_pending_confirmation') {
+    return { ok: false as const, reason: 'invalid_status' as const, message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   }
 
   const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
@@ -255,8 +256,8 @@ export async function confirmDealCompletedFromMobile(input: { dealId: string; cu
     return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بتأكيد الصفقة دي.' };
   }
 
-  if (!['coordinating', 'completed_pending_confirmation'].includes(deal.status as string)) {
-    return { ok: false as const, reason: 'invalid_status' as const, message: 'تأكيد الإتمام غير متاح للحالة الحالية.' };
+  if (!canTransitionDealStatus(deal.status as string, 'completed_pending_confirmation') && deal.status !== 'completed_pending_confirmation') {
+    return { ok: false as const, reason: 'invalid_status' as const, message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   }
 
   const { error: insertError } = await supabase.from('deal_confirmations').insert({ deal_id: input.dealId, user_id: input.currentUserId, note: input.note?.trim() || null });
@@ -350,8 +351,8 @@ export async function sendDealVoiceMessageFromMobile(input: {
     return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بالمراسلة في الصفقة دي.' };
   }
 
-  if (!['coordinating', 'completed_pending_confirmation'].includes(deal.status as string)) {
-    return { ok: false as const, reason: 'invalid_status' as const, message: 'المراسلة متاحة فقط أثناء التنسيق أو انتظار التأكيد.' };
+  if (!canTransitionDealStatus(deal.status as string, 'completed_pending_confirmation') && deal.status !== 'completed_pending_confirmation') {
+    return { ok: false as const, reason: 'invalid_status' as const, message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   }
 
   const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;

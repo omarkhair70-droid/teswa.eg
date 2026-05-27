@@ -85,3 +85,34 @@
 - [ ] `requested` / non-accepted direct conversations do not notify.
 - [ ] Blocked user pairs do not notify.
 - [ ] Duplicate webhook retry for same `streamMessageId` does not create duplicate notification.
+
+## Sprint 3 — Offers/Deals State Machine
+
+### Audit summary (schema + app usage)
+- **Offers statuses currently used by app and RPC paths:** `pending`, `thinking`, `accepted`, `soft_rejected`, `redirected`, `withdrawn`, `expired`, `cancelled_after_accept`.
+- **Deals statuses currently used by app and RPC paths:** `coordinating`, `completed_pending_confirmation`, `completed`, `cancelled`, `disputed`.
+- **Known transitions observed before hardening:** client guarded some actions but could still race against stale states; server functions required stronger transition checks.
+- **Unsafe gaps found:**
+  - Mobile action guards were partly duplicated and not centralized.
+  - Deal completion logic relied on pre-checks in mobile; terminal-state handling needed consistent server-side protection.
+  - Ceremony route moments could appear from route params without full status verification.
+
+### Hardening delivered
+- Added shared pure state-machine helpers in `lib/exchange-state-machine.ts` and wired mobile action guards to canonical transition checks.
+- Hardened RPCs (`mark_offer_thinking`, `soft_reject_offer`, `complete_deal_if_ready`) with participant validation, transition validation, and terminal-state protection.
+- Prevented invalid client-side actions from showing optimistic success by surfacing a unified Arabic message on invalid state: `لا يمكن تنفيذ الإجراء على الحالة الحالية.`
+- Tightened Swap Ceremony rendering so accepted/completed moments only render when backed by real state.
+
+### Manual QA matrix
+- [ ] create offer
+- [ ] accept offer
+- [ ] reject offer
+- [ ] cancel offer if supported
+- [ ] accepted offer cannot be rejected afterward
+- [ ] rejected offer cannot be accepted afterward
+- [ ] accepting an offer creates at most one deal
+- [ ] deal completion requires valid participant
+- [ ] completed deal cannot be completed twice
+- [ ] cancelled deal cannot be completed
+- [ ] unauthorized user cannot mutate offer/deal
+- [ ] Swap Ceremony appears only for real states

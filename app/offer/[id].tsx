@@ -81,7 +81,7 @@ export default function OfferDetailScreen() {
   const receiverCanRespond = offer.viewerRole === 'receiver' && (offer.status === 'pending' || offer.status === 'thinking');
   const showReceiverNoActionCard = offer.viewerRole === 'receiver' && !receiverCanRespond;
 
-  const showSentMoment = moment === 'sent';
+  const showSentMoment = moment === 'sent' && Boolean(offer.id);
   const swapCeremonyEnabled = isSwapCeremonyEnabled();
 
 
