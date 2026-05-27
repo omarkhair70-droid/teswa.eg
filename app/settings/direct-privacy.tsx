@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   optionCard: { gap: spacing.xs },
   optionCardActive: { borderColor: colors.primary },
   optionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  radioOuter: { width: 22, height: 22, borderRadius: radii.pill, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  radioOuter: { width: 22, height: 22, borderRadius: radii.round, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   radioOuterActive: { borderColor: colors.primary },
-  radioInner: { width: 10, height: 10, borderRadius: radii.pill, backgroundColor: colors.primary },
+  radioInner: { width: 10, height: 10, borderRadius: radii.round, backgroundColor: colors.primary },
   savingText: { marginTop: spacing.xs },
 });
