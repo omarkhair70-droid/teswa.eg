@@ -59,7 +59,7 @@ function getConversationSortTimestamp(item: DirectConversationSummary): number {
 }
 
 export async function startOrGetDirectConversation(targetUserId: string): Promise<StartDirectConversationResult> { const { data, error } = await supabase.rpc('start_or_get_direct_conversation', { p_target_user_id: targetUserId }); if (error) return { ok: false, conversationId: null, status: null, requiresRequest: false, message: 'تعذر فتح المراسلة حالياً.' }; const row = Array.isArray(data) ? data[0] : null; return { ok: !!row?.ok, conversationId: row?.conversation_id ?? null, status: row?.status ?? null, requiresRequest: !!row?.requires_request, message: row?.message ?? 'تعذر فتح المراسلة حالياً.' }; }
-export async function fetchMyDirectConversations(): Promise<DirectConversationSummary[]> { const { data, error } = await supabase.rpc('get_my_direct_conversations'); if (error) return []; return (data ?? []).map(normalizeConversationSummaryRow).sort((a, b) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a)); }
+export async function fetchMyDirectConversations(): Promise<DirectConversationSummary[]> { const { data, error } = await supabase.rpc('get_my_direct_conversations'); if (error) return []; const rows: DirectConversationSummary[] = (data ?? []).map(normalizeConversationSummaryRow); return rows.sort((a: DirectConversationSummary, b: DirectConversationSummary) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a)); }
 export async function fetchDirectConversation(conversationId: string): Promise<DirectConversationSummary | null> {
   const { data, error } = await supabase.rpc('get_direct_conversation', { p_conversation_id: conversationId });
   if (error) return null;
