@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Image, Linking, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
@@ -28,6 +28,8 @@ const DIRECT_CHAT_PRO_ENABLED = true;
 type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
 type PendingVoice = { uri: string; fileName: string; mimeType: string; durationSeconds?: number };
+type StreamAttachment = NonNullable<StreamMessage['attachments']>[number];
+type SelectedMediaViewer = { kind: 'image'; url: string; title?: string } | { kind: 'video'; url: string; title?: string; mimeType?: string } | { kind: 'file'; url: string; title?: string; mimeType?: string; fileSize?: number } | null;
 type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
 type ExchangeDraft = { mode: 'idle' | 'drafting'; title?: string; note?: string; selectedItemId?: string; selectedDolabItemId?: string };
 
@@ -70,6 +72,9 @@ export default function DirectScreen() {
   const [recentDolabItems, setRecentDolabItems] = useState<Array<{ id: string; kind: 'text' | 'image' | 'video' | 'audio' | 'file'; title: string; body?: string; uri?: string; mimeType?: string; fileName?: string; sizeBytes?: number }>>([]);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [exchangeDraft, setExchangeDraft] = useState<ExchangeDraft>({ mode: 'idle' });
+  const [selectedMediaViewer, setSelectedMediaViewer] = useState<SelectedMediaViewer>(null);
+  const [imageViewerLoading, setImageViewerLoading] = useState(false);
+  const [imageViewerError, setImageViewerError] = useState(false);
   const directActionsSheetRef = useRef<BottomSheetModal>(null);
   const messageActionsSheetRef = useRef<BottomSheetModal>(null);
   const composerActionsSheetRef = useRef<BottomSheetModal>(null);
@@ -446,6 +451,58 @@ export default function DirectScreen() {
     } catch { setActionFeedback('تعذر تشغيل الرسالة الصوتية.'); }
   }, [playingVoiceId, voicePlayer]);
 
+
+  const normalizeRemoteUrl = useCallback((value?: string | null) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.startsWith('file://')) return null;
+    if (!/^https?:\/\//i.test(trimmed)) return null;
+    return trimmed;
+  }, []);
+  const resolveAttachmentUrl = useCallback((attachment: StreamAttachment, kind: 'image' | 'video' | 'file') => {
+    if (kind === 'image') {
+      return normalizeRemoteUrl(attachment.imageUrl) || normalizeRemoteUrl(attachment.assetUrl) || normalizeRemoteUrl(attachment.thumbUrl);
+    }
+    return normalizeRemoteUrl(attachment.assetUrl) || normalizeRemoteUrl(attachment.imageUrl);
+  }, [normalizeRemoteUrl]);
+  const formatFileSize = useCallback((size?: number) => {
+    if (!size || size <= 0) return null;
+    if (size < 1024) return `${size} B`;
+    const kb = size / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(1)} MB`;
+  }, []);
+  const openMediaViewer = useCallback((attachment: StreamAttachment) => {
+    const isImage = attachment.type === 'image' || !!attachment.imageUrl;
+    const isVideo = attachment.type === 'video';
+    const title = attachment.title || attachment.name;
+    if (isImage) {
+      const url = resolveAttachmentUrl(attachment, 'image');
+      if (!url) { setActionFeedback('تعذر فتح الصورة حالياً.'); return; }
+      setImageViewerLoading(true);
+      setImageViewerError(false);
+      setSelectedMediaViewer({ kind: 'image', url, title });
+      return;
+    }
+    if (isVideo) {
+      const url = resolveAttachmentUrl(attachment, 'video');
+      if (!url) { setActionFeedback('تعذر فتح الميديا حالياً.'); return; }
+      setSelectedMediaViewer({ kind: 'video', url, title, mimeType: attachment.mimeType });
+      return;
+    }
+    const url = resolveAttachmentUrl(attachment, 'file');
+    if (!url) { setActionFeedback('تعذر فتح الملف حالياً.'); return; }
+    setSelectedMediaViewer({ kind: 'file', url, title, mimeType: attachment.mimeType, fileSize: attachment.fileSize });
+  }, [resolveAttachmentUrl]);
+  const copyMediaUrl = useCallback(async (url?: string) => {
+    if (!url) { setActionFeedback('تعذر نسخ الرابط حالياً.'); return; }
+    try { await Clipboard.setStringAsync(url); setActionFeedback('تم نسخ الرابط.'); } catch { setActionFeedback('تعذر نسخ الرابط حالياً.'); }
+  }, []);
+  const openMediaUrl = useCallback(async (url?: string) => {
+    if (!url) { setActionFeedback('تعذر فتح الميديا حالياً.'); return; }
+    try { await Linking.openURL(url); } catch { setActionFeedback('تعذر فتح الميديا حالياً.'); }
+  }, []);
   const openDolabShareables = useCallback(async () => {
     const result = await loadRecentDolabShareables();
     if (!result.ok) {
@@ -552,10 +609,14 @@ ${note}
                       const voiceId = `${m.id}-att-${idx}`;
                       return <Pressable key={voiceId} style={styles.voiceBubble} onPress={() => { void togglePlayVoice(voiceId, attachment.assetUrl); }}><Ionicons name={playingVoiceId === voiceId ? 'pause-circle' : 'play-circle'} size={22} color={colors.primary} /><View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">رسالة صوتية</AppText>{typeof attachment.durationSeconds === 'number' ? <AppText muted>{formatDuration(Math.floor(attachment.durationSeconds))}</AppText> : null}</View></Pressable>;
                     }
-                    if (isImage && (attachment.imageUrl || attachment.thumbUrl || attachment.assetUrl)) {
-                      return <Pressable key={`${m.id}-att-${idx}`} onPress={() => setActionFeedback('فتح الصورة قريباً')}><Image source={{ uri: attachment.imageUrl || attachment.thumbUrl || attachment.assetUrl }} style={styles.inlineImage} /><AppText muted>{label}</AppText></Pressable>;
+                    const previewUrl = resolveAttachmentUrl(attachment, 'image');
+                    if (isImage && previewUrl) {
+                      return <Pressable key={`${m.id}-att-${idx}`} onPress={() => openMediaViewer(attachment)}><Image source={{ uri: previewUrl }} style={styles.inlineImage} /><AppText muted>{label}</AppText></Pressable>;
                     }
-                    return <Pressable key={`${m.id}-att-${idx}`} style={styles.fileCard} onPress={() => setActionFeedback(isVideo ? 'فتح الفيديو قريباً' : 'فتح الملفات قريباً')}><AppText>{isVideo ? '🎬 فيديو' : '📎 ملف'}</AppText><AppText muted>{label}</AppText>{attachment.mimeType ? <AppText muted>{attachment.mimeType}</AppText> : null}</Pressable>;
+                    if (isImage) {
+                      return <Pressable key={`${m.id}-att-${idx}`} style={styles.fileCard} onPress={() => openMediaViewer(attachment)}><AppText>🖼️ صورة</AppText><AppText muted>{label}</AppText></Pressable>;
+                    }
+                    return <Pressable key={`${m.id}-att-${idx}`} style={styles.fileCard} onPress={() => openMediaViewer(attachment)}><AppText>{isVideo ? '🎬 فيديو' : '📎 ملف'}</AppText><AppText muted>{label}</AppText>{attachment.fileSize ? <AppText muted>{formatFileSize(attachment.fileSize)}</AppText> : null}{attachment.mimeType ? <AppText muted>{attachment.mimeType}</AppText> : null}</Pressable>;
                   })}
                   <AppText muted style={styles.time}>{new Date(m.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
                   {mine && mineStatus ? <AppText muted style={styles.time}>{mineStatus}</AppText> : null}
@@ -609,6 +670,22 @@ ${note}
 
     {actionFeedback ? <AppCard style={styles.feedbackCard}><AppText muted>{actionFeedback}</AppText></AppCard> : null}
     {error ? <AppCard style={styles.errorCard}><AppText muted>{error}</AppText></AppCard> : null}
+
+
+    <Modal visible={!!selectedMediaViewer} transparent animationType="fade" onRequestClose={() => setSelectedMediaViewer(null)}>
+      <View style={styles.viewerOverlay}>
+        <Pressable style={styles.viewerBackdrop} onPress={() => setSelectedMediaViewer(null)} />
+        {selectedMediaViewer?.kind === 'image' ? <View style={styles.viewerImageWrap}>
+          <View style={styles.viewerHeader}><AppText weight="semibold" style={styles.viewerTitle}>{selectedMediaViewer.title || 'صورة'}</AppText><Pressable onPress={() => setSelectedMediaViewer(null)} style={styles.viewerClose}><Ionicons name="close" size={20} color={colors.background} /></Pressable></View>
+          <Image source={{ uri: selectedMediaViewer.url }} style={styles.viewerImage} resizeMode="contain" onLoadStart={() => { setImageViewerLoading(true); setImageViewerError(false); }} onError={() => { setImageViewerLoading(false); setImageViewerError(true); setActionFeedback('تعذر فتح الصورة حالياً.'); }} onLoadEnd={() => setImageViewerLoading(false)} />
+          {imageViewerLoading ? <AppText muted>جاري تحميل الصورة...</AppText> : null}
+          {imageViewerError ? <AppText muted>تعذر فتح الصورة حالياً.</AppText> : null}
+        </View> : null}
+        {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppText muted>تشغيل الفيديو داخل التطبيق جاي قريبًا.</AppText><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
+        {selectedMediaViewer?.kind === 'file' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>{selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="حفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: `viewer-file-${Date.now()}`, text: selectedMediaViewer.title, attachments: [{ type: 'file', title: selectedMediaViewer.title, name: selectedMediaViewer.title, assetUrl: selectedMediaViewer.url, mimeType: selectedMediaViewer.mimeType, fileSize: selectedMediaViewer.fileSize }] }); setActionFeedback(result.ok ? 'اتحفظت الميديا في الدولاب.' : result.message); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
+      </View>
+    </Modal>
+
     <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); setActionFeedback(blockedByMe ? 'تم إلغاء الحظر.' : 'تم حظر المستخدم.'); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
     <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.savedText) setActionFeedback('اتحفظت كمسودة في الدولاب.'); else if (result.savedMedia) setActionFeedback('اتحفظت الميديا في الدولاب.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
@@ -670,4 +747,12 @@ const styles = StyleSheet.create({
   reactionChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 2 },
   feedbackCard: { marginHorizontal: spacing.sm, marginBottom: spacing.xs },
   errorCard: { marginHorizontal: spacing.sm, marginBottom: spacing.sm, gap: spacing.xs },
+  viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', padding: spacing.md },
+  viewerBackdrop: { ...StyleSheet.absoluteFillObject },
+  viewerImageWrap: { gap: spacing.sm, alignItems: 'center' },
+  viewerHeader: { width: '100%', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  viewerTitle: { color: colors.background },
+  viewerClose: { width: 36, height: 36, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.textMuted },
+  viewerImage: { width: '100%', height: '75%', borderRadius: radii.md },
+  viewerCard: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs },
 });

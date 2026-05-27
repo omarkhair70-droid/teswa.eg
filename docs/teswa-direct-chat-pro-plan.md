@@ -583,3 +583,26 @@ Scope safety:
 Next PR:
 
 - Direct Chat System PR 6 — Media Viewer.
+
+## Direct Chat System PR 6 — Media Viewer
+
+Delivered in this PR (Direct Chat Pro media viewing polish only):
+
+- Added full-screen image viewer modal in `app/direct/[id].tsx` with premium dark backdrop, close action, optional title, and safe loading/error fallback copy.
+- Added video viewer foundation modal with safe actions (`فتح الفيديو`, `نسخ الرابط`) and fallback guidance: `تشغيل الفيديو داخل التطبيق جاي قريبًا.`
+- Added file viewer/action modal with metadata display (name, size, MIME type), `نسخ الرابط`, and `حفظ في الدولاب` integration using the existing Dolab save bridge.
+- Added safer attachment tap behavior and a scoped media viewer state (`selectedMediaViewer`) for image/video/file handling.
+- Added a local remote URL resolver to prioritize canonical attachment URLs, reject unsafe local `file://` links for open/viewer actions, and fail gracefully with Arabic feedback.
+- Kept message sending/upload/runtime logic unchanged (no Stream token/channel/runtime rewrite).
+- Added no new libraries.
+
+Scope safety:
+
+- No Story Thread changes.
+- No Deal Chat changes.
+- No DB schema or migration changes.
+- No Direct Chat sending flow changes.
+
+Next PR:
+
+- Direct Chat System PR 7 — Voice Polish.
