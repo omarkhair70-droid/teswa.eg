@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/auth';
 import { acceptDirectMessageRequest, fetchDirectConversation, fetchDirectConversationMessages, ignoreDirectMessageRequest, markDirectConversationRead, sendDirectMessage } from '@/lib/direct-messages';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
+import { getOrCreateStreamClient, getWarmStreamClientIfReady } from '@/lib/chat/stream-client';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
@@ -159,10 +160,7 @@ export default function DirectScreen() {
     streamChannelRef.current = null;
     setStreamReady(false);
     setDirectConnectionState('idle');
-    if (streamClientRef.current) {
-      try { await streamClientRef.current.disconnectUser(); } catch {}
-      streamClientRef.current = null;
-    }
+    streamClientRef.current = null;
   }, [clearStreamSubs]);
   const connectStream = useCallback(async () => {
     if (!DIRECT_CHAT_PRO_ENABLED || !convo || convo.status !== 'accepted') return;
@@ -181,9 +179,14 @@ export default function DirectScreen() {
       });
       if (!creds.ok) throw new Error(creds.message);
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
-      const { StreamChat } = await import('stream-chat');
-      const client = StreamChat.getInstance(creds.apiKey);
-      await client.connectUser({ id: creds.userId }, creds.token);
+      const warmClient = getWarmStreamClientIfReady();
+      let client: any = warmClient;
+      if (warmClient && warmClient.userID === creds.userId) {
+        if (__DEV__) console.log('[direct/stream] direct screen reused warm client');
+      } else {
+        if (__DEV__) console.log('[direct/stream] direct screen performed cold connect');
+        client = await getOrCreateStreamClient();
+      }
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
       streamClientRef.current = client;
@@ -263,7 +266,7 @@ export default function DirectScreen() {
 
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
-      if (directConnectionState === 'connecting' || streamConnecting) return 'بنجهز Direct Chat Pro...';
+      if (directConnectionState === 'connecting' || streamConnecting) return 'بنجهز الإرسال...';
       if (streamError || !streamReady) return 'الشات الجديد غير متاح الآن';
       return 'اكتب رسالة في Direct Chat Pro...';
     }

@@ -698,3 +698,23 @@ Scope safety:
   - Therefore current status is **push receiving/tap routing foundation only**. Real Stream-direct delivery requires Stream Push Provider/FCM configuration or a dedicated secure server-side webhook bridge in a follow-up.
   - Android note: reliable push behavior may require a fresh EAS build when native/app config changes are involved; OTA updates alone are not always sufficient.
 - Next phase: **Direct Chat System QA Pass** (end-to-end runtime checks for accepted/requested fallback paths, inbox ordering, and final push delivery integration path).
+
+## Direct Chat Performance — Stream Warmup + Faster Composer Readiness
+
+This polish improves perceived speed for accepted Direct Chat Pro conversations without changing architecture:
+
+- Adds shared Stream client warmup helper in `lib/chat/stream-client.ts`.
+- Warms Stream connection from direct inbox (`app/direct/index.tsx`) in background when accepted conversations exist.
+- Reuses warmed Stream client in direct conversation screen (`app/direct/[id].tsx`) when available.
+- Avoids disconnecting full Stream client on each direct screen unmount; only local channel listeners/subscriptions are cleaned.
+- Keeps existing safe fallback: if warmup fails, direct screen still performs normal cold connect.
+- Updates composer connecting copy to `بنجهز الإرسال...` while channel readiness completes.
+- Adds `__DEV__` diagnostics for warmup/cold-path behavior (without logging tokens/secrets).
+
+Non-goals and guardrails remain unchanged:
+
+- No Stream architecture rewrite.
+- No accepted Direct Pro fallback to Supabase sends.
+- No Story Thread changes.
+- No Deal Chat changes.
+- No DB/schema changes.

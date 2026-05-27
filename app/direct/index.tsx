@@ -14,6 +14,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { acceptDirectMessageRequest, ignoreDirectMessageRequest } from '@/lib/direct-messages';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
+import { warmupDirectStreamClient } from '@/lib/chat/stream-client';
 
 type InboxFilter = 'all' | 'requested' | 'accepted';
 type StreamPreviewAttachment = { type?: string; mime_type?: string };
@@ -130,6 +131,9 @@ export default function DirectInboxScreen() {
       const rows = await fetchMyDirectConversations();
       const hydratedRows = user?.id ? await mergeAcceptedStreamActivity(rows, user.id) : rows;
       setItems(hydratedRows);
+      if (hydratedRows.some((row) => row.status === 'accepted')) {
+        void warmupDirectStreamClient();
+      }
       setError(null);
     } catch {
       setError('تعذر تحميل المحادثات حالياً.');
