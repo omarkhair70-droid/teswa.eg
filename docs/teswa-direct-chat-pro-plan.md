@@ -652,3 +652,24 @@ Next PR:
 
 ### Next phase
 Direct Chat System Stabilization + QA Pass
+
+## Direct Chat Media Follow-up — In-app Video Player
+
+Delivered in this PR (targeted Direct Chat media follow-up only):
+
+- Upgraded the existing video media modal in `app/direct/[id].tsx` to play video **inside the app** using the already installed `expo-video` (`VideoView` + `useVideoPlayer`), with no new dependencies.
+- Preserved fallback actions in the same modal:
+  - `فتح الفيديو`
+  - `نسخ الرابط`
+  - `إغلاق`
+- Added explicit invalid/missing URL fallback copy for video playback:
+  - `تعذر تشغيل الفيديو حالياً.`
+- Kept image viewer behavior unchanged.
+- Kept file viewer behavior unchanged.
+- Kept media sending/uploading and Stream runtime behavior unchanged.
+- Added no DB/schema changes.
+
+Scope safety:
+
+- No Story Thread changes.
+- No Deal Chat changes.
