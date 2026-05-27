@@ -54,7 +54,7 @@ function mapStreamMessagePreview(message: any): string | null {
   const attachments: StreamPreviewAttachment[] = Array.isArray(message?.attachments)
     ? message.attachments
       .filter((attachment: unknown): attachment is StreamPreviewAttachment => Boolean(attachment) && typeof attachment === 'object')
-      .map((attachment) => attachment as StreamPreviewAttachment)
+      .map((attachment: unknown) => attachment as StreamPreviewAttachment)
     : [];
   if (attachments.some((a) => typeof a?.mime_type === 'string' && a.mime_type.startsWith('audio/'))) return 'رسالة صوتية';
   if (attachments.some((a) => a?.type === 'image')) return 'صورة';
