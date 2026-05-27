@@ -412,3 +412,13 @@ Explicitly unchanged in V1.4:
 
 ### Next Phase
 - Direct Chat Pro V1.6 — Composer Actions + Dolab Bridge
+
+## V1.6 — Composer Actions + Dolab Bridge
+- تمت ترقية زر + إلى Composer Actions Sheet بدل مرفقات فقط، مع خيارات: صورة، فيديو، ملف، من دولابي، مسودة في الدولاب، إلغاء.
+- تم إضافة إجراء "احفظ في الدولاب" داخل خيارات الرسالة (long-press) لحفظ نص الرسالة و/أو مرفقاتها بشكل آمن عبر جسر دولاب محلي.
+- تم إضافة إجراء "مسودة في الدولاب" لحفظ نص/ميديا الـ composer في دولاب محلي بدون إرسال إلى Stream.
+- تمت إضافة foundation لتحميل عناصر حديثة من الدولاب (نص + ميديا) وإدراجها بشكل محافظ في composer/pending attachment.
+- سلوك "من دولابي" محافظ وآمن: لا إرسال تلقائي، فقط تجهيز composer أو pending media، مع رسائل fallback عربية.
+
+### Next phase
+- Direct Chat Pro V1.7 — Exchange Cards + Offer Flow.
