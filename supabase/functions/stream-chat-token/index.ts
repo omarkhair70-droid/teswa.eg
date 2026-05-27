@@ -63,7 +63,34 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const otherUserId = typeof body?.otherUserId === "string" && body.otherUserId.trim().length > 0 ? body.otherUserId.trim() : null;
+    const displayName = typeof body?.displayName === "string" && body.displayName.trim().length > 0 ? body.displayName.trim() : null;
+    const avatarUrl = typeof body?.avatarUrl === "string" && body.avatarUrl.trim().length > 0 ? body.avatarUrl.trim() : null;
+
     const streamClient = StreamChat.getInstance(streamApiKey, streamSecret);
+
+    try {
+      const currentUserPayload: Record<string, string> = {
+        id: user.id,
+        name: displayName ?? user.email ?? user.id,
+      };
+      if (avatarUrl) currentUserPayload.image = avatarUrl;
+
+      const usersToUpsert: Array<Record<string, string>> = [currentUserPayload];
+      if (otherUserId && otherUserId !== user.id) usersToUpsert.push({ id: otherUserId });
+
+      await streamClient.upsertUsers(usersToUpsert);
+    } catch (upsertError) {
+      const message = upsertError instanceof Error ? upsertError.message : "unknown_stream_upsert_error";
+      console.error("stream-chat-token upsert failed", { message, userId: user.id, hasOtherUserId: !!otherUserId });
+      return jsonResponse(500, {
+        ok: false,
+        error: "stream_user_upsert_failed",
+        message: "تعذر تجهيز مستخدم الشات.",
+      });
+    }
+
     const token = streamClient.createToken(user.id);
 
     return jsonResponse(200, {
