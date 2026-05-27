@@ -64,7 +64,8 @@
 - Set secret: `TESWA_STREAM_WEBHOOK_SECRET`.
 - Configure Stream dashboard webhook URL to the deployed Supabase Edge Function URL.
 - Configure custom header `x-teswa-stream-webhook-secret` if Stream webhook supports custom headers.
-- If custom headers are unavailable in the Stream webhook surface you use, follow-up with signed webhook verification strategy (HMAC signature verification) before production enablement.
+- Stream dashboard webhook surfaces may not support custom headers; in that case configure the webhook URL with `?secret=...` using `TESWA_STREAM_WEBHOOK_SECRET`.
+- Treat webhook URL secrets as sensitive: rotate immediately if exposed, and never paste the secret into screenshots/chats.
 
 ### Required secrets
 - `TESWA_STREAM_WEBHOOK_SECRET`

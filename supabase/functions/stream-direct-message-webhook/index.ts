@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (req.method !== "POST") return jsonResponse(405, { ok: false, error: "method_not_allowed" });
     const expectedSecret = Deno.env.get("TESWA_STREAM_WEBHOOK_SECRET");
-    const providedSecret = req.headers.get("x-teswa-stream-webhook-secret");
+    const providedSecret = req.headers.get("x-teswa-stream-webhook-secret") ?? new URL(req.url).searchParams.get("secret");
     if (!expectedSecret || !providedSecret || providedSecret !== expectedSecret) return jsonResponse(401, { ok: false, error: "unauthorized" });
 
     let payload: StreamWebhookPayload;
