@@ -169,24 +169,28 @@ export default function DirectScreen() {
     setStreamError(null);
     try {
       clearStreamSubs();
-      const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
-      const displayName = typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.full_name === 'string' ? metadata.full_name : null;
-      const avatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : null;
-      const creds = await fetchStreamChatToken({
-        otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
-        displayName: displayName ?? undefined,
-        avatarUrl: avatarUrl ?? undefined,
-      });
-      if (!creds.ok) throw new Error(creds.message);
-      const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId: creds.userId, otherUserId: convo.otherUserId });
       const warmClient = getWarmStreamClientIfReady();
       let client: any = warmClient;
-      if (warmClient && warmClient.userID === creds.userId) {
+      let currentUserId = typeof warmClient?.userID === 'string' ? warmClient.userID : '';
+
+      if (warmClient && currentUserId) {
         if (__DEV__) console.log('[direct/stream] direct screen reused warm client');
       } else {
+        const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
+        const displayName = typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.full_name === 'string' ? metadata.full_name : null;
+        const avatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : null;
+        const creds = await fetchStreamChatToken({
+          otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
+          displayName: displayName ?? undefined,
+          avatarUrl: avatarUrl ?? undefined,
+        });
+        if (!creds.ok) throw new Error(creds.message);
         if (__DEV__) console.log('[direct/stream] direct screen performed cold connect');
         client = await getOrCreateStreamClient();
+        currentUserId = creds.userId;
       }
+
+      const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId, otherUserId: convo.otherUserId });
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
       streamClientRef.current = client;
