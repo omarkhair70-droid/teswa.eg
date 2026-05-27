@@ -513,3 +513,40 @@ Delivered scope:
 ### Next PR
 
 Direct Chat System PR 4 — Direct Privacy Settings
+
+## Direct Chat System PR 4 — Direct Privacy Settings
+
+This phase adds a focused privacy-control foundation for who can start **new** direct message requests, without changing Stream runtime behavior.
+
+### Privacy options
+
+- `everyone` → **أي حد**
+- `followers_only` → **المتابعين فقط**
+- `no_one` → **لا أحد**
+
+### Settings UI
+
+- Added a dedicated settings screen at `/settings/direct-privacy` with Arabic-first copy:
+  - title: **خصوصية الرسائل**
+  - subtitle: **اختار مين يقدر يبعتلك طلب مراسلة.**
+- Added a settings entry point from `/settings` to open Direct Privacy settings.
+
+### Persistence and enforcement status
+
+- Added `profiles.direct_message_privacy` with safe default `everyone` plus allowed-values check constraint.
+- Added frontend helper APIs to fetch/update the setting safely.
+- Updated `start_or_get_direct_conversation` to enforce privacy for **new conversation/request creation**:
+  - `no_one`: blocks new requests with friendly Arabic message.
+  - `followers_only`: allows only when there is an existing follow edge between the two users.
+  - `everyone`: unchanged allow behavior.
+- Existing conversation rows continue to open by current lifecycle rules; privacy applies only to new request creation.
+
+### Non-impact guarantees
+
+- Existing accepted conversations remain usable.
+- No Stream runtime changes.
+- No changes to Story Thread or Deal Chat.
+
+### Next PR
+
+- **Direct Chat System PR 5 — Direct Push Notifications**

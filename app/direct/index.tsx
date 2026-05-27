@@ -114,6 +114,9 @@ export default function DirectInboxScreen() {
             <View style={styles.requestCenterInfo}>
               <AppText weight="bold">طلبات المراسلة</AppText>
               <AppText muted>الطلبات دي من أشخاص لسه ما بدأش بينكم شات مباشر. اقبل الطلب لو حابب تكملوا الكلام.</AppText>
+              <Pressable onPress={() => router.push('/settings/direct-privacy')}>
+                <AppText muted style={styles.privacyHint}>تقدر تتحكم في مين يبعتلك من إعدادات خصوصية الرسائل.</AppText>
+              </Pressable>
             </View>
           </AppCard>
         ) : null}
@@ -212,6 +215,7 @@ export default function DirectInboxScreen() {
 const styles = StyleSheet.create({
   root: { gap: spacing.md },
   requestCenterInfo: { gap: spacing.xs },
+  privacyHint: { textDecorationLine: 'underline' },
   heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroTextBlock: { flex: 1, gap: spacing.xs },
   title: { fontSize: 20 },
