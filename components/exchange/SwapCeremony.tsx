@@ -15,6 +15,7 @@ type CeremonyStatus = 'sent' | 'accepted' | 'completed';
 
 export function SwapCeremony({ requestedItemTitle, offeredItemTitle, requestedItemImageUrl, offeredItemImageUrl, status = 'sent', onClose, onShare }: { requestedItemTitle?: string; offeredItemTitle?: string; requestedItemImageUrl?: string; offeredItemImageUrl?: string; status?: CeremonyStatus; onClose?: () => void; onShare?: () => void; }) {
   const cardRef = useRef<ViewShot | null>(null);
+  const revealedRef = useRef(false);
   const stampText = useMemo(() => status === 'accepted' ? 'تم الاتفاق' : status === 'completed' ? 'تم التبادل' : 'العرض اتبعت', [status]);
 
   const handleShare = useCallback(async () => {
@@ -28,6 +29,8 @@ export function SwapCeremony({ requestedItemTitle, offeredItemTitle, requestedIt
   }, [onShare]);
 
   const handleReveal = useCallback(() => {
+    if (revealedRef.current) return;
+    revealedRef.current = true;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   }, []);
 
