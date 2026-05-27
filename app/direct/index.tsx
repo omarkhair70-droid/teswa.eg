@@ -12,8 +12,11 @@ import { useAuth } from '@/lib/auth';
 import { fetchMyDirectConversations, type DirectConversationSummary } from '@/lib/direct-messages';
 import { AppButton } from '@/components/ui/AppButton';
 import { acceptDirectMessageRequest, ignoreDirectMessageRequest } from '@/lib/direct-messages';
+import { fetchStreamChatToken } from '@/lib/chat/stream-token';
+import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 
 type InboxFilter = 'all' | 'requested' | 'accepted';
+type StreamPreviewAttachment = { type?: string; mime_type?: string };
 
 const FILTER_LABELS: Record<InboxFilter, string> = { all: 'الكل', requested: 'الطلبات', accepted: 'المقبولة' };
 const STATUS_META: Record<string, { label: string; tone: 'neutral' | 'highlight' | 'warn' }> = {
@@ -40,6 +43,77 @@ function formatTime(value: string | null): string | null {
   return parsed.toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+function getConversationSortTimestamp(item: DirectConversationSummary): number {
+  const ms = item.lastMessageAt ? Date.parse(item.lastMessageAt) : Number.NaN;
+  return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
+}
+
+function mapStreamMessagePreview(message: any): string | null {
+  const metaType = typeof message?.teswa_type === 'string' ? message.teswa_type : '';
+  if (metaType === 'exchange_offer_draft' || metaType === 'exchange_draft') return 'عرض تبادل مبدئي';
+  const attachments: StreamPreviewAttachment[] = Array.isArray(message?.attachments)
+    ? message.attachments
+      .filter((attachment: unknown): attachment is StreamPreviewAttachment => Boolean(attachment) && typeof attachment === 'object')
+      .map((attachment) => attachment as StreamPreviewAttachment)
+    : [];
+  if (attachments.some((a) => typeof a?.mime_type === 'string' && a.mime_type.startsWith('audio/'))) return 'رسالة صوتية';
+  if (attachments.some((a) => a?.type === 'image')) return 'صورة';
+  if (attachments.some((a) => a?.type === 'video')) return 'فيديو';
+  if (attachments.some((a) => a?.type === 'file')) return 'ملف';
+  if (typeof message?.text === 'string' && message.text.trim().length > 0) return message.text.trim();
+  return null;
+}
+
+async function mergeAcceptedStreamActivity(
+  rows: DirectConversationSummary[],
+  currentUserId: string,
+): Promise<DirectConversationSummary[]> {
+  const acceptedRows = rows.filter((row) => row.status === 'accepted');
+  if (!acceptedRows.length) return rows;
+
+  const tokenResult = await fetchStreamChatToken();
+  if (!tokenResult.ok) return rows;
+
+  const { StreamChat } = await import('stream-chat');
+  const client = StreamChat.getInstance(tokenResult.apiKey);
+  const alreadyConnectedUser = typeof client.userID === 'string' ? client.userID : null;
+  const shouldConnect = !alreadyConnectedUser || alreadyConnectedUser !== tokenResult.userId;
+  if (shouldConnect) {
+    if (alreadyConnectedUser && typeof client.disconnectUser === 'function') await client.disconnectUser();
+    await client.connectUser({ id: tokenResult.userId }, tokenResult.token);
+  }
+
+  const mergedById = new Map(rows.map((row) => [row.conversationId, row]));
+  await Promise.all(acceptedRows.map(async (row) => {
+    try {
+      const config = getStreamDirectChannelConfig({
+        conversationId: row.conversationId,
+        currentUserId,
+        otherUserId: row.otherUserId,
+      });
+      const channel = client.channel(config.type, config.id, { members: config.members });
+      const state = await channel.query({ messages: { limit: 1 } });
+      const latest = Array.isArray(state?.messages) ? state.messages[state.messages.length - 1] : null;
+      if (!latest) return;
+      const preview = mapStreamMessagePreview(latest);
+      const createdAt = typeof latest.created_at === 'string' ? latest.created_at : null;
+      const updatedAt = typeof latest.updated_at === 'string' ? latest.updated_at : null;
+      const lastMessageAt = createdAt ?? updatedAt ?? row.lastMessageAt;
+      const unreadCount = typeof channel.countUnread === 'function' ? channel.countUnread() : row.unreadCount;
+      mergedById.set(row.conversationId, {
+        ...row,
+        lastMessageBody: preview ?? row.lastMessageBody,
+        lastMessageAt,
+        unreadCount: Number.isFinite(unreadCount) ? Math.max(0, unreadCount) : row.unreadCount,
+      });
+    } catch {
+      // Keep Supabase fallback per-conversation.
+    }
+  }));
+
+  return Array.from(mergedById.values()).sort((a, b) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a));
+}
+
 export default function DirectInboxScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -54,14 +128,15 @@ export default function DirectInboxScreen() {
     if (!silent) setLoading(true);
     try {
       const rows = await fetchMyDirectConversations();
-      setItems(rows);
+      const hydratedRows = user?.id ? await mergeAcceptedStreamActivity(rows, user.id) : rows;
+      setItems(hydratedRows);
       setError(null);
     } catch {
       setError('تعذر تحميل المحادثات حالياً.');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
