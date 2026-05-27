@@ -347,13 +347,13 @@ export default function DirectScreen() {
           if (typeof channel.sendImage !== 'function') { setActionFeedback('إرسال الميديا غير متاح حالياً.'); return; }
           const uploaded = await channel.sendImage(pendingAttachment.uri);
           const imageUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
-          if (!imageUrl) throw new Error('image upload failed');
+          if (!imageUrl || imageUrl.startsWith('file://')) throw new Error('image upload failed');
           attachments = [{ type: 'image', image_url: imageUrl, title: pendingAttachment.fileName, name: pendingAttachment.fileName, mime_type: pendingAttachment.mimeType, file_size: pendingAttachment.sizeBytes }];
         } else {
           if (typeof channel.sendFile !== 'function') { setActionFeedback('إرسال الميديا غير متاح حالياً.'); return; }
           const uploaded = await channel.sendFile(pendingAttachment.uri, pendingAttachment.fileName, pendingAttachment.mimeType);
           const fileUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
-          if (!fileUrl) throw new Error('file upload failed');
+          if (!fileUrl || fileUrl.startsWith('file://')) throw new Error('file upload failed');
           attachments = [{ type: pendingAttachment.kind === 'video' ? 'video' : 'file', asset_url: fileUrl, title: pendingAttachment.fileName, name: pendingAttachment.fileName, mime_type: pendingAttachment.mimeType, file_size: pendingAttachment.sizeBytes }];
         }
       }

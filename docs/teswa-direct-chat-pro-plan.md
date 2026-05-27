@@ -445,11 +445,14 @@ This phase introduces lightweight exchange foundations inside accepted Direct Ch
   - `كمّل في Deal Chat`
   - fallback feedback only, no fake deal creation.
 
-Final note:
-**Direct Chat Pro core is now complete.**
+## Direct Chat Pro Stabilization + Production Readiness
 
-Next phase order:
-1. Direct Chat Pro Stabilization + QA
-2. Dolab QA
-3. Followers/Following settings QA
-4. Production build
+- **Direct Chat Pro core is complete** (V1 → V1.7 delivered).
+- This stabilization pass is for production safety and build readiness only (no new product features).
+- Remaining pre-production gates:
+  1. `npm.cmd ci`
+  2. `npm.cmd run typecheck`
+  3. `npx.cmd expo-doctor`
+  4. production EAS build
+- No manual QA is required in this PR.
+- After the checks pass, the **next step is the production build**.
