@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 import { fetchUserBlockState } from '@/lib/user-blocks';
 import { ExchangeItemSummary, fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
+import { canTransitionOfferStatus } from '@/lib/exchange-state-machine';
 
 export type OfferInvalidReason = 'requested_not_found' | 'requested_inactive' | 'own_requested_item' | 'offered_not_found' | 'offered_inactive' | 'offered_not_owned' | 'same_item' | 'blocked_interaction';
 export type OfferItemSummary = ExchangeItemSummary;
@@ -99,7 +100,7 @@ export async function fetchOfferById(offerId: string, currentUserId: string): Pr
 export async function markOfferThinkingFromMobile(input: { offerId: string; currentUserId: string; note?: string }): Promise<OfferActionResult> {
   const offer = await getOfferForAction(input.offerId); if (!offer) return { ok: false, reason: 'not_found', message: 'العرض غير موجود.' };
   if (offer.receiver_id !== input.currentUserId) return { ok: false, reason: 'unauthorized', message: 'غير مسموح لك بالرد على هذا العرض.' };
-  if (!respondableStatuses.has(offer.status as string)) return { ok: false, reason: 'invalid_status', message: `لا يمكن تنفيذ الإجراء. حالة العرض: ${getStatusLabel(offer.status as string)}.` };
+  if (!canTransitionOfferStatus(offer.status as string, 'thinking')) return { ok: false, reason: 'invalid_status', message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   const { error } = await supabase.rpc('mark_offer_thinking', { p_offer_id: input.offerId, p_note: input.note?.trim() || null }); if (error) return { ok: false, reason: 'unknown', message: 'تعذر تحديث حالة العرض.' };
   void notify({ target_user_id: offer.sender_id, notification_type: 'offer_thinking', notification_title: 'صاحب الحاجة محتاج يفكر', notification_body: 'العرض لسه مفتوح، بس محتاج وقت.', target_offer_id: input.offerId, target_deal_id: null, target_item_id: null });
   return { ok: true };
@@ -108,7 +109,7 @@ export async function markOfferThinkingFromMobile(input: { offerId: string; curr
 export async function softRejectOfferFromMobile(input: { offerId: string; currentUserId: string; note?: string }): Promise<OfferActionResult> {
   const offer = await getOfferForAction(input.offerId); if (!offer) return { ok: false, reason: 'not_found', message: 'العرض غير موجود.' };
   if (offer.receiver_id !== input.currentUserId) return { ok: false, reason: 'unauthorized', message: 'غير مسموح لك بالرد على هذا العرض.' };
-  if (!respondableStatuses.has(offer.status as string)) return { ok: false, reason: 'invalid_status', message: `لا يمكن تنفيذ الإجراء. حالة العرض: ${getStatusLabel(offer.status as string)}.` };
+  if (!canTransitionOfferStatus(offer.status as string, 'soft_rejected')) return { ok: false, reason: 'invalid_status', message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   const { error } = await supabase.rpc('soft_reject_offer', { p_offer_id: input.offerId, p_note: input.note?.trim() || null }); if (error) return { ok: false, reason: 'unknown', message: 'تعذر رفض العرض حالياً.' };
   void notify({ target_user_id: offer.sender_id, notification_type: 'offer_soft_rejected', notification_title: 'العرض ما ظبطش المرة دي', notification_body: 'صاحب الحاجة رفض العرض بلطف.', target_offer_id: input.offerId, target_deal_id: null, target_item_id: null });
   return { ok: true };
@@ -117,7 +118,7 @@ export async function softRejectOfferFromMobile(input: { offerId: string; curren
 export async function acceptOfferFromMobile(input: { offerId: string; currentUserId: string }): Promise<OfferActionResult> {
   const offer = await getOfferForAction(input.offerId); if (!offer) return { ok: false, reason: 'not_found', message: 'العرض غير موجود.' };
   if (offer.receiver_id !== input.currentUserId) return { ok: false, reason: 'unauthorized', message: 'غير مسموح لك بقبول هذا العرض.' };
-  if (!respondableStatuses.has(offer.status as string)) return { ok: false, reason: 'invalid_status', message: `لا يمكن قبول العرض. حالته الآن: ${getStatusLabel(offer.status as string)}.` };
+  if (!canTransitionOfferStatus(offer.status as string, 'accepted')) return { ok: false, reason: 'invalid_status', message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   const { data: dealId, error } = await supabase.rpc('accept_offer', { p_offer_id: input.offerId });
   if (error || !dealId) return { ok: false, reason: 'unknown', message: 'تعذر قبول العرض حالياً.' };
   void Promise.all([

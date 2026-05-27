@@ -733,7 +733,7 @@ export default function Screen() {
               <AppText muted>{voiceMessage}</AppText>
             </AppCard>
           ) : null}
-          {moment === "accepted" && SWAP_CEREMONY_ENABLED ? (
+          {moment === "accepted" && deal.status !== "cancelled" && SWAP_CEREMONY_ENABLED ? (
             <SwapCeremony
               status="accepted"
               requestedItemTitle={deal.requestedItem?.title}
@@ -752,7 +752,7 @@ export default function Screen() {
               tone="waiting"
             />
           ) : null}
-          {completionMoment === "completed" ? (
+          {completionMoment === "completed" && deal.status === "completed" ? (
             <View style={styles.groupGap}>
               {SWAP_CEREMONY_ENABLED ? <SwapCeremony
                 status="completed"
