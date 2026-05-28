@@ -353,6 +353,15 @@ export default function ProfileScreen() {
             <AppCard><View style={styles.group}><AppText weight="semibold">الثقة والإحصائيات</AppText><AppText>المقايضات الناجحة: {profile?.successful_swaps_count ?? 0}</AppText><AppText>معدل الرد: {profile?.response_rate != null ? `${profile.response_rate}%` : 'غير متاح بعد'}</AppText></View></AppCard>
             <AppCard><View style={styles.group}><AppText weight="semibold">بيانات الحساب</AppText><AppText>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText></View></AppCard>
 
+            <Pressable onPress={() => router.push('/settings')}>
+              <AppCard>
+                <View style={styles.group}>
+                  <AppText weight="semibold">الإعدادات</AppText>
+                  <AppText muted>المظهر، اللغة، الإشعارات، الخصوصية، وروابط الحساب.</AppText>
+                </View>
+              </AppCard>
+            </Pressable>
+
             <AppCard>
               <View style={styles.group}>
                 <AppText weight="semibold">إشعارات الموبايل</AppText>

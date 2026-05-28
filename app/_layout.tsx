@@ -14,6 +14,8 @@ import { DIRECT_OPEN_CHAT_ACTION_ID, DIRECT_REACT_LIKE_ACTION_ID, DIRECT_REPLY_A
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
+import { AppToastRoot } from '@/components/ui/AppToastRoot';
+import { ThemePreferencesProvider } from '@/lib/preferences/appearance';
 import { trackEvent } from '@/lib/analytics';
 import { getPerformanceSessionElapsedMs, setPerformanceNetworkState, trackPerformanceMetric } from '@/lib/performance-telemetry';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
@@ -555,17 +557,20 @@ function RootLayout() {
       <KeyboardProvider preload={false}>
         <GestureHandlerRootView style={styles.gestureRoot}>
           <BottomSheetModalProvider>
-            <AuthProvider>
-              <QueryClientProvider client={queryClient}>
-                <UnreadBadgesProvider>
-                  <ReactQueryRuntimeCoordinator enableNetworkProbe={firstScreenReady} />
-                  <ShareIntentCoordinator />
-                  <RootNavigator onFirstScreenReady={() => setFirstScreenReady(true)} />
-                  <DeferredStartupWorkCoordinator firstScreenReady={firstScreenReady} />
-                  <BiometricAppLockCoordinator />
-                </UnreadBadgesProvider>
-              </QueryClientProvider>
-            </AuthProvider>
+            <ThemePreferencesProvider>
+              <AuthProvider>
+                <QueryClientProvider client={queryClient}>
+                  <UnreadBadgesProvider>
+                    <ReactQueryRuntimeCoordinator enableNetworkProbe={firstScreenReady} />
+                    <ShareIntentCoordinator />
+                    <RootNavigator onFirstScreenReady={() => setFirstScreenReady(true)} />
+                    <DeferredStartupWorkCoordinator firstScreenReady={firstScreenReady} />
+                    <BiometricAppLockCoordinator />
+                    <AppToastRoot />
+                  </UnreadBadgesProvider>
+                </QueryClientProvider>
+              </AuthProvider>
+            </ThemePreferencesProvider>
           </BottomSheetModalProvider>
         </GestureHandlerRootView>
       </KeyboardProvider>
