@@ -22,6 +22,8 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { queryClient } from '@/lib/query/query-client';
 import { getAdventureEntranceSeen } from '@/lib/adventure-entrance';
 import { isPushRegistrationEnabled } from '@/lib/feature-flags';
+import { initSentry, setSentryUser } from '@/lib/sentry';
+import * as Sentry from '@sentry/react-native';
 
 
 
@@ -79,6 +81,7 @@ const policyRouteLog = (decision: 'show_policy' | 'skip_policy' | 'wait_for_sess
 };
 
 startupLog('js_root_layout_started');
+initSentry();
 void SplashScreen.preventAutoHideAsync();
 
 async function hideSplashSafely(_reason: string) {
@@ -192,6 +195,10 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     if (shouldRefreshPolicy) await refreshPolicyAcceptance();
   };
 
+
+  useEffect(() => {
+    setSentryUser(user?.id ?? null);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user || (!loadingProfile && !loadingPolicyAcceptance)) {
@@ -537,7 +544,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function RootLayout() {
+function RootLayout() {
   useRTLSetup();
   const [firstScreenReady, setFirstScreenReady] = useState(false);
   useEffect(() => {
@@ -565,3 +572,5 @@ export default function RootLayout() {
     </ShareIntentProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

@@ -3,6 +3,8 @@ const fs = require('fs');
 const APP_VARIANT = process.env.APP_VARIANT;
 const IS_PREVIEW = APP_VARIANT === 'preview';
 const hasPreviewGoogleServices = fs.existsSync('./google-services.preview.json');
+const sentryOrg = process.env.SENTRY_ORG;
+const sentryProject = process.env.SENTRY_PROJECT;
 
 module.exports = {
   expo: {
@@ -36,6 +38,14 @@ module.exports = {
       output: 'static',
     },
     plugins: [
+      [
+        '@sentry/react-native/expo',
+        {
+          url: 'https://sentry.io/',
+          organization: sentryOrg,
+          project: sentryProject,
+        },
+      ],
       'expo-router',
       [
         'expo-image-picker',
