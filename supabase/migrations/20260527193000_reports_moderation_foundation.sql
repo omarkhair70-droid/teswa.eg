@@ -77,8 +77,28 @@ begin
   end if;
 end $$;
 
+-- Existing deployments may have public.reports.status backed by the
+-- public.report_status enum. Extend it before referencing new moderation
+-- statuses, while remaining compatible with newer databases where status is
+-- plain text and the enum does not exist.
+do $$
+begin
+  if exists (
+    select 1
+    from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where n.nspname = 'public'
+      and t.typname = 'report_status'
+      and t.typtype = 'e'
+  ) then
+    execute 'alter type public.report_status add value if not exists ''reviewing''';
+    execute 'alter type public.report_status add value if not exists ''actioned''';
+    execute 'alter type public.report_status add value if not exists ''dismissed''';
+  end if;
+end $$;
+
 alter table public.reports drop constraint if exists reports_status_check;
-alter table public.reports add constraint reports_status_check check (status in ('open','reviewing','actioned','dismissed'));
+alter table public.reports add constraint reports_status_check check (status::text in ('open','reviewing','actioned','dismissed'));
 
 alter table public.reports drop constraint if exists reports_target_required_check;
 alter table public.reports add constraint reports_target_required_check check (
@@ -248,17 +268,25 @@ end; $$;
 
 create or replace function public.review_report(p_report_id uuid, p_status text, p_action_taken text default null, p_admin_notes text default null)
 returns void language plpgsql security definer set search_path = public as $$
+declare v_rows integer;
 begin
   if auth.role() <> 'service_role' and not public.is_admin_user() then raise exception 'not_allowed' using errcode='42501'; end if;
   if p_status not in ('reviewing','actioned','dismissed') then raise exception 'invalid_status' using errcode='P0001'; end if;
-  update public.reports
-  set status = p_status,
-      action_taken = nullif(trim(coalesce(p_action_taken,'')),''),
-      admin_notes = nullif(trim(coalesce(p_admin_notes,'')),''),
-      reviewed_by = auth.uid(),
-      reviewed_at = now()
-  where id = p_report_id;
-  if not found then raise exception 'report_not_found' using errcode='P0001'; end if;
+
+  -- Assign the validated status as an SQL literal so it can coerce into either
+  -- an existing report_status enum column or a text column.
+  execute '
+    update public.reports
+    set status = ' || quote_literal(p_status) || ',
+        action_taken = nullif(trim(coalesce($2,'''')),''''),
+        admin_notes = nullif(trim(coalesce($3,'''')),''''),
+        reviewed_by = auth.uid(),
+        reviewed_at = now()
+    where id = $1'
+  using p_report_id, p_action_taken, p_admin_notes;
+
+  get diagnostics v_rows = row_count;
+  if v_rows = 0 then raise exception 'report_not_found' using errcode='P0001'; end if;
 end; $$;
 
 create or replace function public.hide_item_for_moderation(p_item_id uuid, p_report_id uuid default null)
