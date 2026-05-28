@@ -153,7 +153,7 @@ export default function StreamDirectPilotScreen() {
 
   return (
     <AppScreen scrollable>
-      <AppText weight="bold" style={styles.title}>Direct Chat Pro — Stream Direct Pilot</AppText>
+      <AppText weight="bold" style={styles.title}>Direct Chat — Stream Direct Pilot</AppText>
 
       <AppCard>
         <View style={styles.statusList}>
