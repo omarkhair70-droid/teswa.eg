@@ -277,3 +277,48 @@
 - No custom icon/sound/channel/defaultChannel/native-notification-config changes were introduced.
 - No iOS rich notification service extension.
 - Full inline reply sending from notification was intentionally not implemented in this sprint pending further auth/background-safety validation.
+
+## Sprint 7 — Admin/Ops Reports Console
+
+### Implemented
+- Added an in-app admin-only reports console at `/admin/reports` for lightweight trust-and-safety report review.
+- Added `checkIsAdminUser()` as the client access helper; it calls the backend RPC `public.is_admin_user()` and does not infer admin access from local metadata.
+- Added admin report helpers for fetching report summaries and safely actioning reports.
+- Added an admin-only settings entry point labeled `لوحة البلاغات`; if the RPC check fails or returns non-admin, no admin teaser is shown.
+
+### Permission source
+- The source of truth for admin/moderator access is `public.is_admin_user()`.
+- Report list reads use the existing `public.reports` RLS policy, which allows admins via `public.is_admin_user()` while normal users remain limited to their own reports.
+- Status actions call `review_report`; the client does not update `public.reports` directly.
+- Item hiding calls `hide_item_for_moderation`; the client does not update item visibility/status directly.
+
+### Actions supported
+- Move a report to `reviewing` (`قيد المراجعة`).
+- Move a report to `actioned` (`تم الإجراء`).
+- Move a report to `dismissed` (`رفض البلاغ`).
+- Hide a reported item when `reported_item_id` exists (`إخفاء العنصر`).
+- Refresh the report list after each action.
+
+### Limitations
+- No full web admin console yet; this is an in-app mobile ops console only.
+- No dedicated audit log table beyond the report `reviewed_by`, `reviewed_at`, `action_taken`, and `admin_notes` fields.
+- No user suspension UI yet.
+- No Stream message deletion/moderation UI yet.
+
+### Manual QA
+- [ ] Normal user cannot see the admin entry in settings.
+- [ ] Normal user opening `/admin/reports` sees `غير مسموح`.
+- [ ] Admin can see reports.
+- [ ] Admin can move report to `reviewing` / `actioned` / `dismissed`.
+- [ ] Admin can hide reported item.
+- [ ] Non-admin RPC action fails.
+- [ ] Reports list refreshes after action.
+
+### Acceptance
+- [ ] `npm.cmd run typecheck` passes.
+- [ ] `npx.cmd expo-doctor` passes.
+- [ ] No DB migration required for this sprint.
+- [ ] Normal users cannot access report data.
+- [ ] Admin-only entry works.
+- [ ] `review_report` RPC is used for status actions.
+- [ ] `hide_item_for_moderation` RPC is used for item hiding.
