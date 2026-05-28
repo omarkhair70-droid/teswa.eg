@@ -34,12 +34,19 @@ type ShareableItem = {
 };
 
 const UNSUPPORTED_MESSAGE = 'نوع الملف ده لسه مش مدعوم في الدولاب.';
+const FILE_TOO_LARGE_MESSAGE = 'حجم الملف كبير على الحفظ في الدولاب حالياً.';
 const FAILURE_MESSAGE = 'تعذر الحفظ في الدولاب حالياً.';
+const LOCAL_UPLOAD_SIZE_LIMIT_BYTES = 25 * 1024 * 1024;
 
 const uid = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 function isRemoteUri(uri?: string | null): boolean {
   return /^https?:\/\//i.test((uri ?? '').trim());
+}
+
+function isLocalUri(uri?: string | null): boolean {
+  const normalized = (uri ?? '').trim();
+  return !!normalized && !isRemoteUri(normalized);
 }
 
 function inferSupportedFileKind(input: { type?: string; kind?: string; mimeType?: string; uri?: string; name?: string; title?: string }): SupportedDolabFileKind | null {
@@ -91,8 +98,8 @@ async function getUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
-function buildFileNoteBody(input: { title?: string; uri?: string; mimeType?: string; sizeBytes?: number; storagePath?: string; source?: string }): string {
-  const lines = ['ملف محفوظ في الدولاب'];
+function buildFileNoteBody(input: { title?: string; uri?: string; mimeType?: string; sizeBytes?: number; storagePath?: string; source?: string; kindLabel?: string }): string {
+  const lines = [input.kindLabel ?? 'ملف محفوظ في الدولاب'];
   if (input.title?.trim()) lines.push(`الاسم: ${input.title.trim()}`);
   if (input.mimeType?.trim()) lines.push(`النوع: ${input.mimeType.trim()}`);
   if (typeof input.sizeBytes === 'number') lines.push(`الحجم: ${input.sizeBytes} bytes`);
@@ -125,14 +132,72 @@ async function saveTextNote(text: string, source?: string): Promise<'saved' | 'a
   return 'saved';
 }
 
-async function saveMedia(media: DolabPendingMedia, options?: { allowLocalOnly?: boolean; noteBody?: string }): Promise<'saved' | 'already' | 'unsupported' | 'failed'> {
+type MediaSaveStatus = 'saved' | 'already' | 'unsupported' | 'too_large' | 'failed';
+
+function mediaTitle(media: DolabPendingMedia): string {
+  return media.fileName || (media.mediaType === 'image' ? 'صورة من الشات' : media.mediaType === 'video' ? 'فيديو من الشات' : 'صوت من الشات');
+}
+
+function mediaKindLabel(media: DolabPendingMedia): string {
+  return media.mediaType === 'image' ? 'صورة محفوظة كمرجع في الدولاب' : media.mediaType === 'video' ? 'فيديو محفوظ كمرجع في الدولاب' : 'صوت محفوظ كمرجع في الدولاب';
+}
+
+function isSafeRemoteMediaPreview(media: DolabPendingMedia): boolean {
+  return media.mediaType === 'image' && (typeof media.sizeBytes !== 'number' || media.sizeBytes <= LOCAL_UPLOAD_SIZE_LIMIT_BYTES);
+}
+
+async function writeLocalMediaPreview(media: DolabPendingMedia, prevMedia?: DolabPendingMedia[]): Promise<void> {
+  const existingMedia = prevMedia ?? await readLocalDolabPendingMedia();
+  const alreadyPreviewed = existingMedia.some((item) => item.uri === media.uri && item.mimeType === media.mimeType && item.fileName === media.fileName);
+  if (alreadyPreviewed) return;
+  await writeLocalDolabPendingMedia([media, ...existingMedia]);
+}
+
+async function saveRemoteMediaReference(media: DolabPendingMedia, options?: { noteBody?: string }): Promise<MediaSaveStatus> {
+  const prevMedia = await readLocalDolabPendingMedia();
+  const title = mediaTitle(media);
+  const body = options?.noteBody ?? buildFileNoteBody({
+    title,
+    uri: media.uri,
+    mimeType: media.mimeType,
+    sizeBytes: media.sizeBytes,
+    kindLabel: mediaKindLabel(media),
+  });
+  const prevMessages = await readLocalDolabSelfMessages();
+  const alreadySaved = prevMessages.some((msg) => msg.body === body);
+  if (alreadySaved) return 'already';
+
+  await writeLocalDolabSelfMessages([{ id: uid('direct-chat-media-ref'), body, messageType: 'text', linkedPendingMediaIds: [], createdAt: new Date().toISOString() }, ...prevMessages]);
+  if (isSafeRemoteMediaPreview(media)) {
+    await writeLocalMediaPreview(media, prevMedia);
+  }
+
+  const userId = await getUserId();
+  if (userId) {
+    const draft = await saveDolabDraftItem(userId, { title, description: body, category: undefined, condition: undefined, status: 'draft', source: 'note' });
+    if (draft.error) return 'saved';
+    await saveDolabSelfNote(userId, { body, messageType: 'text', dolabItemId: draft.data?.id ?? null });
+  }
+
+  return 'saved';
+}
+
+async function saveMedia(media: DolabPendingMedia, options?: { allowLocalOnly?: boolean; noteBody?: string }): Promise<MediaSaveStatus> {
+  if (isRemoteUri(media.uri)) {
+    return saveRemoteMediaReference(media, options);
+  }
+
+  if (!isLocalUri(media.uri)) return 'unsupported';
+
   const prevMedia = await readLocalDolabPendingMedia();
   if (prevMedia.some((item) => item.uri === media.uri && item.mimeType === media.mimeType && item.fileName === media.fileName)) return 'already';
+
+  if (typeof media.sizeBytes === 'number' && media.sizeBytes > LOCAL_UPLOAD_SIZE_LIMIT_BYTES) return 'too_large';
 
   const userId = await getUserId();
   let remoteSaved = false;
   if (userId) {
-    const title = media.fileName || (media.mediaType === 'image' ? 'صورة من الشات' : media.mediaType === 'video' ? 'فيديو من الشات' : 'صوت من الشات');
+    const title = mediaTitle(media);
     const draftResult = await saveDolabDraftItem(userId, {
       title,
       description: options?.noteBody ?? buildFileNoteBody({ title, uri: media.uri, mimeType: media.mimeType, sizeBytes: media.sizeBytes }),
@@ -150,9 +215,9 @@ async function saveMedia(media: DolabPendingMedia, options?: { allowLocalOnly?: 
     }
   }
 
-  if (!remoteSaved && !options?.allowLocalOnly && !isRemoteUri(media.uri)) return 'unsupported';
+  if (!remoteSaved && !options?.allowLocalOnly) return 'unsupported';
 
-  await writeLocalDolabPendingMedia([media, ...prevMedia]);
+  await writeLocalMediaPreview(media, prevMedia);
   return 'saved';
 }
 
@@ -192,27 +257,28 @@ export async function saveDirectMessageToDolab(input: {
       alreadySaved = alreadySaved || textResult === 'already';
     }
 
-    let unsupported = false;
+    let firstFailureMessage: string | null = null;
     for (const attachment of attachments) {
       const mapped = mapAttachmentToPendingMedia(attachment);
       if (mapped) {
         const result = await saveMedia(mapped, { allowLocalOnly: attachment.type !== 'file' || isRemoteUri(mapped.uri) });
         if (result === 'saved') savedMediaCount += 1;
         else if (result === 'already') alreadySaved = true;
-        else if (result === 'unsupported') unsupported = true;
+        else if (result === 'too_large') firstFailureMessage = FILE_TOO_LARGE_MESSAGE;
+        else if (result === 'unsupported') firstFailureMessage = UNSUPPORTED_MESSAGE;
       } else if (attachment.assetUrl && isRemoteUri(attachment.assetUrl)) {
         const result = await saveRemoteFileMetadata({ uri: attachment.assetUrl, title: attachment.name || attachment.title, mimeType: attachment.mimeType, sizeBytes: attachment.fileSize, source: `direct-chat • ${input.conversationId} • ${input.messageId}` });
         if (result === 'saved') savedText = true;
         else if (result === 'already') alreadySaved = true;
-        else unsupported = true;
+        else firstFailureMessage = UNSUPPORTED_MESSAGE;
       } else {
-        unsupported = true;
+        firstFailureMessage = UNSUPPORTED_MESSAGE;
       }
     }
 
     if (!savedText && savedMediaCount === 0) {
       if (alreadySaved) return { ok: true, alreadySaved: true };
-      if (unsupported) return { ok: false, message: UNSUPPORTED_MESSAGE };
+      if (firstFailureMessage) return { ok: false, message: firstFailureMessage };
       return { ok: false, message: FAILURE_MESSAGE };
     }
 
@@ -290,6 +356,7 @@ export async function saveComposerDraftToDolab(input: { text?: string; attachmen
         const result = await saveMedia(buildPendingMedia({ idPrefix: 'composer-media', uri: attachment.uri, mediaType, fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes }), { allowLocalOnly: attachment.kind !== 'file' || isRemoteUri(attachment.uri) });
         if (result === 'saved') savedMedia = true;
         else if (result === 'already') alreadySaved = true;
+        else if (result === 'too_large') return { ok: false, message: FILE_TOO_LARGE_MESSAGE };
         else if (result === 'unsupported') return { ok: false, message: UNSUPPORTED_MESSAGE };
       } else {
         const result = await saveRemoteFileMetadata({ uri: attachment.uri, title: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes, source: 'direct-chat composer draft' });
