@@ -350,19 +350,24 @@ export async function saveComposerDraftToDolab(input: { text?: string; attachmen
       savedText = textResult === 'saved';
       alreadySaved = textResult === 'already';
     }
+    const keepPartialSuccess = (message: string): DolabSaveResult => {
+      if (savedText || savedMedia) return { ok: true, savedText, savedMedia, alreadySaved };
+      if (alreadySaved) return { ok: true, alreadySaved: true };
+      return { ok: false, message };
+    };
     if (attachment) {
       const mediaType = inferSupportedFileKind({ kind: attachment.kind, mimeType: attachment.mimeType, uri: attachment.uri, name: attachment.fileName });
       if (mediaType) {
         const result = await saveMedia(buildPendingMedia({ idPrefix: 'composer-media', uri: attachment.uri, mediaType, fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes }), { allowLocalOnly: attachment.kind !== 'file' || isRemoteUri(attachment.uri) });
         if (result === 'saved') savedMedia = true;
         else if (result === 'already') alreadySaved = true;
-        else if (result === 'too_large') return { ok: false, message: FILE_TOO_LARGE_MESSAGE };
-        else if (result === 'unsupported') return { ok: false, message: UNSUPPORTED_MESSAGE };
+        else if (result === 'too_large') return keepPartialSuccess(FILE_TOO_LARGE_MESSAGE);
+        else if (result === 'unsupported') return keepPartialSuccess(UNSUPPORTED_MESSAGE);
       } else {
         const result = await saveRemoteFileMetadata({ uri: attachment.uri, title: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes, source: 'direct-chat composer draft' });
         if (result === 'saved') savedText = true;
         else if (result === 'already') alreadySaved = true;
-        else return { ok: false, message: UNSUPPORTED_MESSAGE };
+        else return keepPartialSuccess(UNSUPPORTED_MESSAGE);
       }
     }
     if (!savedText && !savedMedia && alreadySaved) return { ok: true, alreadySaved: true };
