@@ -24,8 +24,8 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   }, {});
 }
 
-function sanitizeEvent(event: Sentry.Event): Sentry.Event {
-  const sanitized = sanitizeValue(event) as Sentry.Event;
+function sanitizeEvent<T extends Sentry.Event>(event: T): T {
+  const sanitized = sanitizeValue(event) as T;
 
   if (sanitized.message) {
     sanitized.message = sanitizeString(sanitized.message);
