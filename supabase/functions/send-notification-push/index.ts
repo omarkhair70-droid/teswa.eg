@@ -355,6 +355,7 @@ Deno.serve(async (req: Request) => {
       to: device.expo_push_token,
       title: premiumPayload.title,
       body: premiumPayload.body,
+      ...(record.type === "direct_message_received" ? { categoryId: "direct_message" } : {}),
       sound: "default",
       channelId: ANDROID_CHANNEL_ID,
       ...(shouldUseHighPriority(record.type) ? { priority: "high" } : {}),

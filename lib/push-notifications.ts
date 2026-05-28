@@ -141,6 +141,33 @@ export function resolvePushNotificationRoute(data: unknown): string | null {
   return null;
 }
 
+
+export type NotificationActionResolution = {
+  id: string;
+  route: string;
+  actionIdentifier: string;
+  conversationId: string | null;
+  userText: string | null;
+};
+
+export function resolveNotificationActionResponse(response: Notifications.NotificationResponse | null | undefined): NotificationActionResolution | null {
+  if (!response) return null;
+  const id = response.notification.request.identifier;
+  const route = resolvePushNotificationRoute(response.notification.request.content.data);
+  if (!route) return null;
+
+  const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+  const rawConversationId = data && typeof data.conversationId === 'string' ? data.conversationId.trim() : '';
+  const userText = typeof response.userText === 'string' ? response.userText.trim() : '';
+
+  return {
+    id,
+    route,
+    actionIdentifier: response.actionIdentifier,
+    conversationId: rawConversationId || null,
+    userText: userText || null,
+  };
+}
 export function getRouteFromNotificationResponse(response: Notifications.NotificationResponse | null | undefined): { id: string; route: string } | null {
   if (!response) return null;
   const id = response.notification.request.identifier;
