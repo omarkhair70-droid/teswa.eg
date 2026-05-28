@@ -24,6 +24,7 @@ import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { connectStreamClientWithToken, getWarmStreamClientIfReady } from '@/lib/chat/stream-client';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
+import { reportDirectMessage, SUCCESS_MESSAGE } from '@/lib/reports';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
 import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
@@ -335,7 +336,13 @@ export default function DirectScreen() {
       setActionFeedback('تم تفعيل الرد على الرسالة.');
       return;
     }
-    if (action === 'report') { setActionFeedback('تم تسجيل البلاغ للمراجعة.'); return; }
+    if (action === 'report') {
+      if (target.userId === user?.id) { setActionFeedback('لا يمكنك الإبلاغ عن رسالتك.'); return; }
+      if (!target.userId || target.userId !== convo?.otherUserId) { setActionFeedback('تعذر إرسال البلاغ حالياً.'); return; }
+      const result = await reportDirectMessage({ conversationId, streamMessageId: target.id, reportedUserId: target.userId, reason: 'harassment' });
+      setActionFeedback(result.ok ? SUCCESS_MESSAGE : result.message);
+      return;
+    }
     if (action === 'save_dolab') {
       const result = await saveDirectMessageToDolab({ conversationId, messageId: target.id, text: target.text, attachments: target.attachments });
       if (!result.ok) { setActionFeedback(result.message); return; }
@@ -356,7 +363,7 @@ export default function DirectScreen() {
     const reactionType = action === 'love' ? 'love' : 'thumbs_up';
     if (typeof channel.sendReaction !== 'function') { setActionFeedback('ميزة التفاعل غير متاحة حالياً.'); return; }
     try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); setActionFeedback('تم إضافة التفاعل.'); } catch { setActionFeedback('تعذر إضافة التفاعل حالياً.'); }
-  }, [conversationId, hydrateFromChannel, selectedStreamMessage, user?.id]);
+  }, [conversationId, convo?.otherUserId, hydrateFromChannel, selectedStreamMessage, user?.id]);
   const pickImage = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -552,6 +559,7 @@ export default function DirectScreen() {
     const result = await loadRecentDolabShareables();
     if (!result.ok) {
       setRecentDolabItems([]);
+      setActionFeedback('تعذر تحميل دولابك حالياً.');
       setActionFeedback(result.message);
       dolabShareSheetRef.current?.present();
       return;
@@ -768,6 +776,9 @@ ${note}
     </Modal>
 
     <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); setActionFeedback(blockedByMe ? 'تم إلغاء الحظر.' : 'تم حظر المستخدم.'); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
+    <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId === user?.id, onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
+    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.savedText) setActionFeedback('اتحفظت كمسودة في الدولاب.'); else if (result.savedMedia) setActionFeedback('اتحفظت الميديا في الدولاب.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
+    <AppActionSheet ref={dolabShareSheetRef} title="من دولابي" actions={[...recentDolabItems.map((item) => ({ label: item.kind === 'text' ? `📝 ${item.title}` : item.kind === 'image' ? `🖼️ ${item.title}` : item.kind === 'video' ? `🎬 ${item.title}` : item.kind === 'audio' ? `🎙️ ${item.title}` : `📎 ${item.title}`, onPress: () => { onSelectDolabShareable(item); } })), { label: 'إلغاء', onPress: () => { dolabShareSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
     <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.alreadySaved && !result.savedText && !result.savedMedia) setActionFeedback('موجود بالفعل في دولابك.'); else if (result.savedText) setActionFeedback('اتحفظ في دولابك.'); else if (result.savedMedia) setActionFeedback('اتحفظ في دولابك.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={dolabShareSheetRef} title="من دولابي" actions={[...(recentDolabItems.length > 0 ? recentDolabItems.map((item) => ({ label: item.kind === 'text' ? `📝 ${item.title}` : item.kind === 'image' ? `🖼️ ${item.title}` : item.kind === 'video' ? `🎬 ${item.title}` : item.kind === 'audio' ? `🎙️ ${item.title}` : `📎 ${item.title}`, onPress: () => { onSelectDolabShareable(item); } })) : [{ label: 'مفيش عناصر جاهزة للمشاركة من دولابك حالياً.', disabled: true, onPress: () => {} }]), { label: 'إلغاء', onPress: () => { dolabShareSheetRef.current?.dismiss(); } }]} />

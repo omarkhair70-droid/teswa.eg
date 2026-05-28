@@ -117,6 +117,62 @@
 - [ ] unauthorized user cannot mutate offer/deal
 - [ ] Swap Ceremony appears only for real states
 
+## Sprint 4 — Reports + Moderation Foundation
+
+### Audit summary
+- **Implemented previously:** `public.reports` exists and is already used by mobile report routes (`/report/user`, `/report/item`, `/report/deal`, `/report/story`). Story compatibility exists through `reports.story_id`.
+- **Partial before this sprint:** report submission existed but was direct table insert from mobile with no consistent RPC validation/rate-limit/admin-review flow.
+- **Missing before this sprint:** normalized report target columns for direct conversation/Stream message/deal message, moderation status lifecycle, admin review RPC, server-side participant validation for direct/deal message reports, and reusable rate limit guard.
+
+### Delivered in Sprint 4
+- Added safe report normalization columns on `public.reports` (`reported_item_id`, `reported_offer_id`, `reported_deal_id`, `reported_direct_conversation_id`, `reported_stream_message_id`, `reported_deal_message_id`, review metadata/status fields).
+- Added `reports_status_check` and `reports_target_required_check` constraints.
+- Added `public.is_admin_user()` helper (profiles.role-based when available).
+- Added report submission RPCs:
+  - `public.report_user`
+  - `public.report_item`
+  - `public.report_deal`
+  - `public.report_story`
+  - `public.report_direct_message`
+  - `public.report_deal_message`
+- Added hourly rate-limit guard: max 5 reports/hour via `public.enforce_reports_rate_limit`.
+- Added admin moderation RPCs:
+  - `public.review_report`
+  - `public.hide_item_for_moderation`
+- Added minimal mobile helper layer `lib/reports.ts` that calls RPCs and returns safe Arabic outcome messages.
+- Replaced fake Direct Chat “reported” feedback with real RPC-backed reporting from the message action sheet.
+
+### Actionable now
+- User can report:
+  - another user
+  - an item
+  - a deal with preserved `reported_deal_id` context
+  - a story through the same RPC/rate-limit path
+  - a direct Stream message (participant-validated server-side)
+  - a deal message (participant/message ownership validated server-side)
+- Admin/moderator/service-role can review reports and set moderation status.
+- Admin/moderator/service-role can hide eligible items for moderation (using existing item status contract).
+
+### Admin-only
+- `review_report`
+- `hide_item_for_moderation`
+
+### Not yet built / follow-up
+- Automatic report update notifications are intentionally not added in this sprint to avoid noisy spam and keep rollout safe.
+- Account suspension RPC (`suspend_user_for_moderation`) is not added because profile suspension contract is not confirmed in current schema; this remains a follow-up migration.
+- Deal message UI report action hook is not added in this sprint because no existing per-message action menu was available in deal chat without introducing new UI surface.
+
+### Manual QA checklist
+- [ ] report user succeeds from existing report flow.
+- [ ] report item succeeds from existing report flow.
+- [ ] report direct message succeeds from Direct message action sheet.
+- [ ] report deal message succeeds through RPC call path.
+- [ ] reporter cannot report a direct message outside their conversation.
+- [ ] reporter cannot report a deal message outside their deal.
+- [ ] same reporter is rate-limited after 5 reports/hour.
+- [ ] admin/moderator can review report.
+- [ ] non-admin cannot review report.
+- [ ] hide-item action works only for admin/moderator/service-role.
 ## Sprint 5 — Premium Push Payloads
 
 ### Implemented
