@@ -69,6 +69,13 @@ type NotificationRecord = {
   actor_user_id: string | null;
 };
 
+type ActorProfile = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+};
+
 type WebhookPayload = {
   type?: string;
   table?: string;
@@ -77,6 +84,10 @@ type WebhookPayload = {
 };
 
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
+const DEFAULT_TITLE = "رسالة جديدة على تِسوى";
+const DEFAULT_BODY = "عندك إشعار جديد على تِسوى";
+const DEFAULT_ACTOR_NAME = "مستخدم على تِسوى";
+const ANDROID_CHANNEL_ID = "teswa-activity";
 
 function jsonResponse(status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), {
@@ -94,6 +105,111 @@ function isNotificationRecord(record: unknown): record is NotificationRecord {
     typeof candidate.type === "string" &&
     typeof candidate.title === "string"
   );
+}
+
+function deriveRoute(record: NotificationRecord): string | null {
+  const route = typeof record.route === "string" ? record.route.trim() : "";
+  if (route.length > 0) return route;
+  if (record.deal_id) return `/deal/${record.deal_id}`;
+  if (record.offer_id) return `/offer/${record.offer_id}`;
+  if (record.item_id) return `/item/${record.item_id}`;
+  return null;
+}
+
+function resolveActorName(profile: ActorProfile | null): string {
+  const displayName = profile?.display_name?.trim() ?? "";
+  if (displayName) return displayName;
+  const username = profile?.username?.trim() ?? "";
+  if (username) return username;
+  return DEFAULT_ACTOR_NAME;
+}
+
+function extractDirectConversationId(route: string | null): string | null {
+  if (!route || !route.startsWith("/direct/")) return null;
+  const id = route.replace("/direct/", "").trim();
+  return id.length > 0 ? id : null;
+}
+
+function resolveSafeAvatarUrl(profile: ActorProfile | null): string | null {
+  const avatarUrl = profile?.avatar_url?.trim() ?? "";
+  if (!avatarUrl) return null;
+  try {
+    const parsed = new URL(avatarUrl);
+    if (parsed.protocol === "https:") return avatarUrl;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function buildPremiumPushPayload(record: NotificationRecord, actorProfile: ActorProfile | null): {
+  title: string;
+  body: string;
+  subtitle?: string;
+  data: Record<string, unknown>;
+} {
+  const actorName = resolveActorName(actorProfile);
+  const route = deriveRoute(record);
+  const conversationId = extractDirectConversationId(route);
+  const fallbackTitle = record.title?.trim() || DEFAULT_TITLE;
+  const fallbackBody = record.body?.trim() || DEFAULT_BODY;
+
+  let title = fallbackTitle;
+  let body = fallbackBody;
+
+  switch (record.type as NotificationType) {
+    case "direct_message_received":
+      title = `رسالة من ${actorName}`;
+      body = record.body?.trim() || "وصلك رسالة مباشرة.";
+      break;
+    case "deal_message_received":
+      title = `رسالة في الصفقة من ${actorName}`;
+      body = record.body?.trim() || "وصلك رد جديد في دردشة الصفقة.";
+      break;
+    case "deal_voice_message_received":
+      title = `رسالة صوتية من ${actorName}`;
+      body = "وصلك تسجيل صوتي في دردشة الصفقة.";
+      break;
+    case "offer_received":
+      title = `عرض جديد من ${actorName}`;
+      body = record.body?.trim() || "وصلك عرض تبادل جديد.";
+      break;
+    case "offer_accepted":
+      title = `العرض اتقبل من ${actorName}`;
+      body = record.body?.trim() || "افتح التفاصيل وكملوا التنسيق.";
+      break;
+    case "user_followed_you":
+      title = `${actorName} تابعك`;
+      body = "افتح الملف وشوف النشاط الجديد.";
+      break;
+    case "report_update":
+      title = "تحديث على البلاغ";
+      body = record.body?.trim() || "راجع نتيجة البلاغ.";
+      break;
+    case "system":
+    default:
+      break;
+  }
+
+  return {
+    title,
+    body,
+    data: {
+      ...(route ? { route } : {}),
+      notificationId: record.id,
+      notificationType: record.type,
+      ...(record.deal_id ? { dealId: record.deal_id } : {}),
+      ...(record.offer_id ? { offerId: record.offer_id } : {}),
+      ...(record.item_id ? { itemId: record.item_id } : {}),
+      ...(record.contextual_conversation_id ? { contextualConversationId: record.contextual_conversation_id } : {}),
+      ...(record.actor_user_id ? { actorUserId: record.actor_user_id } : {}),
+      ...(conversationId ? { conversationId } : {}),
+    },
+  };
+}
+
+function shouldUseHighPriority(type: string) {
+  return type === "direct_message_received" || type === "deal_message_received";
 }
 
 Deno.serve(async (req: Request) => {
@@ -134,6 +250,87 @@ Deno.serve(async (req: Request) => {
     if (!supabaseUrl || !serviceRoleKey) return jsonResponse(500, { ok: false, error: "server_misconfigured" });
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+    const preferenceCategory = (() => {
+      switch (record.type as NotificationType) {
+        case "direct_message_received":
+          return "messages_enabled";
+        case "offer_received":
+        case "offer_thinking":
+        case "offer_accepted":
+        case "offer_soft_rejected":
+        case "offer_redirected":
+        case "deal_created":
+        case "deal_message_received":
+        case "deal_voice_message_received":
+        case "deal_completion_confirmation_needed":
+        case "deal_completed":
+        case "deal_cancelled":
+          return "deals_offers";
+        case "user_followed_you":
+        case "story_reply_received":
+        case "contextual_message_received":
+        case "digest_local_activity_pulse":
+        case "nudge_listing_refresh_or_media":
+        case "nudge_return_to_teswa":
+          return "social_activity";
+        case "reminder_offer_response_needed":
+        case "reminder_deal_coordination_needed":
+        case "reminder_deal_confirmation_pending":
+        case "reminder_unread_deal_message":
+        case "reminder_unread_contextual_message":
+          return "reminders";
+        default:
+          return "always";
+      }
+    })();
+
+    const { data: preferenceRow, error: prefError } = await supabase
+      .from("notification_preferences")
+      .select("offers_enabled,deals_enabled,messages_enabled,social_enabled,smart_reminders_enabled")
+      .eq("user_id", record.user_id)
+      .maybeSingle();
+
+    if (prefError) {
+      console.warn("Push preference lookup failed; continuing", { ...baseLog, code: prefError.code, message: prefError.message });
+    }
+
+    const isEnabledByPreference = (() => {
+      if (!preferenceRow) return true;
+      if (preferenceCategory === "messages_enabled") return Boolean(preferenceRow.messages_enabled);
+      if (preferenceCategory === "deals_offers") return Boolean(preferenceRow.offers_enabled && preferenceRow.deals_enabled);
+      if (preferenceCategory === "social_activity") return Boolean(preferenceRow.social_enabled);
+      if (preferenceCategory === "reminders") return Boolean(preferenceRow.smart_reminders_enabled);
+      return true;
+    })();
+
+    if (!isEnabledByPreference) {
+      console.log("Push skipped", { ...baseLog, skipped: true, reason: "notifications_disabled_by_preference" });
+      return jsonResponse(200, { ok: true, skipped: true, reason: "notifications_disabled_by_preference" });
+    }
+
+    let actorProfile: ActorProfile | null = null;
+    if (record.actor_user_id) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id,display_name,username,avatar_url")
+        .eq("id", record.actor_user_id)
+        .maybeSingle();
+      if (error) {
+        console.warn("Actor profile lookup failed; fallback payload will be used", {
+          ...baseLog,
+          actorUserId: record.actor_user_id,
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        actorProfile = data;
+      }
+    }
+
+    const premiumPayload = buildPremiumPushPayload(record, actorProfile);
+    const avatarUrl = resolveSafeAvatarUrl(actorProfile);
+
     const { data: devices, error: devicesError } = await supabase
       .from("push_devices")
       .select("id,expo_push_token")
@@ -152,21 +349,17 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(200, { ok: true, skipped: true, reason: "no_active_devices", attempted: 0, acceptedByExpo: 0 });
     }
 
-    const route = typeof record.route === "string" ? record.route.trim() : "";
-
     const messages = activeDevices.map((device) => ({
       to: device.expo_push_token,
-      title: record.title?.trim() || "رسالة جديدة على تِسوى",
-      body: record.body?.trim() || "عندك إشعار جديد على تِسوى",
+      title: premiumPayload.title,
+      body: premiumPayload.body,
+      sound: "default",
+      channelId: ANDROID_CHANNEL_ID,
+      ...(shouldUseHighPriority(record.type) ? { priority: "high" } : {}),
+      ...(avatarUrl ? { image: avatarUrl } : {}),
       data: {
-        ...(route.length > 0 ? { route } : {}),
-        notificationId: record.id,
-        notificationType: record.type,
-        ...(record.deal_id ? { dealId: record.deal_id } : {}),
-        ...(record.offer_id ? { offerId: record.offer_id } : {}),
-        ...(record.item_id ? { itemId: record.item_id } : {}),
-        ...(record.contextual_conversation_id ? { contextualConversationId: record.contextual_conversation_id } : {}),
-        ...(record.actor_user_id ? { actorUserId: record.actor_user_id } : {}),
+        ...premiumPayload.data,
+        ...(avatarUrl ? { actorAvatarUrl: avatarUrl } : {}),
       },
     }));
 

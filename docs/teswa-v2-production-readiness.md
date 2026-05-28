@@ -116,3 +116,78 @@
 - [ ] cancelled deal cannot be completed
 - [ ] unauthorized user cannot mutate offer/deal
 - [ ] Swap Ceremony appears only for real states
+
+## Sprint 5 — Premium Push Payloads
+
+### Implemented
+- `send-notification-push` now enriches payloads with actor identity when `actor_user_id` is present by reading `public.profiles (id, display_name, username, avatar_url)` and deriving a safe actor name fallback (`مستخدم على تِسوى`).
+- Added type-specific premium copy builder for key notification types (`direct_message_received`, `deal_message_received`, `deal_voice_message_received`, `offer_received`, `offer_accepted`, `user_followed_you`, `report_update`) with conservative fallback to existing row title/body.
+- Added safe avatar payload foundation: HTTPS-only avatar URL is attached as Expo `image` and duplicated in `data.actorAvatarUrl`; invalid/non-HTTPS values are ignored.
+- Added push payload hardening for Android delivery metadata: `sound: "default"` for all pushes and `priority: "high"` only for `direct_message_received` and `deal_message_received`.
+- Routing contract is preserved and reinforced: payload data always includes `notificationId` + `notificationType`, keeps `route` when present, keeps `actorUserId` when present, and safely derives route from `deal_id`/`offer_id`/`item_id` only when explicit route is missing.
+
+### Notification settings reality check
+- Notification settings are **real backend-backed preferences**, not UI-only.
+- Backing schema/functions exist in `public.notification_preferences` with authenticated RPCs (`get_my_notification_preferences`, `update_my_notification_preferences`) and category toggles (`offers_enabled`, `deals_enabled`, `messages_enabled`, `social_enabled`, `smart_reminders_enabled`, ...).
+- `send-notification-push` now respects basic preference categories at send time:
+  - direct messages → `messages_enabled`
+  - offers/deals → `offers_enabled` + `deals_enabled`
+  - social/activity → `social_enabled`
+  - reminders → `smart_reminders_enabled`
+
+### Push coverage audit
+- **Push-supported (allowlisted in `send-notification-push`):**
+  - `offer_received`
+  - `offer_thinking`
+  - `offer_accepted`
+  - `offer_soft_rejected`
+  - `offer_redirected`
+  - `deal_created`
+  - `deal_message_received`
+  - `deal_voice_message_received`
+  - `deal_completion_confirmation_needed`
+  - `deal_completed`
+  - `deal_cancelled`
+  - `story_reply_received`
+  - `contextual_message_received`
+  - `report_update`
+  - `system`
+  - `reminder_offer_response_needed`
+  - `reminder_deal_coordination_needed`
+  - `reminder_deal_confirmation_pending`
+  - `reminder_unread_deal_message`
+  - `reminder_unread_contextual_message`
+  - `nudge_listing_refresh_or_media`
+  - `digest_local_activity_pulse`
+  - `nudge_return_to_teswa`
+  - `user_followed_you`
+  - `direct_message_received`
+- **In-app only types:** none currently identified outside the push allowlist.
+- **Follow-up audit item:** keep allowlist synced with future `public.notification_type` enum additions and confirm each new type has safe route contract + copy policy before enabling push.
+
+### Explicitly not implemented
+- Direct reply from notification.
+- React from notification.
+- Native notification actions.
+- Any Stream runtime or Direct Chat runtime rewrites.
+- Any new native channel creation or native config changes.
+
+### Manual QA
+- [ ] Direct message notification shows sender name.
+- [ ] Direct message opens direct chat.
+- [ ] Offer notification shows actor name.
+- [ ] Deal message notification opens deal.
+- [ ] Avatar/image does not break push rendering.
+- [ ] Missing actor profile falls back safely to existing copy.
+- [ ] Disabled/invalid device token handling still works.
+
+### Acceptance
+- [ ] `npm.cmd run typecheck` passes.
+- [ ] `npx.cmd expo-doctor` passes.
+- [ ] `send-notification-push` deploys.
+- [ ] Direct message push shows sender-aware copy.
+- [ ] Offer/deal/social pushes have clearer copy.
+- [ ] Existing direct push delivery remains working.
+- [ ] No new libraries.
+- [ ] No native build required unless documented.
+- [ ] No direct reply/react actions in this PR.
