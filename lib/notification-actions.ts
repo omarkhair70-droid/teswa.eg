@@ -13,31 +13,31 @@ export function registerNotificationActionCategories() {
   registerPromise = Notifications.setNotificationCategoryAsync(DIRECT_MESSAGE_NOTIFICATION_CATEGORY_ID, [
     {
       identifier: DIRECT_REPLY_ACTION_ID,
-      buttonTitle: 'Reply',
+      buttonTitle: 'رد',
       options: {
         opensAppToForeground: true,
         isAuthenticationRequired: false,
       },
       textInput: {
-        submitButtonTitle: 'Send',
-        placeholder: 'Write a reply…',
+        submitButtonTitle: 'إرسال',
+        placeholder: 'اكتب رد…',
       },
     },
     {
       identifier: DIRECT_REACT_LIKE_ACTION_ID,
-      buttonTitle: 'Like',
+      buttonTitle: 'إعجاب',
       options: {
         opensAppToForeground: true,
       },
     },
     {
       identifier: DIRECT_OPEN_CHAT_ACTION_ID,
-      buttonTitle: 'Open Chat',
+      buttonTitle: 'افتح الشات',
       options: {
         opensAppToForeground: true,
       },
     },
-  ]).catch((error) => {
+  ]).then(() => undefined).catch((error) => {
     if (__DEV__) {
       console.log('[PushActions] register categories failed', {
         message: (error as { message?: string })?.message,
