@@ -120,7 +120,7 @@ export default function DirectScreen() {
   const load = useCallback(async (opts?: { background?: boolean }) => {
     if (!conversationId) return;
     const background = !!opts?.background;
-    const seq = loadSeqRef.current;
+    const seq = ++loadSeqRef.current;
     if (!background) setLoading(true);
 
     const directConvo = await fetchDirectConversation(conversationId);
@@ -281,8 +281,10 @@ export default function DirectScreen() {
     } catch {
       if (seq !== streamConnectionSeqRef.current) return;
       setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.');
-      setDirectConnectionState('unavailable');
       await cleanupStream();
+      setStreamConnecting(false);
+      setStreamReady(false);
+      setStreamInitialHydrated(false);
       setDirectConnectionState('unavailable');
     } finally { if (seq === streamConnectionSeqRef.current) setStreamConnecting(false); }
   }, [cleanupStream, clearStreamSubs, conversationId, hydrateFromChannel, streamConvoStatus, streamOtherDisplayName, streamOtherUserId, user?.id]);
@@ -297,7 +299,6 @@ export default function DirectScreen() {
     setStreamError(null);
     setInitialLoadFailed(false);
     setError(null);
-    loadSeqRef.current += 1;
     streamConnectionSeqRef.current += 1;
     void cleanupStream();
     void load();
@@ -305,8 +306,8 @@ export default function DirectScreen() {
   useFocusEffect(useCallback(() => {
     if (!conversationId) return;
     void markDirectConversationRead(conversationId);
-    void load({ background: true });
-  }, [conversationId, load]));
+    if (!loading) void load({ background: true });
+  }, [conversationId, load, loading]));
   useEffect(() => { const otherUserId = convo?.otherUserId; if (!user?.id || !otherUserId) return; let active = true; void (async () => { const state = await fetchUserBlockState(user.id, otherUserId); if (!active || !state.ok) return; setBlockedByMe(state.state.blockedByMe); })(); return () => { active = false; }; }, [convo?.otherUserId, user?.id]);
   useEffect(() => { if (!DIRECT_CHAT_PRO_ENABLED || streamConvoStatus !== 'accepted') return; void connectStream(); return () => { streamConnectionSeqRef.current += 1; void cleanupStream(); }; }, [cleanupStream, connectStream, streamConvoStatus]);
 
@@ -623,7 +624,6 @@ export default function DirectScreen() {
     const result = await loadRecentDolabShareables();
     if (!result.ok) {
       setRecentDolabItems([]);
-      setActionFeedback('تعذر تحميل دولابك حالياً.');
       setActionFeedback(result.message);
       dolabShareSheetRef.current?.present();
       return;
