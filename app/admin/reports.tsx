@@ -10,7 +10,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { checkIsAdminUser } from '@/lib/admin';
-import { AdminReportStatus, AdminReportStatusFilter, AdminReportSummary, fetchAdminReports, hideReportedItem, reviewAdminReport } from '@/lib/admin-reports';
+import { AdminReportStatus, AdminReportStatusFilter, AdminReportSummary, AdminReportTypeFilter, fetchAdminReports, hideReportedItem, reviewAdminReport } from '@/lib/admin-reports';
 
 type AccessState = 'checking' | 'denied' | 'allowed';
 
@@ -20,6 +20,16 @@ const STATUS_FILTERS: { value: AdminReportStatusFilter; label: string }[] = [
   { value: 'reviewing', label: 'قيد المراجعة' },
   { value: 'actioned', label: 'تم الإجراء' },
   { value: 'dismissed', label: 'مرفوض' },
+];
+
+const TYPE_FILTERS: { value: AdminReportTypeFilter; label: string }[] = [
+  { value: 'all', label: 'الكل' },
+  { value: 'user', label: 'مستخدم' },
+  { value: 'item', label: 'عنصر' },
+  { value: 'story', label: 'قصة' },
+  { value: 'deal', label: 'صفقة' },
+  { value: 'direct_message', label: 'رسالة مباشرة' },
+  { value: 'deal_message', label: 'رسالة صفقة' },
 ];
 
 const STATUS_LABELS: Record<AdminReportStatus, string> = {
@@ -61,6 +71,20 @@ function detailsPreview(details: string | null) {
   return trimmed.length > 140 ? `${trimmed.slice(0, 140)}…` : trimmed;
 }
 
+function confirmHideItem() {
+  return new Promise<boolean>((resolve) => {
+    Alert.alert(
+      'إخفاء العنصر؟',
+      'الإجراء ده هيخفي العنصر من الظهور العام لو مسموح.',
+      [
+        { text: 'إلغاء', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'إخفاء', style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
+}
+
 function ReportCard({ report, busy, onReview, onHideItem }: {
   report: AdminReportSummary;
   busy: boolean;
@@ -100,19 +124,20 @@ function ReportCard({ report, busy, onReview, onHideItem }: {
 
 export default function AdminReportsScreen() {
   const [access, setAccess] = useState<AccessState>('checking');
-  const [filter, setFilter] = useState<AdminReportStatusFilter>('open');
+  const [statusFilter, setStatusFilter] = useState<AdminReportStatusFilter>('open');
+  const [typeFilter, setTypeFilter] = useState<AdminReportTypeFilter>('all');
   const [reports, setReports] = useState<AdminReportSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busyReportId, setBusyReportId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const loadReports = useCallback(async (nextFilter: AdminReportStatusFilter, mode: 'initial' | 'refresh' = 'initial') => {
+  const loadReports = useCallback(async (nextStatusFilter: AdminReportStatusFilter, nextTypeFilter: AdminReportTypeFilter, mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
     else setLoading(true);
     setMessage(null);
 
-    const result = await fetchAdminReports({ status: nextFilter });
+    const result = await fetchAdminReports({ status: nextStatusFilter, type: nextTypeFilter });
     if (result.ok) {
       setReports(result.reports);
     } else {
@@ -137,7 +162,7 @@ export default function AdminReportsScreen() {
       }
 
       setAccess('allowed');
-      await loadReports(filter);
+      await loadReports('open', 'all');
     })();
 
     return () => {
@@ -150,9 +175,14 @@ export default function AdminReportsScreen() {
     return message;
   }, [loading, message]);
 
-  const changeFilter = (nextFilter: AdminReportStatusFilter) => {
-    setFilter(nextFilter);
-    if (access === 'allowed') void loadReports(nextFilter);
+  const changeStatusFilter = (nextStatusFilter: AdminReportStatusFilter) => {
+    setStatusFilter(nextStatusFilter);
+    if (access === 'allowed') void loadReports(nextStatusFilter, typeFilter);
+  };
+
+  const changeTypeFilter = (nextTypeFilter: AdminReportTypeFilter) => {
+    setTypeFilter(nextTypeFilter);
+    if (access === 'allowed') void loadReports(statusFilter, nextTypeFilter);
   };
 
   const handleReview = async (report: AdminReportSummary, status: Exclude<AdminReportStatus, 'open'>) => {
@@ -170,11 +200,14 @@ export default function AdminReportsScreen() {
       return;
     }
 
-    await loadReports(filter, 'refresh');
+    await loadReports(statusFilter, typeFilter, 'refresh');
   };
 
   const handleHideItem = async (report: AdminReportSummary) => {
     if (!report.reportedItemId) return;
+
+    const confirmed = await confirmHideItem();
+    if (!confirmed) return;
 
     setBusyReportId(report.id);
     const result = await hideReportedItem({ itemId: report.reportedItemId, reportId: report.id });
@@ -185,7 +218,7 @@ export default function AdminReportsScreen() {
       return;
     }
 
-    await loadReports(filter, 'refresh');
+    await loadReports(statusFilter, typeFilter, 'refresh');
   };
 
   if (access === 'checking') {
@@ -213,9 +246,20 @@ export default function AdminReportsScreen() {
 
       <View style={styles.filters}>
         {STATUS_FILTERS.map((item) => {
-          const active = item.value === filter;
+          const active = item.value === statusFilter;
           return (
-            <Pressable key={item.value} accessibilityRole="button" style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => changeFilter(item.value)}>
+            <Pressable key={item.value} accessibilityRole="button" style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => changeStatusFilter(item.value)}>
+              <AppText weight="semibold" style={[styles.filterLabel, active && styles.filterLabelActive]}>{item.label}</AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.filters}>
+        {TYPE_FILTERS.map((item) => {
+          const active = item.value === typeFilter;
+          return (
+            <Pressable key={item.value} accessibilityRole="button" style={[styles.filterChip, active && styles.filterChipActive]} onPress={() => changeTypeFilter(item.value)}>
               <AppText weight="semibold" style={[styles.filterLabel, active && styles.filterLabelActive]}>{item.label}</AppText>
             </Pressable>
           );
@@ -224,7 +268,7 @@ export default function AdminReportsScreen() {
 
       {visibleMessage ? <AppCard variant="outlined"><AppText muted>{visibleMessage}</AppText></AppCard> : null}
 
-      <AppButton label="تحديث البلاغات" variant="neutral" size="sm" loading={refreshing} onPress={() => void loadReports(filter, 'refresh')} />
+      <AppButton label="تحديث البلاغات" variant="neutral" size="sm" loading={refreshing} onPress={() => void loadReports(statusFilter, typeFilter, 'refresh')} />
 
       {!loading && reports.length === 0 ? (
         <EmptyState title="لا توجد بلاغات" description="مفيش بلاغات مطابقة للفلاتر الحالية." iconName="file-tray-outline" />
