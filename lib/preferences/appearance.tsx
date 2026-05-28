@@ -34,11 +34,10 @@ const ThemePreferencesContext = createContext<ThemePreferencesContextValue | nul
 
 export function ThemePreferencesProvider({ children }: PropsWithChildren) {
   const [appearancePreference, setAppearancePreferenceState] = useState<AppearancePreference>(readStoredAppearancePreference);
-  const [systemColorScheme, setSystemColorScheme] = useState<ColorSchemeName>(Appearance.getColorScheme());
-
+const [systemColorScheme, setSystemColorScheme] = useState<ColorSchemeName>(Appearance.getColorScheme() ?? null);
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      setSystemColorScheme(colorScheme);
+setSystemColorScheme(colorScheme ?? null);
     });
 
     return () => subscription.remove();
