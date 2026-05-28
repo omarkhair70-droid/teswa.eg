@@ -19,7 +19,8 @@ export type AnalyticsEventName =
   | 'notification_opened'
   | 'story_viewed'
   | 'story_reply_started'
-  | 'profile_viewed';
+  | 'profile_viewed'
+  | 'performance_metric';
 
 export type TrackEventOptions = {
   route?: string;

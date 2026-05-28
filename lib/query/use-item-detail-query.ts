@@ -12,6 +12,7 @@ import { queryKeys } from '@/lib/query/query-keys';
 export type ItemDetailQueryResult = {
   item: MarketplaceItemDetail | null;
   notice: string | null;
+  source: 'network' | 'fresh_cache' | 'stale_cache';
 };
 
 export function useItemDetailQuery(itemId: string | undefined, viewerId?: string | null) {
@@ -36,10 +37,11 @@ export function useItemDetailQuery(itemId: string | undefined, viewerId?: string
       if (!freshCached) return;
 
       queryClient.setQueryData<ItemDetailQueryResult>(queryKey, (previous) => {
-        if (previous?.item) return previous;
+        if (previous?.item) return { ...previous, source: previous.source ?? 'network' };
         return {
           item: freshCached.item,
           notice: 'نستعرض تفاصيل محفوظة بينما نتحقق من الأحدث.',
+          source: 'fresh_cache',
         };
       });
     })();
@@ -51,7 +53,7 @@ export function useItemDetailQuery(itemId: string | undefined, viewerId?: string
     retry: false,
     queryFn: async () => {
       if (!itemId) {
-        return { item: null, notice: null };
+        return { item: null, notice: null, source: 'network' };
       }
 
       const freshCached = await readFreshItemDetailCache(itemId).catch(() => null);
@@ -61,16 +63,17 @@ export function useItemDetailQuery(itemId: string | undefined, viewerId?: string
 
         if (result) {
           if (!viewerId) void writeItemDetailCache(itemId, result);
-          return { item: result, notice: null };
+          return { item: result, notice: null, source: 'network' };
         }
 
         void deleteItemDetailCache(itemId);
-        return { item: null, notice: null };
+        return { item: null, notice: null, source: 'network' };
       } catch {
         if (freshCached) {
           return {
             item: freshCached.item,
             notice: 'تعذر تحديث التفاصيل الآن، نعرض آخر نسخة محفوظة.',
+            source: 'fresh_cache',
           };
         }
 
@@ -79,6 +82,7 @@ export function useItemDetailQuery(itemId: string | undefined, viewerId?: string
           return {
             item: stale.item,
             notice: 'أنت ترى نسخة محفوظة من تفاصيل العنصر. سنحدّثها عندما يتحسن الاتصال.',
+            source: 'stale_cache',
           };
         }
 

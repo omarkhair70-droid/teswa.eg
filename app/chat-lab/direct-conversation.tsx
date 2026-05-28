@@ -10,6 +10,7 @@ import type { DirectConversationSummary } from '@/lib/direct-messages';
 import { fetchDirectConversation } from '@/lib/direct-messages';
 import { getStreamDirectChannelConfig, getStreamDirectChannelId } from '@/lib/chat/stream-direct-mapping';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
+import { trackPerformanceMetric } from '@/lib/performance-telemetry';
 
 type PilotMessage = {
   id: string;
@@ -43,6 +44,8 @@ export default function StreamDirectConversationLabScreen() {
   const [draft, setDraft] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
   const channelRef = useRef<StreamChannel | null>(null);
+  const firstMessageStartedAtRef = useRef(Date.now());
+  const firstMessageMetricSentRef = useRef<string | null>(null);
 
   const rawConversationId = useMemo(() => {
     if (Array.isArray(params.conversationId)) return params.conversationId[0] ?? '';
@@ -52,6 +55,11 @@ export default function StreamDirectConversationLabScreen() {
   const conversationId = rawConversationId.trim();
 
   const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
+
+  useEffect(() => {
+    firstMessageStartedAtRef.current = Date.now();
+    firstMessageMetricSentRef.current = null;
+  }, [conversationId, refreshToken]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -145,6 +153,17 @@ export default function StreamDirectConversationLabScreen() {
       if (client) void client.disconnectUser().catch(() => undefined);
     };
   }, [conversationId, refreshToken]);
+
+  useEffect(() => {
+    if (!conversationId || firstMessageMetricSentRef.current === conversationId) return;
+    if (messages.length === 0) return;
+
+    firstMessageMetricSentRef.current = conversationId;
+    void trackPerformanceMetric('direct_chat_first_message_time', Date.now() - firstMessageStartedAtRef.current, {
+      route: '/chat-lab/direct-conversation',
+      cacheHit: false,
+    });
+  }, [conversationId, messages.length]);
 
   const canSend = conversation?.status === 'accepted' && channelReady && !busy;
 
