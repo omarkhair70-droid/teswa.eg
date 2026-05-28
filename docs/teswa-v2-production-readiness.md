@@ -131,6 +131,8 @@
 - Added report submission RPCs:
   - `public.report_user`
   - `public.report_item`
+  - `public.report_deal`
+  - `public.report_story`
   - `public.report_direct_message`
   - `public.report_deal_message`
 - Added hourly rate-limit guard: max 5 reports/hour via `public.enforce_reports_rate_limit`.
@@ -144,6 +146,8 @@
 - User can report:
   - another user
   - an item
+  - a deal with preserved `reported_deal_id` context
+  - a story through the same RPC/rate-limit path
   - a direct Stream message (participant-validated server-side)
   - a deal message (participant/message ownership validated server-side)
 - Admin/moderator/service-role can review reports and set moderation status.

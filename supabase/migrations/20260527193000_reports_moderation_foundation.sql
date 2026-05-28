@@ -182,6 +182,36 @@ begin
   values (v_uid, v_owner, p_item_id, trim(p_reason), nullif(trim(coalesce(p_details,'')),''), 'open');
 end; $$;
 
+create or replace function public.report_deal(p_deal_id uuid, p_reason text, p_details text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_deal public.swap_deals%rowtype; v_reported_user_id uuid;
+begin
+  if v_uid is null then raise exception 'not_authenticated' using errcode='42501'; end if;
+  select * into v_deal from public.swap_deals where id = p_deal_id;
+  if not found then raise exception 'deal_not_found' using errcode='P0001'; end if;
+  if v_uid not in (v_deal.requester_id, v_deal.offerer_id) then raise exception 'not_participant' using errcode='42501'; end if;
+  v_reported_user_id := case when v_deal.requester_id = v_uid then v_deal.offerer_id else v_deal.requester_id end;
+  if v_reported_user_id is null or v_reported_user_id = v_uid then raise exception 'invalid_target' using errcode='P0001'; end if;
+  if length(trim(coalesce(p_reason,''))) = 0 or length(trim(p_reason)) > 500 then raise exception 'invalid_reason' using errcode='P0001'; end if;
+  perform public.enforce_reports_rate_limit(v_uid);
+  insert into public.reports (reporter_id, reported_user_id, reported_deal_id, reason, details, status)
+  values (v_uid, v_reported_user_id, p_deal_id, trim(p_reason), nullif(trim(coalesce(p_details,'')),''), 'open');
+end; $$;
+
+create or replace function public.report_story(p_story_id uuid, p_reason text, p_details text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_author_id uuid;
+begin
+  if v_uid is null then raise exception 'not_authenticated' using errcode='42501'; end if;
+  select s.user_id into v_author_id from public.stories s where s.id = p_story_id;
+  if v_author_id is null then raise exception 'story_not_found' using errcode='P0001'; end if;
+  if v_author_id = v_uid then raise exception 'cannot_report_own_story' using errcode='P0001'; end if;
+  if length(trim(coalesce(p_reason,''))) = 0 or length(trim(p_reason)) > 500 then raise exception 'invalid_reason' using errcode='P0001'; end if;
+  perform public.enforce_reports_rate_limit(v_uid);
+  insert into public.reports (reporter_id, reported_user_id, story_id, reason, details, status)
+  values (v_uid, v_author_id, p_story_id, trim(p_reason), nullif(trim(coalesce(p_details,'')),''), 'open');
+end; $$;
+
 create or replace function public.report_direct_message(p_conversation_id uuid, p_stream_message_id text, p_reported_user_id uuid, p_reason text, p_details text default null)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_uid uuid := auth.uid(); v_convo public.direct_conversations%rowtype; v_other uuid;
@@ -233,23 +263,35 @@ end; $$;
 
 create or replace function public.hide_item_for_moderation(p_item_id uuid, p_report_id uuid default null)
 returns void language plpgsql security definer set search_path = public as $$
+declare v_target_status text := 'archived';
 begin
   if auth.role() <> 'service_role' and not public.is_admin_user() then raise exception 'not_allowed' using errcode='42501'; end if;
-  update public.items
-  set status = case
-      when exists (
-        select 1
-        from pg_constraint c
-        join pg_class t on t.oid = c.conrelid
-        join pg_namespace n on n.oid = t.relnamespace
-        where n.nspname='public'
-          and t.relname='items'
-          and pg_get_constraintdef(c.oid) ilike '%status%hidden%'
-      ) then 'hidden'
-      else 'paused'
-    end,
-    updated_at = now()
-  where id = p_item_id and status in ('active','paused');
+
+  if exists (
+    select 1
+    from pg_attribute a
+    join pg_class t on t.oid = a.attrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    join pg_type typ on typ.oid = a.atttypid
+    join pg_enum e on e.enumtypid = typ.oid
+    where n.nspname='public'
+      and t.relname='items'
+      and a.attname='status'
+      and e.enumlabel='hidden'
+  ) or exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname='public'
+      and t.relname='items'
+      and pg_get_constraintdef(c.oid) ilike '%status%hidden%'
+  ) then
+    v_target_status := 'hidden';
+  end if;
+
+  execute 'update public.items set status = ' || quote_literal(v_target_status) || ', updated_at = now() where id = $1 and status::text = ''active'''
+  using p_item_id;
   if not found then raise exception 'item_not_mutable' using errcode='P0001'; end if;
   if p_report_id is not null then
     perform public.review_report(p_report_id, 'actioned', 'item_hidden', 'Item hidden for moderation.');
@@ -259,6 +301,8 @@ end; $$;
 grant execute on function public.is_admin_user() to authenticated;
 grant execute on function public.report_user(uuid,text,text) to authenticated;
 grant execute on function public.report_item(uuid,text,text) to authenticated;
+grant execute on function public.report_deal(uuid,text,text) to authenticated;
+grant execute on function public.report_story(uuid,text,text) to authenticated;
 grant execute on function public.report_direct_message(uuid,text,uuid,text,text) to authenticated;
 grant execute on function public.report_deal_message(uuid,uuid,text,text) to authenticated;
 grant execute on function public.review_report(uuid,text,text,text) to authenticated;
