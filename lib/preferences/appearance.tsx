@@ -5,6 +5,7 @@ import { darkTheme, lightTheme, type TeswaThemeMode } from '@/constants/themes';
 import { getString, setString } from '@/lib/storage/mmkv-storage';
 
 export type AppearancePreference = 'system' | 'light' | 'dark';
+type SystemColorScheme = 'light' | 'dark' | null;
 
 const APPEARANCE_STORAGE_KEY = 'teswa:appearance-preference:v1';
 const APPEARANCE_VALUES: readonly AppearancePreference[] = ['system', 'light', 'dark'];
@@ -18,7 +19,12 @@ function readStoredAppearancePreference(): AppearancePreference {
   return isAppearancePreference(stored) ? stored : 'system';
 }
 
-function resolveThemeMode(preference: AppearancePreference, systemScheme: ColorSchemeName): TeswaThemeMode {
+function normalizeSystemColorScheme(value: ColorSchemeName | null | undefined): SystemColorScheme {
+  if (value === 'dark' || value === 'light') return value;
+  return null;
+}
+
+function resolveThemeMode(preference: AppearancePreference, systemScheme: SystemColorScheme): TeswaThemeMode {
   if (preference === 'light' || preference === 'dark') return preference;
   return systemScheme === 'dark' ? 'dark' : 'light';
 }
@@ -26,7 +32,7 @@ function resolveThemeMode(preference: AppearancePreference, systemScheme: ColorS
 type ThemePreferencesContextValue = {
   appearancePreference: AppearancePreference;
   setAppearancePreference: (nextPreference: AppearancePreference) => void;
-  systemColorScheme: ColorSchemeName;
+  systemColorScheme: SystemColorScheme;
   resolvedThemeMode: TeswaThemeMode;
 };
 
@@ -34,10 +40,13 @@ const ThemePreferencesContext = createContext<ThemePreferencesContextValue | nul
 
 export function ThemePreferencesProvider({ children }: PropsWithChildren) {
   const [appearancePreference, setAppearancePreferenceState] = useState<AppearancePreference>(readStoredAppearancePreference);
-const [systemColorScheme, setSystemColorScheme] = useState<ColorSchemeName>(Appearance.getColorScheme() ?? null);
+  const [systemColorScheme, setSystemColorScheme] = useState<SystemColorScheme>(() =>
+    normalizeSystemColorScheme(Appearance.getColorScheme()),
+  );
+
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-setSystemColorScheme(colorScheme ?? null);
+      setSystemColorScheme(normalizeSystemColorScheme(colorScheme));
     });
 
     return () => subscription.remove();
