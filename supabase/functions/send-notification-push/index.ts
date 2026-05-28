@@ -253,33 +253,34 @@ Deno.serve(async (req: Request) => {
 
     const preferenceCategory = (() => {
       switch (record.type as NotificationType) {
-        case "direct_message_received":
-          return "messages_enabled";
         case "offer_received":
         case "offer_thinking":
         case "offer_accepted":
         case "offer_soft_rejected":
         case "offer_redirected":
+          return "offers";
         case "deal_created":
         case "deal_message_received":
         case "deal_voice_message_received":
         case "deal_completion_confirmation_needed":
         case "deal_completed":
         case "deal_cancelled":
-          return "deals_offers";
-        case "user_followed_you":
-        case "story_reply_received":
+          return "deals";
+        case "direct_message_received":
         case "contextual_message_received":
+        case "story_reply_received":
+          return "messages";
+        case "user_followed_you":
         case "digest_local_activity_pulse":
         case "nudge_listing_refresh_or_media":
         case "nudge_return_to_teswa":
-          return "social_activity";
+          return "social";
         case "reminder_offer_response_needed":
         case "reminder_deal_coordination_needed":
         case "reminder_deal_confirmation_pending":
         case "reminder_unread_deal_message":
         case "reminder_unread_contextual_message":
-          return "reminders";
+          return "smart_reminders";
         default:
           return "always";
       }
@@ -297,10 +298,11 @@ Deno.serve(async (req: Request) => {
 
     const isEnabledByPreference = (() => {
       if (!preferenceRow) return true;
-      if (preferenceCategory === "messages_enabled") return Boolean(preferenceRow.messages_enabled);
-      if (preferenceCategory === "deals_offers") return Boolean(preferenceRow.offers_enabled && preferenceRow.deals_enabled);
-      if (preferenceCategory === "social_activity") return Boolean(preferenceRow.social_enabled);
-      if (preferenceCategory === "reminders") return Boolean(preferenceRow.smart_reminders_enabled);
+      if (preferenceCategory === "messages") return Boolean(preferenceRow.messages_enabled);
+      if (preferenceCategory === "offers") return Boolean(preferenceRow.offers_enabled);
+      if (preferenceCategory === "deals") return Boolean(preferenceRow.deals_enabled);
+      if (preferenceCategory === "social") return Boolean(preferenceRow.social_enabled);
+      if (preferenceCategory === "smart_reminders") return Boolean(preferenceRow.smart_reminders_enabled);
       return true;
     })();
 

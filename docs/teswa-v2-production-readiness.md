@@ -129,11 +129,12 @@
 ### Notification settings reality check
 - Notification settings are **real backend-backed preferences**, not UI-only.
 - Backing schema/functions exist in `public.notification_preferences` with authenticated RPCs (`get_my_notification_preferences`, `update_my_notification_preferences`) and category toggles (`offers_enabled`, `deals_enabled`, `messages_enabled`, `social_enabled`, `smart_reminders_enabled`, ...).
-- `send-notification-push` now respects basic preference categories at send time:
-  - direct messages → `messages_enabled`
-  - offers/deals → `offers_enabled` + `deals_enabled`
-  - social/activity → `social_enabled`
-  - reminders → `smart_reminders_enabled`
+- `send-notification-push` now respects basic preference categories at send time with split offer/deal mapping:
+  - offers (`offer_*`) → `offers_enabled`
+  - deals (`deal_*`) → `deals_enabled`
+  - direct/message-like (`direct_message_received`, `contextual_message_received`, `story_reply_received`) → `messages_enabled`
+  - social/activity (`user_followed_you`, activity nudges/digests) → `social_enabled`
+  - reminders (`reminder_*`) → `smart_reminders_enabled`
 
 ### Push coverage audit
 - **Push-supported (allowlisted in `send-notification-push`):**
@@ -191,3 +192,7 @@
 - [ ] No new libraries.
 - [ ] No native build required unless documented.
 - [ ] No direct reply/react actions in this PR.
+
+
+### Android channel verification
+- Push payload uses `channelId: "teswa-activity"` and this channel already exists in mobile startup via `ensureAndroidNotificationChannel()` (`Notifications.setNotificationChannelAsync("teswa-activity", ...)`) before push registration.
