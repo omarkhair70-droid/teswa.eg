@@ -19,7 +19,8 @@ export type AnalyticsEventName =
   | 'notification_opened'
   | 'story_viewed'
   | 'story_reply_started'
-  | 'profile_viewed';
+  | 'profile_viewed'
+  | 'performance_metric';
 
 export type TrackEventOptions = {
   route?: string;
@@ -88,7 +89,7 @@ export async function trackEvent(eventName: AnalyticsEventName, options: TrackEv
     const appVersion = Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? null;
     const platform = Platform.OS;
 
-    await supabase.rpc('track_analytics_event', {
+    const { data, error } = await supabase.rpc('track_analytics_event', {
       p_event_name: eventName,
       p_session_id: getAnalyticsSessionId(),
       p_route: options.route ?? null,
@@ -98,6 +99,16 @@ export async function trackEvent(eventName: AnalyticsEventName, options: TrackEv
       p_app_version: appVersion,
       p_platform: platform,
     });
+
+    if (error) throw error;
+
+    const result = data as { ok?: boolean; reason?: string } | null;
+    if (result?.ok === false && __DEV__) {
+      console.warn('[analytics] trackEvent rejected', {
+        eventName,
+        reason: result.reason ?? 'unknown',
+      });
+    }
   } catch (error) {
     if (__DEV__) {
       console.warn('[analytics] trackEvent failed', {

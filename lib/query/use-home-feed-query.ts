@@ -11,6 +11,7 @@ import { queryKeys } from '@/lib/query/query-keys';
 export type HomeFeedQueryResult = {
   items: MarketplaceItem[];
   notice: string | null;
+  source: 'network' | 'fresh_cache' | 'stale_cache';
 };
 
 export function useHomeFeedQuery(viewerId?: string | null) {
@@ -28,10 +29,11 @@ export function useHomeFeedQuery(viewerId?: string | null) {
       if (!freshCached) return;
 
       queryClient.setQueryData<HomeFeedQueryResult>(queryKey, (previous) => {
-        if ((previous?.items.length ?? 0) > 0) return previous;
+        if (previous && previous.items.length > 0) return { ...previous, source: previous.source ?? 'network' };
         return {
           items: freshCached.page.items,
           notice: 'نستعرض آخر عناصر محفوظة بينما نتحقق من الجديد.',
+          source: 'fresh_cache',
         };
       });
     })();
@@ -46,12 +48,13 @@ export function useHomeFeedQuery(viewerId?: string | null) {
       try {
         const page = await fetchMarketplaceItemsPage({ offset: 0, viewerId });
         if (!viewerId) void writeMarketplaceFirstPageCache(page);
-        return { items: page.items, notice: null };
+        return { items: page.items, notice: null, source: 'network' };
       } catch {
         if (freshCached) {
           return {
             items: freshCached.page.items,
             notice: 'تعذر التحديث الآن، نعرض آخر نسخة محفوظة.',
+            source: 'fresh_cache',
           };
         }
 
@@ -60,6 +63,7 @@ export function useHomeFeedQuery(viewerId?: string | null) {
           return {
             items: stale.page.items,
             notice: 'أنت ترى نسخة محفوظة من أحدث العناصر. سنحدّثها عندما يتحسن الاتصال.',
+            source: 'stale_cache',
           };
         }
 

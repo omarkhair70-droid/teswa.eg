@@ -21,6 +21,7 @@ import { shareMarketplaceItemCard } from '@/lib/share-item-card';
 import { ItemShareCard } from '@/components/share/ItemShareCard';
 import { buildCachedVideoSource, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 import { trackEvent } from '@/lib/analytics';
+import { trackPerformanceMetric } from '@/lib/performance-telemetry';
 import { useItemDetailQuery } from '@/lib/query/use-item-detail-query';
 import { useAuth } from '@/lib/auth';
 import { setItemLiked } from '@/lib/item-likes';
@@ -99,6 +100,8 @@ export default function ItemDetailsScreen() {
   const [likePending, setLikePending] = useState(false);
   const [videoTeaserActive, setVideoTeaserActive] = useState(false);
   const trackedItemDetailRef = useRef<string | null>(null);
+  const itemDetailStartedAtRef = useRef(Date.now());
+  const itemDetailMetricSentRef = useRef<string | null>(null);
   const itemShareCardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
   const itemActionsSheetRef = useRef<BottomSheetModal>(null);
   const { user } = useAuth();
@@ -116,13 +119,21 @@ export default function ItemDetailsScreen() {
   useEffect(() => {
     setActiveImageIndex(0);
     setVideoTeaserActive(false);
-  }, [item?.id]);
+    itemDetailStartedAtRef.current = Date.now();
+  }, [id]);
 
   useEffect(() => {
     if (!item?.id) return;
+    if (itemDetailMetricSentRef.current !== item.id) {
+      itemDetailMetricSentRef.current = item.id;
+      void trackPerformanceMetric('item_detail_first_content_time', Date.now() - itemDetailStartedAtRef.current, {
+        route: '/item/[id]',
+        cacheHit: itemDetailQuery.data?.source !== 'network',
+      });
+    }
     if (!item.images.length) return;
     void prefetchImagesMemoryDisk(item.images.map((image) => image.imageUrl));
-  }, [item?.id, item?.images]);
+  }, [item?.id, item?.images, itemDetailQuery.data?.source]);
 
   useEffect(() => {
     if (!item?.id) return;

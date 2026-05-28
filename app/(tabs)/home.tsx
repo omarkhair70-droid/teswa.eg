@@ -33,6 +33,7 @@ import {
 } from '@/lib/personal-living-world';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { trackEvent } from '@/lib/analytics';
+import { trackPerformanceMetric } from '@/lib/performance-telemetry';
 import { useHomeFeedQuery } from '@/lib/query/use-home-feed-query';
 import { prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
 import type { MarketplaceItem } from '@/lib/marketplace-items';
@@ -74,6 +75,8 @@ export default function HomeScreen() {
   const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
   const personalWorldSeenCommittedRef = useRef(false);
   const skipFirstFocusRefreshRef = useRef(true);
+  const homeContentStartedAtRef = useRef(Date.now());
+  const homeFirstContentMetricSentRef = useRef(false);
   const [homeHubVisible, setHomeHubVisible] = useState(false);
 
 
@@ -171,6 +174,18 @@ export default function HomeScreen() {
     if (!user?.id) return;
     void trackEvent('home_viewed', { route: '/(tabs)/home' });
   }, [user?.id]);
+
+
+  useEffect(() => {
+    if (homeFirstContentMetricSentRef.current) return;
+    if (!homeFeedQuery.data?.items) return;
+
+    homeFirstContentMetricSentRef.current = true;
+    void trackPerformanceMetric('home_first_content_time', Date.now() - homeContentStartedAtRef.current, {
+      route: '/(tabs)/home',
+      cacheHit: homeFeedQuery.data.source !== 'network',
+    });
+  }, [homeFeedQuery.data?.items, homeFeedQuery.data?.source]);
 
   useEffect(() => {
     const candidateUrls = (homeFeedQuery.data?.items ?? []).slice(0, 5).map((entry) => entry.imageUrl).filter(Boolean);

@@ -15,6 +15,7 @@ import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
 import { trackEvent } from '@/lib/analytics';
+import { getPerformanceSessionElapsedMs, setPerformanceNetworkState, trackPerformanceMetric } from '@/lib/performance-telemetry';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
 import { QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -43,7 +44,9 @@ function ReactQueryRuntimeCoordinator({ enableNetworkProbe }: { enableNetworkPro
         const Network = await import('expo-network');
         const state = await Network.getNetworkStateAsync();
         if (!mounted) return;
-        onlineManager.setOnline(Boolean(state.isConnected && state.isInternetReachable !== false));
+        const online = Boolean(state.isConnected && state.isInternetReachable !== false);
+        onlineManager.setOnline(online);
+        setPerformanceNetworkState(online ? 'online' : 'offline');
       } catch (error) {
         if (__DEV__) {
           console.log('[ReactQuery]', 'network_state_probe_failed', {
@@ -296,6 +299,10 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
       requiredPoliciesAccepted,
     });
     startupLog('first_screen_ready_signal');
+    void trackPerformanceMetric('app_start_to_first_screen', getPerformanceSessionElapsedMs(), {
+      route: '/_layout',
+      cacheHit: usingCachedAccountGate,
+    });
     onFirstScreenReady?.();
     void hideSplashSafely('first_screen_ready');
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, profileCompleted, requiredPoliciesAccepted, user]);

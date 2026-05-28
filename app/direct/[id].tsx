@@ -28,6 +28,7 @@ import { reportDirectMessage, SUCCESS_MESSAGE } from '@/lib/reports';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
 import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
+import { trackPerformanceMetric } from '@/lib/performance-telemetry';
 
 type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
@@ -104,6 +105,8 @@ export default function DirectScreen() {
   const recordingStoppedRef = useRef(false);
   const loadSeqRef = useRef(0);
   const streamConnectionSeqRef = useRef(0);
+  const firstMessageStartedAtRef = useRef(Date.now());
+  const firstMessageMetricSentRef = useRef<string | null>(null);
   const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
   const voiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -300,6 +303,8 @@ export default function DirectScreen() {
     setInitialLoadFailed(false);
     setError(null);
     streamConnectionSeqRef.current += 1;
+    firstMessageStartedAtRef.current = Date.now();
+    firstMessageMetricSentRef.current = null;
     void cleanupStream();
     void load();
   }, [cleanupStream, conversationId, load]);
@@ -316,6 +321,19 @@ export default function DirectScreen() {
   const hasRequesterAlreadySent = useMemo(() => isRequesterOnRequest && messages.some((m) => m.senderId === user?.id), [isRequesterOnRequest, messages, user?.id]);
   const acceptedDirectProActive = DIRECT_CHAT_PRO_ENABLED && convo?.status === 'accepted';
   const usingStreamChat = acceptedDirectProActive;
+
+  useEffect(() => {
+    if (!conversationId || firstMessageMetricSentRef.current === conversationId) return;
+    const firstMessageLoaded = usingStreamChat ? streamMessages.length > 0 : messages.length > 0;
+    if (!firstMessageLoaded) return;
+
+    firstMessageMetricSentRef.current = conversationId;
+    void trackPerformanceMetric('direct_chat_first_message_time', Date.now() - firstMessageStartedAtRef.current, {
+      route: '/direct/[id]',
+      cacheHit: false,
+    });
+  }, [conversationId, messages.length, streamMessages.length, usingStreamChat]);
+
   const composerState = useMemo(() => {
     if (convo?.status === 'ignored') return { disabled: true, note: 'تم تجاهل المحادثة حالياً.' };
     if (convo?.status === 'blocked') return { disabled: true, note: 'المحادثة غير متاحة بسبب الحظر.' };

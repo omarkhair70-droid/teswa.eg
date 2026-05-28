@@ -8,6 +8,7 @@ import { getOnboardingCompleted } from '@/lib/onboarding';
 import { REQUIRED_POLICIES, fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
 import { disableRegisteredPushDeviceIfPossible } from '@/lib/push-notifications';
 import { startupTiming, startupTrace } from '@/lib/startup-trace';
+import { getPerformanceSessionElapsedMs, trackPerformanceMetric } from '@/lib/performance-telemetry';
 
 type TeswaMmkvStorage = ReturnType<typeof createMMKV>;
 
@@ -393,6 +394,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!startupResolvedSessionRef.current) {
           startupResolvedSessionRef.current = true;
           startupTiming.mark('auth_session_resolved', { hasSession: Boolean(currentSession?.user) });
+          void trackPerformanceMetric('auth_ready_time', getPerformanceSessionElapsedMs(), { route: '/_layout' });
         }
         lastAuthenticatedUserIdRef.current = currentSession?.user?.id ?? null;
         bootstrappedUserIdRef.current = currentSession?.user?.id ?? null;
@@ -456,6 +458,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!startupResolvedSessionRef.current) {
           startupResolvedSessionRef.current = true;
           startupTiming.mark('auth_session_resolved', { hasSession: Boolean(nextUserId), source: 'auth_state_change' });
+          void trackPerformanceMetric('auth_ready_time', getPerformanceSessionElapsedMs(), { route: '/_layout' });
         }
         const isDuplicateInitialSession =
           event === 'INITIAL_SESSION' && nextUserId && nextUserId === bootstrappedUserIdRef.current;

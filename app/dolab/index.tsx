@@ -56,6 +56,7 @@ import { DolabShelfHeader } from '@/components/dolab/DolabShelfHeader';
 import { DolabShelfActionSheet } from '@/components/dolab/DolabShelfActionSheet';
 import { DolabSavedMediaGrid } from '@/components/dolab/DolabSavedMediaGrid';
 import { readLocalDolabPendingMedia, readLocalDolabSelfMessages, writeLocalDolabPendingMedia, writeLocalDolabSelfMessages } from '@/lib/dolab/local-persistence';
+import { trackPerformanceMetric } from '@/lib/performance-telemetry';
 
 const emptyDraftForm: DolabDraftItemInput = {
   title: '',
@@ -76,6 +77,8 @@ export default function DolabScreen() {
   const conversationPickerRef = useRef<BottomSheetModal>(null);
   const confirmDeleteRef = useRef<BottomSheetModal>(null);
   const audioRecorderSheetRef = useRef<BottomSheetModal>(null);
+  const firstContentStartedAtRef = useRef(Date.now());
+  const firstContentMetricSentRef = useRef(false);
   const inboxQuickNoteSheetRef = useRef<BottomSheetModal>(null);
   const collectionPickerSheetRef = useRef<BottomSheetModal>(null);
   const shelfActionSheetRef = useRef<BottomSheetModal>(null);
@@ -188,6 +191,16 @@ export default function DolabScreen() {
 
     void hydrateLocalDolab();
   }, []);
+
+  useEffect(() => {
+    if (!pendingMediaHydrated || !selfMessagesHydrated || firstContentMetricSentRef.current) return;
+
+    firstContentMetricSentRef.current = true;
+    void trackPerformanceMetric('dolab_first_content_time', Date.now() - firstContentStartedAtRef.current, {
+      route: '/dolab',
+      cacheHit: pendingMedia.length > 0 || selfMessages.length > 0,
+    });
+  }, [pendingMedia.length, pendingMediaHydrated, selfMessages.length, selfMessagesHydrated]);
 
   useEffect(() => {
     if (!pendingMediaHydrated) return;
