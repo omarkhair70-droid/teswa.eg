@@ -115,3 +115,41 @@ Based strictly on existing implementation surface:
 ---
 
 This audit intentionally documents current state and extension direction only; it does not propose replacing current Dolab architecture.
+
+## 8) Dolab 2.0 gap closures in this PR
+
+- Direct Chat save actions now build on the existing Dolab model instead of returning placeholder success:
+  - Text saves continue to write the local self-message bridge first and are also promoted to `public.dolab_notes` when an authenticated Supabase user is available.
+  - Supported media/file attachments are converted into existing pending Dolab media entries and, when possible, promoted through `public.dolab_items`, `public.dolab_media`, and the `dolab-media` bucket.
+  - Generic remote file links that cannot fit `dolab_media.media_type` are persisted as existing Dolab draft/note metadata rather than pretending to upload a binary file.
+- The Direct composer file-only path no longer returns “حفظ الملفات في الدولاب جاي قريبًا.” for supported input. It either saves to existing Dolab persistence or returns the unsupported/failure copy.
+- The “من دولابي” selector remains local-first for speed, but now falls back to the remote Dolab snapshot (`dolab_items`, `dolab_media`, `dolab_notes`) when the local bridge is empty.
+- Exchange draft card saves and file viewer saves use the same Direct Chat save-to-Dolab bridge as message actions, so they now share the same persistence, duplicate, unsupported, and failure behavior.
+
+## 9) Local-first vs remote-backed behavior after this PR
+
+- Still local-first:
+  - Direct Chat text notes and pending media are written to the existing local Dolab bridge immediately so the chat UI is fast and Dolab can still work during temporary remote failures.
+  - The selector reads local notes/media first and only queries Supabase when local shareables are empty.
+- Now remote-backed:
+  - Authenticated text saves are promoted to `dolab_notes`.
+  - Supported image/video/audio attachment saves attempt a `dolab_items` draft plus `dolab_media` row and `dolab-media` upload.
+  - The selector can show remote notes, signed remote media, and item title/description shareables when the local bridge has nothing.
+
+## 10) Supported file behavior
+
+- Supported binary media types through existing `dolab_media.media_type` values:
+  - Images: MIME `image/*` or common image extensions (`jpg`, `jpeg`, `png`, `webp`, `gif`, `heic`).
+  - Videos: MIME `video/*` or common video extensions (`mp4`, `mov`, `m4v`, `webm`).
+  - Audio: MIME `audio/*` or common audio extensions (`m4a`, `mp3`, `aac`, `wav`, `ogg`).
+- Supported metadata-only file saves:
+  - Remote `http`/`https` file URLs with safe metadata (name/title, MIME type, size, URL) are saved as an existing Dolab draft/note record when the binary type is not representable in `dolab_media`.
+- Explicitly unsupported:
+  - Local-only generic files that are not image/video/audio and cannot be represented in the current Dolab schema are rejected with “نوع الملف ده لسه مش مدعوم في الدولاب.”
+
+## 11) Future work that remains
+
+- Add a first-class generic document/file representation only if the product chooses to extend the existing schema in a future migration.
+- Add remote duplicate detection across `dolab_notes`/`dolab_media`; this PR only performs deterministic local duplicate checks before saving.
+- Add richer picker UI for filtering remote Dolab shelves; this PR only upgrades the existing Direct Chat action sheet fallback.
+- Add analytics/observability around path-specific Dolab save failures and remote-promotion retries.
