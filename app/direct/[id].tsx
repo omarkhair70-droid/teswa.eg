@@ -38,7 +38,7 @@ type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
 type ExchangeDraft = { mode: 'idle' | 'drafting'; title?: string; note?: string; selectedItemId?: string; selectedDolabItemId?: string };
 
 const statusMeta = {
-  accepted: { label: 'Direct Chat Pro', sub: 'مساحة تفاوض مباشرة' },
+  accepted: { label: 'Direct Chat', sub: 'مساحة تفاوض مباشرة' },
   requested: { label: 'طلب مراسلة', sub: 'في انتظار قبول الطلب' },
   ignored: { label: 'تم التجاهل', sub: 'المحادثة غير متاحة' },
   blocked: { label: 'محظور', sub: 'المحادثة غير متاحة' },
@@ -72,6 +72,7 @@ export default function DirectScreen() {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamConnecting, setStreamConnecting] = useState(false);
   const [streamReady, setStreamReady] = useState(false);
+  const [streamInitialHydrated, setStreamInitialHydrated] = useState(false);
   const [directConnectionState, setDirectConnectionState] = useState<DirectConnectionState>('idle');
   const [typingText, setTypingText] = useState<string | null>(null);
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
@@ -101,6 +102,8 @@ export default function DirectScreen() {
   const streamUnsubsRef = useRef<Array<() => void>>([]);
   const typingThrottleRef = useRef<number>(0);
   const recordingStoppedRef = useRef(false);
+  const loadSeqRef = useRef(0);
+  const streamConnectionSeqRef = useRef(0);
   const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
   const voiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -111,7 +114,44 @@ export default function DirectScreen() {
     [...prev, ...next].forEach((m) => map.set(m.id, m));
     return Array.from(map.values()).sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
   }, []);
-  const load = useCallback(async (opts?: { background?: boolean }) => { if (!conversationId) return; const background = !!opts?.background; if (!background) setLoading(true); const [messageResult, directConvo] = await Promise.all([fetchDirectConversationMessages(conversationId), fetchDirectConversation(conversationId)]); if (messageResult.ok) { setMessages((prev) => mergeById(prev, messageResult.messages)); if (background) setError(null); } else setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message); setConvo((prev: any) => directConvo ?? prev); if (!directConvo) setInitialLoadFailed((prev) => (background ? prev : true)); if (!background) { setInitialLoadFailed(!directConvo); setLoading(false); } }, [conversationId, mergeById]);
+  const streamConvoStatus = convo?.status;
+  const streamOtherUserId = typeof convo?.otherUserId === 'string' ? convo.otherUserId : '';
+  const streamOtherDisplayName = convo?.otherDisplayName;
+  const load = useCallback(async (opts?: { background?: boolean }) => {
+    if (!conversationId) return;
+    const background = !!opts?.background;
+    const seq = loadSeqRef.current;
+    if (!background) setLoading(true);
+
+    const directConvo = await fetchDirectConversation(conversationId);
+    if (seq !== loadSeqRef.current) return;
+
+    setConvo((prev: any) => directConvo ?? prev);
+    if (!directConvo) {
+      setInitialLoadFailed((prev) => (background ? prev : true));
+      if (!background) {
+        setInitialLoadFailed(true);
+        setLoading(false);
+      }
+      return;
+    }
+
+    setInitialLoadFailed(false);
+    const shouldLoadLegacyMessages = !DIRECT_CHAT_PRO_ENABLED || directConvo.status !== 'accepted';
+    if (shouldLoadLegacyMessages) {
+      const messageResult = await fetchDirectConversationMessages(conversationId);
+      if (seq !== loadSeqRef.current) return;
+      if (messageResult.ok) {
+        setMessages((prev) => mergeById(prev, messageResult.messages));
+        if (background) setError(null);
+      } else setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message);
+    } else {
+      setMessages([]);
+      setError(null);
+    }
+
+    if (!background) setLoading(false);
+  }, [conversationId, mergeById]);
   const hydrateFromChannel = useCallback(() => {
     const channel = streamChannelRef.current;
     if (!channel) return;
@@ -162,13 +202,20 @@ export default function DirectScreen() {
     clearStreamSubs();
     setTypingText(null);
     streamChannelRef.current = null;
+    setStreamConnecting(false);
     setStreamReady(false);
+    setStreamInitialHydrated(false);
     setDirectConnectionState('idle');
     streamClientRef.current = null;
   }, [clearStreamSubs]);
   const connectStream = useCallback(async () => {
-    if (!DIRECT_CHAT_PRO_ENABLED || !convo || convo.status !== 'accepted') return;
+    if (!DIRECT_CHAT_PRO_ENABLED || streamConvoStatus !== 'accepted') return;
+    if (!streamOtherUserId) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); setDirectConnectionState('unavailable'); return; }
+    const seq = ++streamConnectionSeqRef.current;
     setStreamConnecting(true);
+    setStreamReady(false);
+    setStreamInitialHydrated(false);
+    setStreamMessages([]);
     setDirectConnectionState('connecting');
     setStreamError(null);
     try {
@@ -179,7 +226,7 @@ export default function DirectScreen() {
 
       const creds = await fetchStreamChatToken({
         conversationId,
-        otherUserId: typeof convo?.otherUserId === 'string' ? convo.otherUserId : undefined,
+        otherUserId: streamOtherUserId,
         displayName: displayName ?? undefined,
         avatarUrl: avatarUrl ?? undefined,
       });
@@ -196,17 +243,19 @@ export default function DirectScreen() {
         ? '[direct/stream] direct screen validated + reused warm client'
         : '[direct/stream] direct screen validated + connected client');
 
-      const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId, otherUserId: convo.otherUserId });
+      const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId, otherUserId: streamOtherUserId });
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
+      if (seq !== streamConnectionSeqRef.current) return;
       streamClientRef.current = client;
       streamChannelRef.current = channel;
       hydrateFromChannel();
+      setStreamInitialHydrated(true);
       const onMessageChange = () => hydrateFromChannel();
       const onTypingStart = (event: any) => {
         const typistId = event?.user?.id;
         if (!typistId || typistId === user?.id) return;
-        const typistName = event?.user?.name || convo?.otherDisplayName;
+        const typistName = event?.user?.name || streamOtherDisplayName;
         setTypingText(typistName ? `${typistName} بيكتب...` : 'بيكتب...');
       };
       const onTypingStop = (event: any) => {
@@ -230,27 +279,42 @@ export default function DirectScreen() {
       setStreamReady(true);
       setDirectConnectionState('ready');
     } catch {
-      setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.');
+      if (seq !== streamConnectionSeqRef.current) return;
+      setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.');
       setDirectConnectionState('unavailable');
       await cleanupStream();
       setDirectConnectionState('unavailable');
-    } finally { setStreamConnecting(false); }
-  }, [cleanupStream, clearStreamSubs, conversationId, convo, hydrateFromChannel, user?.id]);
+    } finally { if (seq === streamConnectionSeqRef.current) setStreamConnecting(false); }
+  }, [cleanupStream, clearStreamSubs, conversationId, hydrateFromChannel, streamConvoStatus, streamOtherDisplayName, streamOtherUserId, user?.id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    setConvo(null);
+    setMessages([]);
+    setStreamMessages([]);
+    setStreamConnecting(false);
+    setStreamInitialHydrated(false);
+    setStreamReady(false);
+    setStreamError(null);
+    setInitialLoadFailed(false);
+    setError(null);
+    loadSeqRef.current += 1;
+    streamConnectionSeqRef.current += 1;
+    void cleanupStream();
+    void load();
+  }, [cleanupStream, conversationId, load]);
   useFocusEffect(useCallback(() => {
     if (!conversationId) return;
     void markDirectConversationRead(conversationId);
     void load({ background: true });
   }, [conversationId, load]));
   useEffect(() => { const otherUserId = convo?.otherUserId; if (!user?.id || !otherUserId) return; let active = true; void (async () => { const state = await fetchUserBlockState(user.id, otherUserId); if (!active || !state.ok) return; setBlockedByMe(state.state.blockedByMe); })(); return () => { active = false; }; }, [convo?.otherUserId, user?.id]);
-  useEffect(() => { if (!convo) return; if (!DIRECT_CHAT_PRO_ENABLED || convo.status !== 'accepted') return; void connectStream(); return () => { void cleanupStream(); }; }, [cleanupStream, connectStream, convo]);
+  useEffect(() => { if (!DIRECT_CHAT_PRO_ENABLED || streamConvoStatus !== 'accepted') return; void connectStream(); return () => { streamConnectionSeqRef.current += 1; void cleanupStream(); }; }, [cleanupStream, connectStream, streamConvoStatus]);
 
   const isReceiverOnRequest = convo?.status === 'requested' && convo?.requestedBy !== user?.id;
   const isRequesterOnRequest = convo?.status === 'requested' && convo?.requestedBy === user?.id;
   const hasRequesterAlreadySent = useMemo(() => isRequesterOnRequest && messages.some((m) => m.senderId === user?.id), [isRequesterOnRequest, messages, user?.id]);
   const acceptedDirectProActive = DIRECT_CHAT_PRO_ENABLED && convo?.status === 'accepted';
-  const usingStreamChat = acceptedDirectProActive && streamReady && !streamError;
+  const usingStreamChat = acceptedDirectProActive;
   const composerState = useMemo(() => {
     if (convo?.status === 'ignored') return { disabled: true, note: 'تم تجاهل المحادثة حالياً.' };
     if (convo?.status === 'blocked') return { disabled: true, note: 'المحادثة غير متاحة بسبب الحظر.' };
@@ -277,8 +341,8 @@ export default function DirectScreen() {
   const composerPlaceholder = useMemo(() => {
     if (acceptedDirectProActive) {
       if (directConnectionState === 'connecting' || streamConnecting) return 'بنجهز الإرسال...';
-      if (streamError || !streamReady) return 'الشات الجديد غير متاح الآن';
-      return 'اكتب رسالة في Direct Chat Pro...';
+      if (streamError || !streamReady) return 'Direct Chat غير متاح الآن';
+      return 'اكتب رسالة في Direct Chat...';
     }
 
     if (composerState.disabled) return 'المحادثة غير متاحة للإرسال الآن';
@@ -353,7 +417,7 @@ export default function DirectScreen() {
       else setActionFeedback('مفيش حاجة تتحفظ من الرسالة دي.');
       return;
     }
-    if (!channel) { setActionFeedback('الشات الجديد غير متاح حالياً.'); return; }
+    if (!channel) { setActionFeedback('Direct Chat غير متاح حالياً.'); return; }
     if (action === 'delete') {
       if (target.userId !== user?.id) return;
       if (typeof channel.deleteMessage !== 'function') { setActionFeedback('ميزة الحذف غير متاحة حالياً.'); return; }
@@ -398,7 +462,7 @@ export default function DirectScreen() {
   const sendViaStream = useCallback(async () => {
     const trimmed = body.trim();
     if (!trimmed && !pendingAttachment) return;
-    if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
     setSending(true);
     if (pendingAttachment) setMediaSending(true);
     try {
@@ -453,7 +517,7 @@ export default function DirectScreen() {
   }, [canUseVoice, isRecordingVoice, voiceRecorder]);
   const sendVoiceMessage = useCallback(async () => {
     if (voiceSending) return;
-    if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('الشات الجديد مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
     if (!voiceRecorderState.isRecording && !voiceRecorder.uri) { setActionFeedback('سجل رسالة صوتية الأول.'); return; }
     setVoiceSending(true);
     setActionFeedback('جاري إرسال الرسالة الصوتية...');
@@ -609,7 +673,7 @@ ${item.body}` : item.body ?? ''));
     const note = exchangeDraft.note?.trim();
     if (!note) { setActionFeedback('اكتب تفاصيل العرض الأول.'); return; }
     if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) {
-      setActionFeedback('إرسال عرض التبادل متاح داخل Direct Chat Pro المقبول فقط.');
+      setActionFeedback('إرسال عرض التبادل متاح داخل Direct Chat المقبول فقط.');
       return;
     }
     setSending(true);
@@ -648,9 +712,9 @@ ${note}
     {convo?.status === 'blocked' ? <AppCard style={styles.infoCard}><AppText muted>المحادثة غير متاحة بسبب الحظر.</AppText></AppCard> : null}
 
     <KeyboardAwareScrollView bottomOffset={102} contentContainerStyle={styles.messagesWrap}>
-      {streamError ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> : null}
       {usingStreamChat ? (
-        directConnectionState === 'connecting' && streamMessages.length === 0 ? <EmptyState title="بنجهز Direct Chat Pro..." description="بنفتح مساحة المحادثة الآمنة." /> :
+        streamError ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> :
+        !streamInitialHydrated ? <EmptyState title="بنجهز Direct Chat..." description="بنفتح مساحة المحادثة الآمنة." /> :
         streamMessages.length === 0 ? <EmptyState title="ابدأوا الاتفاق" description="اسأل سؤال بسيط أو وضّح تفاصيل الحاجة اللي بتتكلموا عليها." /> :
         streamMessages.map((m) => {
           const mine = m.userId === user?.id;
