@@ -9,7 +9,8 @@ import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { getRouteFromNotificationResponse } from '@/lib/push-notifications';
+import { resolveNotificationActionResponse } from '@/lib/push-notifications';
+import { DIRECT_OPEN_CHAT_ACTION_ID, DIRECT_REACT_LIKE_ACTION_ID, DIRECT_REPLY_ACTION_ID, registerNotificationActionCategories } from '@/lib/notification-actions';
 import { UnreadBadgesProvider } from '@/lib/unread-badges';
 import { setPendingInboundSharedMedia } from '@/lib/inbound-shared-media';
 import { BiometricAppLockCoordinator } from '@/components/security/BiometricAppLockCoordinator';
@@ -231,12 +232,36 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
   }, []);
 
   useEffect(() => {
+    void registerNotificationActionCategories();
+  }, []);
+
+  useEffect(() => {
     const queueNotificationRoute = (response: Notifications.NotificationResponse | null | undefined) => {
-      const resolved = getRouteFromNotificationResponse(response);
+      const resolved = resolveNotificationActionResponse(response);
       if (!resolved) return;
       if (handledNotificationIdsRef.current.has(resolved.id)) return;
       handledNotificationIdsRef.current.add(resolved.id);
-      setPendingNotificationRoute(resolved.route);
+
+      const isDefaultTap = resolved.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER;
+      const conversationRoute = resolved.conversationId ? `/direct/${resolved.conversationId}` : resolved.route;
+      const nextRoute = isDefaultTap
+        ? resolved.route
+        : (resolved.actionIdentifier === DIRECT_OPEN_CHAT_ACTION_ID
+          ? conversationRoute
+          : (resolved.actionIdentifier === DIRECT_REACT_LIKE_ACTION_ID
+            ? conversationRoute
+            : (resolved.actionIdentifier === DIRECT_REPLY_ACTION_ID ? conversationRoute : resolved.route)));
+
+      if (__DEV__) {
+        console.log('[PushActions] response', {
+          actionIdentifier: resolved.actionIdentifier,
+          hasUserText: Boolean(resolved.userText),
+          hasConversationId: Boolean(resolved.conversationId),
+          hasRoute: Boolean(nextRoute),
+        });
+      }
+
+      setPendingNotificationRoute(nextRoute);
     };
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {

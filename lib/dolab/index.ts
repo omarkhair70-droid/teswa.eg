@@ -8,7 +8,7 @@ type DolabResult<T> = { data: T; error: DolabPersistenceError | null };
 
 type SaveDolabDraftInput = Pick<DolabDraftItem, 'title' | 'description' | 'category' | 'condition'> & {
   status?: Extract<DolabItemStatus, 'draft' | 'ready'>;
-  source?: Extract<DolabItemSource, 'manual'>;
+  source?: DolabItemSource;
 };
 const DOLAB_BUCKET = 'dolab-media';
 
