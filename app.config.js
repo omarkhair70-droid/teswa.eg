@@ -15,7 +15,7 @@ module.exports = {
     version: '1.0.8',
     orientation: 'portrait',
     icon: './assets/branding/icon.png',
-    userInterfaceStyle: 'light',
+    userInterfaceStyle: 'automatic',
     ios: {
       supportsTablet: true,
     },
