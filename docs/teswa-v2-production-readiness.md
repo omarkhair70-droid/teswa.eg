@@ -196,3 +196,28 @@
 
 ### Android channel verification
 - Push payload uses `channelId: "teswa-activity"` and this channel already exists in mobile startup via `ensureAndroidNotificationChannel()` (`Notifications.setNotificationChannelAsync("teswa-activity", ...)`) before push registration.
+
+## Sprint 6 — Notification Actions Feasibility
+
+### Implemented
+- Added OTA-safe notification action category registration with Expo Notifications via `setNotificationCategoryAsync` at app startup.
+- Added direct-message category/actions under `categoryId: "direct_message"` with action identifiers:
+  - `direct_reply`
+  - `direct_react_like`
+  - `direct_open_chat`
+- Updated `send-notification-push` so `direct_message_received` payloads now include `categoryId: "direct_message"`.
+- Added action-aware response handling:
+  - Default notification tap preserves existing route behavior.
+  - `direct_open_chat` opens `/direct/{conversationId}` when available.
+  - `direct_react_like` safely opens direct chat (no fake reaction send).
+  - `direct_reply` reads inline text when present, but safely routes to direct chat instead of pretending to send.
+- Added `__DEV__` diagnostics only (action id + booleans for userText/conversationId/route availability).
+
+### Build requirement
+- **No native build required** for this sprint, as implemented changes are OTA-safe and do not require native config/plugin updates.
+
+### Limitations
+- No guaranteed killed-app background send behavior yet (requires dedicated validation).
+- No custom icon/sound/channel/defaultChannel/native-notification-config changes were introduced.
+- No iOS rich notification service extension.
+- Full inline reply sending from notification was intentionally not implemented in this sprint pending further auth/background-safety validation.
