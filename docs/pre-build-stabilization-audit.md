@@ -143,10 +143,22 @@ After the Android build installs, run this smoke test:
 Production Android build:
 
 ```powershell
+npm run build:android
+```
+
+This script runs:
+
+```powershell
 eas build --platform android --profile production
 ```
 
 Optional submit to internal track after manual smoke test:
+
+```powershell
+npm run submit:android
+```
+
+This script runs:
 
 ```powershell
 eas submit --platform android --profile production
