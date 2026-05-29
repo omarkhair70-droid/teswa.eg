@@ -596,7 +596,10 @@ export default function DirectScreen() {
     } finally { setVoiceSending(false); }
   }, [acceptedDirectProActive, body, hydrateFromChannel, replyTarget?.id, streamError, streamReady, voiceRecorder, voiceRecorderState.durationMillis, voiceRecorderState.isRecording, voiceRecorder.uri, voiceRecordingDurationSeconds, voiceSending]);
   const togglePlayVoice = useCallback(async (messageId: string, url?: string) => {
+    if (voicePlaybackBusy) return;
     if (!url) { showActionFeedbackToast('تعذر تشغيل الرسالة الصوتية.'); return; }
+
+    setVoicePlaybackBusy(true);
     try {
       if (playingVoiceId === messageId && voicePlayer.playing) {
         await voicePlayer.pause();
@@ -604,13 +607,21 @@ export default function DirectScreen() {
         setPlayingVoiceId(null);
         return;
       }
+
       await voicePlayer.pause();
       await voicePlayer.seekTo(0);
+      setPlayingVoiceId(null);
+
       await voicePlayer.replace(url);
       voicePlayer.play();
       setPlayingVoiceId(messageId);
-    } catch { showActionFeedbackToast('تعذر تشغيل الرسالة الصوتية.'); }
-  }, [playingVoiceId, voicePlayer]);
+    } catch {
+      setPlayingVoiceId(null);
+      showActionFeedbackToast('تعذر تشغيل الرسالة الصوتية.');
+    } finally {
+      setVoicePlaybackBusy(false);
+    }
+  }, [playingVoiceId, showActionFeedbackToast, voicePlaybackBusy, voicePlayer]);
 
 
   const normalizeRemoteUrl = useCallback((value?: string | null) => {
@@ -816,6 +827,8 @@ ${note}
                       return <View key={voiceId} style={styles.voiceBubble}>
                         <Pressable
                           style={styles.voicePlayButton}
+                          disabled={voicePlaybackBusy && !isPlayingThisVoice}
+
                           onPress={() => { void togglePlayVoice(voiceId, attachment.assetUrl); }}
                           accessibilityRole="button"
                           accessibilityLabel={isPlayingThisVoice ? 'إيقاف الرسالة الصوتية' : 'تشغيل الرسالة الصوتية'}
