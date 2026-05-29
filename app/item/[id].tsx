@@ -240,8 +240,8 @@ export default function ItemDetailsScreen() {
   const owner = item?.ownerPresence;
 
   if (!id) return <AppScreen backgroundVariant="soft"><EmptyState title="معرّف غير صالح" description="تعذر تحديد العنصر المطلوب." /></AppScreen>;
-  if (loading) return <AppScreen backgroundVariant="soft"><EmptyState title="جاري التحميل" description="نقوم بتحضير تفاصيل العنصر." /></AppScreen>;
-  if (error) return <AppScreen backgroundVariant="soft"><View style={styles.stateBox}><EmptyState title="خطأ في التحميل" description={error} /><AppButton label="إعادة المحاولة" onPress={() => { void itemDetailQuery.refetch(); }} /></View></AppScreen>;
+  if (loading) return <ItemDetailLoadingState />;
+  if (error) return <ItemDetailErrorState message={error} onRetry={() => { void itemDetailQuery.refetch(); }} />;
   if (!item) return <AppScreen backgroundVariant="soft"><EmptyState title="العنصر غير موجود" description="قد يكون تم حذفه أو لم يعد متاحاً." /></AppScreen>;
 
   return (
