@@ -97,6 +97,7 @@ export default function DirectScreen() {
   const [voiceSending, setVoiceSending] = useState(false);
   const [recentDolabItems, setRecentDolabItems] = useState<Array<{ id: string; kind: 'text' | 'image' | 'video' | 'audio' | 'file'; title: string; body?: string; uri?: string; mimeType?: string; fileName?: string; sizeBytes?: number }>>([]);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [voicePlaybackBusy, setVoicePlaybackBusy] = useState(false);
   const [exchangeDraft, setExchangeDraft] = useState<ExchangeDraft>({ mode: 'idle' });
   const [selectedMediaViewer, setSelectedMediaViewer] = useState<SelectedMediaViewer>(null);
   const [imageViewerLoading, setImageViewerLoading] = useState(false);
