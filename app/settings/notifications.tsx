@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
+import { NotificationPermissionCard } from '@/components/settings/NotificationPermissionCard';
 import { NotificationPreferencesCard } from '@/components/settings/NotificationPreferencesCard';
 import {
   fetchMyNotificationPreferences,
@@ -102,6 +103,8 @@ export default function NotificationSettingsScreen() {
         <AppText weight="bold" style={styles.title}>
           إعدادات الإشعارات
         </AppText>
+
+        <NotificationPermissionCard />
 
         {error ? <AppText muted>{error}</AppText> : null}
 
