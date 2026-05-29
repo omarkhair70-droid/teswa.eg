@@ -28,14 +28,16 @@ import { reportDirectMessage, SUCCESS_MESSAGE } from '@/lib/reports';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
 import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
+import { readDirectMessageCache, writeDirectMessageCache } from '@/lib/chat/direct-message-cache';
 import { trackPerformanceMetric } from '@/lib/performance-telemetry';
 
-type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
+type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; userAvatar?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
 type PendingVoice = { uri: string; fileName: string; mimeType: string; durationSeconds?: number };
 type StreamAttachment = NonNullable<StreamMessage['attachments']>[number];
 type SelectedMediaViewer = { kind: 'image'; url: string; title?: string } | { kind: 'video'; url: string; title?: string; mimeType?: string } | { kind: 'file'; url: string; title?: string; mimeType?: string; fileSize?: number } | null;
 type DirectConnectionState = 'idle' | 'connecting' | 'ready' | 'unavailable';
+type StreamMessageSource = 'none' | 'cached' | 'live';
 type ExchangeDraft = { mode: 'idle' | 'drafting'; title?: string; note?: string; selectedItemId?: string; selectedDolabItemId?: string };
 
 const statusMeta = {
@@ -65,6 +67,7 @@ export default function DirectScreen() {
   const [convo, setConvo] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [streamMessages, setStreamMessages] = useState<StreamMessage[]>([]);
+  const [streamMessageSource, setStreamMessageSource] = useState<StreamMessageSource>('none');
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -107,6 +110,7 @@ export default function DirectScreen() {
   const streamConnectionSeqRef = useRef(0);
   const firstMessageStartedAtRef = useRef(Date.now());
   const firstMessageMetricSentRef = useRef<string | null>(null);
+  const streamCacheHitRef = useRef(false);
   const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
   const voiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -150,6 +154,14 @@ export default function DirectScreen() {
       } else setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message);
     } else {
       setMessages([]);
+      if (!background) {
+        const cached = readDirectMessageCache(conversationId);
+        if (cached?.messages.length) {
+          setStreamMessages(cached.messages);
+          setStreamMessageSource('cached');
+          streamCacheHitRef.current = true;
+        }
+      }
       setError(null);
     }
 
@@ -168,6 +180,7 @@ export default function DirectScreen() {
         createdAt: safeCreatedAt,
         userId: typeof msg?.user?.id === 'string' ? msg.user.id : '',
         userName: typeof msg?.user?.name === 'string' ? msg.user.name : undefined,
+        userAvatar: typeof msg?.user?.image === 'string' ? msg.user.image : undefined,
         reactionCounts: msg?.reaction_counts && typeof msg.reaction_counts === 'object' ? msg.reaction_counts : undefined,
         ownReactions: Array.isArray(msg?.own_reactions) ? msg.own_reactions.map((reaction: any) => reaction?.type).filter((type: unknown): type is string => typeof type === 'string') : undefined,
         attachments: Array.isArray(msg?.attachments) ? msg.attachments.map((attachment: any) => ({
@@ -193,8 +206,10 @@ export default function DirectScreen() {
         } : undefined,
       };
     }).sort((a: StreamMessage, b: StreamMessage) => +new Date(a.createdAt) - +new Date(b.createdAt));
-    setStreamMessages((prev) => mergeById(prev, mapped));
-  }, [mergeById]);
+    setStreamMessages(mapped);
+    setStreamMessageSource('live');
+    writeDirectMessageCache(conversationId, mapped);
+  }, [conversationId]);
   const clearStreamSubs = useCallback(() => {
     streamUnsubsRef.current.forEach((unsub) => {
       try { unsub(); } catch {}
@@ -218,7 +233,6 @@ export default function DirectScreen() {
     setStreamConnecting(true);
     setStreamReady(false);
     setStreamInitialHydrated(false);
-    setStreamMessages([]);
     setDirectConnectionState('connecting');
     setStreamError(null);
     try {
@@ -296,6 +310,8 @@ export default function DirectScreen() {
     setConvo(null);
     setMessages([]);
     setStreamMessages([]);
+    setStreamMessageSource('none');
+    streamCacheHitRef.current = false;
     setStreamConnecting(false);
     setStreamInitialHydrated(false);
     setStreamReady(false);
@@ -321,6 +337,7 @@ export default function DirectScreen() {
   const hasRequesterAlreadySent = useMemo(() => isRequesterOnRequest && messages.some((m) => m.senderId === user?.id), [isRequesterOnRequest, messages, user?.id]);
   const acceptedDirectProActive = DIRECT_CHAT_PRO_ENABLED && convo?.status === 'accepted';
   const usingStreamChat = acceptedDirectProActive;
+  const hasCachedStreamMessages = usingStreamChat && streamMessageSource === 'cached' && streamMessages.length > 0;
 
   useEffect(() => {
     if (!conversationId || firstMessageMetricSentRef.current === conversationId) return;
@@ -330,9 +347,10 @@ export default function DirectScreen() {
     firstMessageMetricSentRef.current = conversationId;
     void trackPerformanceMetric('direct_chat_first_message_time', Date.now() - firstMessageStartedAtRef.current, {
       route: '/direct/[id]',
-      cacheHit: false,
+      cacheHit: usingStreamChat ? streamCacheHitRef.current : false,
+      source: usingStreamChat ? (streamMessageSource === 'cached' ? 'cached' : 'live') : 'live',
     });
-  }, [conversationId, messages.length, streamMessages.length, usingStreamChat]);
+  }, [conversationId, messages.length, streamMessageSource, streamMessages.length, usingStreamChat]);
 
   const composerState = useMemo(() => {
     if (convo?.status === 'ignored') return { disabled: true, note: 'تم تجاهل المحادثة حالياً.' };
@@ -731,10 +749,13 @@ ${note}
 
     <KeyboardAwareScrollView bottomOffset={102} contentContainerStyle={styles.messagesWrap}>
       {usingStreamChat ? (
-        streamError ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> :
-        !streamInitialHydrated ? <EmptyState title="بنجهز Direct Chat..." description="بنفتح مساحة المحادثة الآمنة." /> :
+        streamError && streamMessages.length === 0 ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> :
+        !streamInitialHydrated && streamMessages.length === 0 ? <EmptyState title="بنجهز Direct Chat..." description="بنفتح مساحة المحادثة الآمنة." /> :
         streamMessages.length === 0 ? <EmptyState title="ابدأوا الاتفاق" description="اسأل سؤال بسيط أو وضّح تفاصيل الحاجة اللي بتتكلموا عليها." /> :
-        streamMessages.map((m) => {
+        <>
+          {streamError ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> : null}
+          {hasCachedStreamMessages && streamConnecting ? <AppCard style={styles.infoCard}><AppText muted>بنحدّث الرسائل في الخلفية...</AppText></AppCard> : null}
+          {streamMessages.map((m) => {
           const mine = m.userId === user?.id;
           const read = mine && latestReadAtMs ? (+new Date(m.createdAt) <= latestReadAtMs) : false;
           const mineStatus = mine ? (read ? 'اتقرت' : 'اتبعثت') : undefined;
@@ -799,7 +820,8 @@ ${note}
               </View>
             </Pressable>
           );
-        })
+        })}
+        </>
       ) : (
         messages.length === 0 ? <EmptyState title="ابدأوا الكلام" description="اكتب أول رسالة وافتح مساحة للتواصل بهدوء." /> :
         messages.map((m) => renderBubble(m.body, m.senderId === user?.id, m.createdAt, undefined, m.id))

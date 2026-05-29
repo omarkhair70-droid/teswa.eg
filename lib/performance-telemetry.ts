@@ -18,6 +18,7 @@ export type PerformanceMetricMetadata = {
   cacheHit?: boolean;
   startType?: PerformanceStartType;
   networkState?: PerformanceNetworkState;
+  source?: 'cached' | 'live';
 };
 
 const PERFORMANCE_SAMPLE_RATE = 0.2;
@@ -82,6 +83,7 @@ export async function trackPerformanceMetric(
       cacheHit: metadata.cacheHit,
       startType: metadata.startType ?? currentStartType,
       networkState: metadata.networkState ?? currentNetworkState ?? undefined,
+      source: metadata.source,
     },
   });
 }
