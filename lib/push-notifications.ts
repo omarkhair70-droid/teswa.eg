@@ -7,9 +7,18 @@ import { supabase } from '@/lib/supabase/client';
 const PUSH_TOKEN_KEY = 'teswa.push.expo_token';
 const ANDROID_CHANNEL_ID = 'teswa-activity';
 
+export type PushPermissionStatus = 'granted' | 'denied' | 'can_ask_again' | 'unsupported';
+
 export type PushRegistrationResult =
   | { ok: true; expoPushToken: string }
   | { ok: false; message: string; reason?: 'permission_denied' | 'unsupported' | 'missing_project_id' | 'unknown' };
+
+export type PushPermissionSnapshot = {
+  status: PushPermissionStatus;
+  granted: boolean;
+  canAskAgain: boolean;
+  hasStoredToken: boolean;
+};
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -28,11 +37,30 @@ export async function ensureAndroidNotificationChannel() {
   });
 }
 
+export async function getNotificationPermissionSnapshot(): Promise<PushPermissionSnapshot> {
+  if (Platform.OS === 'web') {
+    return { status: 'unsupported', granted: false, canAskAgain: false, hasStoredToken: false };
+  }
+
+  const [settings, hasStoredTokenValue] = await Promise.all([
+    Notifications.getPermissionsAsync(),
+    hasStoredPushToken(),
+  ]);
+
+  const status: PushPermissionStatus = settings.granted ? 'granted' : settings.canAskAgain ? 'can_ask_again' : 'denied';
+
+  return {
+    status,
+    granted: settings.granted,
+    canAskAgain: settings.canAskAgain,
+    hasStoredToken: hasStoredTokenValue,
+  };
+}
 
 export async function getNotificationPermissionStatus() {
-  if (Platform.OS === 'web') return 'unsupported' as const;
-  const settings = await Notifications.getPermissionsAsync();
-  return settings.granted ? 'granted' as const : 'denied' as const;
+  const snapshot = await getNotificationPermissionSnapshot();
+  if (snapshot.status === 'can_ask_again') return 'denied' as const;
+  return snapshot.status;
 }
 
 export async function hasStoredPushToken() {
@@ -52,6 +80,27 @@ export async function requestAndRegisterPushDevice(_userId: string) {
 
 function resolveProjectId() {
   return Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? null;
+}
+
+async function getExpoPushTokenWithoutPrompt(): Promise<PushRegistrationResult> {
+  if (Platform.OS === 'web') {
+    return { ok: false, message: 'الإشعارات غير متاحة على هذا الجهاز حالياً.', reason: 'unsupported' };
+  }
+
+  const settings = await Notifications.getPermissionsAsync();
+  if (!settings.granted) {
+    return { ok: false, message: 'الإذن بالإشعارات غير مفعّل.', reason: 'permission_denied' };
+  }
+
+  await ensureAndroidNotificationChannel();
+  const projectId = resolveProjectId();
+  if (!projectId) {
+    return { ok: false, message: 'تعذر تفعيل الإشعارات حالياً.', reason: 'missing_project_id' };
+  }
+
+  const expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  await AsyncStorage.setItem(PUSH_TOKEN_KEY, expoPushToken);
+  return { ok: true, expoPushToken };
 }
 
 export async function registerForPushNotifications(): Promise<PushRegistrationResult> {
@@ -106,11 +155,15 @@ export async function saveUserPushToken(expoPushToken: string): Promise<{ ok: tr
 }
 
 export async function syncPushDeviceRegistrationIfPermitted(_userId: string) {
-  const registration = await registerForPushNotifications();
-  if (!registration.ok) {
-    return { ok: registration.reason === 'permission_denied' || registration.reason === 'unsupported', skipped: registration.reason };
+  try {
+    const registration = await getExpoPushTokenWithoutPrompt();
+    if (!registration.ok) {
+      return { ok: registration.reason === 'permission_denied' || registration.reason === 'unsupported', skipped: registration.reason };
+    }
+    return saveUserPushToken(registration.expoPushToken);
+  } catch {
+    return { ok: false as const, skipped: 'unknown' as const };
   }
-  return saveUserPushToken(registration.expoPushToken);
 }
 
 export async function disableRegisteredPushDeviceIfPossible() {
