@@ -66,6 +66,8 @@ The cache must not store Stream tokens, Supabase auth tokens, refresh tokens, pr
 6. Keep showing cached messages plus a retry/error card if Stream fails while a snapshot exists.
 7. Preserve the existing loading state when no snapshot exists.
 
+Background metadata refreshes, such as focus-triggered `load({ background: true })`, must not re-apply cached snapshots after live Stream state is already displayed. Cached snapshots are only for instant-open bootstrapping; live Stream messages remain the source of truth once hydration has started or completed.
+
 ## Future migration path
 
 This cache is a bridge toward stronger offline support, not a replacement for Stream offline. The next migration step can keep this key/version stable long enough to measure cache-hit value, then introduce Stream offline storage behind a feature flag. Once Stream offline is verified for accepted Direct Chat, this MMKV snapshot can be reduced to a fallback/boot cache or pruned with a new key version such as `direct-chat:stream:v2:`.

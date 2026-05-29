@@ -154,11 +154,13 @@ export default function DirectScreen() {
       } else setError(background ? 'تعذر تحديث الرسائل حالياً.' : messageResult.message);
     } else {
       setMessages([]);
-      const cached = readDirectMessageCache(conversationId);
-      if (cached?.messages.length) {
-        setStreamMessages(cached.messages);
-        setStreamMessageSource('cached');
-        streamCacheHitRef.current = true;
+      if (!background) {
+        const cached = readDirectMessageCache(conversationId);
+        if (cached?.messages.length) {
+          setStreamMessages(cached.messages);
+          setStreamMessageSource('cached');
+          streamCacheHitRef.current = true;
+        }
       }
       setError(null);
     }
