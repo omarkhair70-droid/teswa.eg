@@ -314,6 +314,8 @@ export default function DirectScreen() {
     setConvo(null);
     setMessages([]);
     setStreamMessages([]);
+    setVideoThumbnails({});
+    videoThumbnailRequestsRef.current.clear();
     setStreamMessageSource('none');
     streamCacheHitRef.current = false;
     setStreamConnecting(false);
