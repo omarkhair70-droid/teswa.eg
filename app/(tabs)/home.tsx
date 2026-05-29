@@ -56,6 +56,51 @@ const metricSignals: Array<{ key: 'offers' | 'messages' | 'listings'; label: str
   { key: 'listings', label: 'عناصر نشطة', icon: 'cube-outline', color: '#8A5A2D' },
 ];
 
+function HomeFeedLoadingState() {
+  return (
+    <View style={styles.feedStateCard}>
+      <View style={styles.feedStateIcon}>
+        <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+      </View>
+      <View style={styles.feedStateCopy}>
+        <AppText weight="semibold">بنجهز أحدث العناصر...</AppText>
+        <AppText muted>هنعرض أول نتائج فور وصولها من غير ما نحرك باقي الصفحة.</AppText>
+      </View>
+      {[0, 1, 2].map((item) => <View key={item} style={styles.feedSkeletonRow} />)}
+    </View>
+  );
+}
+
+function HomeFeedEmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <View style={styles.feedStateCard}>
+      <View style={styles.feedStateIcon}>
+        <Ionicons name="cube-outline" size={20} color={colors.primary} />
+      </View>
+      <View style={styles.feedStateCopy}>
+        <AppText weight="semibold">الواجهة هادئة دلوقتي</AppText>
+        <AppText muted>أول ما عناصر جديدة توصل، هتظهر هنا. تقدر تبدأ أنت وتعرض حاجة للتبادل.</AppText>
+      </View>
+      <AppButton label="اعرض حاجة" variant="neutral" onPress={onCreate} />
+    </View>
+  );
+}
+
+function HomeFeedErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <View style={styles.feedStateCard}>
+      <View style={styles.feedStateIcon}>
+        <Ionicons name="refresh-circle-outline" size={22} color={colors.primary} />
+      </View>
+      <View style={styles.feedStateCopy}>
+        <AppText weight="semibold">تعذر تحديث العناصر</AppText>
+        <AppText muted>{message}</AppText>
+      </View>
+      <AppButton label="إعادة المحاولة" onPress={onRetry} />
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user, profileCompleted } = useAuth();
@@ -587,14 +632,11 @@ export default function HomeScreen() {
         renderItem={renderItem}
         ListEmptyComponent={
           homeFeedQuery.isLoading ? (
-            <EmptyState title="جاري التحميل" description="نلمّ أحدث العناصر المتاحة الآن." />
-) : homeFeedQuery.error ? (
-            <View style={styles.stateBox}>
-              <EmptyState title="حدث خطأ" description={homeFeedQuery.error.message} />
-              <AppButton label="إعادة المحاولة" onPress={() => void homeFeedQuery.refetch()} />
-            </View>
+            <HomeFeedLoadingState />
+          ) : homeFeedQuery.error ? (
+            <HomeFeedErrorState message={homeFeedQuery.error.message} onRetry={() => void homeFeedQuery.refetch()} />
           ) : (
-            <EmptyState title="لا توجد عناصر حالياً" description="الواجهة هادئة الآن، وستظهر العناصر هنا فور توفرها." />
+            <HomeFeedEmptyState onCreate={() => router.push('/(tabs)/add')} />
           )
         }
       />
@@ -936,4 +978,8 @@ const styles = StyleSheet.create({
   itemsTitle: { fontSize: 21 },
   itemsSupportText: { color: '#5F5348', fontSize: 13, lineHeight: 19 },
   stateBox: { gap: spacing.md },
+  feedStateCard: { gap: spacing.sm, marginHorizontal: spacing.md, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,253,248,0.86)' },
+  feedStateIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  feedStateCopy: { gap: 2 },
+  feedSkeletonRow: { height: 54, borderRadius: radii.md, backgroundColor: colors.primarySoft, opacity: 0.62 },
 });
