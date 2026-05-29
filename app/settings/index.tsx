@@ -5,6 +5,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
+import { SettingsStatusCard } from '@/components/settings/SettingsStatusCard';
 import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
 import { getCurrentLayoutDirectionNote, getLanguagePreference, setLanguagePreference, t, type LanguagePreference } from '@/lib/i18n';
@@ -174,7 +175,8 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection icon="info" title={t('settings.about')} description="أساس إعدادات تِسوى قبل البناء القادم.">
-          <AppText muted>تمت إضافة طبقة الثيم، اللغة، التوست، الأيقونات، والنماذج بشكل تأسيسي فقط.</AppText>
+          <AppText muted>إعدادات تِسوى أصبحت مركز التحكم الأساسي للمظهر، اللغة، الإشعارات، الخصوصية، والحساب.</AppText>
+          <SettingsStatusCard />
         </SettingsSection>
       </View>
     </AppScreen>
