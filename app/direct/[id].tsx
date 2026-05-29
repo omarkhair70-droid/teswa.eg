@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { Image, Linking, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
@@ -27,6 +28,7 @@ import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from 
 import { reportDirectMessage, SUCCESS_MESSAGE } from '@/lib/reports';
 import { loadRecentDolabShareables, saveComposerDraftToDolab, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
+import { generateDirectVideoThumbnail, type GeneratedVideoThumbnail } from '@/lib/media/video-thumbnails';
 import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
 import { readDirectMessageCache, writeDirectMessageCache } from '@/lib/chat/direct-message-cache';
 import { trackPerformanceMetric } from '@/lib/performance-telemetry';
@@ -67,6 +69,7 @@ export default function DirectScreen() {
   const [convo, setConvo] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [streamMessages, setStreamMessages] = useState<StreamMessage[]>([]);
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, GeneratedVideoThumbnail | null>>({});
   const [streamMessageSource, setStreamMessageSource] = useState<StreamMessageSource>('none');
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
@@ -110,6 +113,7 @@ export default function DirectScreen() {
   const streamConnectionSeqRef = useRef(0);
   const firstMessageStartedAtRef = useRef(Date.now());
   const firstMessageMetricSentRef = useRef<string | null>(null);
+  const videoThumbnailRequestsRef = useRef<Set<string>>(new Set());
   const streamCacheHitRef = useRef(false);
   const voicePlayer = useAudioPlayer(null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
@@ -310,6 +314,8 @@ export default function DirectScreen() {
     setConvo(null);
     setMessages([]);
     setStreamMessages([]);
+    setVideoThumbnails({});
+    videoThumbnailRequestsRef.current.clear();
     setStreamMessageSource('none');
     streamCacheHitRef.current = false;
     setStreamConnecting(false);
@@ -618,6 +624,34 @@ export default function DirectScreen() {
     }
     return normalizeRemoteUrl(attachment.assetUrl) || normalizeRemoteUrl(attachment.imageUrl);
   }, [normalizeRemoteUrl]);
+  const getVideoThumbnailStateKey = useCallback((messageId: string, attachmentIndex: number, attachment: StreamAttachment) => {
+    const stableAttachmentId = attachment.assetUrl || attachment.title || attachment.name || String(attachmentIndex);
+    return `${messageId}:video:${attachmentIndex}:${stableAttachmentId}`;
+  }, []);
+
+  useEffect(() => {
+    if (!usingStreamChat || streamMessages.length === 0) return;
+    for (const message of streamMessages) {
+      message.attachments?.forEach((attachment, index) => {
+        const isVideo = attachment.type === 'video';
+        if (!isVideo) return;
+        const videoUrl = resolveAttachmentUrl(attachment, 'video');
+        if (!videoUrl) return;
+        const stateKey = getVideoThumbnailStateKey(message.id, index, attachment);
+        if (videoThumbnailRequestsRef.current.has(stateKey)) return;
+        videoThumbnailRequestsRef.current.add(stateKey);
+        void generateDirectVideoThumbnail({
+          videoUrl,
+          cacheKeyParts: [message.id, String(index), attachment.name, attachment.title],
+        }).then((thumbnail) => {
+          setVideoThumbnails((prev) => {
+            if (prev[stateKey] === thumbnail) return prev;
+            return { ...prev, [stateKey]: thumbnail };
+          });
+        });
+      });
+    }
+  }, [getVideoThumbnailStateKey, resolveAttachmentUrl, streamMessages, usingStreamChat]);
   const formatFileSize = useCallback((size?: number) => {
     if (!size || size <= 0) return null;
     if (size < 1024) return `${size} B`;
@@ -808,6 +842,25 @@ ${note}
                     if (isImage) {
                       return <Pressable key={`${m.id}-att-${idx}`} style={styles.fileCard} onPress={() => openMediaViewer(attachment)}><AppText>🖼️ صورة</AppText><AppText muted>{label}</AppText></Pressable>;
                     }
+                    if (isVideo) {
+                      const thumbnailKey = getVideoThumbnailStateKey(m.id, idx, attachment);
+                      const thumbnail = videoThumbnails[thumbnailKey];
+                      if (thumbnail?.source) {
+                        return <Pressable key={`${m.id}-att-${idx}`} style={styles.videoThumbnailCard} onPress={() => openMediaViewer(attachment)} accessibilityRole="button" accessibilityLabel={`فتح الفيديو ${label}`}>
+                          <View style={styles.videoThumbnailFrame}>
+                            <ExpoImage source={thumbnail.source as any} style={styles.videoThumbnailImage} contentFit="cover" />
+                            <View style={styles.videoPlayOverlay}><Ionicons name="play" size={22} color={colors.background} /></View>
+                          </View>
+                          <View style={styles.videoThumbnailMeta}>
+                            <AppText weight="semibold" numberOfLines={1}>{label}</AppText>
+                            <View style={styles.videoThumbnailDetails}>
+                              {attachment.fileSize ? <AppText muted>{formatFileSize(attachment.fileSize)}</AppText> : null}
+                              {attachment.mimeType ? <AppText muted>{attachment.mimeType}</AppText> : null}
+                            </View>
+                          </View>
+                        </Pressable>;
+                      }
+                    }
                     return <Pressable key={`${m.id}-att-${idx}`} style={styles.fileCard} onPress={() => openMediaViewer(attachment)}><AppText>{isVideo ? '🎬 فيديو' : '📎 ملف'}</AppText><AppText muted>{label}</AppText>{attachment.fileSize ? <AppText muted>{formatFileSize(attachment.fileSize)}</AppText> : null}{attachment.mimeType ? <AppText muted>{attachment.mimeType}</AppText> : null}</Pressable>;
                   })}
                   <AppText muted style={styles.time}>{new Date(m.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
@@ -934,6 +987,12 @@ const styles = StyleSheet.create({
   quotedUser: { fontSize: 11 },
   inlineImage: { width: 160, height: 120, borderRadius: radii.md, marginTop: 6, marginBottom: 3 },
   fileCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, gap: 2 },
+  videoThumbnailCard: { width: 190, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.lg, overflow: 'hidden', marginTop: 6 },
+  videoThumbnailFrame: { width: '100%', height: 112, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center' },
+  videoThumbnailImage: { width: '100%', height: '100%' },
+  videoPlayOverlay: { position: 'absolute', width: 44, height: 44, borderRadius: radii.round, backgroundColor: 'rgba(0,0,0,0.56)', alignItems: 'center', justifyContent: 'center', paddingLeft: 3 },
+  videoThumbnailMeta: { padding: spacing.xs, gap: 3 },
+  videoThumbnailDetails: { gap: 1 },
   voiceBubble: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.lg, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   voicePlayButton: { width: 38, height: 38, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   voiceBody: { flex: 1, gap: 4 },
