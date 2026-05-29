@@ -6,12 +6,87 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppButton } from '@/components/ui/AppButton';
+import { AppInfoRow } from '@/components/ui/AppInfoRow';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { AppNotification, fetchMyNotifications, markAllNotificationsRead, markNotificationRead, notificationTypeLabel, resolveNotificationRoute } from '@/lib/notifications';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import { trackEvent } from '@/lib/analytics';
 import { queryKeys } from '@/lib/query/query-keys';
+
+type NotificationCenterSummaryProps = {
+  totalCount: number;
+  unreadCount: number;
+  isRefreshing: boolean;
+  canMarkAllRead: boolean;
+  onRefresh: () => void;
+  onMarkAllRead: () => void;
+};
+
+function NotificationCenterSummary({ totalCount, unreadCount, isRefreshing, canMarkAllRead, onRefresh, onMarkAllRead }: NotificationCenterSummaryProps) {
+  const unreadValue = unreadCount > 99 ? '99+' : String(unreadCount);
+  const totalValue = totalCount > 99 ? '99+' : String(totalCount);
+
+  return (
+    <AppCard>
+      <View style={styles.group}>
+        <View style={styles.summaryHeader}>
+          <View style={styles.summaryCopy}>
+            <AppText weight="semibold">مركز إشعارات تِسوى</AppText>
+            <AppText muted style={styles.summaryDescription}>تابع الجديد وافتح المسار المناسب من مكان واحد.</AppText>
+          </View>
+          {unreadCount > 0 ? <AppText style={styles.newBadge}>{unreadValue} جديد</AppText> : <AppText muted style={styles.typeLabel}>كل شيء مقروء</AppText>}
+        </View>
+
+        <View style={styles.summaryRows}>
+          <AppInfoRow label="غير مقروء" value={unreadValue} description="تنبيهات تحتاج انتباهك." />
+          <AppInfoRow label="آخر القائمة" value={totalValue} description="آخر إشعارات محفوظة على حسابك." />
+        </View>
+
+        <View style={styles.rowBetween}>
+          <AppButton label={isRefreshing ? 'جاري التحديث...' : 'تحديث'} onPress={onRefresh} disabled={isRefreshing} variant="neutral" />
+          <AppButton label="تعليم الكل كمقروء" onPress={onMarkAllRead} disabled={!canMarkAllRead} variant="neutral" />
+        </View>
+      </View>
+    </AppCard>
+  );
+}
+
+function NotificationLoadingState() {
+  return (
+    <AppCard>
+      <View style={styles.group}>
+        <AppText weight="semibold">بنحمّل إشعاراتك...</AppText>
+        <AppText muted>هنعرض الجديد هنا فور وصوله.</AppText>
+        <View style={styles.skeletonLine} />
+        <View style={styles.skeletonLineShort} />
+      </View>
+    </AppCard>
+  );
+}
+
+function NotificationEmptyState() {
+  return (
+    <AppCard>
+      <View style={styles.group}>
+        <AppText weight="semibold">لا توجد إشعارات حالياً</AppText>
+        <AppText muted>لما يحصل جديد في العروض، الرسائل، المتابعات، أو التذكيرات هيظهر هنا.</AppText>
+        <AppButton label="العودة للرئيسية" variant="neutral" onPress={() => router.replace('/(tabs)/home')} />
+      </View>
+    </AppCard>
+  );
+}
+
+function getNotificationRouteHint(notification: AppNotification, route: string | null) {
+  if (route?.startsWith('/direct/')) return 'يفتح محادثة مباشرة';
+  if (route?.startsWith('/deal/')) return 'يفتح دردشة الصفقة';
+  if (route?.startsWith('/offer/')) return 'يفتح العرض';
+  if (route?.startsWith('/item/')) return 'يفتح العنصر';
+  if (route?.startsWith('/profile/')) return 'يفتح الملف الشخصي';
+  if (route?.startsWith('/contextual/')) return 'يفتح محادثة القصة';
+  if (notification.type === 'system' || notification.type === 'report_update') return 'تنبيه معلوماتي';
+  return 'غير قابل للفتح حالياً';
+}
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
@@ -135,15 +210,32 @@ export default function NotificationsScreen() {
     }
   };
 
+  const handleRefresh = () => {
+    setDeepLinkError(null);
+    void notificationsQuery.refetch();
+    void refreshBadges();
+  };
+
   if (!user) return <AppScreen><AppText>يجب تسجيل الدخول لعرض الإشعارات.</AppText></AppScreen>;
 
   return (
     <AppScreen scrollable>
       <View style={styles.content}>
-        <AppText weight="bold" style={styles.title}>الإشعارات</AppText>
-        {unreadCount > 0 ? <AppButton label={markAllMutation.isPending ? 'جاري التنفيذ...' : 'تعليم الكل كمقروء'} onPress={handleMarkAllRead} disabled={markAllMutation.isPending} variant="neutral" /> : null}
+        <View style={styles.pageHeader}>
+          <AppText weight="bold" style={styles.title}>الإشعارات</AppText>
+          <AppText muted>تابع كل جديد في تِسوى وافتح المسار المناسب بسرعة.</AppText>
+        </View>
 
-        {notificationsQuery.isLoading ? <AppText muted>جاري تحميل الإشعارات...</AppText> : null}
+        <NotificationCenterSummary
+          totalCount={notifications.length}
+          unreadCount={unreadCount}
+          isRefreshing={notificationsQuery.isFetching || markAllMutation.isPending}
+          canMarkAllRead={unreadCount > 0 && !markAllMutation.isPending}
+          onRefresh={handleRefresh}
+          onMarkAllRead={() => { void handleMarkAllRead(); }}
+        />
+
+        {notificationsQuery.isLoading ? <NotificationLoadingState /> : null}
         {deepLinkError ? (
           <AppCard>
             <View style={styles.group}>
@@ -158,34 +250,40 @@ export default function NotificationsScreen() {
         {!notificationsQuery.isLoading && notificationsQuery.isError ? (
           <AppCard>
             <View style={styles.group}>
-              <AppText>{notificationsQuery.error.message}</AppText>
+              <AppText weight="semibold">تعذر تحميل الإشعارات</AppText>
+              <AppText muted>{notificationsQuery.error.message}</AppText>
               <AppButton label="إعادة المحاولة" onPress={() => void notificationsQuery.refetch()} variant="neutral" />
             </View>
           </AppCard>
         ) : null}
 
-        {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length === 0 ? <AppText muted>لا توجد إشعارات حالياً.</AppText> : null}
+        {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length === 0 ? <NotificationEmptyState /> : null}
 
         {!notificationsQuery.isLoading && !notificationsQuery.isError ? notifications.map((n) => {
           const route = resolveNotificationRoute(n);
           const isOpening = openingNotificationId === n.id;
+          const routeHint = getNotificationRouteHint(n, route);
           const card = (
             <AppCard key={n.id}>
               <View style={styles.group}>
                 <View style={styles.rowBetween}>
-                  <AppText weight={n.isRead ? 'regular' : 'semibold'}>{n.title}</AppText>
+                  <AppText weight={n.isRead ? 'regular' : 'semibold'} style={styles.notificationTitle}>{n.title}</AppText>
                   {!n.isRead ? <AppText style={styles.newBadge}>جديد</AppText> : null}
                 </View>
-                <AppText muted style={styles.typeLabel}>{notificationTypeLabel[n.type]}</AppText>
+                <View style={styles.notificationMetaRow}>
+                  <AppText muted style={styles.typeLabel}>{notificationTypeLabel[n.type]}</AppText>
+                  <AppText muted style={styles.typeLabel}>{routeHint}</AppText>
+                </View>
                 {n.body ? <AppText>{n.body}</AppText> : null}
                 <AppText muted>{new Date(n.createdAt).toLocaleString('ar-EG')}</AppText>
+                {isOpening ? <AppText muted style={styles.typeLabel}>جاري فتح الإشعار...</AppText> : null}
               </View>
             </AppCard>
           );
 
           if (!route && n.isRead) return card;
           return (
-            <Pressable key={n.id} onPress={() => void handleOpenNotification(n)} disabled={Boolean(openingNotificationId)} style={isOpening ? styles.openingItem : undefined}>
+            <Pressable key={n.id} onPress={() => void handleOpenNotification(n)} disabled={Boolean(openingNotificationId) || !route} style={isOpening ? styles.openingItem : undefined}>
               {card}
             </Pressable>
           );
@@ -195,13 +293,21 @@ export default function NotificationsScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   content: { gap: spacing.md },
+  pageHeader: { gap: spacing.xs },
   title: { fontSize: 24 },
   group: { gap: spacing.xs },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
+  summaryHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm },
+  summaryCopy: { flex: 1, gap: 2 },
+  summaryDescription: { fontSize: 13 },
+  summaryRows: { gap: spacing.xs },
+  notificationTitle: { flex: 1 },
+  notificationMetaRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   typeLabel: { fontSize: 12 },
   newBadge: { fontSize: 12, color: '#0A7D25' },
   openingItem: { opacity: 0.6 },
+  skeletonLine: { height: 52, borderRadius: 12, backgroundColor: '#F3E7DB' },
+  skeletonLineShort: { width: '66%', height: 14, borderRadius: 10, backgroundColor: '#F3E7DB' },
 });
