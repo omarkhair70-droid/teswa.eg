@@ -12,7 +12,9 @@
     "typecheck": "npm run typecheck:env && npm run typecheck:app",
     "export:web": "expo export --platform web",
     "typecheck:env": "node ./scripts/typecheck-env.cjs",
-    "typecheck:app": "tsc --noEmit"
+    "typecheck:app": "tsc --noEmit",
+    "build:android": "eas build --platform android --profile production",
+    "submit:android": "eas submit --platform android --profile production"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
