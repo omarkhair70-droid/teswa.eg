@@ -87,6 +87,7 @@ export default function DirectScreen() {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [selectedStreamMessage, setSelectedStreamMessage] = useState<StreamMessage | null>(null);
+  const [reactionBusyMessageId, setReactionBusyMessageId] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<Pick<StreamMessage, 'id' | 'text' | 'userName'> | null>(null);
   const showActionFeedbackToast = useCallback((title: string) => { showToast({ title }); }, []);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
@@ -471,8 +472,19 @@ export default function DirectScreen() {
     }
     const reactionType = action === 'love' ? 'love' : 'thumbs_up';
     if (typeof channel.sendReaction !== 'function') { showActionFeedbackToast('ميزة التفاعل غير متاحة حالياً.'); return; }
-    try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); showActionFeedbackToast('تم إضافة التفاعل.'); } catch { showActionFeedbackToast('تعذر إضافة التفاعل حالياً.'); }
-  }, [conversationId, convo?.otherUserId, hydrateFromChannel, selectedStreamMessage, user?.id]);
+    if (reactionBusyMessageId === target.id) return;
+
+    setReactionBusyMessageId(target.id);
+    try {
+      await channel.sendReaction(target.id, { type: reactionType });
+      hydrateFromChannel();
+      showActionFeedbackToast('تم إضافة التفاعل.');
+    } catch {
+      showActionFeedbackToast('تعذر إضافة التفاعل حالياً.');
+    } finally {
+      setReactionBusyMessageId(null);
+    }
+  }, [conversationId, convo?.otherUserId, hydrateFromChannel, reactionBusyMessageId, selectedStreamMessage, user?.id]);
   const pickImage = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -904,10 +916,10 @@ ${note}
       <View style={styles.composerWrap}>
         {replyTarget ? <View style={styles.replyCard}>
           <View style={{ flex: 1, gap: 2 }}>
-            <AppText muted>ردًا على {replyTarget.userName || 'رسالة'}</AppText>
-            <AppText numberOfLines={1}>{replyTarget.text || '...'}</AppText>
+            <AppText muted>هترد على {replyTarget.userName || 'رسالة'}</AppText>
+            <AppText numberOfLines={1}>{replyTarget.text?.trim() || 'رسالة بدون نص'}</AppText>
           </View>
-          <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Ionicons name="close" size={16} color={colors.textMuted} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="إلغاء الرد" onPress={() => setReplyTarget(null)} style={styles.replyClose}><Ionicons name="close" size={16} color={colors.textMuted} /></Pressable>
         </View> : null}
         {exchangeDraft.mode === 'drafting' ? <View style={styles.exchangeDraftCard}><AppText weight="semibold">جهّز عرض التبادل</AppText><AppText muted>اكتب تفاصيل الاتفاق أو اختار حاجة من دولابك، وبعدها ابعته كرسالة أو كمّل العرض الرسمي.</AppText>{exchangeDraft.selectedDolabItemId ? <AppText muted>مرتبط بحاجة من دولابك.</AppText> : null}{(exchangeDraft.selectedItemId || convo?.itemId) ? <AppText muted>مرتبط بالحاجة محل الكلام.</AppText> : null}<TextInput value={exchangeDraft.note ?? ''} onChangeText={(value) => setExchangeDraft((prev) => ({ ...prev, note: value }))} placeholder="اكتب تفاصيل العرض..." placeholderTextColor={colors.textMuted} style={styles.exchangeDraftInput} multiline /><View style={styles.exchangeActions}><AppButton label="إرسال كرسالة" onPress={() => { void sendExchangeDraftMessage(); }} /><AppButton label="كمّل كعرض رسمي" variant="neutral" onPress={() => continueExchangeDraftAsFormalOffer({ itemId: exchangeDraft.selectedItemId, note: exchangeDraft.note, conversationId })} /><AppButton label="اختار من دولابي" variant="neutral" onPress={() => { void openDolabShareables(); }} /><AppButton label="إلغاء" variant="neutral" onPress={() => setExchangeDraft({ mode: 'idle' })} /></View></View> : null}
         <View style={styles.composer}>
@@ -1078,13 +1090,15 @@ ${note}
       },
     },
     {
-      label: 'إضافة ❤️',
+      label: reactionBusyMessageId === selectedStreamMessage?.id ? 'جاري إضافة ❤️...' : 'إضافة ❤️',
+      disabled: reactionBusyMessageId === selectedStreamMessage?.id,
       onPress: () => {
         void runMessageAction('love');
       },
     },
     {
-      label: 'إضافة 👍',
+      label: reactionBusyMessageId === selectedStreamMessage?.id ? 'جاري إضافة 👍...' : 'إضافة 👍',
+      disabled: reactionBusyMessageId === selectedStreamMessage?.id,
       onPress: () => {
         void runMessageAction('thumbs_up');
       },
