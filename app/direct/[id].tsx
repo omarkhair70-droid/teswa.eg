@@ -32,6 +32,7 @@ import { generateDirectVideoThumbnail, type GeneratedVideoThumbnail } from '@/li
 import { isDirectChatProEnabled, isDirectVideoPlayerEnabled } from '@/lib/feature-flags';
 import { readDirectMessageCache, writeDirectMessageCache } from '@/lib/chat/direct-message-cache';
 import { trackPerformanceMetric } from '@/lib/performance-telemetry';
+import { showToast } from '@/lib/toast';
 
 type StreamMessage = { id: string; text: string; createdAt: string; userId: string; userName?: string; userAvatar?: string; reactionCounts?: Record<string, number>; ownReactions?: string[]; quotedMessage?: { id: string; text: string; userName?: string }; attachments?: Array<{ type?: string; title?: string; name?: string; assetUrl?: string; imageUrl?: string; thumbUrl?: string; mimeType?: string; fileSize?: number; durationSeconds?: number }>; teswaType?: string; offerNote?: string; teswaConversationId?: string; teswaItemId?: string; teswaDolabItemId?: string };
 type PendingAttachment = { kind: 'image' | 'video' | 'file'; uri: string; fileName?: string; mimeType?: string; sizeBytes?: number };
@@ -87,7 +88,7 @@ export default function DirectScreen() {
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [selectedStreamMessage, setSelectedStreamMessage] = useState<StreamMessage | null>(null);
   const [replyTarget, setReplyTarget] = useState<Pick<StreamMessage, 'id' | 'text' | 'userName'> | null>(null);
-  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const showActionFeedbackToast = useCallback((title: string) => { showToast({ title }); }, []);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [mediaSending, setMediaSending] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -433,74 +434,74 @@ export default function DirectScreen() {
     if (!target) return;
     messageActionsSheetRef.current?.dismiss();
     if (action === 'copy') {
-      if (!target.text?.trim()) { setActionFeedback('لا يوجد نص للنسخ.'); return; }
+      if (!target.text?.trim()) { showActionFeedbackToast('لا يوجد نص للنسخ.'); return; }
       await Clipboard.setStringAsync(target.text);
-      setActionFeedback('تم نسخ النص.');
+      showActionFeedbackToast('تم نسخ النص.');
       return;
     }
     if (action === 'reply') {
       setReplyTarget({ id: target.id, text: target.text, userName: target.userName });
-      setActionFeedback('تم تفعيل الرد على الرسالة.');
+      showActionFeedbackToast('تم تفعيل الرد على الرسالة.');
       return;
     }
     if (action === 'report') {
-      if (target.userId === user?.id) { setActionFeedback('لا يمكنك الإبلاغ عن رسالتك.'); return; }
-      if (!target.userId || target.userId !== convo?.otherUserId) { setActionFeedback('تعذر إرسال البلاغ حالياً.'); return; }
+      if (target.userId === user?.id) { showActionFeedbackToast('لا يمكنك الإبلاغ عن رسالتك.'); return; }
+      if (!target.userId || target.userId !== convo?.otherUserId) { showActionFeedbackToast('تعذر إرسال البلاغ حالياً.'); return; }
       const result = await reportDirectMessage({ conversationId, streamMessageId: target.id, reportedUserId: target.userId, reason: 'harassment' });
-      setActionFeedback(result.ok ? SUCCESS_MESSAGE : result.message);
+      showActionFeedbackToast(result.ok ? SUCCESS_MESSAGE : result.message);
       return;
     }
     if (action === 'save_dolab') {
       const result = await saveDirectMessageToDolab({ conversationId, messageId: target.id, text: target.text, attachments: target.attachments });
-      if (!result.ok) { setActionFeedback(result.message); return; }
-      if (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0) setActionFeedback('موجود بالفعل في دولابك.');
-      else if (result.savedText && (result.savedMediaCount ?? 0) > 0) setActionFeedback('اتحفظ في دولابك.');
-      else if (result.savedText) setActionFeedback('اتحفظ في دولابك.');
-      else if ((result.savedMediaCount ?? 0) > 0) setActionFeedback('اتحفظ في دولابك.');
-      else setActionFeedback('مفيش حاجة تتحفظ من الرسالة دي.');
+      if (!result.ok) { showActionFeedbackToast(result.message); return; }
+      if (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0) showActionFeedbackToast('موجود بالفعل في دولابك.');
+      else if (result.savedText && (result.savedMediaCount ?? 0) > 0) showActionFeedbackToast('اتحفظ في دولابك.');
+      else if (result.savedText) showActionFeedbackToast('اتحفظ في دولابك.');
+      else if ((result.savedMediaCount ?? 0) > 0) showActionFeedbackToast('اتحفظ في دولابك.');
+      else showActionFeedbackToast('مفيش حاجة تتحفظ من الرسالة دي.');
       return;
     }
-    if (!channel) { setActionFeedback('Direct Chat غير متاح حالياً.'); return; }
+    if (!channel) { showActionFeedbackToast('Direct Chat غير متاح حالياً.'); return; }
     if (action === 'delete') {
       if (target.userId !== user?.id) return;
-      if (typeof channel.deleteMessage !== 'function') { setActionFeedback('ميزة الحذف غير متاحة حالياً.'); return; }
-      try { await channel.deleteMessage(target.id); hydrateFromChannel(); setActionFeedback('تم حذف الرسالة.'); } catch { setActionFeedback('تعذر حذف الرسالة حالياً.'); }
+      if (typeof channel.deleteMessage !== 'function') { showActionFeedbackToast('ميزة الحذف غير متاحة حالياً.'); return; }
+      try { await channel.deleteMessage(target.id); hydrateFromChannel(); showActionFeedbackToast('تم حذف الرسالة.'); } catch { showActionFeedbackToast('تعذر حذف الرسالة حالياً.'); }
       return;
     }
     const reactionType = action === 'love' ? 'love' : 'thumbs_up';
-    if (typeof channel.sendReaction !== 'function') { setActionFeedback('ميزة التفاعل غير متاحة حالياً.'); return; }
-    try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); setActionFeedback('تم إضافة التفاعل.'); } catch { setActionFeedback('تعذر إضافة التفاعل حالياً.'); }
+    if (typeof channel.sendReaction !== 'function') { showActionFeedbackToast('ميزة التفاعل غير متاحة حالياً.'); return; }
+    try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); showActionFeedbackToast('تم إضافة التفاعل.'); } catch { showActionFeedbackToast('تعذر إضافة التفاعل حالياً.'); }
   }, [conversationId, convo?.otherUserId, hydrateFromChannel, selectedStreamMessage, user?.id]);
   const pickImage = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) { setActionFeedback('تعذر اختيار الصورة.'); return; }
+      if (!permission.granted) { showActionFeedbackToast('تعذر اختيار الصورة.'); return; }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: false, quality: 0.8 });
       if (result.canceled) return;
       const asset = result.assets?.[0];
-      if (!asset?.uri) { setActionFeedback('تعذر اختيار الصورة.'); return; }
+      if (!asset?.uri) { showActionFeedbackToast('تعذر اختيار الصورة.'); return; }
       setPendingAttachment({ kind: 'image', uri: asset.uri, fileName: asset.fileName ?? undefined, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.fileSize ?? undefined });
-    } catch { setActionFeedback('تعذر اختيار الصورة.'); }
+    } catch { showActionFeedbackToast('تعذر اختيار الصورة.'); }
   }, []);
   const pickVideo = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) { setActionFeedback('تعذر اختيار الفيديو.'); return; }
+      if (!permission.granted) { showActionFeedbackToast('تعذر اختيار الفيديو.'); return; }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsMultipleSelection: false });
       if (result.canceled) return;
       const asset = result.assets?.[0];
-      if (!asset?.uri) { setActionFeedback('تعذر اختيار الفيديو.'); return; }
+      if (!asset?.uri) { showActionFeedbackToast('تعذر اختيار الفيديو.'); return; }
       setPendingAttachment({ kind: 'video', uri: asset.uri, fileName: asset.fileName ?? undefined, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.fileSize ?? undefined });
-    } catch { setActionFeedback('تعذر اختيار الفيديو.'); }
+    } catch { showActionFeedbackToast('تعذر اختيار الفيديو.'); }
   }, []);
   const pickFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ multiple: false });
       if (result.canceled) return;
       const asset = result.assets?.[0];
-      if (!asset?.uri) { setActionFeedback('تعذر اختيار الملف.'); return; }
+      if (!asset?.uri) { showActionFeedbackToast('تعذر اختيار الملف.'); return; }
       setPendingAttachment({ kind: 'file', uri: asset.uri, fileName: asset.name, mimeType: asset.mimeType ?? undefined, sizeBytes: asset.size ?? undefined });
-    } catch { setActionFeedback('تعذر اختيار الملف.'); }
+    } catch { showActionFeedbackToast('تعذر اختيار الملف.'); }
   }, []);
   const sendViaStream = useCallback(async () => {
     const trimmed = body.trim();
@@ -513,13 +514,13 @@ export default function DirectScreen() {
       if (pendingAttachment) {
         const channel = streamChannelRef.current;
         if (pendingAttachment.kind === 'image') {
-          if (typeof channel.sendImage !== 'function') { setActionFeedback('إرسال الميديا غير متاح حالياً.'); return; }
+          if (typeof channel.sendImage !== 'function') { showActionFeedbackToast('إرسال الميديا غير متاح حالياً.'); return; }
           const uploaded = await channel.sendImage(pendingAttachment.uri);
           const imageUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
           if (!imageUrl || imageUrl.startsWith('file://')) throw new Error('image upload failed');
           attachments = [{ type: 'image', image_url: imageUrl, title: pendingAttachment.fileName, name: pendingAttachment.fileName, mime_type: pendingAttachment.mimeType, file_size: pendingAttachment.sizeBytes }];
         } else {
-          if (typeof channel.sendFile !== 'function') { setActionFeedback('إرسال الميديا غير متاح حالياً.'); return; }
+          if (typeof channel.sendFile !== 'function') { showActionFeedbackToast('إرسال الميديا غير متاح حالياً.'); return; }
           const uploaded = await channel.sendFile(pendingAttachment.uri, pendingAttachment.fileName, pendingAttachment.mimeType);
           const fileUrl = typeof uploaded?.file === 'string' ? uploaded.file : undefined;
           if (!fileUrl || fileUrl.startsWith('file://')) throw new Error('file upload failed');
@@ -533,7 +534,7 @@ export default function DirectScreen() {
       setPendingAttachment(null);
       setReplyTarget(null);
       setError(null);
-    } catch { setActionFeedback('تعذر إرسال الميديا حالياً.'); }
+    } catch { showActionFeedbackToast('تعذر إرسال الميديا حالياً.'); }
     finally { setMediaSending(false); setSending(false); }
   }, [body, hydrateFromChannel, pendingAttachment, replyTarget?.id, streamError, streamReady]);
   const cancelVoiceRecording = useCallback(async () => {
@@ -541,13 +542,13 @@ export default function DirectScreen() {
     setIsRecordingVoice(false);
     setPendingVoice(null);
     setVoiceRecordingDurationSeconds(0);
-    setActionFeedback('تم إلغاء التسجيل.');
+    showActionFeedbackToast('تم إلغاء التسجيل.');
   }, [voiceRecorder, voiceRecorderState.isRecording]);
   const startVoiceRecording = useCallback(async () => {
     if (!canUseVoice || isRecordingVoice) return;
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
-      if (!permission.granted) { setActionFeedback('محتاجين إذن الميكروفون لتسجيل رسالة صوتية.'); return; }
+      if (!permission.granted) { showActionFeedbackToast('محتاجين إذن الميكروفون لتسجيل رسالة صوتية.'); return; }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       setVoiceRecordingDurationSeconds(0);
       setPendingVoice(null);
@@ -555,15 +556,15 @@ export default function DirectScreen() {
       await voiceRecorder.prepareToRecordAsync();
       voiceRecorder.record();
       setIsRecordingVoice(true);
-      setActionFeedback('بدأ التسجيل.');
-    } catch { setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.'); setIsRecordingVoice(false); }
+      showActionFeedbackToast('بدأ التسجيل.');
+    } catch { showActionFeedbackToast('تعذر إرسال الرسالة الصوتية حالياً.'); setIsRecordingVoice(false); }
   }, [canUseVoice, isRecordingVoice, voiceRecorder]);
   const sendVoiceMessage = useCallback(async () => {
     if (voiceSending) return;
     if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
-    if (!voiceRecorderState.isRecording && !voiceRecorder.uri) { setActionFeedback('سجل رسالة صوتية الأول.'); return; }
+    if (!voiceRecorderState.isRecording && !voiceRecorder.uri) { showActionFeedbackToast('سجل رسالة صوتية الأول.'); return; }
     setVoiceSending(true);
-    setActionFeedback('جاري إرسال الرسالة الصوتية...');
+    showActionFeedbackToast('جاري إرسال الرسالة الصوتية...');
     try {
       recordingStoppedRef.current = true;
       if (voiceRecorderState.isRecording) await voiceRecorder.stop();
@@ -590,11 +591,11 @@ export default function DirectScreen() {
       setReplyTarget(null);
     } catch {
       setIsRecordingVoice(false);
-      setActionFeedback('تعذر إرسال الرسالة الصوتية حالياً.');
+      showActionFeedbackToast('تعذر إرسال الرسالة الصوتية حالياً.');
     } finally { setVoiceSending(false); }
   }, [acceptedDirectProActive, body, hydrateFromChannel, replyTarget?.id, streamError, streamReady, voiceRecorder, voiceRecorderState.durationMillis, voiceRecorderState.isRecording, voiceRecorder.uri, voiceRecordingDurationSeconds, voiceSending]);
   const togglePlayVoice = useCallback(async (messageId: string, url?: string) => {
-    if (!url) { setActionFeedback('تعذر تشغيل الرسالة الصوتية.'); return; }
+    if (!url) { showActionFeedbackToast('تعذر تشغيل الرسالة الصوتية.'); return; }
     try {
       if (playingVoiceId === messageId && voicePlayer.playing) {
         await voicePlayer.pause();
@@ -607,7 +608,7 @@ export default function DirectScreen() {
       await voicePlayer.replace(url);
       voicePlayer.play();
       setPlayingVoiceId(messageId);
-    } catch { setActionFeedback('تعذر تشغيل الرسالة الصوتية.'); }
+    } catch { showActionFeedbackToast('تعذر تشغيل الرسالة الصوتية.'); }
   }, [playingVoiceId, voicePlayer]);
 
 
@@ -666,7 +667,7 @@ export default function DirectScreen() {
     const title = attachment.title || attachment.name;
     if (isImage) {
       const url = resolveAttachmentUrl(attachment, 'image');
-      if (!url) { setActionFeedback('تعذر فتح الصورة حالياً.'); return; }
+      if (!url) { showActionFeedbackToast('تعذر فتح الصورة حالياً.'); return; }
       setImageViewerLoading(true);
       setImageViewerError(false);
       setSelectedMediaViewer({ kind: 'image', url, title });
@@ -674,27 +675,27 @@ export default function DirectScreen() {
     }
     if (isVideo) {
       const url = resolveAttachmentUrl(attachment, 'video');
-      if (!url) { setActionFeedback('تعذر فتح الميديا حالياً.'); return; }
+      if (!url) { showActionFeedbackToast('تعذر فتح الميديا حالياً.'); return; }
       setSelectedMediaViewer({ kind: 'video', url, title, mimeType: attachment.mimeType });
       return;
     }
     const url = resolveAttachmentUrl(attachment, 'file');
-    if (!url) { setActionFeedback('تعذر فتح الملف حالياً.'); return; }
+    if (!url) { showActionFeedbackToast('تعذر فتح الملف حالياً.'); return; }
     setSelectedMediaViewer({ kind: 'file', url, title, mimeType: attachment.mimeType, fileSize: attachment.fileSize });
   }, [resolveAttachmentUrl]);
   const copyMediaUrl = useCallback(async (url?: string) => {
-    if (!url) { setActionFeedback('تعذر نسخ الرابط حالياً.'); return; }
-    try { await Clipboard.setStringAsync(url); setActionFeedback('تم نسخ الرابط.'); } catch { setActionFeedback('تعذر نسخ الرابط حالياً.'); }
+    if (!url) { showActionFeedbackToast('تعذر نسخ الرابط حالياً.'); return; }
+    try { await Clipboard.setStringAsync(url); showActionFeedbackToast('تم نسخ الرابط.'); } catch { showActionFeedbackToast('تعذر نسخ الرابط حالياً.'); }
   }, []);
   const openMediaUrl = useCallback(async (url?: string) => {
-    if (!url) { setActionFeedback('تعذر فتح الميديا حالياً.'); return; }
-    try { await Linking.openURL(url); } catch { setActionFeedback('تعذر فتح الميديا حالياً.'); }
+    if (!url) { showActionFeedbackToast('تعذر فتح الميديا حالياً.'); return; }
+    try { await Linking.openURL(url); } catch { showActionFeedbackToast('تعذر فتح الميديا حالياً.'); }
   }, []);
   const openDolabShareables = useCallback(async () => {
     const result = await loadRecentDolabShareables();
     if (!result.ok) {
       setRecentDolabItems([]);
-      setActionFeedback(result.message);
+      showActionFeedbackToast(result.message);
       dolabShareSheetRef.current?.present();
       return;
     }
@@ -716,8 +717,8 @@ ${item.body}` : item.body ?? ''));
       dolabShareSheetRef.current?.dismiss();
       return;
     }
-    if (item.kind === 'audio') { setActionFeedback('العنصر ده لسه مش جاهز للإرسال من الشات.'); return; }
-    setActionFeedback('العنصر ده لسه مش جاهز للإرسال من الشات.');
+    if (item.kind === 'audio') { showActionFeedbackToast('العنصر ده لسه مش جاهز للإرسال من الشات.'); return; }
+    showActionFeedbackToast('العنصر ده لسه مش جاهز للإرسال من الشات.');
   }, []);
 
 
@@ -729,7 +730,7 @@ ${item.body}` : item.body ?? ''));
     const safeConversationId = (input?.conversationId?.trim() || conversationId || '');
     const safeNote = (input?.note ?? exchangeDraft.note ?? '').trim();
     if (!safeItemId) {
-      setActionFeedback('اختار الحاجة الأول عشان نكمل العرض الرسمي.');
+      showActionFeedbackToast('اختار الحاجة الأول عشان نكمل العرض الرسمي.');
       return;
     }
     router.push({ pathname: '/offer/create/[itemId]', params: { itemId: safeItemId, source: 'direct', conversationId: safeConversationId, note: safeNote.slice(0, 400) } });
@@ -737,13 +738,13 @@ ${item.body}` : item.body ?? ''));
   const continueToDealChat = useCallback((dealId?: string | null) => {
     const safeDealId = typeof dealId === 'string' ? dealId.trim() : '';
     if (safeDealId) { router.push(`/deal/${safeDealId}`); return; }
-    setActionFeedback('Deal Chat بيتفتح بعد ما العرض الرسمي يتقبل.');
+    showActionFeedbackToast('Deal Chat بيتفتح بعد ما العرض الرسمي يتقبل.');
   }, []);
   const sendExchangeDraftMessage = useCallback(async () => {
     const note = exchangeDraft.note?.trim();
-    if (!note) { setActionFeedback('اكتب تفاصيل العرض الأول.'); return; }
+    if (!note) { showActionFeedbackToast('اكتب تفاصيل العرض الأول.'); return; }
     if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) {
-      setActionFeedback('إرسال عرض التبادل متاح داخل Direct Chat المقبول فقط.');
+      showActionFeedbackToast('إرسال عرض التبادل متاح داخل Direct Chat المقبول فقط.');
       return;
     }
     setSending(true);
@@ -755,9 +756,9 @@ ${note}
       await streamChannelRef.current.sendMessage({ text, teswa_type: 'exchange_offer_draft', teswa_offer_note: note, teswa_conversation_id: conversationId, teswa_item_id: typeof convo?.itemId === 'string' ? convo.itemId : undefined, teswa_dolab_item_id: exchangeDraft.selectedDolabItemId });
       hydrateFromChannel();
       setExchangeDraft({ mode: 'idle' });
-      setActionFeedback('اترسل عرض التبادل كرسالة.');
+      showActionFeedbackToast('اترسل عرض التبادل كرسالة.');
     } catch {
-      setActionFeedback('تعذر إرسال عرض التبادل حالياً.');
+      showActionFeedbackToast('تعذر إرسال عرض التبادل حالياً.');
     } finally { setSending(false); }
   }, [acceptedDirectProActive, conversationId, convo?.itemId, exchangeDraft.note, exchangeDraft.selectedDolabItemId, hydrateFromChannel, streamError, streamReady]);
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
@@ -774,9 +775,9 @@ ${note}
       <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
     </View>
 
-    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText>{convo?.itemId ? <View style={styles.itemContextCard}><AppText weight="semibold">الحاجة محل الكلام</AppText><AppText muted>{convo?.itemTitle || 'عنصر مرتبط بالمحادثة'}</AppText><AppButton label="عرض التفاصيل" variant="neutral" onPress={() => { if (convo?.itemId) router.push(`/item/${convo.itemId}`); else setActionFeedback('تفاصيل الحاجة جايه قريبًا.'); }} /></View> : null}</AppCard> : null}
+    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText>{convo?.itemId ? <View style={styles.itemContextCard}><AppText weight="semibold">الحاجة محل الكلام</AppText><AppText muted>{convo?.itemTitle || 'عنصر مرتبط بالمحادثة'}</AppText><AppButton label="عرض التفاصيل" variant="neutral" onPress={() => { if (convo?.itemId) router.push(`/item/${convo.itemId}`); else showActionFeedbackToast('تفاصيل الحاجة جايه قريبًا.'); }} /></View> : null}</AppCard> : null}
 
-    {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); if (r.ok) { setError(null); setActionFeedback('تم قبول الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); if (r.ok) { setError(null); setActionFeedback('تم تجاهل الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
+    {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); if (r.ok) { setError(null); showActionFeedbackToast('تم قبول الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); if (r.ok) { setError(null); showActionFeedbackToast('تم تجاهل الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
     {isRequesterOnRequest ? <AppCard style={styles.infoCard}><AppText muted>طلب المراسلة اتبعت. هتكملوا الكلام لما الطرف التاني يقبل.</AppText></AppCard> : null}
     {convo?.status === 'ignored' ? <AppCard style={styles.infoCard}><AppText muted>تم تجاهل المحادثة حالياً.</AppText></AppCard> : null}
     {convo?.status === 'blocked' ? <AppCard style={styles.infoCard}><AppText muted>المحادثة غير متاحة بسبب الحظر.</AppText></AppCard> : null}
@@ -799,7 +800,7 @@ ${note}
                 <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
                   {!mine && m.userName ? <AppText muted style={styles.senderHint}>{m.userName}</AppText> : null}
                   {m.quotedMessage?.id ? <View style={styles.quotedWrap}><AppText muted style={styles.quotedUser}>{m.quotedMessage.userName || 'رسالة'}</AppText><AppText muted numberOfLines={1}>{m.quotedMessage.text || '...'}</AppText></View> : null}
-                  {m.teswaType === 'exchange_offer_draft' ? <View style={styles.exchangeMessageCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText style={styles.bodyText}>{(m.offerNote ?? m.text ?? '').trim() || 'عرض تبادل مبدئي.'}</AppText><View style={styles.exchangeMeta}>{m.teswaDolabItemId ? <AppText muted>مرتبط بحاجة من دولابك</AppText> : null}{m.teswaItemId ? <AppText muted>مرتبط بالحاجة محل الكلام</AppText> : null}{m.teswaConversationId ? <AppText muted>سياق المحادثة: {m.teswaConversationId}</AppText> : null}</View><View style={styles.exchangeActions}><AppButton label="كمّل العرض" variant="neutral" onPress={() => continueExchangeDraftAsFormalOffer({ itemId: m.teswaItemId, note: m.offerNote ?? m.text, conversationId: m.teswaConversationId })} /><AppButton label="احفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: m.id, text: m.offerNote ?? m.text, attachments: m.attachments }); setActionFeedback(result.ok ? (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0 ? 'موجود بالفعل في دولابك.' : 'اتحفظ في دولابك.') : result.message); }} /><AppButton label="انسخ التفاصيل" variant="neutral" onPress={async () => { const value = (m.offerNote ?? m.text ?? '').trim(); if (!value) { setActionFeedback('مفيش تفاصيل للنسخ.'); return; } try { await Clipboard.setStringAsync(value); setActionFeedback('اتنسخت التفاصيل.'); } catch { setActionFeedback('تعذر نسخ التفاصيل حالياً.'); } }} /></View><AppButton label="كمّل في Deal Chat" variant="neutral" onPress={() => continueToDealChat((m as any).dealId)} /></View> : <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>}
+                  {m.teswaType === 'exchange_offer_draft' ? <View style={styles.exchangeMessageCard}><AppText weight="semibold">عرض تبادل مبدئي</AppText><AppText style={styles.bodyText}>{(m.offerNote ?? m.text ?? '').trim() || 'عرض تبادل مبدئي.'}</AppText><View style={styles.exchangeMeta}>{m.teswaDolabItemId ? <AppText muted>مرتبط بحاجة من دولابك</AppText> : null}{m.teswaItemId ? <AppText muted>مرتبط بالحاجة محل الكلام</AppText> : null}{m.teswaConversationId ? <AppText muted>سياق المحادثة: {m.teswaConversationId}</AppText> : null}</View><View style={styles.exchangeActions}><AppButton label="كمّل العرض" variant="neutral" onPress={() => continueExchangeDraftAsFormalOffer({ itemId: m.teswaItemId, note: m.offerNote ?? m.text, conversationId: m.teswaConversationId })} /><AppButton label="احفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: m.id, text: m.offerNote ?? m.text, attachments: m.attachments }); showActionFeedbackToast(result.ok ? (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0 ? 'موجود بالفعل في دولابك.' : 'اتحفظ في دولابك.') : result.message); }} /><AppButton label="انسخ التفاصيل" variant="neutral" onPress={async () => { const value = (m.offerNote ?? m.text ?? '').trim(); if (!value) { showActionFeedbackToast('مفيش تفاصيل للنسخ.'); return; } try { await Clipboard.setStringAsync(value); showActionFeedbackToast('اتنسخت التفاصيل.'); } catch { showActionFeedbackToast('تعذر نسخ التفاصيل حالياً.'); } }} /></View><AppButton label="كمّل في Deal Chat" variant="neutral" onPress={() => continueToDealChat((m as any).dealId)} /></View> : <AppText style={styles.bodyText}>{(m.text ?? '').trim() || ((m.attachments?.length ?? 0) > 0 ? '' : '...')}</AppText>}
                   {m.attachments?.map((attachment, idx) => {
                     const isImage = attachment.type === 'image' || !!attachment.imageUrl;
                     const isVideo = attachment.type === 'video';
@@ -914,7 +915,6 @@ ${note}
       </View>
     </KeyboardStickyView>
 
-    {actionFeedback ? <AppCard style={styles.feedbackCard}><AppText muted>{actionFeedback}</AppText></AppCard> : null}
     {error ? <AppCard style={styles.errorCard}><AppText muted>{error}</AppText></AppCard> : null}
 
 
@@ -923,21 +923,21 @@ ${note}
         <Pressable style={styles.viewerBackdrop} onPress={() => setSelectedMediaViewer(null)} />
         {selectedMediaViewer?.kind === 'image' ? <View style={styles.viewerImageWrap}>
           <View style={styles.viewerHeader}><AppText weight="semibold" style={styles.viewerTitle}>{selectedMediaViewer.title || 'صورة'}</AppText><Pressable onPress={() => setSelectedMediaViewer(null)} style={styles.viewerClose}><Ionicons name="close" size={20} color={colors.background} /></Pressable></View>
-          <Image source={{ uri: selectedMediaViewer.url }} style={styles.viewerImage} resizeMode="contain" onLoadStart={() => { setImageViewerLoading(true); setImageViewerError(false); }} onError={() => { setImageViewerLoading(false); setImageViewerError(true); setActionFeedback('تعذر فتح الصورة حالياً.'); }} onLoadEnd={() => setImageViewerLoading(false)} />
+          <Image source={{ uri: selectedMediaViewer.url }} style={styles.viewerImage} resizeMode="contain" onLoadStart={() => { setImageViewerLoading(true); setImageViewerError(false); }} onError={() => { setImageViewerLoading(false); setImageViewerError(true); showActionFeedbackToast('تعذر فتح الصورة حالياً.'); }} onLoadEnd={() => setImageViewerLoading(false)} />
           {imageViewerLoading ? <AppText muted>جاري تحميل الصورة...</AppText> : null}
           {imageViewerError ? <AppText muted>تعذر فتح الصورة حالياً.</AppText> : null}
         </View> : null}
         {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}{DIRECT_VIDEO_PLAYER_ENABLED ? (selectedVideoHasValidUrl ? <DirectViewerVideo uri={selectedMediaViewer.url} /> : <AppText muted>تعذر تشغيل الفيديو حالياً.</AppText>) : <AppText muted>تشغيل الفيديو داخل التطبيق غير مفعّل حالياً.</AppText>}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
-        {selectedMediaViewer?.kind === 'file' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>{selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="حفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: `viewer-file-${Date.now()}`, text: selectedMediaViewer.title, attachments: [{ type: 'file', title: selectedMediaViewer.title, name: selectedMediaViewer.title, assetUrl: selectedMediaViewer.url, mimeType: selectedMediaViewer.mimeType, fileSize: selectedMediaViewer.fileSize }] }); setActionFeedback(result.ok ? (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0 ? 'موجود بالفعل في دولابك.' : 'اتحفظ في دولابك.') : result.message); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
+        {selectedMediaViewer?.kind === 'file' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>{selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="حفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: `viewer-file-${Date.now()}`, text: selectedMediaViewer.title, attachments: [{ type: 'file', title: selectedMediaViewer.title, name: selectedMediaViewer.title, assetUrl: selectedMediaViewer.url, mimeType: selectedMediaViewer.mimeType, fileSize: selectedMediaViewer.fileSize }] }); showActionFeedbackToast(result.ok ? (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0 ? 'موجود بالفعل في دولابك.' : 'اتحفظ في دولابك.') : result.message); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
       </View>
     </Modal>
 
-    <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); setActionFeedback(blockedByMe ? 'تم إلغاء الحظر.' : 'تم حظر المستخدم.'); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
+    <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); showActionFeedbackToast(blockedByMe ? 'تم إلغاء الحظر.' : 'تم حظر المستخدم.'); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId === user?.id, onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
-    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.savedText) setActionFeedback('اتحفظت كمسودة في الدولاب.'); else if (result.savedMedia) setActionFeedback('اتحفظت الميديا في الدولاب.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
+    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { showActionFeedbackToast(result.message); return; } if (result.savedText) showActionFeedbackToast('اتحفظت كمسودة في الدولاب.'); else if (result.savedMedia) showActionFeedbackToast('اتحفظت الميديا في الدولاب.'); else showActionFeedbackToast('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={dolabShareSheetRef} title="من دولابي" actions={[...recentDolabItems.map((item) => ({ label: item.kind === 'text' ? `📝 ${item.title}` : item.kind === 'image' ? `🖼️ ${item.title}` : item.kind === 'video' ? `🎬 ${item.title}` : item.kind === 'audio' ? `🎙️ ${item.title}` : `📎 ${item.title}`, onPress: () => { onSelectDolabShareable(item); } })), { label: 'إلغاء', onPress: () => { dolabShareSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
-    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { setActionFeedback(result.message); return; } if (result.alreadySaved && !result.savedText && !result.savedMedia) setActionFeedback('موجود بالفعل في دولابك.'); else if (result.savedText) setActionFeedback('اتحفظ في دولابك.'); else if (result.savedMedia) setActionFeedback('اتحفظ في دولابك.'); else setActionFeedback('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
+    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { showActionFeedbackToast(result.message); return; } if (result.alreadySaved && !result.savedText && !result.savedMedia) showActionFeedbackToast('موجود بالفعل في دولابك.'); else if (result.savedText) showActionFeedbackToast('اتحفظ في دولابك.'); else if (result.savedMedia) showActionFeedbackToast('اتحفظ في دولابك.'); else showActionFeedbackToast('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={dolabShareSheetRef} title="من دولابي" actions={[...(recentDolabItems.length > 0 ? recentDolabItems.map((item) => ({ label: item.kind === 'text' ? `📝 ${item.title}` : item.kind === 'image' ? `🖼️ ${item.title}` : item.kind === 'video' ? `🎬 ${item.title}` : item.kind === 'audio' ? `🎙️ ${item.title}` : `📎 ${item.title}`, onPress: () => { onSelectDolabShareable(item); } })) : [{ label: 'مفيش عناصر جاهزة للمشاركة من دولابك حالياً.', disabled: true, onPress: () => {} }]), { label: 'إلغاء', onPress: () => { dolabShareSheetRef.current?.dismiss(); } }]} />
   </AppScreen>;
 }
@@ -1011,7 +1011,6 @@ const styles = StyleSheet.create({
   pendingImage: { width: 52, height: 52, borderRadius: radii.md },
   reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },
   reactionChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 2 },
-  feedbackCard: { marginHorizontal: spacing.sm, marginBottom: spacing.xs },
   errorCard: { marginHorizontal: spacing.sm, marginBottom: spacing.sm, gap: spacing.xs },
   viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', padding: spacing.md },
   viewerBackdrop: { ...StyleSheet.absoluteFillObject },
