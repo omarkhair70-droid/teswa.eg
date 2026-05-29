@@ -35,8 +35,13 @@ function normalizeVideoUrl(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
   if (trimmed.startsWith('file://')) return trimmed;
-  if (!/^https?:\/\//i.test(trimmed)) return null;
-  return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
 }
 
 function stableUrlKey(value: string): string {
@@ -93,21 +98,21 @@ export async function generateDirectVideoThumbnail(options: VideoThumbnailOption
   if (existing) return existing;
 
   const promise = (async () => {
-    const cached = await readOfflineJsonCache<CachedVideoThumbnail>({ key: cacheKey });
-    if (cached?.value?.uri) {
-      const value: GeneratedVideoThumbnail = {
-        cacheKey,
-        source: { uri: cached.value.uri },
-        uri: cached.value.uri,
-        width: cached.value.width,
-        height: cached.value.height,
-      };
-      memoryCache.set(cacheKey, value);
-      return value;
-    }
-
     let player: ReturnType<typeof createVideoPlayer> | null = null;
     try {
+      const cached = await readOfflineJsonCache<CachedVideoThumbnail>({ key: cacheKey });
+      if (cached?.value?.uri) {
+        const value: GeneratedVideoThumbnail = {
+          cacheKey,
+          source: { uri: cached.value.uri },
+          uri: cached.value.uri,
+          width: cached.value.width,
+          height: cached.value.height,
+        };
+        memoryCache.set(cacheKey, value);
+        return value;
+      }
+
       const source: VideoSource = { uri: videoUrl, useCaching: true };
       player = createVideoPlayer(source);
       const generator = player.generateThumbnailsAsync;
