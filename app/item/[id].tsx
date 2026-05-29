@@ -43,6 +43,40 @@ function ItemVideoPlayer({ uri }: { uri: string }) {
   return <VideoView style={styles.teaserVideo} player={player} nativeControls fullscreenOptions={{ enable: true }} allowsPictureInPicture={false} />;
 }
 
+function ItemDetailLoadingState() {
+  return (
+    <AppScreen scrollable backgroundVariant="soft">
+      <View style={styles.detailLoadingShell}>
+        <View style={[styles.hero, styles.detailSkeletonBlock]} />
+        <AppCard style={styles.premiumCard}>
+          <View style={styles.detailLoadingCopy}>
+            <View style={styles.detailSkeletonTitle} />
+            <View style={styles.detailSkeletonLine} />
+            <View style={[styles.detailSkeletonLine, styles.detailSkeletonLineShort]} />
+          </View>
+        </AppCard>
+        <AppCard style={styles.premiumCard}>
+          <View style={styles.noticeRow}>
+            <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+            <AppText muted style={styles.noticeText}>بنحضر تفاصيل العنصر والصور بأهدى شكل ممكن...</AppText>
+          </View>
+        </AppCard>
+      </View>
+    </AppScreen>
+  );
+}
+
+function ItemDetailErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <AppScreen backgroundVariant="soft">
+      <View style={styles.stateBox}>
+        <EmptyState title="تعذر فتح العنصر" description={message} />
+        <AppButton label="إعادة المحاولة" onPress={onRetry} />
+      </View>
+    </AppScreen>
+  );
+}
+
 function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoTeaser; active: boolean; onPlay: () => void }) {
   const durationLabel = formatDuration(teaser.durationMs);
 
@@ -365,5 +399,11 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 12 },
   ctaPanel: { marginTop: spacing.sm, gap: spacing.sm, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.72)' },
   stateBox: { gap: spacing.md },
+  detailLoadingShell: { gap: spacing.md },
+  detailSkeletonBlock: { backgroundColor: colors.primarySoft, opacity: 0.72 },
+  detailLoadingCopy: { gap: spacing.sm },
+  detailSkeletonTitle: { width: '72%', height: 22, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
+  detailSkeletonLine: { width: '100%', height: 14, borderRadius: radii.sm, backgroundColor: colors.primarySoft, opacity: 0.72 },
+  detailSkeletonLineShort: { width: '58%' },
   shareErrorText: { color: colors.primary },
 });
