@@ -87,6 +87,7 @@ export default function DirectScreen() {
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [selectedStreamMessage, setSelectedStreamMessage] = useState<StreamMessage | null>(null);
+  const [reactionBusyMessageId, setReactionBusyMessageId] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<Pick<StreamMessage, 'id' | 'text' | 'userName'> | null>(null);
   const showActionFeedbackToast = useCallback((title: string) => { showToast({ title }); }, []);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
@@ -471,8 +472,19 @@ export default function DirectScreen() {
     }
     const reactionType = action === 'love' ? 'love' : 'thumbs_up';
     if (typeof channel.sendReaction !== 'function') { showActionFeedbackToast('ميزة التفاعل غير متاحة حالياً.'); return; }
-    try { await channel.sendReaction(target.id, { type: reactionType }); hydrateFromChannel(); showActionFeedbackToast('تم إضافة التفاعل.'); } catch { showActionFeedbackToast('تعذر إضافة التفاعل حالياً.'); }
-  }, [conversationId, convo?.otherUserId, hydrateFromChannel, selectedStreamMessage, user?.id]);
+    if (reactionBusyMessageId === target.id) return;
+
+    setReactionBusyMessageId(target.id);
+    try {
+      await channel.sendReaction(target.id, { type: reactionType });
+      hydrateFromChannel();
+      showActionFeedbackToast('تم إضافة التفاعل.');
+    } catch {
+      showActionFeedbackToast('تعذر إضافة التفاعل حالياً.');
+    } finally {
+      setReactionBusyMessageId(null);
+    }
+  }, [conversationId, convo?.otherUserId, hydrateFromChannel, reactionBusyMessageId, selectedStreamMessage, user?.id]);
   const pickImage = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
