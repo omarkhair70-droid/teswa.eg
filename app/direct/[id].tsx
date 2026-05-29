@@ -918,19 +918,133 @@ ${note}
     {error ? <AppCard style={styles.errorCard}><AppText muted>{error}</AppText></AppCard> : null}
 
 
-    <Modal visible={!!selectedMediaViewer} transparent animationType="fade" onRequestClose={() => setSelectedMediaViewer(null)}>
-      <View style={styles.viewerOverlay}>
-        <Pressable style={styles.viewerBackdrop} onPress={() => setSelectedMediaViewer(null)} />
-        {selectedMediaViewer?.kind === 'image' ? <View style={styles.viewerImageWrap}>
-          <View style={styles.viewerHeader}><AppText weight="semibold" style={styles.viewerTitle}>{selectedMediaViewer.title || 'صورة'}</AppText><Pressable onPress={() => setSelectedMediaViewer(null)} style={styles.viewerClose}><Ionicons name="close" size={20} color={colors.background} /></Pressable></View>
-          <Image source={{ uri: selectedMediaViewer.url }} style={styles.viewerImage} resizeMode="contain" onLoadStart={() => { setImageViewerLoading(true); setImageViewerError(false); }} onError={() => { setImageViewerLoading(false); setImageViewerError(true); showActionFeedbackToast('تعذر فتح الصورة حالياً.'); }} onLoadEnd={() => setImageViewerLoading(false)} />
-          {imageViewerLoading ? <AppText muted>جاري تحميل الصورة...</AppText> : null}
-          {imageViewerError ? <AppText muted>تعذر فتح الصورة حالياً.</AppText> : null}
-        </View> : null}
-        {selectedMediaViewer?.kind === 'video' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}{DIRECT_VIDEO_PLAYER_ENABLED ? (selectedVideoHasValidUrl ? <DirectViewerVideo uri={selectedMediaViewer.url} /> : <AppText muted>تعذر تشغيل الفيديو حالياً.</AppText>) : <AppText muted>تشغيل الفيديو داخل التطبيق غير مفعّل حالياً.</AppText>}<AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} /><AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
-        {selectedMediaViewer?.kind === 'file' ? <View style={styles.viewerCard}><AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>{selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}{selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}<AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} /><AppButton label="حفظ في الدولاب" variant="neutral" onPress={async () => { const result = await saveDirectMessageToDolab({ conversationId, messageId: `viewer-file-${Date.now()}`, text: selectedMediaViewer.title, attachments: [{ type: 'file', title: selectedMediaViewer.title, name: selectedMediaViewer.title, assetUrl: selectedMediaViewer.url, mimeType: selectedMediaViewer.mimeType, fileSize: selectedMediaViewer.fileSize }] }); showActionFeedbackToast(result.ok ? (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0 ? 'موجود بالفعل في دولابك.' : 'اتحفظ في دولابك.') : result.message); }} /><AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} /></View> : null}
+    <Modal
+  visible={!!selectedMediaViewer}
+  transparent
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => setSelectedMediaViewer(null)}
+>
+  <View style={styles.viewerOverlay}>
+    <Pressable style={styles.viewerBackdrop} onPress={() => setSelectedMediaViewer(null)} />
+
+    {selectedMediaViewer?.kind === 'image' ? (
+      <View style={styles.viewerImageShell}>
+        <View style={styles.viewerHeader}>
+          <Pressable onPress={() => setSelectedMediaViewer(null)} style={styles.viewerClose}>
+            <Ionicons name="close" size={22} color={colors.background} />
+          </Pressable>
+
+          <View style={styles.viewerTitleWrap}>
+            <AppText weight="semibold" style={styles.viewerTitle} numberOfLines={1}>
+              {selectedMediaViewer.title || 'صورة'}
+            </AppText>
+            <AppText style={styles.viewerSubtitle}>اضغط خارج الصورة للإغلاق</AppText>
+          </View>
+        </View>
+
+        <View style={styles.viewerImageStage}>
+          <Image
+            source={{ uri: selectedMediaViewer.url }}
+            style={styles.viewerImage}
+            resizeMode="contain"
+            onLoadStart={() => {
+              setImageViewerLoading(true);
+              setImageViewerError(false);
+            }}
+            onError={() => {
+              setImageViewerLoading(false);
+              setImageViewerError(true);
+              showActionFeedbackToast('تعذر فتح الصورة حالياً.');
+            }}
+            onLoadEnd={() => setImageViewerLoading(false)}
+          />
+
+          {imageViewerLoading ? (
+            <AppText style={styles.viewerStateText}>جاري تحميل الصورة...</AppText>
+          ) : null}
+
+          {imageViewerError ? (
+            <AppText style={styles.viewerStateText}>تعذر فتح الصورة حالياً.</AppText>
+          ) : null}
+        </View>
+
+        <View style={styles.viewerActions}>
+          <View style={styles.viewerActionRow}>
+            <AppButton
+              label="نسخ الرابط"
+              variant="neutral"
+              onPress={() => {
+                void copyMediaUrl(selectedMediaViewer.url);
+              }}
+            />
+            <AppButton
+              label="فتح خارجيًا"
+              variant="neutral"
+              onPress={() => {
+                void openMediaUrl(selectedMediaViewer.url);
+              }}
+            />
+          </View>
+          <AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} />
+        </View>
       </View>
-    </Modal>
+    ) : null}
+
+    {selectedMediaViewer?.kind === 'video' ? (
+      <View style={styles.viewerCard}>
+        <AppText weight="semibold">{selectedMediaViewer.title || 'فيديو'}</AppText>
+        {selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}
+        {DIRECT_VIDEO_PLAYER_ENABLED ? (
+          selectedVideoHasValidUrl ? (
+            <DirectViewerVideo uri={selectedMediaViewer.url} />
+          ) : (
+            <AppText muted>تعذر تشغيل الفيديو حالياً.</AppText>
+          )
+        ) : (
+          <AppText muted>تشغيل الفيديو داخل التطبيق غير مفعّل حالياً.</AppText>
+        )}
+        <AppButton label="فتح الفيديو" variant="neutral" onPress={() => { void openMediaUrl(selectedMediaViewer.url); }} />
+        <AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} />
+        <AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} />
+      </View>
+    ) : null}
+
+    {selectedMediaViewer?.kind === 'file' ? (
+      <View style={styles.viewerCard}>
+        <AppText weight="semibold">{selectedMediaViewer.title || 'ملف'}</AppText>
+        {selectedMediaViewer.fileSize ? <AppText muted>{formatFileSize(selectedMediaViewer.fileSize) ?? ''}</AppText> : null}
+        {selectedMediaViewer.mimeType ? <AppText muted>{selectedMediaViewer.mimeType}</AppText> : null}
+        <AppButton label="نسخ الرابط" variant="neutral" onPress={() => { void copyMediaUrl(selectedMediaViewer.url); }} />
+        <AppButton
+          label="حفظ في الدولاب"
+          variant="neutral"
+          onPress={async () => {
+            const result = await saveDirectMessageToDolab({
+              conversationId,
+              messageId: `viewer-file-${Date.now()}`,
+              text: selectedMediaViewer.title,
+              attachments: [{
+                type: 'file',
+                title: selectedMediaViewer.title,
+                name: selectedMediaViewer.title,
+                assetUrl: selectedMediaViewer.url,
+                mimeType: selectedMediaViewer.mimeType,
+                fileSize: selectedMediaViewer.fileSize,
+              }],
+            });
+            showActionFeedbackToast(
+              result.ok
+                ? (result.alreadySaved && !result.savedText && (result.savedMediaCount ?? 0) === 0 ? 'موجود بالفعل في دولابك.' : 'اتحفظ في دولابك.')
+                : result.message,
+            );
+          }}
+        />
+        <AppButton label="إغلاق" variant="neutral" onPress={() => setSelectedMediaViewer(null)} />
+      </View>
+    ) : null}
+  </View>
+</Modal>
 
     <AppActionSheet ref={directActionsSheetRef} title="خيارات المحادثة" actions={[{ label: 'عرض البروفايل', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); } }, { label: 'الإبلاغ عن المستخدم', tone: 'danger', disabled: !convo?.otherUserId, onPress: () => { directActionsSheetRef.current?.dismiss(); if (convo?.otherUserId) router.push(`/report/user/${convo.otherUserId}`); } }, { label: blockBusy ? 'جاري التنفيذ...' : (blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم'), tone: 'danger', disabled: blockBusy || !convo?.otherUserId || !user?.id, onPress: () => { directActionsSheetRef.current?.dismiss(); if (!convo?.otherUserId || !user?.id) return; void (async () => { setBlockBusy(true); try { const result = blockedByMe ? await unblockUserFromMobile(user.id, convo.otherUserId) : await blockUserFromMobile(user.id, convo.otherUserId); if (result.ok) { const next = await fetchUserBlockState(user.id, convo.otherUserId); if (next.ok) setBlockedByMe(next.state.blockedByMe); setError(null); showActionFeedbackToast(blockedByMe ? 'تم إلغاء الحظر.' : 'تم حظر المستخدم.'); } else setError('تعذر تحديث حالة الحظر حالياً.'); } catch { setError('تعذر تحديث حالة الحظر حالياً.'); } finally { setBlockBusy(false); } })(); } }]} />
     <AppActionSheet ref={messageActionsSheetRef} title="خيارات الرسالة" actions={[{ label: 'نسخ النص', onPress: () => { void runMessageAction('copy'); } }, { label: 'رد على الرسالة', onPress: () => { void runMessageAction('reply'); } }, { label: 'تفاعل ❤️', onPress: () => { void runMessageAction('love'); } }, { label: 'تفاعل 👍', onPress: () => { void runMessageAction('thumbs_up'); } }, { label: 'احفظ في الدولاب', onPress: () => { void runMessageAction('save_dolab'); } }, { label: 'إبلاغ عن الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId === user?.id, onPress: () => { void runMessageAction('report'); } }, { label: 'حذف الرسالة', tone: 'danger', disabled: selectedStreamMessage?.userId !== user?.id, onPress: () => { void runMessageAction('delete'); } }]} />
@@ -1009,13 +1123,97 @@ const styles = StyleSheet.create({
   reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },
   reactionChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 2 },
   errorCard: { marginHorizontal: spacing.sm, marginBottom: spacing.sm, gap: spacing.xs },
-  viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', justifyContent: 'center', padding: spacing.md },
-  viewerBackdrop: { ...StyleSheet.absoluteFillObject },
-  viewerImageWrap: { gap: spacing.sm, alignItems: 'center' },
-  viewerHeader: { width: '100%', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  viewerTitle: { color: colors.background },
-  viewerClose: { width: 36, height: 36, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.textMuted },
-  viewerImage: { width: '100%', height: '75%', borderRadius: radii.md },
-  viewerVideo: { width: '100%', height: 240, borderRadius: radii.md, backgroundColor: '#000' },
-  viewerCard: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs },
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: '#050505',
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+    justifyContent: 'center',
+  },
+  viewerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  viewerImageShell: {
+    flex: 1,
+    width: '100%',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  viewerHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    zIndex: 2,
+  },
+  viewerTitleWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  viewerTitle: {
+    color: colors.background,
+    textAlign: 'right',
+  },
+  viewerSubtitle: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 11,
+    textAlign: 'right',
+  },
+  viewerClose: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  viewerImageStage: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: radii.md,
+  },
+  viewerStateText: {
+    position: 'absolute',
+    bottom: spacing.md,
+    color: colors.background,
+    textAlign: 'center',
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    borderRadius: radii.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  viewerActions: {
+    width: '100%',
+    gap: spacing.xs,
+    zIndex: 2,
+  },
+  viewerActionRow: {
+    flexDirection: 'row-reverse',
+    gap: spacing.xs,
+  },
+  viewerVideo: {
+    width: '100%',
+    height: 240,
+    borderRadius: radii.md,
+    backgroundColor: '#000',
+  },
+  viewerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
 });
