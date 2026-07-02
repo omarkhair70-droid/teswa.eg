@@ -102,18 +102,18 @@
   "devDependencies": {
     "@types/react": "~19.2.10",
     "typescript": "~5.9.3"
-  },
-  "expo": {
-  "install": {
-    "exclude": [
-      "@shopify/flash-list"
-    ]
-  },
-  "doctor": {
-    "reactNativeDirectoryCheck": {
+   "expo": {
+    "install": {
       "exclude": [
-        "react-native-compressor"
+        "@shopify/flash-list"
       ]
+    },
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-compressor"
+        ]
+      }
     }
   }
 }
