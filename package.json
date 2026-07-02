@@ -104,9 +104,15 @@
     "typescript": "~5.9.3"
   },
   "expo": {
-    "install": {
+  "install": {
+    "exclude": [
+      "@shopify/flash-list"
+    ]
+  },
+  "doctor": {
+    "reactNativeDirectoryCheck": {
       "exclude": [
-        "@shopify/flash-list"
+        "react-native-compressor"
       ]
     }
   }
