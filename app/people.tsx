@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +14,7 @@ import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
-import { fetchPeopleDirectory, PeopleDirectoryEntry } from '@/lib/people';
+import { fetchPeopleDirectory, PEOPLE_DIRECTORY_PAGE_SIZE, PeopleDirectoryEntry } from '@/lib/people';
 import { readAnyPeopleDefaultDirectoryCache, readFreshPeopleDefaultDirectoryCache, writePeopleDefaultDirectoryCache } from '@/lib/offline-people-cache';
 
 const PEOPLE_SKELETONS = ['people-skeleton-1', 'people-skeleton-2', 'people-skeleton-3'];
@@ -44,85 +44,196 @@ export default function PeopleScreen() {
   const [people, setPeople] = useState<PeopleDirectoryEntry[]>([]);
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState(false);
   const [peopleCacheNotice, setPeopleCacheNotice] = useState<string | null>(null);
+  const requestGenerationRef = useRef(0);
+  const firstPageInFlightRef = useRef(false);
+  const loadMoreRequestRef = useRef<symbol | null>(null);
 
-  const loadPeople = useCallback(async (nextQuery: string) => {
+  const loadFirstPage = useCallback(async (nextQuery: string, mode: 'initial' | 'refresh') => {
     const normalizedQuery = nextQuery.trim();
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+    firstPageInFlightRef.current = true;
+    loadMoreRequestRef.current = null;
 
-    if (normalizedQuery !== '') {
-      setLoading(true);
-      setError(false);
-      setPeopleCacheNotice(null);
-
-      try {
-        const entries = await fetchPeopleDirectory({ query: normalizedQuery });
-        setPeople(entries);
-      } catch {
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    setLoading(true);
+    setPeople([]);
+    setPage(0);
+    setHasMore(true);
     setError(false);
+    setLoadMoreError(false);
+    setLoadingMore(false);
     setPeopleCacheNotice(null);
+    setInitialLoading(mode === 'initial');
+    setRefreshing(mode === 'refresh');
 
-    const cached = await readFreshPeopleDefaultDirectoryCache();
-    const hadFreshCache = Boolean(cached);
+    let cachedFirstPage: PeopleDirectoryEntry[] | null = null;
 
-    if (cached) {
-      setPeople(cached.entries);
-      setLoading(false);
-      setPeopleCacheNotice('نستعرض ناسًا محفوظين بينما نتحقق من الأحدث.');
+    if (normalizedQuery === '' && mode === 'initial') {
+      const cached = await readFreshPeopleDefaultDirectoryCache();
+      if (generation !== requestGenerationRef.current) {
+        return;
+      }
+
+      if (cached) {
+        cachedFirstPage = cached.entries.slice(0, PEOPLE_DIRECTORY_PAGE_SIZE);
+        setPeople(cachedFirstPage);
+        setPage(1);
+        setHasMore(cachedFirstPage.length === PEOPLE_DIRECTORY_PAGE_SIZE);
+        setPeopleCacheNotice('نستعرض ناسًا محفوظين بينما نتحقق من الأحدث.');
+      }
     }
 
     try {
-      const entries = await fetchPeopleDirectory({ query: '' });
-      setPeople(entries);
+      const result = await fetchPeopleDirectory({
+        query: normalizedQuery,
+        page: 1,
+        pageSize: PEOPLE_DIRECTORY_PAGE_SIZE,
+      });
+      if (generation !== requestGenerationRef.current) {
+        return;
+      }
+
+      setPeople(result.entries);
+      setPage(1);
+      setHasMore(result.hasMore);
       setError(false);
       setPeopleCacheNotice(null);
-      await writePeopleDefaultDirectoryCache(entries);
+
+      if (normalizedQuery === '') {
+        void writePeopleDefaultDirectoryCache(result.entries);
+      }
     } catch {
-      if (hadFreshCache) {
+      if (generation !== requestGenerationRef.current) {
+        return;
+      }
+
+      if (cachedFirstPage) {
         setPeopleCacheNotice('تعذر تحديث ناس تِسوى الآن، نعرض آخر نسخة محفوظة.');
         setError(false);
-      } else {
+      } else if (normalizedQuery === '') {
         const stale = await readAnyPeopleDefaultDirectoryCache();
+        if (generation !== requestGenerationRef.current) {
+          return;
+        }
+
         if (stale) {
-          setPeople(stale.entries);
+          const staleFirstPage = stale.entries.slice(0, PEOPLE_DIRECTORY_PAGE_SIZE);
+          setPeople(staleFirstPage);
+          setPage(1);
+          setHasMore(staleFirstPage.length === PEOPLE_DIRECTORY_PAGE_SIZE);
           setError(false);
           setPeopleCacheNotice('أنت ترى نسخة محفوظة من ناس تِسوى. سنحدّثها عندما يتحسن الاتصال.');
         } else {
           setError(true);
+          setHasMore(false);
         }
+      } else {
+        setError(true);
+        setHasMore(false);
       }
     } finally {
-      setLoading(false);
+      if (generation === requestGenerationRef.current) {
+        firstPageInFlightRef.current = false;
+        setInitialLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
+  const loadMorePeople = useCallback(async (allowRetry = false) => {
+    if (
+      loadMoreRequestRef.current
+      || firstPageInFlightRef.current
+      || initialLoading
+      || refreshing
+      || error
+      || !hasMore
+      || page < 1
+      || (loadMoreError && !allowRetry)
+    ) {
+      return;
+    }
+
+    const generation = requestGenerationRef.current;
+    const requestToken = Symbol('people-load-more');
+    const nextPage = page + 1;
+    loadMoreRequestRef.current = requestToken;
+    setLoadingMore(true);
+    setLoadMoreError(false);
+
+    try {
+      const result = await fetchPeopleDirectory({
+        query: appliedQuery,
+        page: nextPage,
+        pageSize: PEOPLE_DIRECTORY_PAGE_SIZE,
+      });
+      if (
+        generation !== requestGenerationRef.current
+        || loadMoreRequestRef.current !== requestToken
+      ) {
+        return;
+      }
+
+      setPeople((currentPeople) => {
+        const peopleById = new Map(currentPeople.map((person) => [person.id, person]));
+        for (const person of result.entries) {
+          peopleById.set(person.id, person);
+        }
+        return Array.from(peopleById.values());
+      });
+      setPage(nextPage);
+      setHasMore(result.hasMore);
+    } catch {
+      if (
+        generation === requestGenerationRef.current
+        && loadMoreRequestRef.current === requestToken
+      ) {
+        setLoadMoreError(true);
+      }
+    } finally {
+      if (loadMoreRequestRef.current === requestToken) {
+        loadMoreRequestRef.current = null;
+        if (generation === requestGenerationRef.current) {
+          setLoadingMore(false);
+        }
+      }
+    }
+  }, [appliedQuery, error, hasMore, initialLoading, loadMoreError, page, refreshing]);
+
   useEffect(() => {
-    loadPeople('');
-  }, [loadPeople]);
+    const initialLoadTimer = setTimeout(() => {
+      void loadFirstPage('', 'initial');
+    }, 0);
+
+    return () => clearTimeout(initialLoadTimer);
+  }, [loadFirstPage]);
 
   const handleSearch = useCallback(() => {
     const trimmed = query.trim();
     setAppliedQuery(trimmed);
-    loadPeople(trimmed);
-  }, [loadPeople, query]);
+    void loadFirstPage(trimmed, 'initial');
+  }, [loadFirstPage, query]);
 
   const handleClearSearch = useCallback(() => {
     setQuery('');
     setAppliedQuery('');
-    loadPeople('');
-  }, [loadPeople]);
+    void loadFirstPage('', 'initial');
+  }, [loadFirstPage]);
+
+  const handleRefresh = useCallback(() => {
+    void loadFirstPage(appliedQuery, 'refresh');
+  }, [appliedQuery, loadFirstPage]);
 
   const hasActiveSearch = appliedQuery.length > 0;
   const hasPeople = people.length > 0;
+  const firstPageLoading = initialLoading || refreshing;
 
   const header = useMemo(
     () => (
@@ -173,14 +284,14 @@ export default function PeopleScreen() {
 
           <View style={styles.searchActions}>
             <View style={styles.searchPrimaryAction}>
-              <AppButton label="ابحث" iconName="search-outline" onPress={handleSearch} disabled={loading} fullWidth />
+              <AppButton label="ابحث" iconName="search-outline" onPress={handleSearch} disabled={firstPageLoading} fullWidth />
             </View>
             {hasActiveSearch ? (
-              <AppButton label="مسح" variant="neutral" iconName="close-outline" onPress={handleClearSearch} disabled={loading} />
+              <AppButton label="مسح" variant="neutral" iconName="close-outline" onPress={handleClearSearch} disabled={firstPageLoading} />
             ) : null}
           </View>
 
-          {!loading && !error ? (
+          {!firstPageLoading && !error ? (
             <View style={styles.resultsSummary}>
               <View style={styles.resultsSummaryIcon}>
                 <Ionicons name={hasActiveSearch ? 'search-outline' : 'sparkles-outline'} size={14} color={colors.accent} />
@@ -218,7 +329,7 @@ export default function PeopleScreen() {
         ) : null}
       </View>
     ),
-    [appliedQuery, error, handleClearSearch, handleSearch, hasActiveSearch, hasPeople, loading, people.length, peopleCacheNotice, query],
+    [appliedQuery, error, firstPageLoading, handleClearSearch, handleSearch, hasActiveSearch, hasPeople, people.length, peopleCacheNotice, query],
   );
 
   const renderPerson = useCallback(({ item, index }: { item: PeopleDirectoryEntry; index: number }) => {
@@ -340,6 +451,36 @@ export default function PeopleScreen() {
     );
   }, []);
 
+  const footer = useMemo(() => {
+    if (loadingMore) {
+      return (
+        <View
+          style={styles.loadMoreState}
+          accessibilityRole="progressbar"
+          accessibilityLabel="جاري تحميل المزيد من الأشخاص"
+          accessibilityLiveRegion="polite"
+        >
+          <ActivityIndicator size="small" color={colors.primary} />
+          <AppText muted style={styles.loadMoreStateText}>جاري تحميل المزيد...</AppText>
+        </View>
+      );
+    }
+
+    if (loadMoreError) {
+      return (
+        <AppCard variant="outlined" padding="md" style={styles.loadMoreErrorCard}>
+          <View style={styles.loadMoreErrorCopy} accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle-outline" size={17} color={colors.primary} />
+            <AppText muted style={styles.loadMoreStateText}>تعذر تحميل المزيد. العناصر الحالية ما زالت ظاهرة.</AppText>
+          </View>
+          <AppButton label="إعادة المحاولة" variant="neutral" onPress={() => void loadMorePeople(true)} />
+        </AppCard>
+      );
+    }
+
+    return null;
+  }, [loadMoreError, loadMorePeople, loadingMore]);
+
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
@@ -349,11 +490,14 @@ export default function PeopleScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        refreshing={loading && hasPeople}
-        onRefresh={() => loadPeople(appliedQuery)}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        onEndReached={() => void loadMorePeople()}
+        onEndReachedThreshold={0.35}
         ListHeaderComponent={header}
+        ListFooterComponent={footer}
         ListEmptyComponent={
-          loading ? (
+          firstPageLoading ? (
             <PeopleLoadingState />
           ) : error ? (
             <AppCard variant="outlined" style={styles.stateCard}>
@@ -362,7 +506,7 @@ export default function PeopleScreen() {
                 description="مقدرناش نوصل للملفات الآن. راجع اتصالك وجرّب مرة ثانية."
                 iconName="cloud-offline-outline"
                 actionLabel="إعادة المحاولة"
-                onAction={() => loadPeople(appliedQuery)}
+                onAction={() => void loadFirstPage(appliedQuery, 'initial')}
               />
             </AppCard>
           ) : hasActiveSearch ? (
@@ -557,4 +701,8 @@ const styles = StyleSheet.create({
   skeletonLine: { height: 12, width: '82%', borderRadius: radii.sm, backgroundColor: '#E9E0D8' },
   skeletonStats: { height: 54, borderRadius: radii.md, backgroundColor: 'rgba(238,216,203,0.52)' },
   stateCard: { borderColor: 'rgba(184,98,63,0.14)', backgroundColor: 'rgba(255,253,248,0.82)' },
+  loadMoreState: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
+  loadMoreStateText: { fontSize: 13 },
+  loadMoreErrorCard: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  loadMoreErrorCopy: { flex: 1, minWidth: 0, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
 });
