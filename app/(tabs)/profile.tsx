@@ -4,6 +4,8 @@ import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppText } from '@/components/ui/AppText';
@@ -26,8 +28,146 @@ import { removeProfileImageFromMobile, replaceProfileImageFromMobile } from '@/l
 
 const PROFILE_ERROR_MESSAGE = 'تعذر تحميل بيانات الحساب حالياً. حاول مرة تانية.';
 
+type AccountIconName = keyof typeof Ionicons.glyphMap;
+type AccountIconTone = 'primary' | 'accent' | 'success' | 'danger';
+
+const iconToneStyles: Record<AccountIconTone, { backgroundColor: string; color: string }> = {
+  primary: { backgroundColor: colors.primarySoft, color: colors.primary },
+  accent: { backgroundColor: colors.accentSoft, color: colors.accent },
+  success: { backgroundColor: colors.successSoft, color: colors.success },
+  danger: { backgroundColor: colors.dangerSoft, color: colors.danger },
+};
+
+function ProfileLoadingState() {
+  return (
+    <View style={styles.loadingStack} accessibilityLabel="جاري تحميل بيانات الحساب">
+      <View style={styles.loadingHero}>
+        <View style={styles.loadingCover} />
+        <View style={styles.loadingIdentityRow}>
+          <View style={styles.loadingAvatar} />
+          <View style={styles.loadingCopy}>
+            <View style={styles.loadingTitle} />
+            <View style={styles.loadingLineSmall} />
+          </View>
+        </View>
+      </View>
+      <View style={styles.loadingActions}>
+        <View style={styles.loadingAction} />
+        <View style={styles.loadingAction} />
+      </View>
+      <View style={styles.loadingCard} />
+      <View style={styles.loadingCardCompact} />
+    </View>
+  );
+}
+
+function AccountSectionHeading({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <View style={styles.sectionHeading}>
+      <AppText weight="semibold" style={styles.sectionEyebrow}>{eyebrow}</AppText>
+      <AppText weight="bold" style={styles.sectionTitle}>{title}</AppText>
+      <AppText muted style={styles.sectionDescription}>{description}</AppText>
+    </View>
+  );
+}
+
+function AccountNavigationRow({
+  icon,
+  title,
+  description,
+  onPress,
+  badge,
+  tone = 'primary',
+  last = false,
+}: {
+  icon: AccountIconName;
+  title: string;
+  description?: string;
+  onPress: () => void;
+  badge?: string | null;
+  tone?: AccountIconTone;
+  last?: boolean;
+}) {
+  const toneStyle = iconToneStyles[tone];
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={description ? `${title}، ${description}` : title}
+      onPress={onPress}
+      style={({ pressed }) => [styles.navigationRow, last && styles.navigationRowLast, pressed && styles.pressedRow]}
+    >
+      <View style={[styles.navigationIcon, { backgroundColor: toneStyle.backgroundColor }]}>
+        <Ionicons name={icon} size={19} color={toneStyle.color} />
+      </View>
+      <View style={styles.navigationCopy}>
+        <View style={styles.navigationTitleRow}>
+          <AppText weight="semibold" style={styles.navigationTitle}>{title}</AppText>
+          {badge ? (
+            <View style={styles.navigationBadge}>
+              <AppText weight="bold" style={styles.navigationBadgeText}>{badge}</AppText>
+            </View>
+          ) : null}
+        </View>
+        {description ? <AppText muted style={styles.navigationDescription}>{description}</AppText> : null}
+      </View>
+      <View style={styles.navigationArrow}>
+        <Ionicons name="chevron-back-outline" size={17} color={colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
+function AccountQuickAction({
+  icon,
+  title,
+  description,
+  onPress,
+  tone = 'primary',
+}: {
+  icon: AccountIconName;
+  title: string;
+  description: string;
+  onPress: () => void;
+  tone?: AccountIconTone;
+}) {
+  const toneStyle = iconToneStyles[tone];
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}، ${description}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}
+    >
+      <View style={[styles.quickActionIcon, { backgroundColor: toneStyle.backgroundColor }]}>
+        <Ionicons name={icon} size={20} color={toneStyle.color} />
+      </View>
+      <AppText weight="bold" style={styles.quickActionTitle}>{title}</AppText>
+      <AppText muted style={styles.quickActionDescription}>{description}</AppText>
+      <Ionicons name="arrow-back-outline" size={16} color={toneStyle.color} style={styles.quickActionArrow} />
+    </Pressable>
+  );
+}
+
+function formatMemberSince(createdAt: string | null | undefined): string | null {
+  if (!createdAt) return null;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(date);
+}
+
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const userId = user?.id ?? null;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -50,12 +190,7 @@ export default function ProfileScreen() {
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
 
-  const memberSince = useMemo(() => {
-    if (!profile?.created_at) return null;
-    const date = new Date(profile.created_at);
-    if (Number.isNaN(date.getTime())) return null;
-    return new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(date);
-  }, [profile?.created_at]);
+  const memberSince = formatMemberSince(profile?.created_at);
 
   const displayName = profile?.display_name?.trim() || 'مستخدم تِسوى';
   const location = [profile?.city, profile?.area].filter(Boolean).join(' - ');
@@ -96,29 +231,29 @@ export default function ProfileScreen() {
   }, [user]);
 
   const loadBiometricState = useCallback(async () => {
-    if (!user?.id) return;
+    if (!userId) return;
     setBiometricLoading(true);
     try {
       const [capability, enabled] = await Promise.all([
         getBiometricCapabilityState(),
-        readBiometricAppLockEnabled(user.id),
+        readBiometricAppLockEnabled(userId),
       ]);
       setBiometricCapability(capability);
       setBiometricEnabled(enabled);
     } finally {
       setBiometricLoading(false);
     }
-  }, [user?.id]);
+  }, [userId]);
 
   const loadMyStoriesState = useCallback(async () => {
-    if (!user?.id) {
+    if (!userId) {
       setMyActiveStoriesCount(0);
       return;
     }
 
     setMyStoriesLoading(true);
     try {
-      const activeStories = await fetchActiveStoriesByUserId(user.id);
+      const activeStories = await fetchActiveStoriesByUserId(userId);
       setMyActiveStoriesCount(activeStories.length);
     } catch (e) {
       if (__DEV__) console.log('[Profile] my stories load failed', e);
@@ -126,15 +261,15 @@ export default function ProfileScreen() {
     } finally {
       setMyStoriesLoading(false);
     }
-  }, [user?.id]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
-      if (user?.id) fetchUserFollowState(user.id, user.id).then((r) => { if (r.ok) setFollowCounts({ followerCount: r.state.followerCount, followingCount: r.state.followingCount }); });
+      if (userId) fetchUserFollowState(userId, userId).then((r) => { if (r.ok) setFollowCounts({ followerCount: r.state.followerCount, followingCount: r.state.followingCount }); });
       loadMyStoriesState();
       void loadBiometricState();
-    }, [loadData, loadMyStoriesState, loadBiometricState]),
+    }, [loadBiometricState, loadData, loadMyStoriesState, userId]),
   );
 
   useEffect(() => {
@@ -284,185 +419,424 @@ export default function ProfileScreen() {
   };
 
   return (
-    <AppScreen scrollable>
+    <AppScreen scrollable backgroundVariant="alive" style={styles.screen}>
       <View style={styles.content}>
-        <AppText weight="bold" style={styles.title}>حسابي</AppText>
+        <View style={styles.screenHeader}>
+          <View style={styles.screenHeaderCopy}>
+            <AppText weight="semibold" style={styles.screenEyebrow}>مساحتك في تِسوى</AppText>
+            <AppText weight="bold" style={styles.title}>حسابي</AppText>
+            <AppText muted style={styles.screenSubtitle}>هويتك، حضورك، وكل أدواتك في مكان واحد.</AppText>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="فتح الإعدادات"
+            onPress={() => router.push('/settings')}
+            style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
+          >
+            <Ionicons name="settings-outline" size={21} color={colors.primary} />
+          </Pressable>
+        </View>
 
-        {loading ? <AppText muted>جاري تحميل بيانات الحساب...</AppText> : null}
-        {!loading && error ? <AppCard><View style={styles.group}><AppText>{error}</AppText><AppButton label="إعادة المحاولة" onPress={loadData} variant="neutral" /></View></AppCard> : null}
+        {loading ? <ProfileLoadingState /> : null}
+        {!loading && error ? (
+          <AppCard variant="outlined" style={styles.errorCard}>
+            <View style={styles.errorIconShell}>
+              <Ionicons name="cloud-offline-outline" size={22} color={colors.primary} />
+            </View>
+            <View style={styles.errorCopy}>
+              <AppText weight="bold" style={styles.errorTitle}>تعذر تحميل حسابك</AppText>
+              <AppText muted style={styles.errorDescription}>{error}</AppText>
+            </View>
+            <AppButton label="إعادة المحاولة" onPress={loadData} variant="neutral" iconName="refresh-outline" />
+          </AppCard>
+        ) : null}
 
         {!loading && !error ? (
           <>
-            <ProfileLivingHero
-              coverUrl={profile?.cover_url ?? null}
-              avatarUrl={profile?.avatar_url ?? null}
-              displayName={displayName}
-              username={profile?.username ?? null}
-              tagline={profile?.profile_tagline ?? null}
-              location={location || null}
-              memberSince={memberSince}
-              activeStoriesCount={myActiveStoriesCount}
-              onOpenStories={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
-              onPressAvatarRing={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
-              onPressAvatar={() => setAvatarSheetOpen(true)}
-              variant="self"
-            />
-
-            <ProfilePresenceSignals presence={profilePresence} />
-            {user?.id ? (
-              <AppCard>
-                <View style={styles.followStatsRow}>
-                  <Pressable style={styles.followStatTile} onPress={() => router.push(`/profile-followers/${user.id}`)}>
-                    <AppText muted style={styles.followStatLabel}>المتابعون</AppText>
-                    <AppText weight="semibold" style={styles.followStatValue}>{followCounts.followerCount}</AppText>
-                  </Pressable>
-                  <Pressable style={styles.followStatTile} onPress={() => router.push(`/profile-following/${user.id}`)}>
-                    <AppText muted style={styles.followStatLabel}>يتابع</AppText>
-                    <AppText weight="semibold" style={styles.followStatValue}>{followCounts.followingCount}</AppText>
-                  </Pressable>
-                </View>
-              </AppCard>
-            ) : null}
+            <AppFadeIn delay={0} duration={240} fromY={10}>
+              <ProfileLivingHero
+                coverUrl={profile?.cover_url ?? null}
+                avatarUrl={profile?.avatar_url ?? null}
+                displayName={displayName}
+                username={profile?.username ?? null}
+                tagline={profile?.profile_tagline ?? null}
+                location={location || null}
+                memberSince={memberSince}
+                activeStoriesCount={myActiveStoriesCount}
+                onOpenStories={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
+                onPressAvatarRing={user?.id && myActiveStoriesCount > 0 ? () => router.push(`/story/${user.id}`) : null}
+                onPressAvatar={() => setAvatarSheetOpen(true)}
+                variant="self"
+              />
+            </AppFadeIn>
 
             {user?.id ? (
-              <AppCard>
-                <View style={styles.publicProfileAction}>
-                  <AppButton label="تعديل ملفي" variant="neutral" onPress={() => router.push('/profile/edit')} />
-                  <AppButton label="عرض ملفي العام" variant="neutral" onPress={() => router.push(`/profile/${user.id}`)} />
-                  {myActiveStoriesCount > 0 ? (
-                    <AppButton label="عرض قصصي" variant="neutral" onPress={() => router.push(`/story/${user.id}`)} />
-                  ) : null}
-                  <AppButton label="إضافة قصة" variant="neutral" onPress={() => router.push('/story/create')} />
-                  <AppButton label="إدارة قصصي" variant="neutral" onPress={() => router.push('/story/manage')} />
-                  <AppButton label="إدارة عناصري" variant="neutral" onPress={() => router.push('/item/manage')} />
-                  <Pressable style={styles.accountShortcut} onPress={() => router.push('/dolab')} accessibilityRole="button" accessibilityLabel="فتح دولابي">
-                    <View style={styles.accountShortcutIcon}>
-                      <Ionicons name="archive-outline" size={18} color="#7C2D12" />
-                    </View>
-                    <View style={styles.accountShortcutBody}>
-                      <AppText weight="semibold">دولابي</AppText>
-                      <AppText muted>مساحتك الخاصة للمسودات والميديا والأفكار.</AppText>
-                    </View>
-                  </Pressable>
-                  {!myStoriesLoading && myActiveStoriesCount > 0 ? <AppText muted>لديك {myActiveStoriesCount} قصة نشطة الآن</AppText> : null}
+              <AppFadeIn delay={45} duration={240} fromY={8} style={styles.primaryActions}>
+                <View style={styles.primaryActionMain}>
+                  <AppButton label="تعديل ملفي" iconName="create-outline" onPress={() => router.push('/profile/edit')} fullWidth />
                 </View>
-              </AppCard>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="عرض ملفي العام"
+                  onPress={() => router.push(`/profile/${user.id}`)}
+                  style={({ pressed }) => [styles.publicProfileButton, pressed && styles.publicProfileButtonPressed]}
+                >
+                  <Ionicons name="eye-outline" size={18} color={colors.primary} />
+                  <AppText weight="semibold" style={styles.publicProfileButtonText}>عرض عام</AppText>
+                </Pressable>
+              </AppFadeIn>
             ) : null}
 
-            <AppCard><View style={styles.group}><AppText weight="semibold">نبذة</AppText>{profile?.bio?.trim() ? <AppText>{profile.bio}</AppText> : <AppText muted>لم تضف نبذة بعد.</AppText>}</View></AppCard>
-            <AppCard><View style={styles.group}><AppText weight="semibold">الثقة والإحصائيات</AppText><AppText>المقايضات الناجحة: {profile?.successful_swaps_count ?? 0}</AppText><AppText>معدل الرد: {profile?.response_rate != null ? `${profile.response_rate}%` : 'غير متاح بعد'}</AppText></View></AppCard>
-            <AppCard><View style={styles.group}><AppText weight="semibold">بيانات الحساب</AppText><AppText>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText></View></AppCard>
+            <AppFadeIn delay={75} duration={240} fromY={8} style={styles.sectionGroup}>
+              <AccountSectionHeading
+                eyebrow="نبض ملفك"
+                title="حضورك في المجتمع"
+                description="لمحة مركزة عن القصص، التبديلات، وسرعة تواصلك."
+              />
+              <ProfilePresenceSignals presence={profilePresence} />
+            </AppFadeIn>
 
-            <Pressable onPress={() => router.push('/settings')}>
-              <AppCard>
-                <View style={styles.group}>
-                  <AppText weight="semibold">الإعدادات</AppText>
-                  <AppText muted>المظهر، اللغة، الإشعارات، الخصوصية، وروابط الحساب.</AppText>
-                </View>
-              </AppCard>
-            </Pressable>
-
-            <AppCard>
-              <View style={styles.group}>
-                <AppText weight="semibold">إشعارات الموبايل</AppText>
-                {pushState !== 'enabled' ? <AppText muted>فعّل إشعارات الموبايل علشان يوصلك تنبيه عند العروض والرسائل المهمة.</AppText> : null}
-                {pushState === 'enabled' ? <AppText muted>تم تفعيل إشعارات الموبايل لهذا الجهاز.</AppText> : null}
-                {pushState === 'denied' ? <AppText muted>لم يتم منح إذن الإشعارات. تقدر تفعّله لاحقًا من إعدادات الهاتف.</AppText> : null}
-                {pushState === 'error' ? <AppText muted>تعذر تفعيل الإشعارات حالياً. حاول مرة تانية.</AppText> : null}
-                {pushState !== 'enabled' ? <AppButton label={enablingPush ? 'جاري التفعيل...' : 'تفعيل إشعارات الموبايل'} disabled={enablingPush} onPress={handleEnablePush} variant="neutral" /> : null}
-              </View>
-            </AppCard>
-
-            <AppCard>
-              <View style={styles.group}>
-                <View style={styles.securityTitleRow}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color="#7C2D12" />
-                  <AppText weight="semibold">حماية التطبيق</AppText>
-                </View>
-                <AppText muted>اقفل تِسوى على هذا الجهاز بالبصمة أو التحقق البيومتري المتاح.</AppText>
-                {biometricLoading ? <AppText muted>جاري التحقق من جاهزية الجهاز...</AppText> : null}
-                {capabilityMessage ? <AppText muted>{capabilityMessage}</AppText> : null}
-                {biometricEnabled ? <AppText style={styles.successText}>قفل التطبيق مفعّل على هذا الجهاز.</AppText> : null}
-                {biometricMessage ? <AppText muted>{biometricMessage}</AppText> : null}
-                <AppButton
-                  label={biometricEnabled ? 'إيقاف القفل' : 'تفعيل القفل بالبصمة'}
-                  onPress={handleBiometricAction}
-                  disabled={biometricBusy || biometricLoading}
-                  variant="neutral"
+            {user?.id ? (
+              <AppFadeIn delay={100} duration={240} fromY={8} style={styles.sectionGroup}>
+                <AccountSectionHeading
+                  eyebrow="دائرتك"
+                  title="مجتمعك القريب"
+                  description="تابع نمو دائرتك وافتح القوائم من نفس المكان."
                 />
-              </View>
-            </AppCard>
+                <AppCard padding="sm" style={styles.communityCard}>
+                  <View style={styles.followStatsRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`المتابعون، ${followCounts.followerCount}`}
+                      style={({ pressed }) => [styles.followStatTile, pressed && styles.followStatPressed]}
+                      onPress={() => router.push(`/profile-followers/${user.id}`)}
+                    >
+                      <View style={styles.followStatIcon}>
+                        <Ionicons name="people-outline" size={18} color={colors.primary} />
+                      </View>
+                      <AppText weight="bold" style={styles.followStatValue}>{followCounts.followerCount}</AppText>
+                      <AppText muted style={styles.followStatLabel}>المتابعون</AppText>
+                    </Pressable>
+                    <View style={styles.followDivider} />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`يتابع، ${followCounts.followingCount}`}
+                      style={({ pressed }) => [styles.followStatTile, pressed && styles.followStatPressed]}
+                      onPress={() => router.push(`/profile-following/${user.id}`)}
+                    >
+                      <View style={[styles.followStatIcon, styles.followStatIconAccent]}>
+                        <Ionicons name="person-add-outline" size={18} color={colors.accent} />
+                      </View>
+                      <AppText weight="bold" style={styles.followStatValue}>{followCounts.followingCount}</AppText>
+                      <AppText muted style={styles.followStatLabel}>يتابع</AppText>
+                    </Pressable>
+                  </View>
+                </AppCard>
+              </AppFadeIn>
+            ) : null}
 
-            <Pressable onPress={() => router.push('/settings/notifications')}>
-              <AppCard>
-                <View style={styles.group}>
-                  <AppText weight="semibold">إعدادات الإشعارات</AppText>
-                  <AppText muted>تحكم في أنواع الإشعارات ووضع الهدوء كما يناسبك.</AppText>
+            {user?.id ? (
+              <AppFadeIn delay={125} duration={240} fromY={8} style={styles.sectionGroup}>
+                <AccountSectionHeading
+                  eyebrow="أدواتك"
+                  title="مساحتك الخاصة"
+                  description="العناصر، القصص، والمسودات التي تصنع حضورك في تِسوى."
+                />
+                <View style={styles.quickActionsGrid}>
+                  <AccountQuickAction
+                    icon="cube-outline"
+                    title="عناصري"
+                    description="راجع وعدّل المعروض"
+                    onPress={() => router.push('/item/manage')}
+                  />
+                  <AccountQuickAction
+                    icon="archive-outline"
+                    title="دولابي"
+                    description="مسوداتك وميدياك"
+                    onPress={() => router.push('/dolab')}
+                    tone="accent"
+                  />
+                  <AccountQuickAction
+                    icon="add-circle-outline"
+                    title="قصة جديدة"
+                    description="شارك لحظة الآن"
+                    onPress={() => router.push('/story/create')}
+                    tone="success"
+                  />
+                  <AccountQuickAction
+                    icon="albums-outline"
+                    title="إدارة القصص"
+                    description="رتّب ما شاركته"
+                    onPress={() => router.push('/story/manage')}
+                  />
+                </View>
+
+                {!myStoriesLoading && myActiveStoriesCount > 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`عرض قصصي، لديك ${myActiveStoriesCount} قصة نشطة`}
+                    onPress={() => router.push(`/story/${user.id}`)}
+                    style={({ pressed }) => [styles.activeStoryBanner, pressed && styles.activeStoryBannerPressed]}
+                  >
+                    <LinearGradient
+                      colors={['rgba(184,98,63,0.14)', 'rgba(245,158,11,0.12)', 'rgba(62,124,115,0.12)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <View style={styles.activeStoryIcon}>
+                      <Ionicons name="play-outline" size={20} color={colors.primary} />
+                    </View>
+                    <View style={styles.activeStoryCopy}>
+                      <AppText weight="bold">قصصك حاضرة الآن</AppText>
+                      <AppText muted style={styles.activeStoryDescription}>لديك {myActiveStoriesCount} قصة نشطة — شاهدها كما يراها الآخرون.</AppText>
+                    </View>
+                    <Ionicons name="chevron-back-outline" size={18} color={colors.primary} />
+                  </Pressable>
+                ) : null}
+              </AppFadeIn>
+            ) : null}
+
+            <AppFadeIn delay={150} duration={240} fromY={8} style={styles.sectionGroup}>
+              <AccountSectionHeading
+                eyebrow="عنّك"
+                title="تفاصيل ملفك"
+                description="المعلومات التي تساعد المجتمع يعرفك ويثق في التواصل معك."
+              />
+              <AppCard padding="md" style={styles.detailsCard}>
+                <View style={styles.detailBlock}>
+                  <View style={styles.detailIcon}>
+                    <Ionicons name="reader-outline" size={18} color={colors.primary} />
+                  </View>
+                  <View style={styles.detailCopy}>
+                    <AppText weight="semibold">نبذة عنك</AppText>
+                    {profile?.bio?.trim() ? (
+                      <AppText muted style={styles.detailBody}>{profile.bio}</AppText>
+                    ) : (
+                      <View style={styles.emptyDetailRow}>
+                        <AppText muted style={styles.detailBody}>لم تضف نبذة بعد. سطران صادقان يجعلون ملفك أقرب.</AppText>
+                        <Pressable accessibilityRole="button" onPress={() => router.push('/profile/edit')} hitSlop={spacing.sm}>
+                          <AppText weight="semibold" style={styles.inlineAction}>أضف نبذة</AppText>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.cardDivider} />
+                <View style={styles.detailBlock}>
+                  <View style={[styles.detailIcon, styles.detailIconAccent]}>
+                    <Ionicons name="mail-outline" size={18} color={colors.accent} />
+                  </View>
+                  <View style={styles.detailCopy}>
+                    <AppText weight="semibold">بريد الحساب</AppText>
+                    <AppText muted style={styles.detailBody}>{user?.email ?? 'لا يوجد بريد إلكتروني متاح حالياً.'}</AppText>
+                  </View>
                 </View>
               </AppCard>
-            </Pressable>
+            </AppFadeIn>
 
-            <Pressable onPress={() => router.push('/notifications')}>
-              <AppCard>
-                <View style={styles.group}>
-                  <AppText weight="semibold">الإشعارات</AppText>
-                  <AppText muted>{notificationsUnreadCount > 0 ? `لديك ${notificationsUnreadCount} إشعارات جديدة` : 'لا توجد إشعارات جديدة'}</AppText>
-                </View>
+            <AppFadeIn delay={175} duration={240} fromY={8} style={styles.sectionGroup}>
+              <AccountSectionHeading
+                eyebrow="التحكم"
+                title="الحساب والتفضيلات"
+                description="كل ما يخص إعداداتك وتنبيهاتك بدون تشتيت."
+              />
+              <AppCard padding="sm" style={styles.navigationCard}>
+                <AccountNavigationRow
+                  icon="settings-outline"
+                  title="الإعدادات"
+                  description="المظهر، اللغة، الخصوصية، وروابط الحساب."
+                  onPress={() => router.push('/settings')}
+                />
+                <AccountNavigationRow
+                  icon="options-outline"
+                  title="تفضيلات الإشعارات"
+                  description="أنواع التنبيهات ووضع الهدوء."
+                  onPress={() => router.push('/settings/notifications')}
+                  tone="accent"
+                />
+                <AccountNavigationRow
+                  icon="notifications-outline"
+                  title="مركز الإشعارات"
+                  description={notificationsUnreadCount > 0 ? `لديك ${notificationsUnreadCount} إشعارات جديدة` : 'كل شيء هادئ حتى الآن.'}
+                  badge={notificationsUnreadCount > 0 ? String(notificationsUnreadCount) : null}
+                  onPress={() => router.push('/notifications')}
+                  tone="success"
+                  last
+                />
               </AppCard>
-            </Pressable>
+            </AppFadeIn>
+
+            <AppFadeIn delay={200} duration={240} fromY={8} style={styles.sectionGroup}>
+              <AccountSectionHeading
+                eyebrow="الأمان والتواصل"
+                title="جاهزية حسابك"
+                description="فعّل ما تحتاجه على هذا الجهاز واترك الباقي لوقته."
+              />
+              <AppCard padding="md" style={styles.readinessCard}>
+                <View style={styles.readinessFeature}>
+                  <View style={[styles.readinessIcon, pushState === 'enabled' && styles.readinessIconSuccess]}>
+                    <Ionicons name={pushState === 'enabled' ? 'notifications' : 'notifications-outline'} size={20} color={pushState === 'enabled' ? colors.success : colors.primary} />
+                  </View>
+                  <View style={styles.readinessCopy}>
+                    <View style={styles.readinessTitleRow}>
+                      <AppText weight="bold">إشعارات الموبايل</AppText>
+                      <View style={[styles.statusPill, pushState === 'enabled' && styles.statusPillSuccess]}>
+                        <AppText weight="semibold" style={[styles.statusPillText, pushState === 'enabled' && styles.statusPillTextSuccess]}>
+                          {pushState === 'enabled' ? 'مفعّلة' : 'غير مفعّلة'}
+                        </AppText>
+                      </View>
+                    </View>
+                    {pushState === 'enabled' ? <AppText muted style={styles.readinessDescription}>التنبيهات المهمة ستصل إلى هذا الجهاز.</AppText> : null}
+                    {pushState === 'idle' ? <AppText muted style={styles.readinessDescription}>فعّلها لتعرف بالعروض والرسائل المهمة وقتها.</AppText> : null}
+                    {pushState === 'denied' ? <AppText muted style={styles.readinessDescription}>الإذن مرفوض حاليًا. يمكنك تغييره من إعدادات الهاتف.</AppText> : null}
+                    {pushState === 'error' ? <AppText muted style={styles.readinessDescription}>تعذر التفعيل الآن. حاول مرة أخرى.</AppText> : null}
+                  </View>
+                </View>
+                {pushState !== 'enabled' ? (
+                  <AppButton
+                    label={enablingPush ? 'جاري التفعيل' : 'تفعيل الإشعارات'}
+                    loading={enablingPush}
+                    onPress={handleEnablePush}
+                    variant="neutral"
+                    iconName="notifications-outline"
+                    fullWidth
+                  />
+                ) : null}
+
+                <View style={styles.cardDivider} />
+
+                <View style={styles.readinessFeature}>
+                  <View style={[styles.readinessIcon, biometricEnabled && styles.readinessIconSuccess]}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color={biometricEnabled ? colors.success : colors.primary} />
+                  </View>
+                  <View style={styles.readinessCopy}>
+                    <View style={styles.readinessTitleRow}>
+                      <AppText weight="bold">حماية التطبيق</AppText>
+                      <View style={[styles.statusPill, biometricEnabled && styles.statusPillSuccess]}>
+                        <AppText weight="semibold" style={[styles.statusPillText, biometricEnabled && styles.statusPillTextSuccess]}>
+                          {biometricEnabled ? 'محمي' : 'اختياري'}
+                        </AppText>
+                      </View>
+                    </View>
+                    <AppText muted style={styles.readinessDescription}>اقفل تِسوى بالبصمة أو التحقق المتاح على جهازك.</AppText>
+                    {biometricLoading ? <AppText muted style={styles.readinessMeta}>جاري التحقق من جاهزية الجهاز...</AppText> : null}
+                    {capabilityMessage ? <AppText muted style={styles.readinessMeta}>{capabilityMessage}</AppText> : null}
+                    {biometricMessage ? <AppText style={biometricEnabled ? styles.successText : styles.readinessMeta}>{biometricMessage}</AppText> : null}
+                  </View>
+                </View>
+                <AppButton
+                  label={biometricEnabled ? 'إيقاف قفل التطبيق' : 'تفعيل القفل بالبصمة'}
+                  onPress={handleBiometricAction}
+                  loading={biometricBusy}
+                  disabled={biometricLoading}
+                  variant="neutral"
+                  iconName="finger-print-outline"
+                  fullWidth
+                />
+              </AppCard>
+            </AppFadeIn>
           </>
         ) : null}
 
+        <AppFadeIn delay={225} duration={240} fromY={8} style={styles.sectionGroup}>
+          <AccountSectionHeading
+            eyebrow="الخصوصية"
+            title="سياسات تِسوى"
+            description="اعرف حقوقك وقواعد المجتمع وخيارات إدارة بياناتك."
+          />
+          <AppCard padding="sm" style={styles.navigationCard}>
+            <AccountNavigationRow icon="lock-closed-outline" title="سياسة الخصوصية" onPress={() => router.push('/legal/privacy')} />
+            <AccountNavigationRow icon="document-text-outline" title="شروط الاستخدام" onPress={() => router.push('/legal/terms')} tone="accent" />
+            <AccountNavigationRow icon="people-circle-outline" title="إرشادات المجتمع" onPress={() => router.push('/legal/community-guidelines')} tone="success" />
+            <AccountNavigationRow
+              icon="globe-outline"
+              title="طلب حذف الحساب عبر الويب"
+              description="مسار بديل لإدارة طلب الحذف."
+              onPress={() => router.push('/account-deletion')}
+              last
+            />
+          </AppCard>
+        </AppFadeIn>
 
-        <AppCard>
-          <View style={styles.group}>
-            <AppText weight="semibold">الخصوصية والسياسات</AppText>
-            <AppButton label="سياسة الخصوصية" variant="neutral" onPress={() => router.push('/legal/privacy')} />
-            <AppButton label="شروط الاستخدام" variant="neutral" onPress={() => router.push('/legal/terms')} />
-            <AppButton label="إرشادات المجتمع" variant="neutral" onPress={() => router.push('/legal/community-guidelines')} />
-            <AppButton label="طلب حذف الحساب عبر الويب" variant="neutral" onPress={() => router.push('/account-deletion')} />
-          </View>
-        </AppCard>
+        <AppFadeIn delay={250} duration={240} fromY={8} style={styles.sectionGroup}>
+          <AccountSectionHeading
+            eyebrow="الجلسة"
+            title="تبديل الحساب"
+            description="سجّل خروجك بأمان وارجع بحساب مختلف وقت ما تحب."
+          />
+          <AppCard padding="md" style={styles.sessionCard}>
+            <View style={styles.sessionCopy}>
+              <View style={styles.sessionIcon}>
+                <Ionicons name="log-out-outline" size={20} color={colors.textMuted} />
+              </View>
+              <AppText muted style={styles.sessionDescription}>لن يتم حذف أي بيانات عند تسجيل الخروج.</AppText>
+            </View>
+            {signOutError ? <AppText style={styles.errorText}>{signOutError}</AppText> : null}
+            <AppButton
+              label={isSigningOut ? 'جاري تسجيل الخروج' : 'تسجيل الخروج'}
+              loading={isSigningOut}
+              disabled={isDeletingAccount}
+              onPress={handleSignOut}
+              variant="neutral"
+              iconName="log-out-outline"
+              fullWidth
+            />
+          </AppCard>
+        </AppFadeIn>
 
-
-
-        <AppCard>
-          <View style={styles.group}>
-            <AppText weight="semibold" style={styles.dangerTitle}>حذف الحساب نهائيًا</AppText>
-            <AppText muted>حذف الحساب يزيل حساب تِسوى والبيانات المرتبطة به داخل التطبيق بشكل نهائي، ولا يمكن التراجع بعد التأكيد.</AppText>
+        <AppFadeIn delay={275} duration={240} fromY={8} style={styles.sectionGroup}>
+          <AccountSectionHeading
+            eyebrow="منطقة حساسة"
+            title="حذف الحساب"
+            description="هذا الإجراء نهائي؛ لذلك فصلناه عن بقية إعداداتك."
+          />
+          <AppCard variant="outlined" padding="md" style={styles.dangerCard}>
+            <View style={styles.dangerIntro}>
+              <View style={styles.dangerIcon}>
+                <Ionicons name="warning-outline" size={20} color={colors.danger} />
+              </View>
+              <View style={styles.dangerCopy}>
+                <AppText weight="bold" style={styles.dangerTitle}>حذف الحساب نهائيًا</AppText>
+                <AppText muted style={styles.dangerDescription}>سيتم حذف حساب تِسوى والبيانات المرتبطة به، ولا يمكن التراجع بعد التأكيد.</AppText>
+              </View>
+            </View>
             {accountDeletionError ? <AppText style={styles.errorText}>{accountDeletionError}</AppText> : null}
             {accountDeletionNotice ? <AppText style={styles.successText}>{accountDeletionNotice}</AppText> : null}
             <AppButton
-              label={isDeletingAccount ? 'جارٍ حذف الحساب...' : 'حذف الحساب'}
-              disabled={isDeletingAccount || isSigningOut}
+              label={isDeletingAccount ? 'جارٍ حذف الحساب' : 'حذف الحساب نهائيًا'}
+              loading={isDeletingAccount}
+              disabled={isSigningOut}
               onPress={handleDeleteAccount}
-              variant="neutral"
+              variant="danger"
+              iconName="trash-outline"
+              fullWidth
             />
-          </View>
-        </AppCard>
-
-        <AppCard>
-          <View style={styles.group}>
-            <AppText muted>تقدر تسجل خروجك وتدخل بحساب مختلف وقت ما تحب.</AppText>
-            {signOutError ? <AppText style={styles.errorText}>{signOutError}</AppText> : null}
-            <AppButton label={isSigningOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'} disabled={isSigningOut} onPress={handleSignOut} variant="neutral" />
-          </View>
-        </AppCard>
+          </AppCard>
+        </AppFadeIn>
       </View>
 
       <Modal visible={avatarSheetOpen} transparent animationType="fade" onRequestClose={() => setAvatarSheetOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setAvatarSheetOpen(false)}>
-          <View style={styles.sheet}>
+          <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <AppText weight="bold" style={styles.sheetTitle}>صورة الملف</AppText>
+              <AppText muted style={styles.sheetDescription}>حدّث صورتك بالطريقة المناسبة لك.</AppText>
+            </View>
             {profile?.avatar_url ? <AppButton label="عرض الصورة" variant="neutral" onPress={() => { setAvatarSheetOpen(false); setAvatarViewerOpen(true); }} /> : null}
             {profile?.avatar_url ? <AppButton label="تغيير صورة الملف" variant="neutral" onPress={() => void handlePickAvatar('gallery')} /> : <AppButton label="إضافة صورة الملف" variant="neutral" onPress={() => void handlePickAvatar('gallery')} />}
             <AppButton label="التقاط صورة" variant="neutral" onPress={() => void handlePickAvatar('camera')} />
-            {profile?.avatar_url ? <AppButton label="حذف صورة الملف" onPress={() => void handleRemoveAvatar()} /> : null}
-          </View>
+            {profile?.avatar_url ? <AppButton label="حذف صورة الملف" variant="danger" onPress={() => void handleRemoveAvatar()} /> : null}
+          </Pressable>
         </Pressable>
       </Modal>
       <Modal visible={avatarViewerOpen} transparent animationType="fade" onRequestClose={() => setAvatarViewerOpen(false)}>
         <Pressable style={styles.viewerBackdrop} onPress={() => setAvatarViewerOpen(false)}>
-          {profile?.avatar_url ? <ExpoImage source={{ uri: profile.avatar_url }} style={styles.viewerImage} contentFit="contain" /> : <AppText style={{ color: '#fff' }}>لا توجد صورة ملف لعرضها.</AppText>}
+          <View style={styles.viewerClose}>
+            <Ionicons name="close-outline" size={24} color={colors.white} />
+          </View>
+          {profile?.avatar_url ? <ExpoImage source={{ uri: profile.avatar_url }} style={styles.viewerImage} contentFit="contain" /> : <AppText style={styles.viewerFallbackText}>لا توجد صورة ملف لعرضها.</AppText>}
         </Pressable>
       </Modal>
     </AppScreen>
@@ -470,50 +844,187 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: spacing.md, paddingBottom: spacing.xxl },
-  title: { fontSize: 24 },
-  group: { gap: spacing.sm },
-  followStatsRow: { flexDirection: 'row', gap: spacing.sm },
+  screen: { paddingHorizontal: spacing.lg },
+  content: { gap: spacing.xl, paddingBottom: spacing.xxxl },
+  screenHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg },
+  screenHeaderCopy: { flex: 1, gap: spacing.xs },
+  screenEyebrow: { color: colors.primary, fontSize: 12 },
+  title: { fontSize: 28, lineHeight: 36 },
+  screenSubtitle: { fontSize: 14, lineHeight: 21 },
+  settingsButton: {
+    width: 46,
+    height: 46,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,253,248,0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.18)',
+  },
+  settingsButtonPressed: { opacity: 0.78, transform: [{ scale: 0.97 }] },
+  sectionGroup: { gap: spacing.md },
+  sectionHeading: { gap: 3, paddingHorizontal: spacing.xs },
+  sectionEyebrow: { color: colors.primary, fontSize: 12 },
+  sectionTitle: { fontSize: 21, lineHeight: 28 },
+  sectionDescription: { fontSize: 13, lineHeight: 20 },
+  primaryActions: { flexDirection: 'row-reverse', alignItems: 'stretch', gap: spacing.sm },
+  primaryActionMain: { flex: 1 },
+  publicProfileButton: {
+    minWidth: 104,
+    minHeight: 44,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  publicProfileButtonPressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
+  publicProfileButtonText: { color: colors.primary, fontSize: 13 },
+  communityCard: { borderColor: 'rgba(184,98,63,0.16)', backgroundColor: 'rgba(255,253,248,0.86)' },
+  followStatsRow: { flexDirection: 'row-reverse', alignItems: 'stretch' },
   followStatTile: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: 118,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing.xs,
   },
-  followStatLabel: { fontSize: 13 },
-  followStatValue: { fontSize: 19 },
-  publicProfileAction: { marginTop: spacing.md, gap: spacing.sm },
-  accountShortcut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: spacing.sm,
-    backgroundColor: colors.background,
-  },
-  accountShortcutIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  followStatPressed: { backgroundColor: 'rgba(184,98,63,0.06)' },
+  followStatIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FDE7D9',
+    backgroundColor: colors.primarySoft,
   },
-  accountShortcutBody: { flex: 1, gap: 2 },
-  errorText: { color: '#B00020' },
-  securityTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  successText: { color: '#7C2D12' },
-  dangerTitle: { color: '#B00020' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end', padding: spacing.lg },
-  sheet: { backgroundColor: '#fff', borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
+  followStatIconAccent: { backgroundColor: colors.accentSoft },
+  followStatLabel: { fontSize: 12 },
+  followStatValue: { fontSize: 22 },
+  followDivider: { width: StyleSheet.hairlineWidth, marginVertical: spacing.md, backgroundColor: colors.border },
+  quickActionsGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm },
+  quickAction: {
+    width: '48%',
+    minHeight: 148,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(184,98,63,0.15)',
+    backgroundColor: 'rgba(255,253,248,0.88)',
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  quickActionPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
+  quickActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionTitle: { fontSize: 16, marginTop: spacing.xs },
+  quickActionDescription: { fontSize: 12, lineHeight: 18 },
+  quickActionArrow: { marginTop: 'auto', alignSelf: 'flex-start' },
+  activeStoryBanner: {
+    minHeight: 90,
+    overflow: 'hidden',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.22)',
+    padding: spacing.md,
+  },
+  activeStoryBannerPressed: { opacity: 0.84, transform: [{ scale: 0.992 }] },
+  activeStoryIcon: { width: 42, height: 42, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
+  activeStoryCopy: { flex: 1, minWidth: 0, gap: 2 },
+  activeStoryDescription: { fontSize: 12, lineHeight: 18 },
+  detailsCard: { gap: spacing.md, borderColor: 'rgba(184,98,63,0.15)', backgroundColor: 'rgba(255,253,248,0.88)' },
+  detailBlock: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md },
+  detailIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  detailIconAccent: { backgroundColor: colors.accentSoft },
+  detailCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
+  detailBody: { fontSize: 13, lineHeight: 21 },
+  emptyDetailRow: { gap: spacing.sm },
+  inlineAction: { color: colors.primary, fontSize: 13 },
+  cardDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  navigationCard: { paddingVertical: 0, borderColor: 'rgba(184,98,63,0.15)', backgroundColor: 'rgba(255,253,248,0.9)' },
+  navigationRow: {
+    minHeight: 78,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  navigationRowLast: { borderBottomWidth: 0 },
+  pressedRow: { opacity: 0.72, backgroundColor: 'rgba(184,98,63,0.04)' },
+  navigationIcon: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  navigationCopy: { flex: 1, minWidth: 0, gap: 3 },
+  navigationTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  navigationTitle: { fontSize: 15, flexShrink: 1 },
+  navigationDescription: { fontSize: 12, lineHeight: 18 },
+  navigationArrow: { width: 28, height: 28, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  navigationBadge: { minWidth: 24, height: 24, paddingHorizontal: 6, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  navigationBadgeText: { color: colors.white, fontSize: 11 },
+  readinessCard: { gap: spacing.md, borderColor: 'rgba(62,124,115,0.17)', backgroundColor: 'rgba(255,253,248,0.9)' },
+  readinessFeature: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md },
+  readinessIcon: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  readinessIconSuccess: { backgroundColor: colors.successSoft },
+  readinessCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
+  readinessTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  readinessDescription: { fontSize: 13, lineHeight: 20 },
+  readinessMeta: { fontSize: 12, lineHeight: 18 },
+  statusPill: { borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  statusPillSuccess: { backgroundColor: colors.successSoft, borderColor: 'rgba(47,125,75,0.2)' },
+  statusPillText: { color: colors.textMuted, fontSize: 11 },
+  statusPillTextSuccess: { color: colors.success },
+  sessionCard: { gap: spacing.md, borderColor: 'rgba(29,26,22,0.1)', backgroundColor: 'rgba(255,253,248,0.86)' },
+  sessionCopy: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
+  sessionIcon: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  sessionDescription: { flex: 1, fontSize: 13, lineHeight: 20 },
+  dangerCard: { gap: spacing.md, borderColor: 'rgba(180,67,67,0.28)', backgroundColor: 'rgba(246,223,223,0.34)' },
+  dangerIntro: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md },
+  dangerIcon: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.dangerSoft },
+  dangerCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
+  dangerTitle: { color: colors.danger },
+  dangerDescription: { fontSize: 13, lineHeight: 20 },
+  errorCard: { gap: spacing.md, alignItems: 'stretch', borderColor: 'rgba(184,98,63,0.22)', backgroundColor: 'rgba(255,253,248,0.88)' },
+  errorIconShell: { width: 46, height: 46, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft, alignSelf: 'center' },
+  errorCopy: { gap: spacing.xs, alignItems: 'center' },
+  errorTitle: { fontSize: 18 },
+  errorDescription: { textAlign: 'center', lineHeight: 21 },
+  errorText: { color: colors.danger, fontSize: 13 },
+  successText: { color: colors.success, fontSize: 12, lineHeight: 18 },
+  loadingStack: { gap: spacing.md },
+  loadingHero: { overflow: 'hidden', minHeight: 330, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  loadingCover: { height: 212, backgroundColor: colors.primarySoft },
+  loadingIdentityRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: -38 },
+  loadingAvatar: { width: 94, height: 94, borderRadius: 47, borderWidth: 4, borderColor: colors.surface, backgroundColor: '#E5CDBD' },
+  loadingCopy: { flex: 1, gap: spacing.sm, paddingTop: spacing.xl },
+  loadingTitle: { width: '68%', height: 22, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
+  loadingLineSmall: { width: '44%', height: 13, borderRadius: radii.sm, backgroundColor: '#E9E0D8' },
+  loadingActions: { flexDirection: 'row-reverse', gap: spacing.sm },
+  loadingAction: { flex: 1, height: 46, borderRadius: radii.md, backgroundColor: '#E8DDD3' },
+  loadingCard: { height: 182, borderRadius: radii.xl, backgroundColor: 'rgba(238,216,203,0.68)' },
+  loadingCardCompact: { height: 126, borderRadius: radii.xl, backgroundColor: 'rgba(215,232,229,0.68)' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(29,26,22,0.48)', justifyContent: 'flex-end', padding: spacing.lg },
+  sheet: { backgroundColor: colors.surface, borderRadius: radii.xl, padding: spacing.lg, gap: spacing.sm },
+  sheetHandle: { width: 44, height: 4, borderRadius: radii.round, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.sm },
+  sheetHeader: { gap: spacing.xs, marginBottom: spacing.sm },
+  sheetTitle: { fontSize: 20 },
+  sheetDescription: { fontSize: 13 },
   viewerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  viewerClose: { position: 'absolute', top: spacing.xxl, left: spacing.lg, width: 44, height: 44, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
   viewerImage: { width: '100%', height: '75%' },
+  viewerFallbackText: { color: colors.white },
 });
