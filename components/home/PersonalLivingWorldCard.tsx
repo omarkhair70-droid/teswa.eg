@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
@@ -14,10 +14,10 @@ type Props = {
 };
 
 const toneStyles = {
-  attention: { gradient: ['#FFF9F3', '#F7DFCC', '#FFF6E8'], border: 'rgba(184,98,63,0.24)' },
-  alive: { gradient: ['#F8FFFC', '#DDEFEA', '#F4FFFB'], border: 'rgba(62,124,115,0.24)' },
-  calm: { gradient: ['#FFFCF7', '#F4ECE3', '#FFFBF4'], border: 'rgba(138,90,45,0.2)' },
-  first_visit: { gradient: ['#FFFDF8', '#F7E9DA', '#F6FBF8'], border: 'rgba(184,98,63,0.2)' },
+  attention: { gradient: ['#FFF9F3', '#F7DFCC', '#FFF6E8'], border: 'rgba(184,98,63,0.24)', accent: colors.primary },
+  alive: { gradient: ['#F8FFFC', '#DDEFEA', '#F4FFFB'], border: 'rgba(62,124,115,0.24)', accent: colors.accent },
+  calm: { gradient: ['#FFFCF7', '#F4ECE3', '#FFFBF4'], border: 'rgba(138,90,45,0.2)', accent: '#8A5A2D' },
+  first_visit: { gradient: ['#FFFDF8', '#F7E9DA', '#F6FBF8'], border: 'rgba(184,98,63,0.2)', accent: colors.primary },
 } as const;
 
 const signalToneBg: Record<PersonalLivingSignal['tone'], string> = {
@@ -33,40 +33,59 @@ export function PersonalLivingWorldCard({ state, loading = false, onPrimaryActio
   const tone = toneStyles[state.tone];
 
   return (
-    <LinearGradient colors={tone.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.card, { borderColor: tone.border }]}>
+    <LinearGradient
+      colors={tone.gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.card, { borderColor: tone.border }]}
+    >
       <View style={styles.orbPrimary} />
-      <View style={styles.orbAccent} />
       <View style={styles.headerRow}>
-        <View style={styles.iconShell}>
-          <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+        <View style={styles.headerIdentity}>
+          <View style={[styles.iconShell, { backgroundColor: `${tone.accent}18` }]}>
+            <Ionicons name="time-outline" size={18} color={tone.accent} />
+          </View>
+          <View style={styles.headerCopy}>
+            <AppText weight="semibold" style={[styles.eyebrow, { color: tone.accent }]}>منذ آخر زيارة</AppText>
+            <AppText muted style={styles.visitLabel}>{state.visitLabel}</AppText>
+          </View>
         </View>
-        <AppText muted style={styles.eyebrow}>{state.visitLabel}</AppText>
+        <View style={[styles.toneDot, { backgroundColor: tone.accent }]} />
       </View>
 
       {loading ? (
-        <View style={styles.loadingBlock}>
-          <AppText weight="bold" style={styles.title}>نقرأ آخر حركة في عالمك...</AppText>
-          <AppText muted style={styles.supportMutedText}>لحظات ونرتّب لك المشهد بشكل أوضح.</AppText>
+        <View style={styles.loadingBlock} accessibilityLabel="جاري تجهيز ملخص آخر زيارة">
+          <View style={styles.loadingTitle} />
+          <View style={styles.loadingLine} />
+          <View style={styles.loadingSignals}>
+            <View style={styles.loadingPill} />
+            <View style={styles.loadingPill} />
+          </View>
         </View>
       ) : (
         <>
           <View style={styles.copyBlock}>
             <AppText weight="bold" style={styles.title}>{state.title}</AppText>
-            <AppText muted style={[styles.body, styles.supportMutedText]}>{state.body}</AppText>
+            <AppText muted style={styles.body}>{state.body}</AppText>
           </View>
           <View style={styles.signalsWrap}>
             {state.signals.map((signal) => (
               <View key={signal.key} style={[styles.signalPill, { backgroundColor: signalToneBg[signal.tone] }]}>
                 <Ionicons name={signal.icon as never} size={14} color={colors.text} />
-                <AppText weight="semibold" style={styles.signalValue}>{signal.value}</AppText>
+                <AppText weight="bold" style={styles.signalValue}>{signal.value}</AppText>
                 <AppText style={styles.signalLabel}>{signal.label}</AppText>
               </View>
             ))}
           </View>
           {state.primaryActionLabel && state.primaryActionRoute ? (
-            <Pressable style={styles.ctaButton} onPress={onPrimaryAction}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={state.primaryActionLabel}
+              onPress={onPrimaryAction}
+              style={({ pressed }) => [styles.ctaButton, { backgroundColor: tone.accent }, pressed && styles.ctaButtonPressed]}
+            >
               <AppText weight="semibold" style={styles.ctaText}>{state.primaryActionLabel}</AppText>
-              <Ionicons name="arrow-back-outline" size={15} color="#fff" />
+              <Ionicons name="arrow-back-outline" size={15} color={colors.white} />
             </Pressable>
           ) : null}
         </>
@@ -76,21 +95,28 @@ export function PersonalLivingWorldCard({ state, loading = false, onPrimaryActio
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: radii.xl, padding: spacing.lg, gap: spacing.md, overflow: 'hidden' },
-  orbPrimary: { position: 'absolute', width: 138, height: 138, borderRadius: radii.round, top: -44, right: -38, backgroundColor: 'rgba(184,98,63,0.09)' },
-  orbAccent: { position: 'absolute', width: 104, height: 104, borderRadius: radii.round, bottom: -32, left: -24, backgroundColor: 'rgba(62,124,115,0.1)' },
-  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  iconShell: { width: 34, height: 34, borderRadius: radii.round, borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)', backgroundColor: 'rgba(255,253,248,0.74)', alignItems: 'center', justifyContent: 'center' },
+  card: { overflow: 'hidden', borderWidth: 1, borderRadius: radii.xl, padding: spacing.lg, gap: spacing.md },
+  orbPrimary: { position: 'absolute', width: 150, height: 150, borderRadius: 75, top: -70, left: -42, backgroundColor: 'rgba(255,255,255,0.34)' },
+  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  headerIdentity: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  iconShell: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  headerCopy: { flex: 1, minWidth: 0, gap: 2 },
   eyebrow: { fontSize: 12 },
-  supportMutedText: { color: '#5C5146' },
-  loadingBlock: { gap: spacing.xs },
+  visitLabel: { fontSize: 11 },
+  toneDot: { width: 9, height: 9, borderRadius: 5 },
   copyBlock: { gap: spacing.xs },
-  title: { fontSize: 20, lineHeight: 28 },
-  body: { lineHeight: 22 },
+  title: { fontSize: 21, lineHeight: 28 },
+  body: { color: '#5C5146', fontSize: 13, lineHeight: 21 },
   signalsWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
-  signalPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 7 },
+  signalPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 7 },
   signalValue: { fontSize: 12 },
-  signalLabel: { fontSize: 12 },
-  ctaButton: { marginTop: spacing.xs, alignSelf: 'flex-end', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.primary, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  ctaText: { color: '#fff' },
+  signalLabel: { fontSize: 11 },
+  ctaButton: { alignSelf: 'flex-start', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  ctaButtonPressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
+  ctaText: { color: colors.white, fontSize: 13 },
+  loadingBlock: { gap: spacing.sm },
+  loadingTitle: { width: '66%', height: 20, borderRadius: radii.sm, backgroundColor: 'rgba(184,98,63,0.14)' },
+  loadingLine: { width: '90%', height: 12, borderRadius: radii.sm, backgroundColor: 'rgba(29,26,22,0.09)' },
+  loadingSignals: { flexDirection: 'row-reverse', gap: spacing.xs },
+  loadingPill: { width: 94, height: 30, borderRadius: radii.round, backgroundColor: 'rgba(29,26,22,0.07)' },
 });

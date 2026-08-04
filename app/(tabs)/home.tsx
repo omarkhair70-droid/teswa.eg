@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { ItemCard } from '@/components/marketplace/ItemCard';
@@ -50,7 +49,7 @@ const nextActionVisuals: Record<NextActionKind, { icon: IoniconName; color: stri
   calm: { icon: 'pulse-outline', color: colors.accent, soft: 'rgba(62,124,115,0.13)' },
 };
 
-const metricSignals: Array<{ key: 'offers' | 'messages' | 'listings'; label: string; icon: IoniconName; color: string }> = [
+const metricSignals: { key: 'offers' | 'messages' | 'listings'; label: string; icon: IoniconName; color: string }[] = [
   { key: 'offers', label: 'العروض الواردة', icon: 'swap-horizontal-outline', color: colors.primary },
   { key: 'messages', label: 'رسائل وردود', icon: 'chatbubble-ellipses-outline', color: colors.accent },
   { key: 'listings', label: 'عناصر نشطة', icon: 'cube-outline', color: '#8A5A2D' },
@@ -58,15 +57,17 @@ const metricSignals: Array<{ key: 'offers' | 'messages' | 'listings'; label: str
 
 function HomeFeedLoadingState() {
   return (
-    <View style={styles.feedStateCard}>
-      <View style={styles.feedStateIcon}>
-        <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
-      </View>
-      <View style={styles.feedStateCopy}>
-        <AppText weight="semibold">بنجهز أحدث العناصر...</AppText>
-        <AppText muted>هنعرض أول نتائج فور وصولها من غير ما نحرك باقي الصفحة.</AppText>
-      </View>
-      {[0, 1, 2].map((item) => <View key={item} style={styles.feedSkeletonRow} />)}
+    <View style={styles.feedLoadingStack} accessibilityLabel="جاري تحميل أحدث العناصر">
+      {[0, 1, 2].map((item) => (
+        <View key={item} style={styles.feedSkeletonCard}>
+          <View style={styles.feedSkeletonImage} />
+          <View style={styles.feedSkeletonCopy}>
+            <View style={styles.feedSkeletonTitle} />
+            <View style={styles.feedSkeletonLine} />
+            <View style={styles.feedSkeletonMeta} />
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -101,9 +102,40 @@ function HomeFeedErrorState({ message, onRetry }: { message: string; onRetry: ()
   );
 }
 
+function HomeSectionHeading({
+  eyebrow,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.homeSectionHeading}>
+      <View style={styles.homeSectionCopy}>
+        <AppText weight="semibold" style={styles.homeSectionEyebrow}>{eyebrow}</AppText>
+        <AppText weight="bold" style={styles.homeSectionTitle}>{title}</AppText>
+        <AppText muted style={styles.homeSectionDescription}>{description}</AppText>
+      </View>
+      {actionLabel && onAction ? (
+        <Pressable accessibilityRole="button" onPress={onAction} hitSlop={spacing.sm} style={styles.homeSectionAction}>
+          <AppText weight="semibold" style={styles.homeSectionActionText}>{actionLabel}</AppText>
+          <Ionicons name="arrow-back-outline" size={14} color={colors.primary} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { user, profileCompleted } = useAuth();
+  const userId = user?.id ?? null;
   const { notificationsUnreadCount, refreshBadges } = useUnreadBadges();
   const [stories, setStories] = useState<ActiveStorySummary[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
@@ -120,12 +152,14 @@ export default function HomeScreen() {
   const [personalWorldLoading, setPersonalWorldLoading] = useState(false);
   const personalWorldSeenCommittedRef = useRef(false);
   const skipFirstFocusRefreshRef = useRef(true);
-  const homeContentStartedAtRef = useRef(Date.now());
+  const homeContentStartedAtRef = useRef<number | null>(null);
   const homeFirstContentMetricSentRef = useRef(false);
   const [homeHubVisible, setHomeHubVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
 
-  const homeFeedQuery = useHomeFeedQuery(user?.id ?? null);
+  const homeFeedQuery = useHomeFeedQuery(userId);
+  const refetchHomeFeed = homeFeedQuery.refetch;
 
   const loadStories = useCallback(async () => {
     setStoriesLoading(true);
@@ -141,7 +175,7 @@ export default function HomeScreen() {
   }, []);
 
   const loadDashboard = useCallback(async () => {
-    if (!user?.id) {
+    if (!userId) {
       setDashboard(null);
       setDashboardLoading(false);
       setDashboardError(null);
@@ -151,7 +185,7 @@ export default function HomeScreen() {
     setDashboardLoading(true);
     setDashboardError(null);
     try {
-      const result = await fetchHomeDashboardSummary(user.id);
+      const result = await fetchHomeDashboardSummary(userId);
       setDashboard(result);
     } catch {
       setDashboardError('تعذر تحميل لمحة حسابك حالياً.');
@@ -159,7 +193,7 @@ export default function HomeScreen() {
     } finally {
       setDashboardLoading(false);
     }
-  }, [user?.id]);
+  }, [userId]);
 
   const loadVideoMoments = useCallback(async () => {
     setVideoMomentsLoading(true);
@@ -176,7 +210,7 @@ export default function HomeScreen() {
   }, []);
 
   const loadPersonalLivingWorldMarker = useCallback(async () => {
-    if (!user?.id) {
+    if (!userId) {
       setPersonalWorldLastSeenAtMs(null);
       setPersonalWorldNewItemsCount(null);
       setPersonalWorldLoading(false);
@@ -184,24 +218,48 @@ export default function HomeScreen() {
     }
 
     setPersonalWorldLoading(true);
-    const lastSeen = await readPersonalLivingWorldLastSeen(user.id);
+    const lastSeen = await readPersonalLivingWorldLastSeen(userId);
     setPersonalWorldLastSeenAtMs(lastSeen);
     const newItemsCount = await fetchNewMarketplaceItemsCountSince(lastSeen);
     setPersonalWorldNewItemsCount(newItemsCount);
     setPersonalWorldLoading(false);
-  }, [user?.id]);
+  }, [userId]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    const refreshTasks: Promise<unknown>[] = [
+      loadStories(),
+      loadVideoMoments(),
+      loadPersonalLivingWorldMarker(),
+      refetchHomeFeed(),
+      refreshBadges(),
+    ];
+    if (userId) {
+      refreshTasks.push(loadDashboard());
+    }
+
+    try {
+      await Promise.allSettled(refreshTasks);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadDashboard, loadPersonalLivingWorldMarker, loadStories, loadVideoMoments, refetchHomeFeed, refreshBadges, userId]);
+
+
+  useEffect(() => {
+    homeContentStartedAtRef.current = Date.now();
+  }, []);
 
   useEffect(() => {
     const interactionTask = InteractionManager.runAfterInteractions(() => {
       void loadStories();
       void loadVideoMoments();
-      if (user?.id) {
+      if (userId) {
         void loadDashboard();
       }
       void loadPersonalLivingWorldMarker();
     });
-    if (user?.id) {
+    if (userId) {
       const delayedBadgeRefresh = setTimeout(() => {
         void refreshBadges();
       }, 1500);
@@ -213,17 +271,18 @@ export default function HomeScreen() {
     return () => {
       interactionTask.cancel();
     };
-  }, [loadDashboard, loadPersonalLivingWorldMarker, loadStories, loadVideoMoments, refreshBadges, user?.id]);
+  }, [loadDashboard, loadPersonalLivingWorldMarker, loadStories, loadVideoMoments, refreshBadges, userId]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!userId) return;
     void trackEvent('home_viewed', { route: '/(tabs)/home' });
-  }, [user?.id]);
+  }, [userId]);
 
 
   useEffect(() => {
     if (homeFirstContentMetricSentRef.current) return;
     if (!homeFeedQuery.data?.items) return;
+    if (homeContentStartedAtRef.current === null) return;
 
     homeFirstContentMetricSentRef.current = true;
     void trackPerformanceMetric('home_first_content_time', Date.now() - homeContentStartedAtRef.current, {
@@ -241,15 +300,15 @@ export default function HomeScreen() {
   useEffect(() => {
     personalWorldSeenCommittedRef.current = false;
     skipFirstFocusRefreshRef.current = true;
-  }, [user?.id]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!user?.id || personalWorldSeenCommittedRef.current) return;
+    if (!userId || personalWorldSeenCommittedRef.current) return;
     if (personalWorldLoading || storiesLoading || videoMomentsLoading || dashboardLoading) return;
 
     personalWorldSeenCommittedRef.current = true;
-    void writePersonalLivingWorldLastSeen(user.id);
-  }, [dashboardLoading, personalWorldLoading, storiesLoading, user?.id, videoMomentsLoading]);
+    void writePersonalLivingWorldLastSeen(userId);
+  }, [dashboardLoading, personalWorldLoading, storiesLoading, userId, videoMomentsLoading]);
 
   useFocusEffect(
     useCallback(() => {
@@ -258,14 +317,14 @@ export default function HomeScreen() {
         return;
       }
       void loadStories();
-      if (user?.id) {
+      if (userId) {
         void loadDashboard();
       }
-    }, [loadDashboard, loadStories, user?.id]),
+    }, [loadDashboard, loadStories, userId]),
   );
 
-  const myStorySummary = useMemo(() => stories.find((summary) => summary.author.id === user?.id) ?? null, [stories, user?.id]);
-  const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== user?.id), [stories, user?.id]);
+  const myStorySummary = useMemo(() => stories.find((summary) => summary.author.id === userId) ?? null, [stories, userId]);
+  const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== userId), [stories, userId]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
   const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
   const newActiveStoriesCount = useMemo(
@@ -399,6 +458,8 @@ export default function HomeScreen() {
         windowSize={7}
         updateCellsBatchingPeriod={50}
         contentContainerStyle={styles.content}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
         ListHeaderComponent={
           <View style={styles.header}>
             <AppFadeIn delay={0} duration={200} fromY={8}>
@@ -412,11 +473,18 @@ export default function HomeScreen() {
             </AppFadeIn>
             {user ? (
               <AppFadeIn delay={40} duration={210} fromY={8}>
-                <AppCard>
+                <AppCard padding="md" style={styles.todayCard}>
                 <View style={styles.dashboardSection}>
-                  <View style={styles.sectionHeader}>
-                    <AppText weight="bold" style={styles.sectionTitle}>يهمك الآن</AppText>
-                    <AppText muted style={styles.supportMutedText}>نبضة شخصية تجمع لك أقرب خطوة، من غير ضجيج.</AppText>
+                  <View style={styles.todayHeaderRow}>
+                    <HomeSectionHeading
+                      eyebrow="خطوتك التالية"
+                      title="يهمك الآن"
+                      description="أقرب خطوة مفيدة لك، مرتبة من غير ضجيج."
+                    />
+                    <View style={styles.liveBadge}>
+                      <View style={styles.liveBadgeDot} />
+                      <AppText weight="semibold" style={styles.liveBadgeText}>مباشر</AppText>
+                    </View>
                   </View>
 
                   {dashboardLoading ? (
@@ -453,6 +521,8 @@ export default function HomeScreen() {
                         label={nextAction.buttonLabel}
                         variant={nextAction.kind === 'firstItem' ? 'neutral' : nextAction.variant}
                         onPress={() => router.push(nextAction.route)}
+                        iconName="arrow-back-outline"
+                        fullWidth
                       />
                     </LinearGradient>
                   ) : null}
@@ -485,27 +555,35 @@ export default function HomeScreen() {
             ) : null}
 
             {user ? (
-              <AppFadeIn delay={80} duration={220} fromY={8}>
+              <AppFadeIn delay={80} duration={220} fromY={8} style={styles.sectionGroup}>
+                <HomeSectionHeading
+                  eyebrow="من آخر مرة"
+                  title="ما الذي تحرّك؟"
+                  description="ملخص سريع للجديد المرتبط بحسابك منذ زيارتك السابقة."
+                />
                 <PersonalLivingWorldCard
-                state={personalLivingWorldState}
-                loading={personalWorldLoading}
-                onPrimaryAction={() => {
-                  if (personalLivingWorldState.primaryActionRoute) {
-                    router.push(personalLivingWorldState.primaryActionRoute as any);
-                  }
-                }}
+                  state={personalLivingWorldState}
+                  loading={personalWorldLoading}
+                  onPrimaryAction={() => {
+                    if (personalLivingWorldState.primaryActionRoute) {
+                      router.push(personalLivingWorldState.primaryActionRoute as any);
+                    }
+                  }}
                 />
               </AppFadeIn>
             ) : null}
 
             <AppFadeIn delay={120} duration={220} fromY={8}>
-              <AppCard>
+              <AppCard padding="md" style={styles.storiesCard}>
               <View style={styles.storiesSection}>
                 <View style={styles.storiesHeaderRow}>
-                  <View style={styles.sectionHeader}>
-                    <AppText weight="bold" style={styles.sectionTitle}>القصص</AppText>
-                    <AppText muted style={styles.supportMutedText}>لقطات قريبة من عالم تِسوى الآن.</AppText>
-                  </View>
+                  <HomeSectionHeading
+                    eyebrow="حكايات قريبة"
+                    title="القصص"
+                    description="لقطات حقيقية من عالم تِسوى الآن."
+                    actionLabel="أضف قصة"
+                    onAction={() => router.push('/story/create')}
+                  />
                   {!storiesLoading && !storiesError && totalActiveStories > 0 ? (
                     <View style={styles.storyCountBadge}>
                       <Ionicons name="radio-outline" size={13} color={colors.primary} />
@@ -515,8 +593,8 @@ export default function HomeScreen() {
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRail}>
-                  {myStorySummary && user?.id ? (
-                    <Pressable style={[styles.storyTile, styles.myStoryTile]} onPress={() => router.push(`/story/${user.id}`)}>
+                  {myStorySummary && userId ? (
+                    <Pressable style={[styles.storyTile, styles.myStoryTile]} onPress={() => router.push(`/story/${userId}`)}>
                       <LinearGradient colors={[colors.primary, '#F2B978', colors.accent]} style={styles.storyAvatarRing}>
                         <View style={styles.storyAvatar}>
                           {myStorySummary.author.avatarUrl ? (
@@ -597,36 +675,40 @@ export default function HomeScreen() {
 
             {shouldShowVideoMomentsRail ? (
               <AppFadeIn delay={120} duration={220} fromY={8}>
-                <AppCard>
+                <AppCard padding="md" style={styles.videoCard}>
                   <ItemVideoDiscoveryRail
-            onOpenViewer={() => router.push('/motion/viewer')}
-            viewerCtaLabel='شوف المشاهد'
-                  eyebrow="لمحات مرئية"
-                  title="عناصر تقدر تشوفها أقرب"
-                  description="فيديوهات قصيرة تساعدك تلمح العنصر قبل ما تفتح تفاصيله."
-                  moments={videoMoments}
-                  loading={videoMomentsLoading}
-                  errorMessage={videoMomentsError}
-                  onRetry={loadVideoMoments}
+                    onOpenViewer={() => router.push('/motion/viewer')}
+                    viewerCtaLabel="شوف المشاهد"
+                    eyebrow="لمحات مرئية"
+                    title="عناصر تقدر تشوفها أقرب"
+                    description="فيديوهات قصيرة تساعدك تلمح العنصر قبل ما تفتح تفاصيله."
+                    moments={videoMoments}
+                    loading={videoMomentsLoading}
+                    errorMessage={videoMomentsError}
+                    onRetry={loadVideoMoments}
                   />
                 </AppCard>
               </AppFadeIn>
             ) : null}
 
             {homeFeedQuery.data?.notice ? (
-              <AppCard>
+              <AppCard variant="outlined" padding="md" style={styles.cacheNoticeCard}>
                 <View style={styles.cacheNoticeRow}>
-                  <Ionicons name="cloud-offline-outline" size={18} color={colors.accent} />
+                  <View style={styles.cacheNoticeIcon}>
+                    <Ionicons name="cloud-offline-outline" size={17} color={colors.accent} />
+                  </View>
                   <AppText muted style={styles.cacheNoticeText}>{homeFeedQuery.data.notice}</AppText>
                 </View>
               </AppCard>
             ) : null}
 
-            <View style={styles.itemsHeader}>
-              <AppText weight="semibold" style={styles.itemsEyebrow}>ظهر حديثًا</AppText>
-              <AppText weight="bold" style={styles.itemsTitle}>أحدث العناصر</AppText>
-              <AppText muted style={styles.itemsSupportText}>حاجات وصلت للتو، جاهزة تفتح رحلة تبادل جديدة.</AppText>
-            </View>
+            <HomeSectionHeading
+              eyebrow="ظهر حديثًا"
+              title="أحدث العناصر"
+              description="حاجات وصلت للتو، جاهزة تفتح رحلة تبادل جديدة."
+              actionLabel="شوف الكل"
+              onAction={() => router.push('/(tabs)/discover')}
+            />
           </View>
         }
         renderItem={renderItem}
@@ -706,8 +788,8 @@ export default function HomeScreen() {
             iconName: 'person-circle-outline',
             onPress: () => {
               setHomeHubVisible(false);
-              if (user?.id) {
-                router.push(`/profile/${user.id}`);
+              if (userId) {
+                router.push(`/profile/${userId}`);
                 return;
               }
               router.push('/(auth)/login');
@@ -721,90 +803,31 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  header: { gap: spacing.xs, marginBottom: spacing.md },
-  heroCard: {
-    minHeight: 190,
-    gap: spacing.md,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.18)',
-    padding: spacing.lg,
-    overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
-  },
-  heroOrb: { position: 'absolute', borderRadius: radii.round, opacity: 0.34 },
-  heroOrbPrimary: { width: 132, height: 132, right: -34, top: -26, backgroundColor: colors.primarySoft },
-  heroOrbAccent: { width: 112, height: 112, left: -28, bottom: -36, backgroundColor: 'rgba(62,124,115,0.18)' },
-  heroIconShell: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.round,
-    backgroundColor: 'rgba(255,253,248,0.78)',
-    borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroCopy: { gap: spacing.sm, maxWidth: '92%' },
-  heroTopRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  notificationsEntry: {
-    minWidth: 44,
-    minHeight: 44,
-    borderRadius: radii.round,
-    backgroundColor: 'rgba(255,253,248,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hubEntry: {
-    minWidth: 44,
-    minHeight: 44,
-    borderRadius: radii.round,
-    backgroundColor: 'rgba(255,253,248,0.78)',
-    borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#B42318',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  unreadBadgeText: { color: colors.white, fontSize: 10 },
-  title: { fontSize: 27, lineHeight: 34 },
-  heroBody: { fontSize: 16, lineHeight: 24 },
-  heroSupport: { lineHeight: 22 },
-  sectionHeader: { gap: spacing.xs, flexShrink: 1 },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
+  header: { gap: spacing.lg, marginBottom: spacing.lg },
+  sectionGroup: { gap: spacing.md },
+  homeSectionHeading: { flex: 1, flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: spacing.xs },
+  homeSectionCopy: { flex: 1, minWidth: 0, gap: 3 },
+  homeSectionEyebrow: { color: colors.primary, fontSize: 12 },
+  homeSectionTitle: { fontSize: 21, lineHeight: 28 },
+  homeSectionDescription: { fontSize: 13, lineHeight: 20 },
+  homeSectionAction: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3, paddingVertical: spacing.xs },
+  homeSectionActionText: { color: colors.primary, fontSize: 12 },
   supportMutedText: { color: '#5F5348' },
-  sectionTitle: { fontSize: 18 },
-  dashboardSection: { gap: spacing.xs },
-  dashboardErrorText: { color: '#B42318' },
+  todayCard: { borderColor: 'rgba(184,98,63,0.16)', backgroundColor: 'rgba(255,253,248,0.9)' },
+  todayHeaderRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
+  liveBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.accentSoft },
+  liveBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
+  liveBadgeText: { color: colors.accent, fontSize: 11 },
+  dashboardSection: { gap: spacing.md },
+  dashboardErrorText: { color: colors.danger },
   nextActionBlock: {
-    gap: spacing.xs,
+    minHeight: 170,
+    gap: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.12)',
+    borderColor: 'rgba(184,98,63,0.15)',
     borderRadius: radii.lg,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.sm,
+    padding: spacing.md,
     overflow: 'hidden',
   },
   nextActionTopRow: {
@@ -821,20 +844,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,253,248,0.74)',
   },
-  nextActionCopy: { flex: 1, gap: spacing.xs },
-  nextActionTitle: { fontSize: 17 },
+  nextActionCopy: { flex: 1, gap: spacing.xs, paddingTop: 2 },
+  nextActionTitle: { fontSize: 18, lineHeight: 25 },
   metricsRow: {
     flexDirection: 'row-reverse',
     gap: spacing.sm,
   },
   metricCard: {
     flex: 1,
+    minHeight: 108,
     minWidth: 92,
     borderWidth: 1,
     borderColor: 'rgba(221,208,197,0.82)',
     borderRadius: radii.lg,
     backgroundColor: 'rgba(255,253,248,0.82)',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
     gap: spacing.xs,
@@ -848,7 +872,8 @@ const styles = StyleSheet.create({
   },
   metricLabel: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
   metricValue: { fontSize: 22, lineHeight: 27 },
-  storiesSection: { gap: spacing.xs },
+  storiesCard: { borderColor: 'rgba(184,98,63,0.14)', backgroundColor: 'rgba(255,253,248,0.88)' },
+  storiesSection: { gap: spacing.md },
   storiesHeaderRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
@@ -965,21 +990,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   compactStoryActionText: { color: colors.primary, fontSize: 12 },
-
+  videoCard: { borderColor: 'rgba(62,124,115,0.16)', backgroundColor: 'rgba(255,253,248,0.9)' },
+  cacheNoticeCard: { borderColor: 'rgba(62,124,115,0.2)', backgroundColor: 'rgba(215,232,229,0.52)' },
   cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
-  cacheNoticeText: { flex: 1 },
-  itemsHeader: {
-    gap: 2,
-    marginTop: 2,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
-  },
-  itemsEyebrow: { color: colors.primary, fontSize: 12 },
-  itemsTitle: { fontSize: 21 },
-  itemsSupportText: { color: '#5F5348', fontSize: 13, lineHeight: 19 },
-  stateBox: { gap: spacing.md },
-  feedStateCard: { gap: spacing.sm, marginHorizontal: spacing.md, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,253,248,0.86)' },
+  cacheNoticeIcon: { width: 34, height: 34, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
+  cacheNoticeText: { flex: 1, fontSize: 13, lineHeight: 20 },
+  feedStateCard: { gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,253,248,0.88)' },
   feedStateIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   feedStateCopy: { gap: 2 },
-  feedSkeletonRow: { height: 54, borderRadius: radii.md, backgroundColor: colors.primarySoft, opacity: 0.62 },
+  feedLoadingStack: { gap: spacing.md },
+  feedSkeletonCard: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  feedSkeletonImage: { height: 176, backgroundColor: colors.primarySoft },
+  feedSkeletonCopy: { gap: spacing.sm, padding: spacing.md },
+  feedSkeletonTitle: { width: '68%', height: 18, borderRadius: radii.sm, backgroundColor: '#E5D2C5' },
+  feedSkeletonLine: { width: '92%', height: 12, borderRadius: radii.sm, backgroundColor: '#E9E0D8' },
+  feedSkeletonMeta: { width: '38%', height: 12, borderRadius: radii.sm, backgroundColor: colors.accentSoft },
 });
