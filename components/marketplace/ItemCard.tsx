@@ -1,10 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps } from 'react';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
@@ -13,31 +12,28 @@ import { spacing } from '@/constants/spacing';
 import type { MarketplaceItem } from '@/lib/marketplace-items';
 import { useAuth } from '@/lib/auth';
 import { setItemLiked } from '@/lib/item-likes';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+import { getItemConditionLabel } from '@/lib/item-display';
 
 function ItemCardComponent({ item }: { item: MarketplaceItem }) {
   const { user } = useAuth();
-  const [likedByMe, setLikedByMe] = useState(item.likedByMe);
-  const [likeCount, setLikeCount] = useState(item.likeCount);
+  const userId = user?.id ?? null;
+  const [optimisticLike, setOptimisticLike] = useState<{ itemId: string; liked: boolean; count: number } | null>(null);
   const [likePending, setLikePending] = useState(false);
-
-  useEffect(() => {
-    setLikedByMe(item.likedByMe);
-    setLikeCount(item.likeCount);
-  }, [item.id, item.likedByMe, item.likeCount]);
-
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const activeOptimisticLike = optimisticLike?.itemId === item.id ? optimisticLike : null;
+  const likedByMe = activeOptimisticLike?.liked ?? item.likedByMe;
+  const likeCount = activeOptimisticLike?.count ?? item.likeCount;
+  const conditionLabel = getItemConditionLabel(item.condition);
+  const shouldShowImage = Boolean(item.imageUrl && failedImageUrl !== item.imageUrl);
 
   const metadata = useMemo(
     () =>
       [
         item.category ? { key: 'category', label: item.category, icon: 'pricetag-outline' as const, color: colors.primary } : null,
-        item.condition ? { key: 'condition', label: item.condition, icon: 'shield-checkmark-outline' as const, color: colors.accent } : null,
+        conditionLabel ? { key: 'condition', label: conditionLabel, icon: 'shield-checkmark-outline' as const, color: colors.accent } : null,
         item.location ? { key: 'location', label: item.location, icon: 'location-outline' as const, color: '#8A5A2D' } : null,
-      ].filter(Boolean) as Array<{ key: string; label: string; icon: ComponentProps<typeof Ionicons>['name']; color: string }>,
-    [item.category, item.condition, item.location],
+      ].filter(Boolean) as { key: string; label: string; icon: ComponentProps<typeof Ionicons>['name']; color: string }[],
+    [conditionLabel, item.category, item.location],
   );
 
   const handlePress = useCallback(() => {
@@ -48,50 +44,53 @@ function ItemCardComponent({ item }: { item: MarketplaceItem }) {
     event.stopPropagation();
 
     if (likePending) return;
-    if (!user?.id) {
+    if (!userId) {
       router.push('/(auth)/login');
       return;
     }
 
     const nextLiked = !likedByMe;
-    setLikedByMe(nextLiked);
-    setLikeCount((value) => Math.max(0, value + (nextLiked ? 1 : -1)));
+    const previousCount = likeCount;
+    setOptimisticLike({ itemId: item.id, liked: nextLiked, count: Math.max(0, previousCount + (nextLiked ? 1 : -1)) });
     setLikePending(true);
 
     try {
-      const result = await setItemLiked({ itemId: item.id, userId: user.id, liked: nextLiked });
+      const result = await setItemLiked({ itemId: item.id, userId, liked: nextLiked });
       if (!result.ok) {
-        setLikedByMe(!nextLiked);
-        setLikeCount((value) => Math.max(0, value + (nextLiked ? -1 : 1)));
+        setOptimisticLike({ itemId: item.id, liked: !nextLiked, count: previousCount });
       }
     } catch {
-      setLikedByMe(!nextLiked);
-      setLikeCount((value) => Math.max(0, value + (nextLiked ? -1 : 1)));
+      setOptimisticLike({ itemId: item.id, liked: !nextLiked, count: previousCount });
     } finally {
       setLikePending(false);
     }
-  }, [item.id, likePending, likedByMe, user?.id]);
+  }, [item.id, likeCount, likePending, likedByMe, userId]);
 
   return (
-    <AnimatedPressable
+    <Pressable
       onPress={handlePress}
-      onPressIn={() => {
-        scale.value = withTiming(0.988, { duration: 90 });
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, { damping: 16, stiffness: 250, mass: 0.75 });
-      }}
-      style={[styles.pressable, animatedStyle]}
+      style={({ pressed }) => [styles.pressable, pressed && styles.pressablePressed]}
     >
       <LinearGradient colors={['rgba(255,253,248,0.98)', 'rgba(255,247,236,0.95)', 'rgba(238,216,203,0.42)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
         <View style={styles.wrapper}>
           <View style={styles.imageFrame}>
-            {item.imageUrl ? (
-              <ExpoImage source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={160} recyclingKey={item.id} />
+            <View style={styles.imageLoadingBackdrop}>
+              <Ionicons name="image-outline" size={22} color="rgba(184,98,63,0.42)" />
+            </View>
+            {shouldShowImage ? (
+              <ExpoImage
+                source={{ uri: item.imageUrl! }}
+                style={styles.image}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={140}
+                recyclingKey={item.id}
+                onError={() => setFailedImageUrl(item.imageUrl)}
+              />
             ) : (
               <LinearGradient colors={['#FFF6E8', colors.primarySoft, 'rgba(62,124,115,0.18)']} style={[styles.image, styles.placeholder]}>
-                <View style={styles.placeholderIcon}><Ionicons name="image-outline" size={24} color={colors.primary} /></View>
-                <AppText muted weight="semibold" style={styles.placeholderText}>الصورة غير متاحة</AppText>
+                <View style={styles.placeholderIcon}><Ionicons name={item.imageUrl ? 'cloud-offline-outline' : 'image-outline'} size={22} color={colors.primary} /></View>
+                <AppText muted weight="semibold" style={styles.placeholderText}>{item.imageUrl ? 'تعذر عرض الصورة' : 'لا توجد صورة'}</AppText>
               </LinearGradient>
             )}
             <LinearGradient colors={['rgba(29,26,22,0)', 'rgba(29,26,22,0.16)']} style={styles.imageShade} />
@@ -112,11 +111,11 @@ function ItemCardComponent({ item }: { item: MarketplaceItem }) {
                 </View>
               ))}
             </View>
-            {item.ownerDisplayName ? <View style={styles.ownerRow}><View style={styles.ownerIcon}><Ionicons name="person-outline" size={13} color={colors.primary} /></View><AppText muted numberOfLines={1} style={styles.ownerText}>من {item.ownerDisplayName}</AppText></View> : null}
+            {item.ownerDisplayName ? <View style={styles.ownerRow}><View style={styles.ownerIcon}><Ionicons name="person-outline" size={13} color={colors.primary} /></View><AppText muted numberOfLines={1} style={styles.ownerText}>بواسطة {item.ownerDisplayName}</AppText></View> : null}
           </View>
         </View>
       </LinearGradient>
-    </AnimatedPressable>
+    </Pressable>
   );
 }
 
@@ -127,11 +126,13 @@ function areItemCardPropsEqual(prev: { item: MarketplaceItem }, next: { item: Ma
 export const ItemCard = memo(ItemCardComponent, areItemCardPropsEqual);
 
 const styles = StyleSheet.create({
-  pressable: { marginBottom: spacing.md },
-  card: { borderRadius: radii.xl, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', padding: spacing.md, shadowColor: colors.primary, shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
-  wrapper: { gap: spacing.md },
+  pressable: { marginBottom: 10 },
+  pressablePressed: { opacity: 0.88, transform: [{ scale: 0.995 }] },
+  card: { borderRadius: radii.lg, borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', padding: 10, shadowColor: colors.primary, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  wrapper: { gap: 10 },
   imageFrame: { position: 'relative', borderRadius: radii.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: 'rgba(255,253,248,0.86)', overflow: 'hidden' },
-  image: { width: '100%', height: 184, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
+  imageLoadingBackdrop: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,216,203,0.5)' },
+  image: { width: '100%', height: 168, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
   imageShade: { ...StyleSheet.absoluteFillObject },
   likeChip: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: 'rgba(255,253,248,0.95)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)' },
   likeChipText: { color: colors.primary, fontSize: 12 },
@@ -140,12 +141,12 @@ const styles = StyleSheet.create({
   placeholderText: { fontSize: 13 },
   videoBadge: { position: 'absolute', right: spacing.sm, bottom: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: 'rgba(255,253,248,0.94)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.22)' },
   videoBadgeText: { color: colors.primary, fontSize: 12 },
-  content: { gap: spacing.sm },
-  title: { fontSize: 18, lineHeight: 25 },
+  content: { gap: 7 },
+  title: { fontSize: 16, lineHeight: 22, textAlign: 'auto', writingDirection: 'auto' },
   metadataRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
-  metaPill: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: 'rgba(221,208,197,0.78)', borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.72)', paddingHorizontal: spacing.sm, paddingVertical: 6 },
-  metaText: { fontSize: 12, flexShrink: 1 },
-  ownerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, paddingTop: spacing.xs },
+  metaPill: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: 'rgba(221,208,197,0.72)', borderRadius: radii.round, backgroundColor: 'rgba(255,253,248,0.7)', paddingHorizontal: spacing.sm, paddingVertical: 5 },
+  metaText: { fontSize: 11, flexShrink: 1 },
+  ownerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, paddingTop: 2 },
   ownerIcon: { width: 24, height: 24, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.1)', alignItems: 'center', justifyContent: 'center' },
-  ownerText: { flex: 1, fontSize: 13 },
+  ownerText: { flex: 1, fontSize: 12, textAlign: 'auto', writingDirection: 'auto' },
 });
