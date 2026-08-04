@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, InteractionManager, Pressable, StyleSheet, View, type ListRenderItemInfo } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -33,8 +32,29 @@ import { DiscoverSpotlightRail } from '@/components/discover/DiscoverSpotlightRa
 import { DiscoverWorldHeader } from '@/components/discover/DiscoverWorldHeader';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 
+function DiscoverItemsLoadingState() {
+  return (
+    <View style={styles.loadingList} accessibilityLabel="جارٍ تحميل عناصر الاكتشاف">
+      {[0, 1].map((index) => (
+        <View key={index} style={styles.loadingCard}>
+          <View style={styles.loadingImage} />
+          <View style={styles.loadingCardCopy}>
+            <View style={[styles.loadingLine, styles.loadingLineTitle]} />
+            <View style={styles.loadingPillsRow}>
+              <View style={styles.loadingPill} />
+              <View style={[styles.loadingPill, styles.loadingPillShort]} />
+            </View>
+            <View style={[styles.loadingLine, styles.loadingLineOwner]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function DiscoverScreen() {
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -56,24 +76,27 @@ export default function DiscoverScreen() {
   const [storyHighlightsLoading, setStoryHighlightsLoading] = useState(true);
   const [storyHighlightsError, setStoryHighlightsError] = useState<string | null>(null);
   const filterSheetRef = useRef<BottomSheetModal>(null);
-
-  const clearAllFilters = useCallback(() => {
-    setQuery('');
-    setActiveNearbyLocation(null);
-    setNearbyError(null);
-    setSelectedCategory(null);
-    setSelectedCondition(null);
-  }, []);
+  const listRef = useRef<FlatList<MarketplaceItem>>(null);
+  const itemsRequestGenerationRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const loadingMoreGenerationRef = useRef(0);
 
   const loadItems = useCallback(async () => {
+    const requestGeneration = itemsRequestGenerationRef.current + 1;
+    itemsRequestGenerationRef.current = requestGeneration;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setRefreshing(false);
+    setNearbyLoading(false);
     setLoading(true);
     setError(null);
     setLoadMoreError(null);
     setItemsCacheNotice(null);
 
     let hasFreshCacheVisible = false;
-
     const cached = await readFreshMarketplaceFirstPageCache();
+    if (requestGeneration !== itemsRequestGenerationRef.current) return;
+
     if (cached) {
       hasFreshCacheVisible = true;
       setItems(cached.page.items);
@@ -83,17 +106,20 @@ export default function DiscoverScreen() {
     }
 
     try {
-      const page = await fetchMarketplaceItemsPage({ offset: 0, viewerId: user?.id ?? null });
+      const page = await fetchMarketplaceItemsPage({ offset: 0, viewerId: userId });
+      if (requestGeneration !== itemsRequestGenerationRef.current) return;
       setItems(page.items);
       setHasMore(page.hasMore);
       setError(null);
       setItemsCacheNotice(null);
       void writeMarketplaceFirstPageCache(page);
     } catch {
+      if (requestGeneration !== itemsRequestGenerationRef.current) return;
       if (hasFreshCacheVisible) {
         setItemsCacheNotice('تعذر تحديث التصفح الآن، نعرض آخر نسخة محفوظة.');
       } else {
         const stale = await readAnyMarketplaceFirstPageCache();
+        if (requestGeneration !== itemsRequestGenerationRef.current) return;
         if (stale) {
           setItems(stale.page.items);
           setHasMore(stale.page.hasMore);
@@ -104,9 +130,9 @@ export default function DiscoverScreen() {
         }
       }
     } finally {
-      setLoading(false);
+      if (requestGeneration === itemsRequestGenerationRef.current) setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   const loadVideoMoments = useCallback(async () => {
     setVideoMomentsLoading(true);
@@ -137,16 +163,27 @@ export default function DiscoverScreen() {
   }, []);
 
   const refreshItems = useCallback(async () => {
-    if (refreshing) {
-      return;
-    }
+    if (refreshing) return;
 
+    const requestGeneration = itemsRequestGenerationRef.current + 1;
+    itemsRequestGenerationRef.current = requestGeneration;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setNearbyLoading(false);
     setRefreshing(true);
     setLoadMoreError(null);
+
     try {
       const page = activeNearbyLocation
-        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: 0, viewerId: user?.id ?? null })
-        : await fetchMarketplaceItemsPage({ offset: 0, viewerId: user?.id ?? null });
+        ? await fetchNearbyMarketplaceItemsPage({
+            latitude: activeNearbyLocation.latitude,
+            longitude: activeNearbyLocation.longitude,
+            radiusKm: 3,
+            offset: 0,
+            viewerId: userId,
+          })
+        : await fetchMarketplaceItemsPage({ offset: 0, viewerId: userId });
+      if (requestGeneration !== itemsRequestGenerationRef.current) return;
       setItems(page.items);
       setHasMore(page.hasMore);
       setError(null);
@@ -156,50 +193,76 @@ export default function DiscoverScreen() {
     } catch {
       // Keep existing items visible on refresh failure.
     } finally {
-      setRefreshing(false);
+      if (requestGeneration === itemsRequestGenerationRef.current) setRefreshing(false);
     }
-  }, [activeNearbyLocation, loadStoryHighlights, loadVideoMoments, refreshing, user?.id]);
+  }, [activeNearbyLocation, loadStoryHighlights, loadVideoMoments, refreshing, userId]);
 
   const loadMoreItems = useCallback(async () => {
-    if (loading || refreshing || loadingMore || !hasMore || error) {
-      return;
-    }
+    if (loading || refreshing || loadingMoreRef.current || !hasMore || error) return;
 
+    const requestGeneration = itemsRequestGenerationRef.current;
+    loadingMoreGenerationRef.current = requestGeneration;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     setLoadMoreError(null);
 
     try {
       const page = activeNearbyLocation
-        ? await fetchNearbyMarketplaceItemsPage({ latitude: activeNearbyLocation.latitude, longitude: activeNearbyLocation.longitude, radiusKm: 3, offset: items.length, viewerId: user?.id ?? null })
-        : await fetchMarketplaceItemsPage({ offset: items.length, viewerId: user?.id ?? null });
+        ? await fetchNearbyMarketplaceItemsPage({
+            latitude: activeNearbyLocation.latitude,
+            longitude: activeNearbyLocation.longitude,
+            radiusKm: 3,
+            offset: items.length,
+            viewerId: userId,
+          })
+        : await fetchMarketplaceItemsPage({ offset: items.length, viewerId: userId });
+      if (requestGeneration !== itemsRequestGenerationRef.current) return;
       setItems((currentItems) => {
-        const merged = [...currentItems, ...page.items];
-        const uniqueById = new Map(merged.map((item) => [item.id, item]));
+        const uniqueById = new Map([...currentItems, ...page.items].map((item) => [item.id, item]));
         return Array.from(uniqueById.values());
       });
       setHasMore(page.hasMore);
     } catch {
-      setLoadMoreError('تعذر تحميل المزيد. حاول مرة أخرى.');
+      if (requestGeneration === itemsRequestGenerationRef.current) {
+        setLoadMoreError('تعذر تحميل المزيد. حاول مرة أخرى.');
+      }
     } finally {
-      setLoadingMore(false);
+      if (loadingMoreGenerationRef.current === requestGeneration) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
-  }, [activeNearbyLocation, error, hasMore, items.length, loading, loadingMore, refreshing, user?.id]);
+  }, [activeNearbyLocation, error, hasMore, items.length, loading, refreshing, userId]);
 
   const handleUseMyLocation = useCallback(async () => {
+    const requestGeneration = itemsRequestGenerationRef.current + 1;
+    itemsRequestGenerationRef.current = requestGeneration;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setRefreshing(false);
     setNearbyLoading(true);
     setNearbyError(null);
 
     try {
       const result = await resolveCurrentDiscoveryLocation();
+      if (requestGeneration !== itemsRequestGenerationRef.current) return;
       if (result.ok) {
         try {
-          const page = await fetchNearbyMarketplaceItemsPage({ latitude: result.latitude, longitude: result.longitude, radiusKm: 3, offset: 0, viewerId: user?.id ?? null });
+          const page = await fetchNearbyMarketplaceItemsPage({
+            latitude: result.latitude,
+            longitude: result.longitude,
+            radiusKm: 3,
+            offset: 0,
+            viewerId: userId,
+          });
+          if (requestGeneration !== itemsRequestGenerationRef.current) return;
           setItems(page.items);
           setHasMore(page.hasMore);
           setError(null);
           setLoadMoreError(null);
           setActiveNearbyLocation({ label: result.label, latitude: result.latitude, longitude: result.longitude });
         } catch {
+          if (requestGeneration !== itemsRequestGenerationRef.current) return;
           setActiveNearbyLocation(null);
           setNearbyError('تعذر تحميل العناصر القريبة الآن. حاول مرة أخرى.');
         }
@@ -209,15 +272,25 @@ export default function DiscoverScreen() {
       setActiveNearbyLocation(null);
       setNearbyError(result.message);
     } finally {
-      setNearbyLoading(false);
+      if (requestGeneration === itemsRequestGenerationRef.current) setNearbyLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   const clearNearbyFilter = useCallback(() => {
     setActiveNearbyLocation(null);
     setNearbyError(null);
     void loadItems();
   }, [loadItems]);
+
+  const clearAllFilters = useCallback(() => {
+    const shouldReloadDirectory = Boolean(activeNearbyLocation);
+    setQuery('');
+    setActiveNearbyLocation(null);
+    setNearbyError(null);
+    setSelectedCategory(null);
+    setSelectedCondition(null);
+    if (shouldReloadDirectory) void loadItems();
+  }, [activeNearbyLocation, loadItems]);
 
   const openFilterSheet = useCallback(() => {
     filterSheetRef.current?.present();
@@ -227,19 +300,19 @@ export default function DiscoverScreen() {
     filterSheetRef.current?.dismiss();
   }, []);
 
-  const applyFiltersAndClose = useCallback(() => {
-    closeFilterSheet();
-  }, [closeFilterSheet]);
-
   const clearFiltersAndClose = useCallback(() => {
     clearAllFilters();
     closeFilterSheet();
   }, [clearAllFilters, closeFilterSheet]);
 
   useEffect(() => {
-    loadItems();
-    void loadVideoMoments();
-    void loadStoryHighlights();
+    const task = InteractionManager.runAfterInteractions(() => {
+      void loadItems();
+      void loadVideoMoments();
+      void loadStoryHighlights();
+    });
+
+    return () => task.cancel();
   }, [loadItems, loadStoryHighlights, loadVideoMoments]);
 
   const availableCategories = useMemo(() => {
@@ -250,7 +323,6 @@ export default function DiscoverScreen() {
       const key = clean.toLocaleLowerCase();
       if (!uniqueByLowercase.has(key)) uniqueByLowercase.set(key, clean);
     }
-
     return Array.from(uniqueByLowercase.values()).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [items]);
 
@@ -262,7 +334,6 @@ export default function DiscoverScreen() {
       const key = clean.toLocaleLowerCase();
       if (!uniqueByLowercase.has(key)) uniqueByLowercase.set(key, clean);
     }
-
     return Array.from(uniqueByLowercase.values()).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [items]);
 
@@ -270,6 +341,7 @@ export default function DiscoverScreen() {
   const hasActiveSearchOrFacetFilter = Boolean(query.trim() || selectedCategory || selectedCondition);
   const activeFiltersCount = [Boolean(query.trim()), Boolean(activeNearbyLocation), Boolean(selectedCategory), Boolean(selectedCondition)].filter(Boolean).length;
   const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
+  const shouldShowStoryHighlightsRail = storyHighlightsLoading || Boolean(storyHighlightsError) || storyHighlights.length > 0;
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -279,17 +351,14 @@ export default function DiscoverScreen() {
           return haystack.includes(normalized);
         })
       : items;
-
-    const nearbyFiltered = queryFiltered;
-
     const categoryFiltered = selectedCategory
-      ? nearbyFiltered.filter((item) => item.category?.trim().toLocaleLowerCase() === selectedCategory.toLocaleLowerCase())
-      : nearbyFiltered;
-
+      ? queryFiltered.filter((item) => item.category?.trim().toLocaleLowerCase() === selectedCategory.toLocaleLowerCase())
+      : queryFiltered;
     return selectedCondition
       ? categoryFiltered.filter((item) => item.condition?.trim().toLocaleLowerCase() === selectedCondition.toLocaleLowerCase())
       : categoryFiltered;
-  }, [activeNearbyLocation, items, query, selectedCategory, selectedCondition]);
+  }, [items, query, selectedCategory, selectedCondition]);
+
   const discoverIntelligenceState = buildDiscoverIntelligenceState({
     visibleItemsCount: filtered.length,
     loadedItemsCount: items.length,
@@ -298,25 +367,34 @@ export default function DiscoverScreen() {
     activeFiltersCount,
     nearbyLabel: activeNearbyLocation?.label ?? null,
   });
-  const spotlightItems = buildDiscoverSpotlightItems(hasActiveFilters ? filtered : items, 6);
+  const spotlightItems = useMemo(
+    () => buildDiscoverSpotlightItems(hasActiveFilters ? filtered : items, 6),
+    [filtered, hasActiveFilters, items],
+  );
   const isFilteredEmptyWithMore = hasActiveFilters && filtered.length === 0 && hasMore;
+  const lastVisibleIndex = filtered.length - 1;
+  const spotlightInsertIndex = Math.min(0, lastVisibleIndex);
+  const storyInsertIndex = Math.min(2, lastVisibleIndex);
+  const videoInsertIndex = Math.min(4, lastVisibleIndex);
 
   const renderListFooter = useCallback(() => {
     if (loadingMore) {
       return (
         <View style={styles.footerBox}>
-          <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
-          <AppText>جارٍ فتح المزيد من العناصر...</AppText>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <AppText muted style={styles.footerText}>بنفتح لك عناصر أكثر...</AppText>
         </View>
       );
     }
 
     if (loadMoreError) {
       return (
-        <View style={styles.footerBox}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
-          <AppText>تعذر تحميل المزيد. حاول مرة أخرى.</AppText>
-          <AppButton label="إعادة المحاولة" variant="neutral" onPress={loadMoreItems} />
+        <View style={styles.footerErrorBox}>
+          <View style={styles.footerErrorCopy}>
+            <Ionicons name="alert-circle-outline" size={17} color={colors.primary} />
+            <AppText muted style={styles.footerText}>تعذر تحميل المزيد، والعناصر الحالية ما زالت محفوظة.</AppText>
+          </View>
+          <AppButton label="حاول مرة أخرى" variant="neutral" size="sm" onPress={loadMoreItems} />
         </View>
       );
     }
@@ -324,8 +402,8 @@ export default function DiscoverScreen() {
     if (!hasMore && items.length > 0) {
       return (
         <View style={styles.footerBox}>
-          <Ionicons name="checkmark-done-outline" size={16} color={colors.primary} />
-          <AppText>وصلت لنهاية المشهد الحالي.</AppText>
+          <Ionicons name="checkmark-circle-outline" size={17} color={colors.accent} />
+          <AppText muted style={styles.footerText}>شفت كل العناصر في المشهد الحالي.</AppText>
         </View>
       );
     }
@@ -333,9 +411,73 @@ export default function DiscoverScreen() {
     return null;
   }, [hasMore, items.length, loadMoreError, loadMoreItems, loadingMore]);
 
+  const renderItem = useCallback(({ item, index }: ListRenderItemInfo<MarketplaceItem>) => {
+    const showSpotlight = index === spotlightInsertIndex && spotlightItems.length > 0;
+    const showStories = index === storyInsertIndex && shouldShowStoryHighlightsRail;
+    const showVideos = index === videoInsertIndex && shouldShowVideoMomentsRail;
+
+    return (
+      <View>
+        <ItemCard item={item} />
+        {showSpotlight ? (
+          <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
+            <AppCard padding="md" style={styles.editorialCard}>
+              <DiscoverSpotlightRail items={spotlightItems} />
+            </AppCard>
+          </AppFadeIn>
+        ) : null}
+        {showStories ? (
+          <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
+            <AppCard padding="md" style={styles.editorialCard}>
+              <DiscoverStoryHighlightsRail
+                items={storyHighlights}
+                loading={storyHighlightsLoading}
+                errorMessage={storyHighlightsError}
+                onRetry={loadStoryHighlights}
+              />
+            </AppCard>
+          </AppFadeIn>
+        ) : null}
+        {showVideos ? (
+          <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
+            <AppCard padding="md" style={styles.editorialCard}>
+              <ItemVideoDiscoveryRail
+                onOpenViewer={() => router.push('/motion/viewer')}
+                viewerCtaLabel="افتح المشاهد"
+                eyebrow="اكتشاف مرئي"
+                title="شوف العنصر من زاوية أقرب"
+                description="لمحات قصيرة تساعدك تفهم الشكل الحقيقي قبل التفاصيل."
+                moments={videoMoments}
+                loading={videoMomentsLoading}
+                errorMessage={videoMomentsError}
+                onRetry={loadVideoMoments}
+              />
+            </AppCard>
+          </AppFadeIn>
+        ) : null}
+      </View>
+    );
+  }, [
+    loadStoryHighlights,
+    loadVideoMoments,
+    shouldShowStoryHighlightsRail,
+    shouldShowVideoMomentsRail,
+    spotlightInsertIndex,
+    spotlightItems,
+    storyHighlights,
+    storyHighlightsError,
+    storyHighlightsLoading,
+    storyInsertIndex,
+    videoInsertIndex,
+    videoMoments,
+    videoMomentsError,
+    videoMomentsLoading,
+  ]);
+
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
@@ -346,206 +488,300 @@ export default function DiscoverScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <AppFadeIn delay={0} duration={200} fromY={8}>
-              <DiscoverWorldHeader />
+              <DiscoverWorldHeader
+                onOpenPeople={() => router.push('/people')}
+                onOpenMotion={() => router.push('/motion')}
+                onBrowseItems={() => listRef.current?.scrollToOffset({ offset: 430, animated: true })}
+              />
             </AppFadeIn>
 
             <AppFadeIn delay={40} duration={210} fromY={8}>
-              <AppCard>
-              <View style={styles.worldPathsBox}>
-                <AppText weight="bold">أبواب الاكتشاف</AppText>
-                <AppText muted>تِسوى مش مجرد قائمة عناصر؛ فيها ناس، حركة، وتصفح حيّ للعناصر الجاهزة للتبديل.</AppText>
-                <View style={styles.gateCard}>
-                  <View style={styles.gateTitleRow}>
-                    <Ionicons name="people-outline" size={16} color={colors.primary} />
-                    <AppText weight="bold">ناس تِسوى</AppText>
+              <AppCard padding="md" style={styles.searchCard}>
+                <View style={styles.sectionHeadingRow}>
+                  <View style={styles.sectionHeadingCopy}>
+                    <AppText weight="semibold" style={styles.eyebrow}>دوّر بطريقتك</AppText>
+                    <AppText weight="bold" style={styles.searchTitle}>إيه اللي في بالك؟</AppText>
+                    <AppText muted style={styles.searchDescription}>اكتب كلمة، أو قرّب النتائج بالموقع والفلاتر.</AppText>
                   </View>
-                  <AppText muted>اكتشف الناس، عناصرهم، والحكايات اللي تعرّفك على أسلوب كل واحد في التبديل.</AppText>
-                  <AppButton label="اكتشف الناس" variant="neutral" onPress={() => router.push('/people')} />
-                </View>
-                <View style={styles.gateCard}>
-                  <View style={styles.gateTitleRow}>
-                    <Ionicons name="pulse-outline" size={16} color={colors.primary} />
-                    <AppText weight="bold">حركة تِسوى</AppText>
-                  </View>
-                  <AppText muted>شاهد القصص النشطة والحركة الظاهرة حولك، وخليك قريب من الأبواب اللي بدأت تتفتح.</AppText>
-                  <AppButton label="ادخل الحركة" variant="neutral" onPress={() => router.push('/motion')} />
-                </View>
-                <View style={styles.gateCard}>
-                  <View style={styles.gateTitleRow}>
-                    <Ionicons name="cube-outline" size={16} color={colors.primary} />
-                    <AppText weight="bold">العناصر</AppText>
-                  </View>
-                  <AppText muted>تصفح العناصر الجاهزة للتبديل، وفلتر النتائج حسب ما يناسبك بسرعة ووضوح.</AppText>
-                  <View style={styles.itemsHint}>
-                    <Ionicons name="arrow-down-outline" size={13} color={colors.primary} />
-                    <AppText muted>التصفح يبدأ تحت</AppText>
+                  <View style={styles.searchIconShell}>
+                    <Ionicons name="search-outline" size={19} color={colors.primary} />
                   </View>
                 </View>
-              </View>
-              </AppCard>
-            </AppFadeIn>
 
-            {shouldShowVideoMomentsRail ? (
-              <AppFadeIn delay={80} duration={220} fromY={8}>
-                <AppCard>
-                  <ItemVideoDiscoveryRail
-            onOpenViewer={() => router.push('/motion/viewer')}
-            viewerCtaLabel='افتح الريل المرئي'
-                  eyebrow="اكتشاف مرئي"
-                  title="شوف عناصر لها لمحة فيديو"
-                  description="قبل ما تدخل التفاصيل، فيه عناصر تفتح لك لقطة أقرب من شكلها الحقيقي."
-                  moments={videoMoments}
-                  loading={videoMomentsLoading}
-                  errorMessage={videoMomentsError}
-                  onRetry={loadVideoMoments}
-                  />
-                </AppCard>
-              </AppFadeIn>
-            ) : null}
-            {storyHighlightsLoading || Boolean(storyHighlightsError) || storyHighlights.length > 0 ? (
-              <AppCard>
-                <DiscoverStoryHighlightsRail items={storyHighlights} loading={storyHighlightsLoading} errorMessage={storyHighlightsError} onRetry={loadStoryHighlights} />
-              </AppCard>
-            ) : null}
-            <DiscoverIntelligencePanel state={discoverIntelligenceState} />
+                <AppInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="ابحث بالاسم أو الفئة أو المدينة"
+                  returnKeyType="search"
+                  accessibilityLabel="البحث في عناصر تِسوى"
+                />
 
-            <AppFadeIn delay={120} duration={220} fromY={8}>
-              <AppCard>
-                <View style={styles.browseBox}>
-                  <AppText style={styles.eyebrow}>تصفح مباشر</AppText>
-                  <AppText weight="bold" style={styles.browseTitle}>مركز استكشاف العناصر</AppText>
-                  <AppText muted>ابحث بسرعة، فعّل الموقع القريب، واضبط الفلاتر عشان توصل للعنصر المناسب بثقة.</AppText>
-                  <AppInput value={query} onChangeText={setQuery} placeholder="ابحث بالاسم أو الفئة أو المدينة" />
+                <View style={styles.controlRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`ضبط الفلاتر${activeFiltersCount > 0 ? `، ${activeFiltersCount} مفعلة` : ''}`}
+                    onPress={openFilterSheet}
+                    style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}
+                  >
+                    <Ionicons name="options-outline" size={17} color={colors.primary} />
+                    <AppText weight="semibold" style={styles.controlButtonText}>الفلاتر</AppText>
+                    {activeFiltersCount > 0 ? (
+                      <View style={styles.filterCountBadge}>
+                        <AppText weight="bold" style={styles.filterCountText}>{activeFiltersCount}</AppText>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={activeNearbyLocation ? 'إلغاء عرض العناصر القريبة' : 'اعرض العناصر الأقرب لي'}
+                    onPress={activeNearbyLocation ? clearNearbyFilter : handleUseMyLocation}
+                    disabled={nearbyLoading}
+                    style={({ pressed }) => [
+                      styles.controlButton,
+                      activeNearbyLocation && styles.controlButtonActive,
+                      pressed && styles.controlButtonPressed,
+                      nearbyLoading && styles.controlButtonDisabled,
+                    ]}
+                  >
+                    {nearbyLoading ? (
+                      <ActivityIndicator size="small" color={colors.accent} />
+                    ) : (
+                      <Ionicons name={activeNearbyLocation ? 'location' : 'navigate-outline'} size={17} color={activeNearbyLocation ? colors.white : colors.accent} />
+                    )}
+                    <AppText weight="semibold" style={[styles.controlButtonText, activeNearbyLocation && styles.controlButtonTextActive]}>
+                      {nearbyLoading ? 'بنحدد موقعك' : activeNearbyLocation ? 'قريب مني' : 'الأقرب لي'}
+                    </AppText>
+                  </Pressable>
                 </View>
+
+                {activeNearbyLocation ? (
+                  <View style={styles.locationBanner}>
+                    <View style={styles.locationBannerCopy}>
+                      <Ionicons name="location-outline" size={15} color={colors.accent} />
+                      <AppText numberOfLines={2} style={styles.locationBannerText}>داخل 3 كم تقريبًا من {activeNearbyLocation.label}</AppText>
+                    </View>
+                    <Pressable accessibilityRole="button" accessibilityLabel="إلغاء الموقع القريب" onPress={clearNearbyFilter} style={styles.bannerCloseButton}>
+                      <Ionicons name="close" size={15} color={colors.accent} />
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {nearbyError ? (
+                  <View style={styles.inlineError}>
+                    <Ionicons name="alert-circle-outline" size={15} color={colors.primary} />
+                    <AppText muted style={styles.inlineErrorText}>{nearbyError}</AppText>
+                  </View>
+                ) : null}
+
+                {query.trim() || selectedCategory || selectedCondition ? (
+                  <View style={styles.activeChipsRow}>
+                    {query.trim() ? (
+                      <Pressable accessibilityRole="button" accessibilityLabel="مسح كلمة البحث" onPress={() => setQuery('')} style={styles.activeChip}>
+                        <Ionicons name="search-outline" size={12} color={colors.primary} />
+                        <AppText numberOfLines={1} style={styles.activeChipText}>{query.trim()}</AppText>
+                        <Ionicons name="close" size={12} color={colors.primary} />
+                      </Pressable>
+                    ) : null}
+                    {selectedCategory ? (
+                      <Pressable accessibilityRole="button" accessibilityLabel="مسح فلتر الفئة" onPress={() => setSelectedCategory(null)} style={styles.activeChip}>
+                        <Ionicons name="pricetag-outline" size={12} color={colors.primary} />
+                        <AppText numberOfLines={1} style={styles.activeChipText}>{selectedCategory}</AppText>
+                        <Ionicons name="close" size={12} color={colors.primary} />
+                      </Pressable>
+                    ) : null}
+                    {selectedCondition ? (
+                      <Pressable accessibilityRole="button" accessibilityLabel="مسح فلتر الحالة" onPress={() => setSelectedCondition(null)} style={styles.activeChip}>
+                        <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
+                        <AppText numberOfLines={1} style={styles.activeChipText}>{selectedCondition}</AppText>
+                        <Ionicons name="close" size={12} color={colors.primary} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
               </AppCard>
             </AppFadeIn>
 
             {itemsCacheNotice ? (
-              <AppCard>
+              <AppCard variant="outlined" padding="md" style={styles.noticeCard}>
                 <View style={styles.noticeRow}>
-                  <Ionicons name="layers-outline" size={16} color={colors.primary} />
+                  <View style={styles.noticeIcon}>
+                    <Ionicons name="cloud-offline-outline" size={16} color={colors.primary} />
+                  </View>
                   <AppText muted style={styles.noticeText}>{itemsCacheNotice}</AppText>
                 </View>
               </AppCard>
             ) : null}
 
-            <AppFadeIn delay={120} duration={220} fromY={8}>
-              <AppCard>
-                <View style={styles.filterTriggerBox}>
-                  <AppButton label="ضبط الفلاتر" variant="neutral" iconName="options-outline" onPress={openFilterSheet} />
-                  {activeFiltersCount > 0 ? <AppText muted>مفعّل: {activeFiltersCount}</AppText> : null}
+            {!loading && !error ? <DiscoverIntelligencePanel state={discoverIntelligenceState} /> : null}
+
+            <View style={styles.resultsHeading}>
+              <View style={styles.resultsHeadingCopy}>
+                <AppText weight="semibold" style={styles.eyebrow}>عناصر جاهزة للتبديل</AppText>
+                <AppText weight="bold" style={styles.resultsTitle}>
+                  {hasActiveFilters ? 'النتائج الأقرب لاختيارك' : 'اكتشف الجديد'}
+                </AppText>
+                <AppText muted style={styles.resultsDescription}>
+                  {loading ? 'بنجهّز المشهد الآن.' : hasActiveFilters ? `ظهر ${filtered.length} عنصر من النتائج المحمّلة.` : `${filtered.length} عنصر ظاهر للتصفح الآن.`}
+                </AppText>
+              </View>
+              {hasActiveFilters ? (
+                <Pressable accessibilityRole="button" accessibilityLabel="مسح كل الفلاتر" onPress={clearAllFilters} style={styles.clearButton}>
+                  <Ionicons name="refresh-outline" size={14} color={colors.primary} />
+                  <AppText weight="semibold" style={styles.clearButtonText}>ابدأ من جديد</AppText>
+                </Pressable>
+              ) : (
+                <View style={styles.resultsCountBadge}>
+                  <AppText weight="bold" style={styles.resultsCountText}>{filtered.length}</AppText>
                 </View>
-              </AppCard>
-            </AppFadeIn>
-            {!loading && !error ? (
-              <AppFadeIn delay={120} duration={220} fromY={8}>
-                <AppCard>
-                  <View style={styles.resultsRow}>
-                    <View style={styles.resultsLabelRow}>
-                      <Ionicons name="search-outline" size={15} color={colors.primary} />
-                      <AppText>{hasActiveFilters ? `وجدنا ${filtered.length} عنصرًا قريبًا من اختيارك` : `المشهد يضم ${filtered.length} عنصرًا للتصفح الآن`}</AppText>
-                    </View>
-                    {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} /> : null}
-                  </View>
-                </AppCard>
-              </AppFadeIn>
-            ) : null}
-            {spotlightItems.length > 0 ? (
-              <AppCard>
-                <DiscoverSpotlightRail items={spotlightItems} />
-              </AppCard>
-            ) : null}
+              )}
+            </View>
           </View>
         }
-        renderItem={({ item }) => <ItemCard item={item} />}
+        renderItem={renderItem}
         ListFooterComponent={renderListFooter}
         ListEmptyComponent={
           loading ? (
-            <EmptyState title="جاري التحميل" description="نجهز لك بوابة التصفح الآن." />
+            <DiscoverItemsLoadingState />
           ) : error ? (
             <View style={styles.stateBox}>
-              <EmptyState title="تعذر تحميل التصفح" description={error} />
-              <AppButton label="إعادة المحاولة" onPress={loadItems} />
+              <EmptyState
+                title="المشهد مش متاح دلوقتي"
+                description={error}
+                iconName="cloud-offline-outline"
+                actionLabel="حاول مرة أخرى"
+                onAction={() => void loadItems()}
+              />
             </View>
           ) : isFilteredEmptyWithMore ? (
             <View style={styles.stateBox}>
               <EmptyState
-                title="لا توجد نتائج مطابقة في النتائج المحمّلة"
-                description="حمّل المزيد أو جرّب مسح بعض الفلاتر."
+                title="لسه ما لقيناش تطابق"
+                description="في نتائج أكثر لم تُحمّل بعد. افتح صفحة إضافية أو وسّع اختيارك."
+                iconName="search-outline"
               />
-              <AppButton label="تحميل المزيد" onPress={loadMoreItems} disabled={loadingMore} />
-              <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} />
+              <AppButton label="حمّل نتائج أكثر" onPress={loadMoreItems} disabled={loadingMore} fullWidth />
+              <AppButton label="وسّع الاختيار" variant="neutral" onPress={clearAllFilters} fullWidth />
             </View>
           ) : hasActiveFilters && filtered.length === 0 ? (
             <View style={styles.stateBox}>
               <EmptyState
-                title="لا توجد نتائج مطابقة"
-                description="جرّب مسح بعض الفلاتر أو تغيير كلمة البحث."
+                title="مفيش نتيجة بنفس الاختيار"
+                description="جرّب كلمة أوسع أو امسح فلتر واحد عشان نفتح لك المشهد."
+                iconName="options-outline"
+                actionLabel="مسح الفلاتر"
+                onAction={clearAllFilters}
               />
-              <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearAllFilters} />
             </View>
           ) : (
-            <EmptyState title="لا توجد عناصر حالياً" description="عند إضافة عناصر جديدة ستظهر هنا مباشرة." />
+            <EmptyState
+              title="المشهد هادئ حاليًا"
+              description="أول ما تتضاف عناصر جديدة هتظهر هنا مباشرة."
+              iconName="cube-outline"
+              actionLabel="اعرض حاجة"
+              onAction={() => router.push('/(tabs)/add')}
+            />
           )
         }
       />
 
-      <AppBottomSheet ref={filterSheetRef} title="فلاتر التصفح" description="اضبط الفئة والحالة والتصفح القريب." snapPoints={['65%', '90%']}>
+      <AppBottomSheet ref={filterSheetRef} title="قرّب النتيجة" description="اختار الفئة والحالة، أو خلّي الموقع يقرب لك العناصر." snapPoints={['68%', '92%']}>
         <View style={styles.filterSheetContent}>
-          <View style={styles.filterBox}>
-            <View style={styles.filterHeaderRow}>
-              <Ionicons name="navigate-outline" size={15} color={colors.primary} />
-              <AppText weight="bold">التصفح القريب</AppText>
+          <View style={styles.filterSection}>
+            <View style={styles.filterSectionHeading}>
+              <View style={styles.filterSectionIcon}>
+                <Ionicons name="navigate-outline" size={16} color={colors.accent} />
+              </View>
+              <View style={styles.filterSectionCopy}>
+                <AppText weight="bold">الأقرب ليك</AppText>
+                <AppText muted style={styles.filterSectionDescription}>نستخدم موقعك مرة واحدة ونبحث داخل 3 كم تقريبًا.</AppText>
+              </View>
             </View>
             {activeNearbyLocation ? (
-              <>
-                <AppText>نعرض العناصر داخل 3 كم تقريبًا من: {activeNearbyLocation.label}</AppText>
-                <AppButton label="عرض كل العناصر" variant="neutral" onPress={clearNearbyFilter} />
-              </>
+              <View style={styles.sheetLocationState}>
+                <AppText style={styles.sheetLocationText}>النتائج قريبة من {activeNearbyLocation.label}</AppText>
+                <AppButton label="عرض كل العناصر" variant="neutral" size="sm" onPress={clearNearbyFilter} />
+              </View>
             ) : (
-              <>
-                <AppButton label={nearbyLoading ? 'جارٍ تحديد موقعك...' : 'اعرض الأقرب لي'} onPress={handleUseMyLocation} disabled={nearbyLoading} />
-                <AppText muted>نستخدم موقعك مرة واحدة لتقريب نتائج التصفح.</AppText>
-              </>
+              <AppButton
+                label={nearbyLoading ? 'بنحدد موقعك' : 'اعرض الأقرب لي'}
+                iconName="location-outline"
+                onPress={handleUseMyLocation}
+                loading={nearbyLoading}
+                fullWidth
+              />
             )}
-            {nearbyError ? <AppText muted>{nearbyError}</AppText> : null}
-            {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? <AppText muted>لا توجد عناصر قريبة بدقة في هذا النطاق بعد. جرّب عرض كل العناصر أو عُد لاحقًا.</AppText> : null}
+            {nearbyError ? <AppText muted style={styles.sheetErrorText}>{nearbyError}</AppText> : null}
+            {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? (
+              <AppText muted style={styles.filterSectionDescription}>لا توجد عناصر دقيقة في هذا النطاق بعد. جرّب عرض الكل أو عُد لاحقًا.</AppText>
+            ) : null}
           </View>
 
-          <View style={styles.filterBox}>
-            <View style={styles.filterHeaderRow}>
-              <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
-              <AppText weight="bold">الفئة</AppText>
+          <View style={styles.filterSection}>
+            <View style={styles.filterSectionHeading}>
+              <View style={styles.filterSectionIconPrimary}>
+                <Ionicons name="pricetag-outline" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.filterSectionCopy}>
+                <AppText weight="bold">الفئة</AppText>
+                <AppText muted style={styles.filterSectionDescription}>اختار نوع الحاجة اللي بتدور عليها.</AppText>
+              </View>
             </View>
             <View style={styles.chipsRow}>
-              <Pressable onPress={() => setSelectedCategory(null)} style={[styles.chip, !selectedCategory && styles.chipActive]}>
-                <AppText style={!selectedCategory ? styles.chipTextActive : undefined}>الكل</AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: !selectedCategory }}
+                onPress={() => setSelectedCategory(null)}
+                style={({ pressed }) => [styles.chip, !selectedCategory && styles.chipActive, pressed && styles.chipPressed]}
+              >
+                <AppText weight="semibold" style={!selectedCategory ? styles.chipTextActive : styles.chipText}>الكل</AppText>
               </Pressable>
               {availableCategories.map((category) => {
                 const isActive = selectedCategory?.toLocaleLowerCase() === category.toLocaleLowerCase();
                 return (
-                  <Pressable key={category} onPress={() => setSelectedCategory(category)} style={[styles.chip, isActive && styles.chipActive]}>
-                    <AppText style={isActive ? styles.chipTextActive : undefined}>{category}</AppText>
+                  <Pressable
+                    key={category}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive }}
+                    onPress={() => setSelectedCategory(category)}
+                    style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}
+                  >
+                    <AppText weight="semibold" style={isActive ? styles.chipTextActive : styles.chipText}>{category}</AppText>
                   </Pressable>
                 );
               })}
             </View>
           </View>
 
-          <View style={styles.filterBox}>
-            <View style={styles.filterHeaderRow}>
-              <Ionicons name="sparkles-outline" size={15} color={colors.primary} />
-              <AppText weight="bold">الحالة</AppText>
+          <View style={styles.filterSection}>
+            <View style={styles.filterSectionHeading}>
+              <View style={styles.filterSectionIconPrimary}>
+                <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.filterSectionCopy}>
+                <AppText weight="bold">الحالة</AppText>
+                <AppText muted style={styles.filterSectionDescription}>قرّب مستوى الاستخدام المناسب ليك.</AppText>
+              </View>
             </View>
             <View style={styles.chipsRow}>
-              <Pressable onPress={() => setSelectedCondition(null)} style={[styles.chip, !selectedCondition && styles.chipActive]}>
-                <AppText style={!selectedCondition ? styles.chipTextActive : undefined}>الكل</AppText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: !selectedCondition }}
+                onPress={() => setSelectedCondition(null)}
+                style={({ pressed }) => [styles.chip, !selectedCondition && styles.chipActive, pressed && styles.chipPressed]}
+              >
+                <AppText weight="semibold" style={!selectedCondition ? styles.chipTextActive : styles.chipText}>الكل</AppText>
               </Pressable>
               {availableConditions.map((condition) => {
                 const isActive = selectedCondition?.toLocaleLowerCase() === condition.toLocaleLowerCase();
                 return (
-                  <Pressable key={condition} onPress={() => setSelectedCondition(condition)} style={[styles.chip, isActive && styles.chipActive]}>
-                    <AppText style={isActive ? styles.chipTextActive : undefined}>{condition}</AppText>
+                  <Pressable
+                    key={condition}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive }}
+                    onPress={() => setSelectedCondition(condition)}
+                    style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}
+                  >
+                    <AppText weight="semibold" style={isActive ? styles.chipTextActive : styles.chipText}>{condition}</AppText>
                   </Pressable>
                 );
               })}
@@ -553,8 +789,8 @@ export default function DiscoverScreen() {
           </View>
 
           <View style={styles.filterSheetFooter}>
-            <AppButton label="تطبيق الفلاتر" onPress={applyFiltersAndClose} />
-            {hasActiveFilters ? <AppButton label="مسح الفلاتر" variant="neutral" onPress={clearFiltersAndClose} /> : null}
+            <AppButton label="شوف النتائج" onPress={closeFilterSheet} fullWidth />
+            {hasActiveFilters ? <AppButton label="مسح كل الفلاتر" variant="neutral" onPress={clearFiltersAndClose} fullWidth /> : null}
           </View>
         </View>
       </AppBottomSheet>
@@ -564,89 +800,89 @@ export default function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  header: { gap: spacing.sm, marginBottom: spacing.md },
-  heroCard: {
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(62,124,115,0.28)',
-    overflow: 'hidden',
-    gap: spacing.xs,
-  },
-  heroOrbOne: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.34)',
-    top: -40,
-    right: -20,
-  },
-  heroOrbTwo: {
-    position: 'absolute',
-    width: 110,
-    height: 110,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,226,182,0.5)',
-    bottom: -44,
-    left: -30,
-  },
-  heroIconShell: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
+  header: { gap: spacing.lg, marginBottom: spacing.lg },
+  searchCard: { borderRadius: radii.xl, gap: spacing.md },
+  sectionHeadingRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
+  sectionHeadingCopy: { flex: 1, gap: 3 },
+  eyebrow: { color: colors.primary, fontSize: 11 },
+  searchTitle: { fontSize: 21, lineHeight: 28 },
+  searchDescription: { fontSize: 12, lineHeight: 19 },
+  searchIconShell: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.1)' },
+  controlRow: { flexDirection: 'row-reverse', gap: spacing.sm },
+  controlButton: {
+    flex: 1,
+    minHeight: 46,
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(62,124,115,0.25)',
-    backgroundColor: 'rgba(255,255,255,0.68)',
-  },
-  heroBox: { gap: spacing.sm },
-  heroTitle: { fontSize: 26 },
-  worldPathsBox: { gap: spacing.sm },
-  gateCard: {
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-  },
-  gateTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  itemsHint: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radii.round,
-  },
-  browseBox: { gap: spacing.sm },
-  eyebrow: { color: colors.primary, fontSize: 12 },
-  browseTitle: { fontSize: 24 },
-  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  noticeText: { flex: 1 },
-  filterTriggerBox: { gap: spacing.xs, alignItems: 'flex-start' },
-  filterSheetContent: { gap: spacing.md },
-  filterBox: { gap: spacing.sm },
-  filterHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  chip: {
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 999,
+    backgroundColor: colors.white,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,0.74)',
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipTextActive: { color: colors.white },
-  resultsRow: { gap: spacing.sm },
-  resultsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  filterSheetFooter: { gap: spacing.sm },
+  controlButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  controlButtonPressed: { opacity: 0.78 },
+  controlButtonDisabled: { opacity: 0.64 },
+  controlButtonText: { fontSize: 12 },
+  controlButtonTextActive: { color: colors.white },
+  filterCountBadge: { minWidth: 21, height: 21, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  filterCountText: { color: colors.white, fontSize: 10 },
+  locationBanner: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: 'rgba(62,124,115,0.09)' },
+  locationBannerCopy: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  locationBannerText: { flex: 1, color: colors.accent, fontSize: 11, lineHeight: 17 },
+  bannerCloseButton: { width: 30, height: 30, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
+  inlineError: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  inlineErrorText: { flex: 1, fontSize: 11 },
+  activeChipsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
+  activeChip: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: 'rgba(184,98,63,0.09)' },
+  activeChipText: { maxWidth: 160, color: colors.primary, fontSize: 11 },
+  noticeCard: { borderColor: 'rgba(184,98,63,0.16)', borderRadius: radii.lg },
+  noticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  noticeIcon: { width: 34, height: 34, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.09)' },
+  noticeText: { flex: 1, fontSize: 11, lineHeight: 18 },
+  resultsHeading: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: spacing.xs },
+  resultsHeadingCopy: { flex: 1, gap: 3 },
+  resultsTitle: { fontSize: 23, lineHeight: 30 },
+  resultsDescription: { fontSize: 12, lineHeight: 18 },
+  resultsCountBadge: { minWidth: 42, height: 42, paddingHorizontal: spacing.sm, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  resultsCountText: { color: colors.primary, fontSize: 14 },
+  clearButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.09)' },
+  clearButtonText: { color: colors.primary, fontSize: 10 },
+  editorialModule: { marginBottom: spacing.lg },
+  editorialCard: { borderRadius: radii.xl },
+  loadingList: { gap: spacing.md },
+  loadingCard: { borderRadius: radii.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', backgroundColor: colors.surface },
+  loadingImage: { height: 184, backgroundColor: 'rgba(221,208,197,0.48)' },
+  loadingCardCopy: { gap: spacing.sm, padding: spacing.md },
+  loadingLine: { height: 13, borderRadius: radii.round, backgroundColor: 'rgba(221,208,197,0.52)' },
+  loadingLineTitle: { width: '62%', height: 18 },
+  loadingPillsRow: { flexDirection: 'row-reverse', gap: spacing.xs },
+  loadingPill: { width: 86, height: 26, borderRadius: radii.round, backgroundColor: 'rgba(221,208,197,0.42)' },
+  loadingPillShort: { width: 62 },
+  loadingLineOwner: { width: '44%' },
   stateBox: { gap: spacing.md },
-  footerBox: { gap: spacing.sm, marginTop: spacing.md, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  footerBox: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
+  footerText: { fontSize: 12 },
+  footerErrorBox: { gap: spacing.sm, marginVertical: spacing.md, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', backgroundColor: 'rgba(184,98,63,0.05)' },
+  footerErrorCopy: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  filterSheetContent: { gap: spacing.md, paddingBottom: spacing.xl },
+  filterSection: { gap: spacing.md, padding: spacing.md, borderRadius: radii.xl, borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', backgroundColor: 'rgba(255,253,248,0.78)' },
+  filterSectionHeading: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  filterSectionIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(62,124,115,0.1)' },
+  filterSectionIconPrimary: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.1)' },
+  filterSectionCopy: { flex: 1, gap: 2 },
+  filterSectionDescription: { fontSize: 11, lineHeight: 17 },
+  sheetLocationState: { gap: spacing.sm },
+  sheetLocationText: { fontSize: 12, lineHeight: 19 },
+  sheetErrorText: { color: colors.primary, fontSize: 11 },
+  chipsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
+  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipPressed: { opacity: 0.76 },
+  chipText: { fontSize: 12 },
+  chipTextActive: { color: colors.white, fontSize: 12 },
+  filterSheetFooter: { gap: spacing.sm },
 });
