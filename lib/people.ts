@@ -31,6 +31,13 @@ type ProfileRow = {
   created_at: string | null;
 };
 
+export const PEOPLE_DIRECTORY_PAGE_SIZE = 24;
+
+export type PeopleDirectoryPage = {
+  entries: PeopleDirectoryEntry[];
+  hasMore: boolean;
+};
+
 function sanitizePeopleSearchQuery(raw: string): string {
   return raw
     .trim()
@@ -46,10 +53,18 @@ const normalizeText = (value: string | null | undefined) => {
   return clean ? clean : null;
 };
 
-export async function fetchPeopleDirectory(input?: { query?: string; limit?: number }): Promise<PeopleDirectoryEntry[]> {
+export async function fetchPeopleDirectory(input?: {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<PeopleDirectoryPage> {
   const query = sanitizePeopleSearchQuery(input?.query ?? '');
-  const rawLimit = Number(input?.limit);
-  const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, Math.floor(rawLimit))) : 24;
+  const rawPage = Number(input?.page);
+  const rawPageSize = Number(input?.pageSize);
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
+  const pageSize = Number.isFinite(rawPageSize) ? Math.max(1, Math.floor(rawPageSize)) : PEOPLE_DIRECTORY_PAGE_SIZE;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize;
 
   let profilesQuery = supabase
     .from('profiles')
@@ -57,7 +72,8 @@ export async function fetchPeopleDirectory(input?: { query?: string; limit?: num
     .not('username', 'is', null)
     .order('successful_swaps_count', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .order('id', { ascending: true })
+    .range(from, to);
 
   if (query) {
     const pattern = `%${query}%`;
@@ -71,10 +87,12 @@ export async function fetchPeopleDirectory(input?: { query?: string; limit?: num
   }
 
   if (!profiles?.length) {
-    return [];
+    return { entries: [], hasMore: false };
   }
 
-  const profileIds = profiles.map((profile: ProfileRow) => profile.id);
+  const hasMore = profiles.length > pageSize;
+  const visibleProfiles = profiles.slice(0, pageSize);
+  const profileIds = visibleProfiles.map((profile: ProfileRow) => profile.id);
   const { data: activeItems, error: activeItemsError } = await supabase
     .from('items')
     .select('owner_id, id')
@@ -94,7 +112,7 @@ export async function fetchPeopleDirectory(input?: { query?: string; limit?: num
     activeCountByOwner.set(item.owner_id, (activeCountByOwner.get(item.owner_id) ?? 0) + 1);
   }
 
-  return profiles.map((profile: ProfileRow) => {
+  const entries = visibleProfiles.map((profile: ProfileRow) => {
     const username = normalizeText(profile.username) ?? '';
     const displayName = (normalizeText(profile.display_name) ?? username) || 'مستخدم';
 
@@ -114,4 +132,6 @@ export async function fetchPeopleDirectory(input?: { query?: string; limit?: num
       createdAt: profile.created_at,
     };
   });
+
+  return { entries, hasMore };
 }

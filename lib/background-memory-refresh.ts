@@ -37,7 +37,7 @@ export async function refreshPublicOfflineMemoryInBackground(): Promise<{
   }
 
   try {
-    const entries = await fetchPeopleDirectory({ query: '' });
+    const { entries } = await fetchPeopleDirectory({ query: '', page: 1 });
     await writePeopleDefaultDirectoryCache(entries);
     peopleRefreshed = true;
   } catch {
