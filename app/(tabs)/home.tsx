@@ -326,7 +326,7 @@ export default function HomeScreen() {
   const myStorySummary = useMemo(() => stories.find((summary) => summary.author.id === userId) ?? null, [stories, userId]);
   const otherStorySummaries = useMemo(() => stories.filter((summary) => summary.author.id !== userId), [stories, userId]);
   const totalActiveStories = stories.reduce((total, summary) => total + summary.stories.length, 0);
-  const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
+  const shouldShowVideoMomentsRail = Boolean(videoMomentsError) || videoMoments.length >= 2;
   const newActiveStoriesCount = useMemo(
     () => countActiveStoriesSince(stories, personalWorldLastSeenAtMs),
     [personalWorldLastSeenAtMs, stories],
@@ -348,6 +348,7 @@ export default function HomeScreen() {
       }),
     [dashboard, newActiveStoriesCount, newVideoMomentsCount, personalWorldLastSeenAtMs, personalWorldNewItemsCount],
   );
+  const shouldShowPersonalWorld = Boolean(userId && !personalWorldLoading && personalLivingWorldState.tone === 'alive');
 
 
   const nextAction = useMemo(() => {
@@ -476,11 +477,10 @@ export default function HomeScreen() {
                 <AppCard padding="md" style={styles.todayCard}>
                 <View style={styles.dashboardSection}>
                   <View style={styles.todayHeaderRow}>
-                    <HomeSectionHeading
-                      eyebrow="خطوتك التالية"
-                      title="يهمك الآن"
-                      description="أقرب خطوة مفيدة لك، مرتبة من غير ضجيج."
-                    />
+                    <View style={styles.todayTitleCopy}>
+                      <AppText weight="semibold" style={styles.homeSectionEyebrow}>يهمك الآن</AppText>
+                      <AppText muted style={styles.todayDescription}>أقرب خطوة مفيدة لحسابك.</AppText>
+                    </View>
                     <View style={styles.liveBadge}>
                       <View style={styles.liveBadgeDot} />
                       <AppText weight="semibold" style={styles.liveBadgeText}>مباشر</AppText>
@@ -522,6 +522,7 @@ export default function HomeScreen() {
                         variant={nextAction.kind === 'firstItem' ? 'neutral' : nextAction.variant}
                         onPress={() => router.push(nextAction.route)}
                         iconName="arrow-back-outline"
+                        size="sm"
                         fullWidth
                       />
                     </LinearGradient>
@@ -554,12 +555,12 @@ export default function HomeScreen() {
               </AppFadeIn>
             ) : null}
 
-            {user ? (
+            {shouldShowPersonalWorld ? (
               <AppFadeIn delay={80} duration={220} fromY={8} style={styles.sectionGroup}>
                 <HomeSectionHeading
                   eyebrow="من آخر مرة"
-                  title="ما الذي تحرّك؟"
-                  description="ملخص سريع للجديد المرتبط بحسابك منذ زيارتك السابقة."
+                  title="في جديد ليك"
+                  description="الحركة الجديدة المرتبطة بحسابك منذ زيارتك السابقة."
                 />
                 <PersonalLivingWorldCard
                   state={personalLivingWorldState}
@@ -592,54 +593,56 @@ export default function HomeScreen() {
                   ) : <View />}
                 </View>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRail}>
-                  {myStorySummary && userId ? (
-                    <Pressable style={[styles.storyTile, styles.myStoryTile]} onPress={() => router.push(`/story/${userId}`)}>
-                      <LinearGradient colors={[colors.primary, '#F2B978', colors.accent]} style={styles.storyAvatarRing}>
-                        <View style={styles.storyAvatar}>
-                          {myStorySummary.author.avatarUrl ? (
-                            <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-                          ) : (
-                            <AppText weight="bold" style={styles.fallbackInitial}>
-                              {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
-                            </AppText>
-                          )}
-                        </View>
-                      </LinearGradient>
-                      <AppText numberOfLines={1} weight="semibold" style={styles.storyLabel}>قصتك</AppText>
-                      {myStorySummary.stories.length > 1 ? <AppText weight="semibold" style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
-                    </Pressable>
-                  ) : (
-                    <Pressable style={[styles.storyTile, styles.addStoryTile]} onPress={() => router.push('/story/create')}>
-                      <LinearGradient colors={['#FFF6E8', colors.primarySoft]} style={styles.storyAvatarRing}>
-                        <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
-                          <Ionicons name="add" size={26} color={colors.primary} />
-                        </View>
-                      </LinearGradient>
-                      <AppText numberOfLines={1} weight="semibold" style={styles.storyLabel}>قصتك</AppText>
-                    </Pressable>
-                  )}
-
-                  {otherStorySummaries.map((story) => {
-                    const label = story.author.displayName ?? (story.author.username ? `@${story.author.username}` : 'مستخدم');
-                    const fallbackInitial = (story.author.displayName ?? story.author.username ?? 'م').trim().charAt(0).toUpperCase();
-
-                    return (
-                      <Pressable key={story.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${story.author.id}`)}>
-                        <LinearGradient colors={['#F2B978', colors.primarySoft, colors.accent]} style={styles.storyAvatarRing}>
+                {!storiesLoading && !storiesError && stories.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRail}>
+                    {myStorySummary && userId ? (
+                      <Pressable style={[styles.storyTile, styles.myStoryTile]} onPress={() => router.push(`/story/${userId}`)}>
+                        <LinearGradient colors={[colors.primary, '#F2B978', colors.accent]} style={styles.storyAvatarRing}>
                           <View style={styles.storyAvatar}>
-                            {story.author.avatarUrl ? (
-                              <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                            {myStorySummary.author.avatarUrl ? (
+                              <ExpoImage source={{ uri: myStorySummary.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
                             ) : (
-                              <AppText weight="bold" style={styles.fallbackInitial}>{fallbackInitial}</AppText>
+                              <AppText weight="bold" style={styles.fallbackInitial}>
+                                {(myStorySummary.author.displayName ?? myStorySummary.author.username ?? 'م').trim().charAt(0).toUpperCase()}
+                              </AppText>
                             )}
                           </View>
                         </LinearGradient>
-                        <AppText numberOfLines={1} style={styles.storyLabel}>{label}</AppText>
+                        <AppText numberOfLines={1} weight="semibold" style={styles.storyLabel}>قصتك</AppText>
+                        {myStorySummary.stories.length > 1 ? <AppText weight="semibold" style={styles.myStoryCount}>{myStorySummary.stories.length}</AppText> : null}
                       </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                    ) : (
+                      <Pressable style={[styles.storyTile, styles.addStoryTile]} onPress={() => router.push('/story/create')}>
+                        <LinearGradient colors={['#FFF6E8', colors.primarySoft]} style={styles.storyAvatarRing}>
+                          <View style={[styles.storyAvatar, styles.addStoryAvatar]}>
+                            <Ionicons name="add" size={24} color={colors.primary} />
+                          </View>
+                        </LinearGradient>
+                        <AppText numberOfLines={1} weight="semibold" style={styles.storyLabel}>قصتك</AppText>
+                      </Pressable>
+                    )}
+
+                    {otherStorySummaries.map((story) => {
+                      const label = story.author.displayName ?? (story.author.username ? `@${story.author.username}` : 'مستخدم');
+                      const fallbackInitial = (story.author.displayName ?? story.author.username ?? 'م').trim().charAt(0).toUpperCase();
+
+                      return (
+                        <Pressable key={story.author.id} style={styles.storyTile} onPress={() => router.push(`/story/${story.author.id}`)}>
+                          <LinearGradient colors={['#F2B978', colors.primarySoft, colors.accent]} style={styles.storyAvatarRing}>
+                            <View style={styles.storyAvatar}>
+                              {story.author.avatarUrl ? (
+                                <ExpoImage source={{ uri: story.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+                              ) : (
+                                <AppText weight="bold" style={styles.fallbackInitial}>{fallbackInitial}</AppText>
+                              )}
+                            </View>
+                          </LinearGradient>
+                          <AppText numberOfLines={1} style={styles.storyLabel}>{label}</AppText>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
 
                 {storiesLoading ? (
                   <View style={styles.loadingPanel}>
@@ -656,17 +659,7 @@ export default function HomeScreen() {
                 {!storiesLoading && !storiesError && stories.length === 0 ? (
                   <View style={styles.quietStoryState}>
                     <Ionicons name="moon-outline" size={17} color={colors.textMuted} />
-                    <View style={styles.quietStoryCopy}>
-                      <AppText muted style={styles.supportMutedText}>لا توجد قصص نشطة بعد. كن أول نبضة اليوم.</AppText>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="انشر قصة"
-                        onPress={() => router.push('/story/create')}
-                        style={styles.compactStoryAction}
-                      >
-                        <AppText weight="semibold" style={styles.compactStoryActionText}>انشر قصة</AppText>
-                      </Pressable>
-                    </View>
+                    <AppText muted style={[styles.supportMutedText, styles.quietStoryText]}>لا توجد قصص نشطة الآن. تقدر تبدأ أول قصة من الزر بالأعلى.</AppText>
                   </View>
                 ) : null}
               </View>
@@ -804,30 +797,31 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
-  header: { gap: spacing.lg, marginBottom: spacing.lg },
-  sectionGroup: { gap: spacing.md },
+  header: { gap: 14, marginBottom: spacing.md },
+  sectionGroup: { gap: 10 },
   homeSectionHeading: { flex: 1, flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: spacing.xs },
   homeSectionCopy: { flex: 1, minWidth: 0, gap: 3 },
-  homeSectionEyebrow: { color: colors.primary, fontSize: 12 },
-  homeSectionTitle: { fontSize: 21, lineHeight: 28 },
-  homeSectionDescription: { fontSize: 13, lineHeight: 20 },
+  homeSectionEyebrow: { color: colors.primary, fontSize: 11 },
+  homeSectionTitle: { fontSize: 19, lineHeight: 25 },
+  homeSectionDescription: { fontSize: 12, lineHeight: 18 },
   homeSectionAction: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3, paddingVertical: spacing.xs },
   homeSectionActionText: { color: colors.primary, fontSize: 12 },
   supportMutedText: { color: '#5F5348' },
   todayCard: { borderColor: 'rgba(184,98,63,0.16)', backgroundColor: 'rgba(255,253,248,0.9)' },
   todayHeaderRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
+  todayTitleCopy: { flex: 1, gap: 2 },
+  todayDescription: { fontSize: 11, lineHeight: 17 },
   liveBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.accentSoft },
   liveBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
   liveBadgeText: { color: colors.accent, fontSize: 11 },
-  dashboardSection: { gap: spacing.md },
+  dashboardSection: { gap: 10 },
   dashboardErrorText: { color: colors.danger },
   nextActionBlock: {
-    minHeight: 170,
-    gap: spacing.md,
+    gap: 10,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.15)',
     borderRadius: radii.lg,
-    padding: spacing.md,
+    padding: 10,
     overflow: 'hidden',
   },
   nextActionTopRow: {
@@ -836,8 +830,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   nextActionIcon: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
     borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
@@ -845,35 +839,35 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,253,248,0.74)',
   },
   nextActionCopy: { flex: 1, gap: spacing.xs, paddingTop: 2 },
-  nextActionTitle: { fontSize: 18, lineHeight: 25 },
+  nextActionTitle: { fontSize: 17, lineHeight: 23 },
   metricsRow: {
     flexDirection: 'row-reverse',
-    gap: spacing.sm,
+    gap: 6,
   },
   metricCard: {
     flex: 1,
-    minHeight: 108,
-    minWidth: 92,
+    minHeight: 76,
+    minWidth: 86,
     borderWidth: 1,
     borderColor: 'rgba(221,208,197,0.82)',
-    borderRadius: radii.lg,
+    borderRadius: radii.md,
     backgroundColor: 'rgba(255,253,248,0.82)',
-    paddingVertical: spacing.md,
+    paddingVertical: 8,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 2,
   },
   metricIcon: {
-    width: 30,
-    height: 30,
+    width: 26,
+    height: 26,
     borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metricLabel: { fontSize: 11, textAlign: 'center', lineHeight: 16 },
-  metricValue: { fontSize: 22, lineHeight: 27 },
+  metricLabel: { fontSize: 10, textAlign: 'center', lineHeight: 14 },
+  metricValue: { fontSize: 18, lineHeight: 21 },
   storiesCard: { borderColor: 'rgba(184,98,63,0.14)', backgroundColor: 'rgba(255,253,248,0.88)' },
-  storiesSection: { gap: spacing.md },
+  storiesSection: { gap: 10 },
   storiesHeaderRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
@@ -898,7 +892,7 @@ const styles = StyleSheet.create({
     paddingRight: 2,
   },
   storyTile: {
-    width: 72,
+    width: 64,
     alignItems: 'center',
     gap: 6,
     borderRadius: radii.lg,
@@ -907,8 +901,8 @@ const styles = StyleSheet.create({
   myStoryTile: { backgroundColor: 'rgba(238,216,203,0.24)' },
   addStoryTile: { backgroundColor: 'rgba(255,246,232,0.68)' },
   storyAvatarRing: {
-    width: 62,
-    height: 62,
+    width: 54,
+    height: 54,
     borderRadius: radii.round,
     padding: 3,
     shadowColor: colors.primary,
@@ -936,10 +930,10 @@ const styles = StyleSheet.create({
   },
   fallbackInitial: {
     color: colors.textMuted,
-    fontSize: 20,
+    fontSize: 18,
   },
   storyLabel: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
   },
   myStoryCount: {
@@ -972,24 +966,14 @@ const styles = StyleSheet.create({
   },
   quietStoryState: {
     flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
     borderRadius: radii.md,
     backgroundColor: 'rgba(249,243,234,0.72)',
-    paddingVertical: 6,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
   },
-  quietStoryCopy: { flex: 1, gap: 6 },
-  compactStoryAction: {
-    alignSelf: 'flex-start',
-    borderRadius: radii.round,
-    borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.28)',
-    backgroundColor: 'rgba(255,253,248,0.9)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  compactStoryActionText: { color: colors.primary, fontSize: 12 },
+  quietStoryText: { flex: 1, fontSize: 12, lineHeight: 18 },
   videoCard: { borderColor: 'rgba(62,124,115,0.16)', backgroundColor: 'rgba(255,253,248,0.9)' },
   cacheNoticeCard: { borderColor: 'rgba(62,124,115,0.2)', backgroundColor: 'rgba(215,232,229,0.52)' },
   cacheNoticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
