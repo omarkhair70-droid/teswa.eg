@@ -1,9 +1,7 @@
 import { StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
-import { shadows } from '@/constants/shadows';
 import { spacing } from '@/constants/spacing';
 import type { ProfilePresenceSignal, ProfilePresenceState, ProfilePresenceTone } from '@/lib/profile-presence';
 
@@ -32,13 +30,6 @@ function SignalPill({ signal }: { signal: ProfilePresenceSignal }) {
 export function ProfilePresenceSignals({ presence }: ProfilePresenceSignalsProps) {
   return (
     <View style={styles.card}>
-      <LinearGradient
-        colors={['rgba(255,253,248,0.88)', 'rgba(255,244,220,0.64)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.orb} />
       <View style={styles.copy}>
         <AppText weight="bold" style={styles.headline}>{presence.headline}</AppText>
         <AppText muted style={styles.body}>{presence.body}</AppText>
@@ -56,32 +47,23 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.18)',
-    padding: spacing.lg,
-    gap: spacing.md,
-    backgroundColor: 'rgba(255,253,248,0.78)',
-    ...shadows.card,
-  },
-  orb: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(184,98,63,0.1)',
-    top: -58,
-    left: -34,
+    padding: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255,253,248,0.9)',
   },
   copy: { gap: spacing.xs },
-  headline: { fontSize: 19, lineHeight: 27 },
-  body: { lineHeight: 22 },
-  signalsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm },
+  headline: { fontSize: 17, lineHeight: 24 },
+  body: { fontSize: 13, lineHeight: 20 },
+  signalsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
   signalPill: {
-    minWidth: 104,
-    borderRadius: radii.lg,
+    flexGrow: 1,
+    minWidth: 88,
+    borderRadius: radii.md,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     gap: 2,
   },
-  signalLabel: { fontSize: 12 },
-  signalValue: { fontSize: 15 },
+  signalLabel: { fontSize: 11 },
+  signalValue: { fontSize: 14 },
 });

@@ -37,39 +37,43 @@ export function ProfileLivingHero({
   variant = 'public',
 }: ProfileLivingHeroProps) {
   const hasStories = activeStoriesCount > 0;
+  const isSelf = variant === 'self';
+  const usesLightFallback = isSelf && !coverUrl;
   const initial = displayName.trim().charAt(0) || 'ت';
   const storyLabel = activeStoriesCount === 1 ? 'قصة نشطة الآن' : `${activeStoriesCount} قصص نشطة الآن`;
 
   return (
     <View style={styles.shell}>
-      <View style={styles.coverFrame}>
+      <View style={[styles.coverFrame, isSelf && styles.coverFrameSelf]}>
         {coverUrl ? (
           <ExpoImage source={{ uri: coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={220} cachePolicy="memory-disk" />
         ) : (
           <LinearGradient
-            colors={['#2A1A15', '#8E4B32', '#E7B98F']}
+            colors={usesLightFallback ? ['#F2DDD0', '#EDC9B4', '#C7D8D3'] : ['#2A1A15', '#8E4B32', '#E7B98F']}
             start={{ x: 0.1, y: 0 }}
             end={{ x: 0.9, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
         )}
         <LinearGradient
-          colors={['rgba(29,26,22,0.12)', 'rgba(29,26,22,0.42)', 'rgba(44,24,17,0.82)']}
+          colors={usesLightFallback
+            ? ['rgba(255,253,248,0.04)', 'rgba(255,253,248,0.1)', 'rgba(86,52,40,0.24)']
+            : ['rgba(29,26,22,0.12)', 'rgba(29,26,22,0.42)', 'rgba(44,24,17,0.82)']}
           locations={[0, 0.48, 1]}
           style={StyleSheet.absoluteFill}
         />
         <View style={styles.glowOne} />
         <View style={styles.glowTwo} />
-        <View style={styles.heroCopy}>
-          <AppText style={styles.eyebrow}>{variant === 'self' ? 'هويتك في تِسوى' : 'ملف يعيش داخل تِسوى'}</AppText>
-          {hasStories ? <AppText style={styles.storyText}>{storyLabel}</AppText> : null}
+        <View style={[styles.heroCopy, isSelf && styles.heroCopySelf]}>
+          <AppText style={[styles.eyebrow, usesLightFallback && styles.eyebrowOnLight]}>{isSelf ? 'هويتك في تِسوى' : 'ملف يعيش داخل تِسوى'}</AppText>
+          {hasStories ? <AppText style={[styles.storyText, usesLightFallback && styles.storyTextOnLight]}>{storyLabel}</AppText> : null}
         </View>
       </View>
 
-      <View style={styles.identityPanel}>
+      <View style={[styles.identityPanel, isSelf && styles.identityPanelSelf]}>
         <View style={styles.avatarColumn}>
-          <Pressable disabled={!onPressAvatarRing} onPress={onPressAvatarRing ?? undefined} style={[styles.avatarAura, hasStories && styles.avatarAuraActive]}>
-            <Pressable disabled={!onPressAvatar} onPress={onPressAvatar ?? undefined} style={styles.avatarFrame}>
+          <Pressable disabled={!onPressAvatarRing} onPress={onPressAvatarRing ?? undefined} style={[styles.avatarAura, isSelf && styles.avatarAuraSelf, hasStories && styles.avatarAuraActive]}>
+            <Pressable disabled={!onPressAvatar} onPress={onPressAvatar ?? undefined} style={[styles.avatarFrame, isSelf && styles.avatarFrameSelf]}>
               {avatarUrl ? (
                 <ExpoImage source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" transition={220} cachePolicy="memory-disk" />
               ) : (
@@ -82,8 +86,8 @@ export function ProfileLivingHero({
           {hasStories ? <View style={styles.liveDot} /> : null}
         </View>
 
-        <View style={styles.info}>
-          <AppText weight="bold" style={styles.name}>{displayName}</AppText>
+        <View style={[styles.info, isSelf && styles.infoSelf]}>
+          <AppText weight="bold" style={[styles.name, isSelf && styles.nameSelf]}>{displayName}</AppText>
           {username ? <AppText muted style={styles.meta}>@{username}</AppText> : null}
           {tagline ? <AppText style={styles.tagline}>{tagline}</AppText> : null}
           <View style={styles.metaRow}>
@@ -123,6 +127,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.primarySoft,
   },
+  coverFrameSelf: { height: 136 },
   glowOne: {
     position: 'absolute',
     width: 190,
@@ -148,8 +153,11 @@ const styles = StyleSheet.create({
     bottom: spacing.lg,
     gap: spacing.xs,
   },
+  heroCopySelf: { bottom: spacing.md },
   eyebrow: { color: 'rgba(255,253,248,0.86)', fontSize: 13 },
+  eyebrowOnLight: { color: '#684334' },
   storyText: { color: colors.white, fontSize: 15 },
+  storyTextOnLight: { color: colors.text },
   identityPanel: {
     flexDirection: 'row-reverse',
     alignItems: 'flex-start',
@@ -158,6 +166,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     marginTop: -38,
   },
+  identityPanelSelf: { marginTop: -28, paddingBottom: spacing.md },
   avatarColumn: { alignItems: 'center' },
   avatarAura: {
     borderRadius: 54,
@@ -170,6 +179,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,190,112,0.98)',
     backgroundColor: 'rgba(255,244,220,0.96)',
   },
+  avatarAuraSelf: { padding: 3 },
   avatarFrame: {
     width: 92,
     height: 92,
@@ -179,6 +189,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.surface,
   },
+  avatarFrameSelf: { width: 74, height: 74, borderRadius: 37 },
   avatar: { width: '100%', height: '100%' },
   avatarFallback: { justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { color: colors.primary, fontSize: 34 },
@@ -193,7 +204,9 @@ const styles = StyleSheet.create({
     marginRight: 52,
   },
   info: { flex: 1, paddingTop: 46, gap: spacing.xs },
+  infoSelf: { paddingTop: 32 },
   name: { fontSize: 25, lineHeight: 32 },
+  nameSelf: { fontSize: 22, lineHeight: 28 },
   meta: { fontSize: 14 },
   tagline: { color: colors.text, lineHeight: 22 },
   metaRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
