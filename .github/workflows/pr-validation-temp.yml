@@ -19,7 +19,16 @@ jobs:
       - run: npm ci
       - name: TypeScript
         run: npm run typecheck
+      - name: Install temporary lint tooling
+        run: npm install --no-save eslint@^9.0.0 eslint-config-expo@~55.0.1
+      - name: Configure Expo ESLint
+        run: |
+          cat > eslint.config.js <<'EOF'
+          const { defineConfig } = require('eslint/config');
+          const expoConfig = require('eslint-config-expo/flat');
+          module.exports = defineConfig([...expoConfig]);
+          EOF
       - name: ESLint modified files
-        run: npx expo lint 'app/(tabs)/messages.tsx' 'app/direct/index.tsx'
+        run: ./node_modules/.bin/eslint 'app/(tabs)/messages.tsx' 'app/direct/index.tsx'
       - name: Diff check
         run: git diff --check origin/main...HEAD
