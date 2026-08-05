@@ -1,0 +1,23 @@
+name: Temporary PR validation
+on:
+  push:
+    branches:
+      - agent/redesign-settings-center
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint modified files
+        run: npx eslint 'app/settings/index.tsx'
+      - name: Diff check
+        run: git diff --check origin/main...HEAD
