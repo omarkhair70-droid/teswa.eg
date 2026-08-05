@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useRTLSetup } from '@/hooks/useRTLSetup';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { resolveNotificationActionResponse } from '@/lib/push-notifications';
@@ -25,6 +26,7 @@ import { queryClient } from '@/lib/query/query-client';
 import { getAdventureEntranceSeen } from '@/lib/adventure-entrance';
 import { isPushRegistrationEnabled } from '@/lib/feature-flags';
 import { initSentry, setSentryUser } from '@/lib/sentry';
+import { colors } from '@/constants/colors';
 import * as Sentry from '@sentry/react-native';
 
 
@@ -204,8 +206,8 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
 
   useEffect(() => {
     if (!user || (!loadingProfile && !loadingPolicyAcceptance)) {
-      setAccountStateCheckStalled(false);
-      return;
+      const resetTimer = setTimeout(() => setAccountStateCheckStalled(false), 0);
+      return () => clearTimeout(resetTimer);
     }
 
     const stallTimer = setTimeout(() => {
@@ -233,7 +235,7 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     }, DEFERRED_PUSH_SYNC_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [bootstrapReady, hasSatisfiedAccountGate, pushRegistrationEnabled, user?.id]);
+  }, [bootstrapReady, hasSatisfiedAccountGate, user?.id]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -295,7 +297,7 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
       startupTiming.mark('initial_route_decided', { hasUser: Boolean(user), profileCompleted, requiredPoliciesAccepted });
     }
     void hideSplashSafely('bootstrap_ready');
-  }, [bootstrapReady]);
+  }, [bootstrapReady, profileCompleted, requiredPoliciesAccepted, user]);
 
   useEffect(() => {
     if (!bootstrapReady) return;
@@ -314,7 +316,22 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     });
     onFirstScreenReady?.();
     void hideSplashSafely('first_screen_ready');
-  }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, profileCompleted, requiredPoliciesAccepted, user]);
+  }, [bootstrapReady, hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, onFirstScreenReady, profileCompleted, requiredPoliciesAccepted, user, usingCachedAccountGate]);
+
+  useEffect(() => {
+    if (!bootstrapReady && !loggedStartupHoldingScreenRef.current) {
+      loggedStartupHoldingScreenRef.current = true;
+      startupLog('startup_holding_screen_shown', { stage: 'bootstrap_not_ready' });
+    }
+  }, [bootstrapReady]);
+
+  useEffect(() => {
+    const showingAccountGate = Boolean(user && (loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate && !usingCachedAccountGate);
+    if (showingAccountGate && !loggedAccountGateHoldingScreenRef.current) {
+      loggedAccountGateHoldingScreenRef.current = true;
+      startupLog('startup_holding_screen_shown', { stage: 'account_gate_loading' });
+    }
+  }, [hasSatisfiedAccountGate, loadingPolicyAcceptance, loadingProfile, user, usingCachedAccountGate]);
 
   useEffect(() => {
     if (!pendingNotificationRoute) return;
@@ -415,10 +432,6 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router, usingCachedAccountGate]);
 
   if (!bootstrapReady) {
-    if (!loggedStartupHoldingScreenRef.current) {
-      loggedStartupHoldingScreenRef.current = true;
-      startupLog('startup_holding_screen_shown', { stage: 'bootstrap_not_ready' });
-    }
     return (
       <AccountGateLoadingState
         title="تِسوى"
@@ -428,10 +441,6 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
   }
 
   if (user && (loadingProfile || loadingPolicyAcceptance) && !hasSatisfiedAccountGate && !usingCachedAccountGate) {
-    if (!loggedAccountGateHoldingScreenRef.current) {
-      loggedAccountGateHoldingScreenRef.current = true;
-      startupLog('startup_holding_screen_shown', { stage: 'account_gate_loading' });
-    }
     if (accountStateCheckStalled) {
       return (
         <View style={styles.errorContainer}>
@@ -549,6 +558,7 @@ const styles = StyleSheet.create({
 function RootLayout() {
   useRTLSetup();
   const [firstScreenReady, setFirstScreenReady] = useState(false);
+  const handleFirstScreenReady = useCallback(() => setFirstScreenReady(true), []);
   useEffect(() => {
     startupTiming.mark('root_layout_mounted');
   }, []);
@@ -556,6 +566,7 @@ function RootLayout() {
     <ShareIntentProvider>
       <KeyboardProvider preload={false}>
         <GestureHandlerRootView style={styles.gestureRoot}>
+          <StatusBar style="dark" backgroundColor={colors.background} translucent={false} />
           <BottomSheetModalProvider>
             <ThemePreferencesProvider>
               <AuthProvider>
@@ -563,7 +574,7 @@ function RootLayout() {
                   <UnreadBadgesProvider>
                     <ReactQueryRuntimeCoordinator enableNetworkProbe={firstScreenReady} />
                     <ShareIntentCoordinator />
-                    <RootNavigator onFirstScreenReady={() => setFirstScreenReady(true)} />
+                    <RootNavigator onFirstScreenReady={handleFirstScreenReady} />
                     <DeferredStartupWorkCoordinator firstScreenReady={firstScreenReady} />
                     <BiometricAppLockCoordinator />
                     <AppToastRoot />

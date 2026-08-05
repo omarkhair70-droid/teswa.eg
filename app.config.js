@@ -33,6 +33,11 @@ module.exports = {
       },
       permissions: ['android.permission.RECORD_AUDIO'],
     },
+    androidStatusBar: {
+      barStyle: 'dark-content',
+      backgroundColor: '#F9F3EA',
+      translucent: false,
+    },
     web: {
       bundler: 'metro',
       output: 'static',
