@@ -29,8 +29,6 @@ export function HomeLivingWorldHero({
     >
       <View style={styles.orbPrimary} />
       <View style={styles.orbAccent} />
-      <View style={styles.textureLineOne} />
-      <View style={styles.textureLineTwo} />
 
       <View style={styles.topRow}>
         <View style={styles.brandPill}>
@@ -43,14 +41,14 @@ export function HomeLivingWorldHero({
         <View style={styles.topActions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="فتح الإشعارات"
+            accessibilityLabel={unreadCount > 0 ? `فتح الإشعارات، لديك ${unreadCount} غير مقروء` : 'فتح الإشعارات'}
             onPress={onOpenNotifications}
             style={({ pressed }) => [styles.iconButton, pressed && styles.pressedButton]}
           >
             <Ionicons name="notifications-outline" size={19} color={colors.primary} />
             {unreadCount > 0 ? (
               <View style={styles.unreadBadge}>
-                <AppText weight="bold" style={styles.unreadText}>{unreadCount > 99 ? '99+' : unreadCount}</AppText>
+                <AppText weight="bold" style={styles.unreadText}>{unreadCount > 9 ? '9+' : unreadCount}</AppText>
               </View>
             ) : null}
           </Pressable>
@@ -67,7 +65,7 @@ export function HomeLivingWorldHero({
 
       <View style={styles.copyWrap}>
         <AppText weight="bold" style={styles.title}>ابدأ من اللي يهمك</AppText>
-        <AppText muted style={styles.subtitle}>فرص جديدة، ردود تنتظرك، وحاجات تستحق تبديلة أحسن.</AppText>
+        <AppText muted style={styles.subtitle}>فرص وردود وحاجات تستحق تبديلة أحسن.</AppText>
       </View>
 
       <View style={styles.ctaRow}>
@@ -104,53 +102,31 @@ export function HomeLivingWorldHero({
 
 const styles = StyleSheet.create({
   heroCard: {
-    minHeight: 272,
+    minHeight: 224,
     overflow: 'hidden',
     borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.2)',
-    padding: spacing.lg,
-    gap: spacing.lg,
+    padding: spacing.md,
+    gap: spacing.md,
   },
   orbPrimary: {
     position: 'absolute',
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    top: -78,
-    left: -58,
-    backgroundColor: 'rgba(184,98,63,0.1)',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    top: -90,
+    left: -76,
+    backgroundColor: 'rgba(184,98,63,0.07)',
   },
   orbAccent: {
     position: 'absolute',
-    width: 178,
-    height: 178,
-    borderRadius: 89,
-    right: -64,
-    bottom: -82,
-    backgroundColor: 'rgba(62,124,115,0.13)',
-  },
-  textureLineOne: {
-    position: 'absolute',
-    width: 220,
-    height: 80,
-    borderRadius: radii.round,
-    borderWidth: 1,
-    borderColor: 'rgba(184,98,63,0.1)',
-    transform: [{ rotate: '-12deg' }],
-    right: -86,
-    top: 96,
-  },
-  textureLineTwo: {
-    position: 'absolute',
-    width: 160,
-    height: 58,
-    borderRadius: radii.round,
-    borderWidth: 1,
-    borderColor: 'rgba(62,124,115,0.1)',
-    transform: [{ rotate: '14deg' }],
-    left: -72,
-    bottom: 52,
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    right: -74,
+    bottom: -88,
+    backgroundColor: 'rgba(62,124,115,0.09)',
   },
   topRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   brandPill: {
@@ -164,12 +140,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.16)',
   },
-  brandMark: { width: 26, height: 26, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  brandMark: { width: 24, height: 24, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   brandText: { color: colors.primary, fontSize: 12 },
   topActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   iconButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
@@ -180,11 +156,11 @@ const styles = StyleSheet.create({
   pressedButton: { opacity: 0.76, transform: [{ scale: 0.97 }] },
   unreadBadge: {
     position: 'absolute',
-    top: -4,
-    left: -4,
-    minWidth: 19,
-    height: 19,
-    borderRadius: 10,
+    top: -3,
+    left: -3,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -192,14 +168,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#F9EBDD',
   },
-  unreadText: { color: colors.white, fontSize: 9 },
-  copyWrap: { maxWidth: 315, gap: spacing.xs },
-  title: { fontSize: 29, lineHeight: 37 },
-  subtitle: { fontSize: 15, lineHeight: 23, color: '#5F5348' },
+  unreadText: { color: colors.white, fontSize: 8 },
+  copyWrap: { maxWidth: 315, gap: 3 },
+  title: { fontSize: 25, lineHeight: 32 },
+  subtitle: { fontSize: 13, lineHeight: 20, color: '#5F5348' },
   ctaRow: { flexDirection: 'row-reverse', gap: spacing.sm },
   primaryCta: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 43,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
@@ -212,7 +188,7 @@ const styles = StyleSheet.create({
   primaryText: { color: colors.white, fontSize: 14 },
   secondaryCta: {
     minWidth: 118,
-    minHeight: 46,
+    minHeight: 43,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
@@ -224,7 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   secondaryText: { color: colors.primary, fontSize: 14 },
-  liveSignal: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, marginTop: 'auto' },
+  liveSignal: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   liveDotAura: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(62,124,115,0.13)' },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
   liveSignalText: { color: colors.accent, fontSize: 11 },
