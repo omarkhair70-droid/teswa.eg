@@ -52,6 +52,17 @@ function DiscoverItemsLoadingState() {
   );
 }
 
+const conditionLabels: Record<string, string> = {
+  almost_new: 'شبه جديد',
+  good_used: 'مستعمل بحالة جيدة',
+  minor_issues: 'به ملاحظات بسيطة',
+  needs_repair: 'يحتاج إصلاح',
+};
+
+function getConditionLabel(condition: string): string {
+  return conditionLabels[condition] ?? condition.replaceAll('_', ' ');
+}
+
 export default function DiscoverScreen() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -70,11 +81,7 @@ export default function DiscoverScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCondition, setSelectedCondition] = useState<string | null>(null);
   const [videoMoments, setVideoMoments] = useState<ItemVideoDiscoveryMoment[]>([]);
-  const [videoMomentsLoading, setVideoMomentsLoading] = useState(true);
-  const [videoMomentsError, setVideoMomentsError] = useState<string | null>(null);
   const [storyHighlights, setStoryHighlights] = useState<StoryDiscoveryItem[]>([]);
-  const [storyHighlightsLoading, setStoryHighlightsLoading] = useState(true);
-  const [storyHighlightsError, setStoryHighlightsError] = useState<string | null>(null);
   const filterSheetRef = useRef<BottomSheetModal>(null);
   const listRef = useRef<FlatList<MarketplaceItem>>(null);
   const itemsRequestGenerationRef = useRef(0);
@@ -135,30 +142,20 @@ export default function DiscoverScreen() {
   }, [userId]);
 
   const loadVideoMoments = useCallback(async () => {
-    setVideoMomentsLoading(true);
-    setVideoMomentsError(null);
     try {
       const moments = await fetchRecentItemVideoDiscoveryMoments(8);
       setVideoMoments(moments);
     } catch {
       setVideoMoments([]);
-      setVideoMomentsError('تعذر تحميل اللمحات المرئية الآن.');
-    } finally {
-      setVideoMomentsLoading(false);
     }
   }, []);
 
   const loadStoryHighlights = useCallback(async () => {
-    setStoryHighlightsLoading(true);
-    setStoryHighlightsError(null);
     try {
       const highlights = await fetchStoryDiscoveryItems({ limit: 8 });
       setStoryHighlights(highlights);
     } catch {
       setStoryHighlights([]);
-      setStoryHighlightsError('تعذر تحميل العناصر ذات الحكاية الآن.');
-    } finally {
-      setStoryHighlightsLoading(false);
     }
   }, []);
 
@@ -340,8 +337,6 @@ export default function DiscoverScreen() {
   const hasActiveFilters = Boolean(query.trim() || activeNearbyLocation || selectedCategory || selectedCondition);
   const hasActiveSearchOrFacetFilter = Boolean(query.trim() || selectedCategory || selectedCondition);
   const activeFiltersCount = [Boolean(query.trim()), Boolean(activeNearbyLocation), Boolean(selectedCategory), Boolean(selectedCondition)].filter(Boolean).length;
-  const shouldShowVideoMomentsRail = videoMomentsLoading || Boolean(videoMomentsError) || videoMoments.length > 0;
-  const shouldShowStoryHighlightsRail = storyHighlightsLoading || Boolean(storyHighlightsError) || storyHighlights.length > 0;
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -367,15 +362,20 @@ export default function DiscoverScreen() {
     activeFiltersCount,
     nearbyLabel: activeNearbyLocation?.label ?? null,
   });
-  const spotlightItems = useMemo(
-    () => buildDiscoverSpotlightItems(hasActiveFilters ? filtered : items, 6),
-    [filtered, hasActiveFilters, items],
-  );
+  const spotlightItems = useMemo(() => (items.length >= 8 ? buildDiscoverSpotlightItems(items, 6) : []), [items]);
+  const editorialMode = hasActiveFilters
+    ? null
+    : storyHighlights.length >= 3
+      ? 'stories'
+      : videoMoments.length >= 2
+        ? 'video'
+        : spotlightItems.length >= 4
+          ? 'spotlight'
+          : null;
+  const shouldShowIntelligence = activeFiltersCount > 0 || editorialMode !== null;
   const isFilteredEmptyWithMore = hasActiveFilters && filtered.length === 0 && hasMore;
   const lastVisibleIndex = filtered.length - 1;
-  const spotlightInsertIndex = Math.min(0, lastVisibleIndex);
-  const storyInsertIndex = Math.min(2, lastVisibleIndex);
-  const videoInsertIndex = Math.min(4, lastVisibleIndex);
+  const editorialInsertIndex = Math.min(2, lastVisibleIndex);
 
   const renderListFooter = useCallback(() => {
     if (loadingMore) {
@@ -412,33 +412,28 @@ export default function DiscoverScreen() {
   }, [hasMore, items.length, loadMoreError, loadMoreItems, loadingMore]);
 
   const renderItem = useCallback(({ item, index }: ListRenderItemInfo<MarketplaceItem>) => {
-    const showSpotlight = index === spotlightInsertIndex && spotlightItems.length > 0;
-    const showStories = index === storyInsertIndex && shouldShowStoryHighlightsRail;
-    const showVideos = index === videoInsertIndex && shouldShowVideoMomentsRail;
+    const showEditorial = index === editorialInsertIndex && editorialMode !== null;
 
     return (
       <View>
         <ItemCard item={item} />
-        {showSpotlight ? (
+        {showEditorial && editorialMode === 'spotlight' ? (
           <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
             <AppCard padding="md" style={styles.editorialCard}>
               <DiscoverSpotlightRail items={spotlightItems} />
             </AppCard>
           </AppFadeIn>
         ) : null}
-        {showStories ? (
+        {showEditorial && editorialMode === 'stories' ? (
           <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
             <AppCard padding="md" style={styles.editorialCard}>
               <DiscoverStoryHighlightsRail
                 items={storyHighlights}
-                loading={storyHighlightsLoading}
-                errorMessage={storyHighlightsError}
-                onRetry={loadStoryHighlights}
               />
             </AppCard>
           </AppFadeIn>
         ) : null}
-        {showVideos ? (
+        {showEditorial && editorialMode === 'video' ? (
           <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
             <AppCard padding="md" style={styles.editorialCard}>
               <ItemVideoDiscoveryRail
@@ -448,9 +443,6 @@ export default function DiscoverScreen() {
                 title="شوف العنصر من زاوية أقرب"
                 description="لمحات قصيرة تساعدك تفهم الشكل الحقيقي قبل التفاصيل."
                 moments={videoMoments}
-                loading={videoMomentsLoading}
-                errorMessage={videoMomentsError}
-                onRetry={loadVideoMoments}
               />
             </AppCard>
           </AppFadeIn>
@@ -458,20 +450,11 @@ export default function DiscoverScreen() {
       </View>
     );
   }, [
-    loadStoryHighlights,
-    loadVideoMoments,
-    shouldShowStoryHighlightsRail,
-    shouldShowVideoMomentsRail,
-    spotlightInsertIndex,
+    editorialInsertIndex,
+    editorialMode,
     spotlightItems,
     storyHighlights,
-    storyHighlightsError,
-    storyHighlightsLoading,
-    storyInsertIndex,
-    videoInsertIndex,
     videoMoments,
-    videoMomentsError,
-    videoMomentsLoading,
   ]);
 
   return (
@@ -491,7 +474,7 @@ export default function DiscoverScreen() {
               <DiscoverWorldHeader
                 onOpenPeople={() => router.push('/people')}
                 onOpenMotion={() => router.push('/motion')}
-                onBrowseItems={() => listRef.current?.scrollToOffset({ offset: 430, animated: true })}
+                onBrowseItems={() => listRef.current?.scrollToOffset({ offset: 330, animated: true })}
               />
             </AppFadeIn>
 
@@ -592,7 +575,7 @@ export default function DiscoverScreen() {
                     {selectedCondition ? (
                       <Pressable accessibilityRole="button" accessibilityLabel="مسح فلتر الحالة" onPress={() => setSelectedCondition(null)} style={styles.activeChip}>
                         <Ionicons name="sparkles-outline" size={12} color={colors.primary} />
-                        <AppText numberOfLines={1} style={styles.activeChipText}>{selectedCondition}</AppText>
+                        <AppText numberOfLines={1} style={styles.activeChipText}>{getConditionLabel(selectedCondition)}</AppText>
                         <Ionicons name="close" size={12} color={colors.primary} />
                       </Pressable>
                     ) : null}
@@ -612,7 +595,7 @@ export default function DiscoverScreen() {
               </AppCard>
             ) : null}
 
-            {!loading && !error ? <DiscoverIntelligencePanel state={discoverIntelligenceState} /> : null}
+            {!loading && !error && shouldShowIntelligence ? <DiscoverIntelligencePanel state={discoverIntelligenceState} /> : null}
 
             <View style={styles.resultsHeading}>
               <View style={styles.resultsHeadingCopy}>
@@ -781,7 +764,7 @@ export default function DiscoverScreen() {
                     onPress={() => setSelectedCondition(condition)}
                     style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}
                   >
-                    <AppText weight="semibold" style={isActive ? styles.chipTextActive : styles.chipText}>{condition}</AppText>
+                    <AppText weight="semibold" style={isActive ? styles.chipTextActive : styles.chipText}>{getConditionLabel(condition)}</AppText>
                   </Pressable>
                 );
               })}
@@ -801,18 +784,18 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 0 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
-  header: { gap: spacing.lg, marginBottom: spacing.lg },
-  searchCard: { borderRadius: radii.xl, gap: spacing.md },
+  header: { gap: 14, marginBottom: spacing.md },
+  searchCard: { borderRadius: radii.lg, gap: 10 },
   sectionHeadingRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
   sectionHeadingCopy: { flex: 1, gap: 3 },
   eyebrow: { color: colors.primary, fontSize: 11 },
-  searchTitle: { fontSize: 21, lineHeight: 28 },
-  searchDescription: { fontSize: 12, lineHeight: 19 },
-  searchIconShell: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.1)' },
+  searchTitle: { fontSize: 19, lineHeight: 25 },
+  searchDescription: { fontSize: 11, lineHeight: 17 },
+  searchIconShell: { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.1)' },
   controlRow: { flexDirection: 'row-reverse', gap: spacing.sm },
   controlButton: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 43,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
@@ -845,14 +828,14 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, fontSize: 11, lineHeight: 18 },
   resultsHeading: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: spacing.xs },
   resultsHeadingCopy: { flex: 1, gap: 3 },
-  resultsTitle: { fontSize: 23, lineHeight: 30 },
+  resultsTitle: { fontSize: 21, lineHeight: 27 },
   resultsDescription: { fontSize: 12, lineHeight: 18 },
-  resultsCountBadge: { minWidth: 42, height: 42, paddingHorizontal: spacing.sm, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  resultsCountBadge: { minWidth: 38, height: 38, paddingHorizontal: spacing.sm, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   resultsCountText: { color: colors.primary, fontSize: 14 },
   clearButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.09)' },
   clearButtonText: { color: colors.primary, fontSize: 10 },
-  editorialModule: { marginBottom: spacing.lg },
-  editorialCard: { borderRadius: radii.xl },
+  editorialModule: { marginBottom: spacing.md },
+  editorialCard: { borderRadius: radii.lg },
   loadingList: { gap: spacing.md },
   loadingCard: { borderRadius: radii.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', backgroundColor: colors.surface },
   loadingImage: { height: 184, backgroundColor: 'rgba(221,208,197,0.48)' },

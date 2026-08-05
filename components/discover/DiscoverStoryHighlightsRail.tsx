@@ -105,15 +105,15 @@ export function DiscoverStoryHighlightsRail({ items, loading = false, errorMessa
 }
 
 const styles = StyleSheet.create({
-  box: { gap: spacing.md },
+  box: { gap: 10 },
   headingRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
   headingCopy: { flex: 1, gap: 3 },
   eyebrow: { color: '#A96A32', fontSize: 11 },
-  title: { fontSize: 20, lineHeight: 27 },
-  description: { fontSize: 12, lineHeight: 19 },
+  title: { fontSize: 18, lineHeight: 24 },
+  description: { fontSize: 11, lineHeight: 17 },
   headingIcon: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   errorText: { flex: 1, fontSize: 12 },
   rail: { gap: spacing.sm, paddingBottom: 2 },
   card: {
-    width: 222,
+    width: 194,
     borderWidth: 1,
     borderColor: 'rgba(169,106,50,0.16)',
     borderRadius: radii.lg,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   cardPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
-  imageWrap: { height: 112, backgroundColor: colors.background },
+  imageWrap: { height: 96, backgroundColor: colors.background },
   image: { ...StyleSheet.absoluteFillObject },
   storyBadge: {
     position: 'absolute',
@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
   },
   storyLabel: { flex: 1, color: colors.primary, fontSize: 10 },
   content: { padding: spacing.sm, gap: 5 },
-  itemTitle: { fontSize: 15 },
-  snippet: { fontSize: 11, lineHeight: 17 },
+  itemTitle: { fontSize: 14 },
+  snippet: { fontSize: 10, lineHeight: 15 },
   metaRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   meta: { flex: 1, fontSize: 10 },
 });

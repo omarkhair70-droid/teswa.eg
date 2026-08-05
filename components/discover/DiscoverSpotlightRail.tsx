@@ -76,15 +76,15 @@ export function DiscoverSpotlightRail({ items }: Props) {
 }
 
 const styles = StyleSheet.create({
-  box: { gap: spacing.md },
+  box: { gap: 10 },
   headingRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
   headingCopy: { flex: 1, gap: 3 },
   eyebrow: { color: colors.primary, fontSize: 11 },
-  title: { fontSize: 20, lineHeight: 27 },
-  description: { fontSize: 12, lineHeight: 19 },
+  title: { fontSize: 18, lineHeight: 24 },
+  description: { fontSize: 11, lineHeight: 17 },
   headingIcon: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   },
   rail: { gap: spacing.sm, paddingBottom: 2 },
   card: {
-    width: 198,
+    width: 176,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.14)',
     borderRadius: radii.lg,
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   cardPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
-  imageWrap: { height: 116, backgroundColor: colors.background },
+  imageWrap: { height: 100, backgroundColor: colors.background },
   image: { ...StyleSheet.absoluteFillObject },
   imageOverlay: { ...StyleSheet.absoluteFillObject },
   videoBadge: {
@@ -117,8 +117,8 @@ const styles = StyleSheet.create({
   },
   videoBadgeText: { color: colors.white, fontSize: 10 },
   content: { padding: spacing.sm, gap: 5 },
-  itemTitle: { fontSize: 15 },
-  meta: { fontSize: 11 },
+  itemTitle: { fontSize: 14 },
+  meta: { fontSize: 10 },
   openRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, marginTop: 2 },
   openText: { color: colors.primary, fontSize: 11 },
 });
