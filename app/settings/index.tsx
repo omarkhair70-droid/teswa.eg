@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { AppFadeIn } from '@/components/motion/AppFadeIn';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
@@ -65,14 +65,31 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     let mounted = true;
-    void Promise.all([checkIsAdminUser(), fetchDirectPrivacySetting()]).then(([adminResult, privacyResult]) => {
+    void checkIsAdminUser().then((adminResult) => {
       if (!mounted) return;
       setShowAdminReports(adminResult.ok && adminResult.isAdmin);
-      setPrivacyValue(privacyResult.ok ? privacyResult.value : null);
-      setPrivacyLoaded(true);
-    }).catch(() => { if (mounted) { setShowAdminReports(false); setPrivacyValue(null); setPrivacyLoaded(true); } });
+    }).catch(() => {
+      if (mounted) setShowAdminReports(false);
+    });
     return () => { mounted = false; };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setPrivacyLoaded(false);
+      void fetchDirectPrivacySetting().then((privacyResult) => {
+        if (!active) return;
+        setPrivacyValue(privacyResult.ok ? privacyResult.value : null);
+        setPrivacyLoaded(true);
+      }).catch(() => {
+        if (!active) return;
+        setPrivacyValue(null);
+        setPrivacyLoaded(true);
+      });
+      return () => { active = false; };
+    }, []),
+  );
 
   const appearanceLabel = useMemo(() => appearancePreference === 'system' ? `حسب النظام · ${resolvedThemeMode === 'dark' ? 'داكن' : 'فاتح'}` : appearancePreference === 'dark' ? 'داكن' : 'فاتح', [appearancePreference, resolvedThemeMode]);
   const languageLabel = useMemo(() => languagePreference === 'system' ? 'حسب النظام' : languagePreference === 'en' ? 'English' : 'العربية', [languagePreference]);
