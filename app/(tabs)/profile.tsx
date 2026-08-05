@@ -491,18 +491,10 @@ export default function ProfileScreen() {
               <AccountSectionHeading
                 eyebrow="نبض ملفك"
                 title="حضورك في المجتمع"
-                description="لمحة مركزة عن القصص، التبديلات، وسرعة تواصلك."
+                description="قصصك، تبديلاتك، ودائرتك في لمحة واحدة."
               />
               <ProfilePresenceSignals presence={profilePresence} />
-            </AppFadeIn>
-
-            {user?.id ? (
-              <AppFadeIn delay={100} duration={240} fromY={8} style={styles.sectionGroup}>
-                <AccountSectionHeading
-                  eyebrow="دائرتك"
-                  title="مجتمعك القريب"
-                  description="تابع نمو دائرتك وافتح القوائم من نفس المكان."
-                />
+              {user?.id ? (
                 <AppCard padding="sm" style={styles.communityCard}>
                   <View style={styles.followStatsRow}>
                     <Pressable
@@ -532,8 +524,8 @@ export default function ProfileScreen() {
                     </Pressable>
                   </View>
                 </AppCard>
-              </AppFadeIn>
-            ) : null}
+              ) : null}
+            </AppFadeIn>
 
             {user?.id ? (
               <AppFadeIn delay={125} duration={240} fromY={8} style={styles.sectionGroup}>
@@ -638,16 +630,10 @@ export default function ProfileScreen() {
             <AppFadeIn delay={175} duration={240} fromY={8} style={styles.sectionGroup}>
               <AccountSectionHeading
                 eyebrow="التحكم"
-                title="الحساب والتفضيلات"
-                description="كل ما يخص إعداداتك وتنبيهاتك بدون تشتيت."
+                title="إشعاراتك"
+                description="تحكم في التنبيهات وافتح الجديد من مكان واحد."
               />
               <AppCard padding="sm" style={styles.navigationCard}>
-                <AccountNavigationRow
-                  icon="settings-outline"
-                  title="الإعدادات"
-                  description="المظهر، اللغة، الخصوصية، وروابط الحساب."
-                  onPress={() => router.push('/settings')}
-                />
                 <AccountNavigationRow
                   icon="options-outline"
                   title="تفضيلات الإشعارات"
@@ -845,15 +831,15 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: spacing.lg },
-  content: { gap: spacing.xl, paddingBottom: spacing.xxxl },
-  screenHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg },
+  content: { gap: spacing.lg, paddingBottom: spacing.xxxl },
+  screenHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   screenHeaderCopy: { flex: 1, gap: spacing.xs },
   screenEyebrow: { color: colors.primary, fontSize: 12 },
-  title: { fontSize: 28, lineHeight: 36 },
-  screenSubtitle: { fontSize: 14, lineHeight: 21 },
+  title: { fontSize: 26, lineHeight: 32 },
+  screenSubtitle: { fontSize: 13, lineHeight: 20 },
   settingsButton: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
@@ -862,11 +848,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(184,98,63,0.18)',
   },
   settingsButtonPressed: { opacity: 0.78, transform: [{ scale: 0.97 }] },
-  sectionGroup: { gap: spacing.md },
+  sectionGroup: { gap: spacing.sm },
   sectionHeading: { gap: 3, paddingHorizontal: spacing.xs },
   sectionEyebrow: { color: colors.primary, fontSize: 12 },
-  sectionTitle: { fontSize: 21, lineHeight: 28 },
-  sectionDescription: { fontSize: 13, lineHeight: 20 },
+  sectionTitle: { fontSize: 19, lineHeight: 25 },
+  sectionDescription: { fontSize: 12, lineHeight: 18 },
   primaryActions: { flexDirection: 'row-reverse', alignItems: 'stretch', gap: spacing.sm },
   primaryActionMain: { flex: 1 },
   publicProfileButton: {
@@ -888,7 +874,7 @@ const styles = StyleSheet.create({
   followStatsRow: { flexDirection: 'row-reverse', alignItems: 'stretch' },
   followStatTile: {
     flex: 1,
-    minHeight: 118,
+    minHeight: 84,
     borderRadius: radii.lg,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
@@ -898,8 +884,8 @@ const styles = StyleSheet.create({
   },
   followStatPressed: { backgroundColor: 'rgba(184,98,63,0.06)' },
   followStatIcon: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: radii.round,
     alignItems: 'center',
     justifyContent: 'center',
@@ -907,12 +893,12 @@ const styles = StyleSheet.create({
   },
   followStatIconAccent: { backgroundColor: colors.accentSoft },
   followStatLabel: { fontSize: 12 },
-  followStatValue: { fontSize: 22 },
-  followDivider: { width: StyleSheet.hairlineWidth, marginVertical: spacing.md, backgroundColor: colors.border },
+  followStatValue: { fontSize: 20 },
+  followDivider: { width: StyleSheet.hairlineWidth, marginVertical: spacing.sm, backgroundColor: colors.border },
   quickActionsGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.sm },
   quickAction: {
     width: '48%',
-    minHeight: 148,
+    minHeight: 112,
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.15)',
@@ -922,13 +908,13 @@ const styles = StyleSheet.create({
   },
   quickActionPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
   quickActionIcon: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickActionTitle: { fontSize: 16, marginTop: spacing.xs },
+  quickActionTitle: { fontSize: 15, marginTop: 2 },
   quickActionDescription: { fontSize: 12, lineHeight: 18 },
   quickActionArrow: { marginTop: 'auto', alignSelf: 'flex-start' },
   activeStoryBanner: {
@@ -957,10 +943,10 @@ const styles = StyleSheet.create({
   cardDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   navigationCard: { paddingVertical: 0, borderColor: 'rgba(184,98,63,0.15)', backgroundColor: 'rgba(255,253,248,0.9)' },
   navigationRow: {
-    minHeight: 78,
+    minHeight: 66,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -968,7 +954,7 @@ const styles = StyleSheet.create({
   },
   navigationRowLast: { borderBottomWidth: 0 },
   pressedRow: { opacity: 0.72, backgroundColor: 'rgba(184,98,63,0.04)' },
-  navigationIcon: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  navigationIcon: { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   navigationCopy: { flex: 1, minWidth: 0, gap: 3 },
   navigationTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   navigationTitle: { fontSize: 15, flexShrink: 1 },
@@ -1006,17 +992,17 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontSize: 13 },
   successText: { color: colors.success, fontSize: 12, lineHeight: 18 },
   loadingStack: { gap: spacing.md },
-  loadingHero: { overflow: 'hidden', minHeight: 330, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  loadingCover: { height: 212, backgroundColor: colors.primarySoft },
-  loadingIdentityRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: -38 },
-  loadingAvatar: { width: 94, height: 94, borderRadius: 47, borderWidth: 4, borderColor: colors.surface, backgroundColor: '#E5CDBD' },
-  loadingCopy: { flex: 1, gap: spacing.sm, paddingTop: spacing.xl },
+  loadingHero: { overflow: 'hidden', minHeight: 218, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  loadingCover: { height: 132, backgroundColor: colors.primarySoft },
+  loadingIdentityRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: -28 },
+  loadingAvatar: { width: 78, height: 78, borderRadius: 39, borderWidth: 3, borderColor: colors.surface, backgroundColor: '#E5CDBD' },
+  loadingCopy: { flex: 1, gap: spacing.sm, paddingTop: spacing.lg },
   loadingTitle: { width: '68%', height: 22, borderRadius: radii.sm, backgroundColor: colors.primarySoft },
   loadingLineSmall: { width: '44%', height: 13, borderRadius: radii.sm, backgroundColor: '#E9E0D8' },
   loadingActions: { flexDirection: 'row-reverse', gap: spacing.sm },
   loadingAction: { flex: 1, height: 46, borderRadius: radii.md, backgroundColor: '#E8DDD3' },
-  loadingCard: { height: 182, borderRadius: radii.xl, backgroundColor: 'rgba(238,216,203,0.68)' },
-  loadingCardCompact: { height: 126, borderRadius: radii.xl, backgroundColor: 'rgba(215,232,229,0.68)' },
+  loadingCard: { height: 142, borderRadius: radii.xl, backgroundColor: 'rgba(238,216,203,0.68)' },
+  loadingCardCompact: { height: 104, borderRadius: radii.xl, backgroundColor: 'rgba(215,232,229,0.68)' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(29,26,22,0.48)', justifyContent: 'flex-end', padding: spacing.lg },
   sheet: { backgroundColor: colors.surface, borderRadius: radii.xl, padding: spacing.lg, gap: spacing.sm },
   sheetHandle: { width: 44, height: 4, borderRadius: radii.round, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.sm },
