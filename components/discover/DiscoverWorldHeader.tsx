@@ -38,9 +38,8 @@ function PathButton({
       </View>
       <View style={styles.pathCopy}>
         <AppText weight="bold" style={styles.pathLabel}>{label}</AppText>
-        <AppText muted numberOfLines={2} style={styles.pathDescription}>{description}</AppText>
+        <AppText muted numberOfLines={1} style={styles.pathDescription}>{description}</AppText>
       </View>
-      <Ionicons name="chevron-back" size={16} color={colors.textMuted} />
     </Pressable>
   );
 }
@@ -70,7 +69,7 @@ export function DiscoverWorldHeader({ onOpenPeople, onOpenMotion, onBrowseItems 
       <View style={styles.heroCopy}>
         <AppText weight="bold" style={styles.title}>كل حاجة ممكن تفتح لك باب</AppText>
         <AppText muted style={styles.subtitle}>
-          ابدأ بعنصر، شخص، أو حكاية. رتّبنا لك عالم تِسوى عشان توصل للاكتشاف المناسب من غير زحمة.
+          عنصر، شخص، أو حكاية—ابدأ بالطريق الأقرب لاهتمامك.
         </AppText>
       </View>
 
@@ -85,7 +84,7 @@ export function DiscoverWorldHeader({ onOpenPeople, onOpenMotion, onBrowseItems 
         </View>
         <View style={styles.primaryPathCopy}>
           <AppText weight="bold" style={styles.primaryPathTitle}>ابدأ بالعناصر</AppText>
-          <AppText style={styles.primaryPathDescription}>ابحث وفلتر وشوف الجديد الجاهز للتبديل</AppText>
+          <AppText numberOfLines={1} style={styles.primaryPathDescription}>ابحث وفلتر وشوف الجديد الجاهز للتبديل</AppText>
         </View>
         <Ionicons name="arrow-back" size={18} color={colors.white} />
       </Pressable>
@@ -101,29 +100,29 @@ export function DiscoverWorldHeader({ onOpenPeople, onOpenMotion, onBrowseItems 
 const styles = StyleSheet.create({
   wrap: {
     borderRadius: radii.xxl,
-    padding: spacing.lg,
+    padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(184,98,63,0.18)',
-    gap: spacing.lg,
+    gap: spacing.md,
     overflow: 'hidden',
   },
   orbOne: {
     position: 'absolute',
-    width: 180,
-    height: 180,
+    width: 150,
+    height: 150,
     borderRadius: radii.round,
     backgroundColor: 'rgba(255,255,255,0.36)',
-    top: -85,
-    left: -60,
+    top: -88,
+    left: -72,
   },
   orbTwo: {
     position: 'absolute',
-    width: 130,
-    height: 130,
+    width: 112,
+    height: 112,
     borderRadius: radii.round,
     backgroundColor: 'rgba(62,124,115,0.08)',
-    bottom: -70,
-    right: -38,
+    bottom: -68,
+    right: -46,
   },
   topRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   badge: {
@@ -141,22 +140,22 @@ const styles = StyleSheet.create({
   livePill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   liveDot: { width: 7, height: 7, borderRadius: radii.round, backgroundColor: colors.accent },
   liveText: { color: colors.accent, fontSize: 11 },
-  heroCopy: { gap: spacing.sm },
-  title: { fontSize: 29, lineHeight: 38, maxWidth: 310 },
-  subtitle: { fontSize: 14, lineHeight: 23, maxWidth: 330 },
+  heroCopy: { gap: 4 },
+  title: { fontSize: 25, lineHeight: 32, maxWidth: 310 },
+  subtitle: { fontSize: 13, lineHeight: 20, maxWidth: 330 },
   primaryPath: {
-    minHeight: 76,
+    minHeight: 62,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.sm,
-    borderRadius: radii.xl,
-    padding: spacing.md,
+    borderRadius: radii.lg,
+    padding: 10,
     backgroundColor: colors.primary,
   },
   primaryPathPressed: { opacity: 0.88, transform: [{ scale: 0.99 }] },
   primaryPathIcon: {
-    width: 42,
-    height: 42,
+    width: 36,
+    height: 36,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -168,8 +167,9 @@ const styles = StyleSheet.create({
   secondaryPaths: { flexDirection: 'row-reverse', gap: spacing.sm },
   pathButton: {
     flex: 1,
-    minHeight: 92,
-    alignItems: 'flex-start',
+    minHeight: 68,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     gap: 6,
     padding: spacing.sm,
     borderRadius: radii.lg,
@@ -179,14 +179,14 @@ const styles = StyleSheet.create({
   },
   pathButtonPressed: { opacity: 0.78, backgroundColor: 'rgba(255,255,255,0.9)' },
   pathIcon: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(184,98,63,0.1)',
   },
   pathCopy: { flex: 1, gap: 2 },
-  pathLabel: { fontSize: 14 },
-  pathDescription: { fontSize: 11, lineHeight: 16 },
+  pathLabel: { fontSize: 13 },
+  pathDescription: { fontSize: 10, lineHeight: 14 },
 });
