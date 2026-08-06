@@ -204,8 +204,8 @@ export default function EditProfileScreen() {
     }
 
     if (!usernameValidation.ok) {
-  setFormError(usernameValidation.message);
-  return;
+       setFormError(usernameValidation.message);
+       return;
 }
 
     if (normalizedTaglineLength > 120) {

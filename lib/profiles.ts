@@ -117,7 +117,7 @@ export async function updateMyProfileFromMobile(
 ): Promise<UpdateMyProfileResult> {
   const userId = input.userId.trim();
   const normalizedDisplayName = input.displayName.trim();
- const usernameValidation = validateUsername(input.username);
+  const usernameValidation = validateUsername(input.username);
   const normalizedTagline = normalizeOptional(input.profileTagline);
   const normalizedCity = normalizeOptional(input.city);
   const normalizedArea = normalizeOptional(input.area);
@@ -131,7 +131,7 @@ export async function updateMyProfileFromMobile(
     return { ok: false, reason: 'invalid_display_name', message: 'الاسم الظاهر مطلوب.' };
   }
 
-  if (!usernameValidation.ok) {
+if (!usernameValidation.ok) {
   return {
     ok: false,
     reason: 'invalid_username',
