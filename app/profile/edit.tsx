@@ -15,8 +15,11 @@ import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { removeProfileImageFromMobile, replaceProfileImageFromMobile, type ProfileImageKind } from '@/lib/profile-images';
 import { fetchMyAccountProfile, updateMyProfileFromMobile } from '@/lib/profiles';
-
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
+import {
+  USERNAME_MAX_LENGTH,
+  USERNAME_RULES_AR,
+  validateUsername,
+} from '@/lib/username';
 
 export default function EditProfileScreen() {
   const { user, refreshProfile } = useAuth();
@@ -192,7 +195,7 @@ export default function EditProfileScreen() {
     }
 
     const normalizedDisplayName = displayName.trim();
-    const normalizedUsername = username.trim();
+    const usernameValidation = validateUsername(username);
     const normalizedTaglineLength = profileTagline.trim().length;
 
     if (!normalizedDisplayName) {
@@ -200,10 +203,10 @@ export default function EditProfileScreen() {
       return;
     }
 
-    if (!normalizedUsername || !USERNAME_REGEX.test(normalizedUsername)) {
-      setFormError('اسم المستخدم لازم يكون من 3 إلى 20 حرف أو رقم أو _.');
-      return;
-    }
+    if (!usernameValidation.ok) {
+       setFormError(usernameValidation.message);
+       return;
+}
 
     if (normalizedTaglineLength > 120) {
       setFormError('الجملة التعريفية يجب ألا تتجاوز 120 حرفًا.');
@@ -218,7 +221,7 @@ export default function EditProfileScreen() {
       const result = await updateMyProfileFromMobile({
         userId: user.id,
         displayName,
-        username,
+        username: usernameValidation.normalized,
         profileTagline,
         city,
         area,
@@ -377,13 +380,19 @@ export default function EditProfileScreen() {
               <View style={styles.group}>
                 <AppInput placeholder="الاسم الظاهر" value={displayName} onChangeText={setDisplayName} />
                 <AppInput
-                  placeholder="اسم المستخدم"
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <AppText muted>من 3 إلى 20 حرفًا أو رقمًا أو _.</AppText>
+  placeholder="اسم المستخدم"
+  value={username}
+  onChangeText={(value) => {
+    setUsername(value);
+    if (formError) setFormError(null);
+  }}
+  autoCapitalize="none"
+  autoCorrect={false}
+  spellCheck={false}
+  maxLength={USERNAME_MAX_LENGTH}
+/>
+
+<AppText muted>{USERNAME_RULES_AR}</AppText>
                 <AppInput placeholder="جملة تعريفية قصيرة" value={profileTagline} onChangeText={setProfileTagline} />
                 <AppText muted>{`${taglineCount}/120`}</AppText>
                 <AppInput placeholder="المدينة" value={city} onChangeText={setCity} />
