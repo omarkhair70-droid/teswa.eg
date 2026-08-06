@@ -1,6 +1,8 @@
 import { PropsWithChildren } from 'react';
+import { StyleSheet, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScrollView, StyleSheet, ViewStyle } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+
 import { TeswaAmbientBackground } from '@/components/ui/TeswaAmbientBackground';
 import type { TeswaAmbientBackgroundVariant } from '@/components/ui/TeswaAmbientBackground';
 import { colors } from '@/constants/colors';
@@ -14,17 +16,46 @@ type AppScreenProps = PropsWithChildren<{
   backgroundVariant?: AppScreenBackgroundVariant;
 }>;
 
-export function AppScreen({ children, scrollable = false, style, backgroundVariant = 'soft' }: AppScreenProps) {
-  const content = scrollable ? <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView> : children;
+export function AppScreen({
+  children,
+  scrollable = false,
+  style,
+  backgroundVariant = 'soft',
+}: AppScreenProps) {
+  const content = scrollable ? (
+    <KeyboardAwareScrollView
+      contentContainerStyle={styles.content}
+      bottomOffset={spacing.lg}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      showsVerticalScrollIndicator={false}
+    >
+      {children}
+    </KeyboardAwareScrollView>
+  ) : (
+    children
+  );
+
   return (
     <SafeAreaView style={[styles.container, style]}>
-      {backgroundVariant !== 'none' ? <TeswaAmbientBackground variant={backgroundVariant} /> : null}
+      {backgroundVariant !== 'none' ? (
+        <TeswaAmbientBackground variant={backgroundVariant} />
+      ) : null}
+
       {content}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, padding: spacing.lg, overflow: 'hidden' },
-  content: { paddingBottom: spacing.xxl, gap: spacing.lg },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    overflow: 'hidden',
+  },
+  content: {
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
 });
