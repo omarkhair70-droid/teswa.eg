@@ -102,7 +102,48 @@ function normalizeStreamDate(value: unknown): string | null {
 
   return null;
 }
+async function getConnectedStreamClient(): Promise<any | null> {
+  try {
+    const tokenResult = await fetchStreamChatToken();
 
+    if (!tokenResult.ok) {
+      return null;
+    }
+
+    const { StreamChat } = await import('stream-chat');
+    const client = StreamChat.getInstance(tokenResult.apiKey);
+
+    const connectedUserId =
+      typeof client.userID === 'string'
+        ? client.userID
+        : null;
+
+    if (connectedUserId !== tokenResult.userId) {
+      if (
+        connectedUserId &&
+        typeof client.disconnectUser === 'function'
+      ) {
+        await client.disconnectUser();
+      }
+
+      await client.connectUser(
+        { id: tokenResult.userId },
+        tokenResult.token,
+      );
+    }
+
+    return client;
+  } catch (error) {
+    if (__DEV__) {
+      console.log(
+        '[DirectInbox] Stream connection failed',
+        error,
+      );
+    }
+
+    return null;
+  }
+}
 export function formatConversationListTime(
   value: string | null,
 ): string | null {
@@ -166,38 +207,13 @@ export async function mergeDirectConversationStreamActivity(
     );
   }
 
-  const tokenResult = await fetchStreamChatToken();
+   const client = await getConnectedStreamClient();
 
-  if (!tokenResult.ok) {
+  if (!client) {
     return [...rows].sort(
       (a, b) =>
         getConversationSortTimestamp(b) -
         getConversationSortTimestamp(a),
-    );
-  }
-
-  const { StreamChat } = await import('stream-chat');
-  const client = StreamChat.getInstance(tokenResult.apiKey);
-
-  const connectedUserId =
-    typeof client.userID === 'string'
-      ? client.userID
-      : null;
-
-  if (
-    !connectedUserId ||
-    connectedUserId !== tokenResult.userId
-  ) {
-    if (
-      connectedUserId &&
-      typeof client.disconnectUser === 'function'
-    ) {
-      await client.disconnectUser();
-    }
-
-    await client.connectUser(
-      { id: tokenResult.userId },
-      tokenResult.token,
     );
   }
 
@@ -277,37 +293,11 @@ export async function mergeDirectConversationStreamActivity(
 export async function subscribeToDirectInboxStreamUpdates(
   onUpdate: () => void,
 ): Promise<() => void> {
-  const tokenResult = await fetchStreamChatToken();
+    const client = await getConnectedStreamClient();
 
-  if (!tokenResult.ok) {
+  if (!client) {
     return () => {};
   }
-
-  const { StreamChat } = await import('stream-chat');
-  const client = StreamChat.getInstance(tokenResult.apiKey);
-
-  const connectedUserId =
-    typeof client.userID === 'string'
-      ? client.userID
-      : null;
-
-  if (
-    !connectedUserId ||
-    connectedUserId !== tokenResult.userId
-  ) {
-    if (
-      connectedUserId &&
-      typeof client.disconnectUser === 'function'
-    ) {
-      await client.disconnectUser();
-    }
-
-    await client.connectUser(
-      { id: tokenResult.userId },
-      tokenResult.token,
-    );
-  }
-
   const subscriptions = [
     client.on('message.new', onUpdate),
     client.on('message.updated', onUpdate),
