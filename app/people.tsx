@@ -16,6 +16,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { fetchPeopleDirectory, PEOPLE_DIRECTORY_PAGE_SIZE, PeopleDirectoryEntry } from '@/lib/people';
 import { readAnyPeopleDefaultDirectoryCache, readFreshPeopleDefaultDirectoryCache, writePeopleDefaultDirectoryCache } from '@/lib/offline-people-cache';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 const PEOPLE_SKELETONS = ['people-skeleton-1', 'people-skeleton-2', 'people-skeleton-3'];
 
@@ -484,6 +485,13 @@ export default function PeopleScreen() {
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
+        renderScrollComponent={(props) => (
+          <KeyboardAwareScrollView
+            {...props}
+            bottomOffset={spacing.lg}
+          />
+        )}
+        keyboardDismissMode="on-drag"
         data={people}
         keyExtractor={(item) => item.id}
         renderItem={renderPerson}
