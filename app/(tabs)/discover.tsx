@@ -471,13 +471,13 @@ export default function DiscoverScreen() {
    keyboardDismissMode="on-drag"
    ref={listRef}
    data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
-        refreshing={refreshing}
-        onRefresh={refreshItems}
-        onEndReached={isFilteredEmptyWithMore ? undefined : loadMoreItems}
-        onEndReachedThreshold={0.35}
-        ListHeaderComponent={
+   keyExtractor={(item) => item.id}
+   contentContainerStyle={styles.content}
+   refreshing={refreshing}
+   onRefresh={refreshItems}
+   onEndReached={isFilteredEmptyWithMore ? undefined : loadMoreItems}
+   onEndReachedThreshold={0.35}
+   ListHeaderComponent={
           <View style={styles.header}>
             <AppFadeIn delay={0} duration={200} fromY={8}>
               <DiscoverWorldHeader
