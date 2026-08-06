@@ -16,6 +16,11 @@ import { fetchOffersInbox, getOfferStatusLabel, OfferRowSummary } from '@/lib/of
 import { DealConversation, fetchDealConversationsForUser } from '@/lib/messages';
 import { ContextualConversationSummary, fetchContextualConversationSummariesForUser } from '@/lib/contextual-conversations';
 import { DirectConversationSummary, fetchMyDirectConversations } from '@/lib/direct-messages';
+import {
+  formatConversationListTime,
+  mergeDirectConversationStreamActivity,
+  subscribeToDirectInboxStreamUpdates,
+} from '@/lib/chat/direct-inbox-stream';
 import { useUnreadBadges } from '@/lib/unread-badges';
 
 type TopSection = 'conversations' | 'offers';
@@ -55,15 +60,55 @@ export default function Screen() {
       const [offersData, convosData, repliesData, directData] = await Promise.all([
         fetchOffersInbox(user.id), fetchDealConversationsForUser(user.id), fetchContextualConversationSummariesForUser(user.id), fetchMyDirectConversations(),
       ]);
+      const hydratedDirectData =
+        await mergeDirectConversationStreamActivity(
+          directData,
+          user.id,
+        );
       setIncoming(offersData.incomingActionableOffers); setSent(offersData.sentOffers);
-      setDealConversations(convosData); setStoryReplies(repliesData); setDirectConversations(directData);
+      setDealConversations(convosData); setStoryReplies(repliesData); setDirectConversations(hydratedDirectData);
       void refreshBadges();
     } catch { setError('تعذر تحميل الرسائل حالياً.'); }
     finally { setLoading(false); }
   }, [refreshBadges, user?.id]);
+  const refreshDirectInbox = useCallback(async () => {
+    if (!user?.id) return;
 
+    const directData = await fetchMyDirectConversations();
+
+    const hydratedDirectData =
+      await mergeDirectConversationStreamActivity(
+        directData,
+        user.id,
+      );
+
+    setDirectConversations(hydratedDirectData);
+    void refreshBadges();
+  }, [refreshBadges, user?.id]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      let unsubscribe: (() => void) | null = null;
 
+      void subscribeToDirectInboxStreamUpdates(() => {
+        if (active) {
+          void refreshDirectInbox();
+        }
+      }).then((cleanup) => {
+        if (active) {
+          unsubscribe = cleanup;
+        } else {
+          cleanup();
+        }
+      });
+
+      return () => {
+        active = false;
+        unsubscribe?.();
+      };
+    }, [refreshDirectInbox]),
+  );
   const unified = useMemo<UnifiedRow[]>(() => {
     const directRows = directConversations.map((c) => ({ id: `direct-${c.conversationId}`, type: 'direct' as const, title: c.otherDisplayName ?? 'رسالة مباشرة', preview: c.lastMessageBody ?? 'ابدأ برسالة من البروفايل.', at: c.lastMessageAt, route: `/direct/${c.conversationId}`, avatarUrl: c.otherAvatarUrl, unreadCount: c.unreadCount, requestBadge: c.requiresAction, swapContext: null }));
     const dealRows = dealConversations.map((d) => ({ id: `deal-${d.dealId}`, type: 'deal' as const, title: d.otherParticipant.displayName?.trim() || 'دردشة صفقة', preview: d.latestMessage?.messageType === 'voice' ? 'رسالة صوتية' : (d.latestMessage?.body ?? 'افتح الدردشة للتنسيق.'), at: d.lastActivityAt, route: `/deal/${d.dealId}`, avatarUrl: d.otherParticipant.avatarUrl, unreadCount: d.unreadCount, swapContext: `${d.requestedItemTitle} ↔ ${d.offeredItemTitle}` }));
@@ -141,9 +186,92 @@ export default function Screen() {
 
             {filteredConversations.length ? filteredConversations.map((row) => {
               const chip = typeChip(row.type);
+              const formattedTime = formatConversationListTime(row.at);
               return (
-                <Pressable key={row.id} onPress={() => router.push(row.route)}>
-                  <AppCard style={styles.card}><View style={styles.row}><View style={styles.avatarWrap}>{row.avatarUrl ? <Image source={{ uri: row.avatarUrl }} style={styles.avatar} /> : <Ionicons name="person" size={16} color={colors.textMuted} />}</View><View style={styles.main}><View style={styles.headerRow}><AppText weight="semibold" numberOfLines={1} style={styles.rowTitle}>{row.title}</AppText><View style={styles.kind}><Ionicons name={chip.icon} size={12} color={colors.textMuted} /><AppText muted style={styles.kindText}>{chip.label}</AppText></View></View><AppText muted numberOfLines={1}>{row.preview}</AppText>{row.swapContext ? <AppText muted numberOfLines={1} style={styles.swapContext}>{row.swapContext}</AppText> : null}{row.requestBadge ? <View style={styles.requestBadge}><AppText style={styles.requestBadgeText}>طلب مراسلة</AppText></View> : null}</View><View style={styles.meta}>{row.at ? <AppText muted>{new Date(row.at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText> : null}{row.unreadCount > 0 ? <View style={styles.badge}><AppText weight="semibold" style={styles.badgeText}>{row.unreadCount}</AppText></View> : null}</View></View></AppCard>
+                                <Pressable
+                  key={row.id}
+                  onPress={() => router.push(row.route)}
+                >
+                  <AppCard style={styles.card}>
+                    <View style={styles.row}>
+                      <View style={styles.avatarWrap}>
+                        {row.avatarUrl ? (
+                          <Image
+                            source={{ uri: row.avatarUrl }}
+                            style={styles.avatar}
+                          />
+                        ) : (
+                          <Ionicons
+                            name="person"
+                            size={16}
+                            color={colors.textMuted}
+                          />
+                        )}
+                      </View>
+
+                      <View style={styles.main}>
+                        <View style={styles.headerRow}>
+                          <AppText
+                            weight="semibold"
+                            numberOfLines={1}
+                            style={styles.rowTitle}
+                          >
+                            {row.title}
+                          </AppText>
+
+                          <View style={styles.kind}>
+                            <Ionicons
+                              name={chip.icon}
+                              size={12}
+                              color={colors.textMuted}
+                            />
+                            <AppText muted style={styles.kindText}>
+                              {chip.label}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        <AppText muted numberOfLines={1}>
+                          {row.preview}
+                        </AppText>
+
+                        {row.swapContext ? (
+                          <AppText
+                            muted
+                            numberOfLines={1}
+                            style={styles.swapContext}
+                          >
+                            {row.swapContext}
+                          </AppText>
+                        ) : null}
+
+                        {row.requestBadge ? (
+                          <View style={styles.requestBadge}>
+                            <AppText style={styles.requestBadgeText}>
+                              طلب مراسلة
+                            </AppText>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.meta}>
+                        {formattedTime ? (
+                          <AppText muted>{formattedTime}</AppText>
+                        ) : null}
+
+                        {row.unreadCount > 0 ? (
+                          <View style={styles.badge}>
+                            <AppText
+                              weight="semibold"
+                              style={styles.badgeText}
+                            >
+                              {row.unreadCount}
+                            </AppText>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  </AppCard>
                 </Pressable>
               );
             }) : <AppCard style={styles.emptyCard}><EmptyState title={unified.length ? 'مفيش نتائج في النوع ده' : 'لسه مفيش محادثات'} description="ابدأ من بروفايل أو صفقة، وأول رسالة تفتح باب التبادل." /></AppCard>}
