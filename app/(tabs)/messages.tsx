@@ -55,22 +55,52 @@ export default function Screen() {
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    setLoading(true); setError(null);
+
+    setLoading(true);
+    setError(null);
+
     try {
-      const [offersData, convosData, repliesData, directData] = await Promise.all([
-        fetchOffersInbox(user.id), fetchDealConversationsForUser(user.id), fetchContextualConversationSummariesForUser(user.id), fetchMyDirectConversations(),
+      const [
+        offersData,
+        convosData,
+        repliesData,
+        directData,
+      ] = await Promise.all([
+        fetchOffersInbox(user.id),
+        fetchDealConversationsForUser(user.id),
+        fetchContextualConversationSummariesForUser(user.id),
+        fetchMyDirectConversations(),
       ]);
-      const hydratedDirectData =
-        await mergeDirectConversationStreamActivity(
-          directData,
-          user.id,
-        );
-      setIncoming(offersData.incomingActionableOffers); setSent(offersData.sentOffers);
-      setDealConversations(convosData); setStoryReplies(repliesData); setDirectConversations(hydratedDirectData);
-      void refreshBadges();
-    } catch { setError('تعذر تحميل الرسائل حالياً.'); }
-    finally { setLoading(false); }
-  }, [refreshBadges, user?.id]);
+
+      // اعرض بيانات Supabase فورًا من غير انتظار Stream.
+      setIncoming(offersData.incomingActionableOffers);
+      setSent(offersData.sentOffers);
+      setDealConversations(convosData);
+      setStoryReplies(repliesData);
+      setDirectConversations(directData);
+      setLoading(false);
+
+      // حدّث بيانات Direct من Stream في الخلفية.
+      void mergeDirectConversationStreamActivity(
+        directData,
+        user.id,
+      )
+        .then((hydratedDirectData) => {
+          setDirectConversations(hydratedDirectData);
+        })
+        .catch((streamHydrationError) => {
+          if (__DEV__) {
+            console.log(
+              '[Messages] background Stream hydration failed',
+              streamHydrationError,
+            );
+          }
+        });
+    } catch {
+      setError('تعذر تحميل الرسائل حالياً.');
+      setLoading(false);
+    }
+  }, [user?.id]);
   const refreshDirectInbox = useCallback(async () => {
     if (!user?.id) return;
 
@@ -83,8 +113,8 @@ export default function Screen() {
       );
 
     setDirectConversations(hydratedDirectData);
-    void refreshBadges();
-  }, [refreshBadges, user?.id]);
+
+  }, [user?.id]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useFocusEffect(
     useCallback(() => {
