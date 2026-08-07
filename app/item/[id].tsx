@@ -1,5 +1,12 @@
 import { type ElementRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
@@ -129,6 +136,8 @@ function ItemVideoTeaserSection({ teaser, active, onPlay }: { teaser: ItemVideoT
 export default function ItemDetailsScreen() {
   const { id, moment } = useLocalSearchParams<{ id: string; moment?: string }>();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [galleryVisible, setGalleryVisible] = useState(false);
+  const { width: screenWidth } = useWindowDimensions();
   const [shareError, setShareError] = useState<string | null>(null);
   const [itemCacheNotice, setItemCacheNotice] = useState<string | null>(null);
   const [likePending, setLikePending] = useState(false);
@@ -230,6 +239,14 @@ export default function ItemDetailsScreen() {
     return item.images[activeImageIndex]?.imageUrl ?? item.images[0].imageUrl;
   }, [activeImageIndex, item]);
 
+  const galleryImages = useMemo(() => {
+  if (item?.images.length) {
+    return item.images.map((image) => image.imageUrl);
+  }
+
+  return item?.imageUrl ? [item.imageUrl] : [];
+}, [item]);
+
   const locationText = useMemo(() => {
     if (!item) return 'غير محدد';
     if (item.location && item.area) return `${item.location} • ${item.area}`;
@@ -248,7 +265,41 @@ export default function ItemDetailsScreen() {
     <AppScreen scrollable backgroundVariant="alive">
       <Animated.View entering={FadeInDown.duration(220).delay(40)}>
         <View style={styles.heroShell}>
-          {activeImage ? <ExpoImage source={{ uri: activeImage }} style={styles.hero} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : <View style={[styles.hero, styles.placeholder]}><Ionicons name="image-outline" size={22} color={colors.textMuted} /><AppText muted weight="semibold">الصورة غير متاحة</AppText></View>}
+          {activeImage ? (
+  <Pressable
+    onPress={() => setGalleryVisible(true)}
+    style={styles.heroPressable}
+    accessibilityRole="button"
+    accessibilityLabel="فتح صور العنصر بالحجم الكامل"
+  >
+    <ExpoImage
+      source={{ uri: activeImage }}
+      style={styles.hero}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={200}
+    />
+
+    <View style={styles.expandButton}>
+      <Ionicons
+        name="expand-outline"
+        size={18}
+        color={colors.white}
+      />
+    </View>
+  </Pressable>
+) : (
+  <View style={[styles.hero, styles.placeholder]}>
+    <Ionicons
+      name="image-outline"
+      size={22}
+      color={colors.textMuted}
+    />
+    <AppText muted weight="semibold">
+      الصورة غير متاحة
+    </AppText>
+  </View>
+)}
           {!!item.images.length && <View style={styles.imageCounter}><AppText style={styles.imageCounterText}>{`${Math.min(activeImageIndex + 1, item.images.length)} من ${item.images.length}`}</AppText></View>}
           {(item.hasVideoTeaser || item.videoTeaser) ? <View style={styles.mediaCue}><Ionicons name="videocam-outline" size={12} color={colors.white} /><AppText style={styles.mediaCueText}>فيه لمحة فيديو</AppText></View> : null}
         </View>
@@ -324,6 +375,76 @@ export default function ItemDetailsScreen() {
           />
         </ViewShot>
       </View>
+    <Modal
+  visible={galleryVisible}
+  animationType="fade"
+  statusBarTranslucent
+  onRequestClose={() => setGalleryVisible(false)}
+>
+  <View style={styles.galleryModal}>
+    <ScrollView
+      key={`gallery-${galleryVisible}-${activeImageIndex}`}
+      horizontal
+      pagingEnabled
+      showsHorizontalScrollIndicator={false}
+      contentOffset={{
+        x: activeImageIndex * screenWidth,
+        y: 0,
+      }}
+      onMomentumScrollEnd={(event) => {
+        const nextIndex = Math.round(
+          event.nativeEvent.contentOffset.x / screenWidth,
+        );
+
+        setActiveImageIndex(
+          Math.max(
+            0,
+            Math.min(nextIndex, galleryImages.length - 1),
+          ),
+        );
+      }}
+    >
+      {galleryImages.map((imageUrl, index) => (
+        <View
+          key={`${imageUrl}-${index}`}
+          style={[
+            styles.galleryPage,
+            { width: screenWidth },
+          ]}
+        >
+          <ExpoImage
+            source={{ uri: imageUrl }}
+            style={styles.galleryImage}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
+        </View>
+      ))}
+    </ScrollView>
+
+    <Pressable
+      onPress={() => setGalleryVisible(false)}
+      style={styles.galleryClose}
+      accessibilityRole="button"
+      accessibilityLabel="إغلاق معرض الصور"
+      hitSlop={10}
+    >
+      <Ionicons
+        name="close"
+        size={25}
+        color={colors.white}
+      />
+    </Pressable>
+
+    {galleryImages.length > 0 ? (
+      <View style={styles.galleryCounter}>
+        <AppText style={styles.galleryCounterText}>
+          {`${activeImageIndex + 1} من ${galleryImages.length}`}
+        </AppText>
+      </View>
+    ) : null}
+  </View>
+</Modal>
     </AppScreen>
   );
 }
@@ -331,6 +452,59 @@ export default function ItemDetailsScreen() {
 const styles = StyleSheet.create({
   heroShell: { borderRadius: radii.xl, padding: spacing.xs, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   hero: { width: '100%', height: 252, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
+  heroPressable: {
+  width: '100%',
+  borderRadius: radii.lg,
+  overflow: 'hidden',
+},
+expandButton: {
+  position: 'absolute',
+  top: spacing.sm,
+  left: spacing.sm,
+  width: 38,
+  height: 38,
+  borderRadius: 19,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(0,0,0,0.55)',
+},
+galleryModal: {
+  flex: 1,
+  backgroundColor: '#000000',
+},
+galleryPage: {
+  height: '100%',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+galleryImage: {
+  width: '100%',
+  height: '100%',
+},
+galleryClose: {
+  position: 'absolute',
+  top: 52,
+  right: 20,
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(30,30,30,0.72)',
+},
+galleryCounter: {
+  position: 'absolute',
+  bottom: 38,
+  alignSelf: 'center',
+  borderRadius: radii.round,
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.xs,
+  backgroundColor: 'rgba(30,30,30,0.72)',
+},
+galleryCounterText: {
+  color: colors.white,
+  fontSize: 13,
+},
   placeholder: { borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: spacing.xs },
   imageCounter: { position: 'absolute', bottom: spacing.sm, left: spacing.sm, backgroundColor: 'rgba(25,20,45,0.6)', borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   imageCounterText: { color: colors.white, fontSize: 12 },
