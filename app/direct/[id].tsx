@@ -270,6 +270,8 @@ export default function DirectScreen() {
       const cfg = getStreamDirectChannelConfig({ conversationId, currentUserId, otherUserId: streamOtherUserId });
       const channel = client.channel(cfg.type, cfg.id, { members: cfg.members });
       await channel.watch();
+      await channel.markRead().catch(() => {});
+
       if (seq !== streamConnectionSeqRef.current) return;
       streamClientRef.current = client;
       streamChannelRef.current = channel;
@@ -333,11 +335,22 @@ export default function DirectScreen() {
     void cleanupStream();
     void load();
   }, [cleanupStream, conversationId, load]);
-  useFocusEffect(useCallback(() => {
+  useFocusEffect(
+  useCallback(() => {
     if (!conversationId) return;
+
     void markDirectConversationRead(conversationId);
-    if (!loading) void load({ background: true });
-  }, [conversationId, load, loading]));
+
+    const channel = streamChannelRef.current;
+    if (channel && typeof channel.markRead === 'function') {
+      void channel.markRead().catch(() => {});
+    }
+
+    if (!loading) {
+      void load({ background: true });
+    }
+  }, [conversationId, load, loading]),
+);
   useEffect(() => { const otherUserId = convo?.otherUserId; if (!user?.id || !otherUserId) return; let active = true; void (async () => { const state = await fetchUserBlockState(user.id, otherUserId); if (!active || !state.ok) return; setBlockedByMe(state.state.blockedByMe); })(); return () => { active = false; }; }, [convo?.otherUserId, user?.id]);
   useEffect(() => { if (!DIRECT_CHAT_PRO_ENABLED || streamConvoStatus !== 'accepted') return; void connectStream(); return () => { streamConnectionSeqRef.current += 1; void cleanupStream(); }; }, [cleanupStream, connectStream, streamConvoStatus]);
 

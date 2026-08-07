@@ -195,100 +195,139 @@ export async function mergeDirectConversationStreamActivity(
   rows: DirectConversationSummary[],
   currentUserId: string,
 ): Promise<DirectConversationSummary[]> {
+  const fallbackRows = [...rows].sort(
+    (a, b) =>
+      getConversationSortTimestamp(b) -
+      getConversationSortTimestamp(a),
+  );
+
   const acceptedRows = rows.filter(
     (row) => row.status === 'accepted',
   );
 
   if (!acceptedRows.length) {
-    return [...rows].sort(
-      (a, b) =>
-        getConversationSortTimestamp(b) -
-        getConversationSortTimestamp(a),
-    );
+    return fallbackRows;
   }
 
-   const client = await getConnectedStreamClient();
+  const client = await getConnectedStreamClient();
 
   if (!client) {
-    return [...rows].sort(
+    return fallbackRows;
+  }
+
+  const rowsByChannelId =
+    new Map<string, DirectConversationSummary>();
+
+  acceptedRows.forEach((row) => {
+    try {
+      const config = getStreamDirectChannelConfig({
+        conversationId: row.conversationId,
+        currentUserId,
+        otherUserId: row.otherUserId,
+      });
+
+      rowsByChannelId.set(config.id, row);
+    } catch (error) {
+      if (__DEV__) {
+        console.log(
+          '[DirectInbox] Invalid Stream channel mapping',
+          {
+            conversationId: row.conversationId,
+            error,
+          },
+        );
+      }
+    }
+  });
+
+  if (!rowsByChannelId.size) {
+    return fallbackRows;
+  }
+
+  try {
+    const channels = await client.queryChannels(
+      {
+        type: 'messaging',
+        members: { $in: [currentUserId] },
+      },
+      [{ last_message_at: -1 }],
+      {
+        state: true,
+        watch: false,
+        presence: false,
+        limit: 30,
+        message_limit: 1,
+        member_limit: 2,
+      },
+    );
+
+    const conversationsById = new Map(
+      rows.map((row) => [row.conversationId, row]),
+    );
+
+    channels.forEach((channel: any) => {
+      const channelId =
+        typeof channel?.id === 'string'
+          ? channel.id
+          : '';
+
+      const row = rowsByChannelId.get(channelId);
+
+      if (!row) return;
+
+      const channelMessages =
+        Array.isArray(channel.state?.messages)
+          ? channel.state.messages
+          : [];
+
+      const latestMessage =
+        channelMessages.length > 0
+          ? channelMessages[channelMessages.length - 1]
+          : null;
+
+      const latestMessageTime = latestMessage
+        ? (
+            normalizeStreamDate(latestMessage.created_at) ??
+            normalizeStreamDate(latestMessage.updated_at) ??
+            row.lastMessageAt
+          )
+        : row.lastMessageAt;
+
+      const unreadCount =
+        typeof channel.countUnread === 'function'
+          ? channel.countUnread()
+          : row.unreadCount;
+
+      conversationsById.set(row.conversationId, {
+        ...row,
+        lastMessageBody: latestMessage
+          ? (
+              mapStreamMessagePreview(latestMessage) ??
+              row.lastMessageBody
+            )
+          : row.lastMessageBody,
+        lastMessageAt: latestMessageTime,
+        unreadCount: Number.isFinite(unreadCount)
+          ? Math.max(0, unreadCount)
+          : row.unreadCount,
+      });
+    });
+
+    return Array.from(conversationsById.values()).sort(
       (a, b) =>
         getConversationSortTimestamp(b) -
         getConversationSortTimestamp(a),
     );
+  } catch (error) {
+    if (__DEV__) {
+      console.log(
+        '[DirectInbox] Stream inbox query failed',
+        error,
+      );
+    }
+
+    return fallbackRows;
   }
-
-  const conversationsById = new Map(
-    rows.map((row) => [row.conversationId, row]),
-  );
-
-  await Promise.all(
-    acceptedRows.map(async (row) => {
-      try {
-        const config = getStreamDirectChannelConfig({
-          conversationId: row.conversationId,
-          currentUserId,
-          otherUserId: row.otherUserId,
-        });
-
-        const channel = client.channel(
-          config.type,
-          config.id,
-          {
-            members: config.members,
-          },
-        );
-
-        const state = await channel.query({
-          messages: { limit: 1 },
-        });
-
-        const latestMessage =
-          Array.isArray(state?.messages) &&
-          state.messages.length > 0
-            ? state.messages[state.messages.length - 1]
-            : null;
-
-        if (!latestMessage) return;
-
-        const latestMessageTime =
-          normalizeStreamDate(latestMessage.created_at) ??
-          normalizeStreamDate(latestMessage.updated_at) ??
-          row.lastMessageAt;
-
-        const unreadCount =
-          typeof channel.countUnread === 'function'
-            ? channel.countUnread()
-            : row.unreadCount;
-
-        conversationsById.set(row.conversationId, {
-          ...row,
-          lastMessageBody:
-            mapStreamMessagePreview(latestMessage) ??
-            row.lastMessageBody,
-          lastMessageAt: latestMessageTime,
-          unreadCount: Number.isFinite(unreadCount)
-            ? Math.max(0, unreadCount)
-            : row.unreadCount,
-        });
-      } catch (error) {
-        if (__DEV__) {
-          console.log(
-            '[DirectInbox] Stream conversation hydration failed',
-            {
-              conversationId: row.conversationId,
-              error,
-            },
-          );
-        }
-      }
-    }),
-  );
-
-  return Array.from(conversationsById.values()).sort(
-    (a, b) =>
-      getConversationSortTimestamp(b) -
-      getConversationSortTimestamp(a),
-  );
 }
 export async function subscribeToDirectInboxStreamUpdates(
   onUpdate: () => void,
