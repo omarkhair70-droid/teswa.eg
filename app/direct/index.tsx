@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { AppFadeIn } from '@/components/motion/AppFadeIn';
+import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -9,320 +12,46 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { fetchMyDirectConversations, type DirectConversationSummary } from '@/lib/direct-messages';
-import { AppButton } from '@/components/ui/AppButton';
-import { acceptDirectMessageRequest, ignoreDirectMessageRequest } from '@/lib/direct-messages';
+import { acceptDirectMessageRequest, fetchMyDirectConversations, ignoreDirectMessageRequest, type DirectConversationSummary } from '@/lib/direct-messages';
 import { fetchStreamChatToken } from '@/lib/chat/stream-token';
 import { getStreamDirectChannelConfig } from '@/lib/chat/stream-direct-mapping';
 import { warmupDirectStreamClient } from '@/lib/chat/stream-client';
 
 type InboxFilter = 'all' | 'requested' | 'accepted';
 type StreamPreviewAttachment = { type?: string; mime_type?: string };
+const FILTERS: { key: InboxFilter; label: string }[] = [{ key: 'all', label: 'الكل' }, { key: 'requested', label: 'الطلبات' }, { key: 'accepted', label: 'المحادثات' }];
 
-const FILTER_LABELS: Record<InboxFilter, string> = { all: 'الكل', requested: 'الطلبات', accepted: 'المقبولة' };
-const STATUS_META: Record<string, { label: string; tone: 'neutral' | 'highlight' | 'warn' }> = {
-  accepted: { label: 'مقبول', tone: 'highlight' },
-  requested: { label: 'طلب جديد', tone: 'warn' },
-  ignored: { label: 'تم التجاهل', tone: 'neutral' },
-  blocked: { label: 'محظور', tone: 'neutral' },
-  pending: { label: 'في الانتظار', tone: 'neutral' },
-};
-
-
-function getLastMessagePreview(body: string | null): string {
-  const trimmed = body?.trim();
-  if (!trimmed) return 'ابدأ المحادثة';
-  if (trimmed === 'رسالة صوتية') return 'رسالة صوتية';
-  // TODO: when direct conversation summary includes explicit message/attachment type, map image/video/file/exchange-draft previews here.
-  return trimmed;
-}
-
-function formatTime(value: string | null): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
-function getConversationSortTimestamp(item: DirectConversationSummary): number {
-  const ms = item.lastMessageAt ? Date.parse(item.lastMessageAt) : Number.NaN;
-  return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
-}
-
-function mapStreamMessagePreview(message: any): string | null {
-  const metaType = typeof message?.teswa_type === 'string' ? message.teswa_type : '';
-  if (metaType === 'exchange_offer_draft' || metaType === 'exchange_draft') return 'عرض تبادل مبدئي';
-  const attachments: StreamPreviewAttachment[] = Array.isArray(message?.attachments)
-    ? message.attachments
-      .filter((attachment: unknown): attachment is StreamPreviewAttachment => Boolean(attachment) && typeof attachment === 'object')
-      .map((attachment: unknown) => attachment as StreamPreviewAttachment)
-    : [];
-  if (attachments.some((a) => typeof a?.mime_type === 'string' && a.mime_type.startsWith('audio/'))) return 'رسالة صوتية';
-  if (attachments.some((a) => a?.type === 'image')) return 'صورة';
-  if (attachments.some((a) => a?.type === 'video')) return 'فيديو';
-  if (attachments.some((a) => a?.type === 'file')) return 'ملف';
-  if (typeof message?.text === 'string' && message.text.trim().length > 0) return message.text.trim();
-  return null;
-}
-
-async function mergeAcceptedStreamActivity(
-  rows: DirectConversationSummary[],
-  currentUserId: string,
-): Promise<DirectConversationSummary[]> {
-  const acceptedRows = rows.filter((row) => row.status === 'accepted');
-  if (!acceptedRows.length) return rows;
-
-  const tokenResult = await fetchStreamChatToken();
-  if (!tokenResult.ok) return rows;
-
-  const { StreamChat } = await import('stream-chat');
-  const client = StreamChat.getInstance(tokenResult.apiKey);
-  const alreadyConnectedUser = typeof client.userID === 'string' ? client.userID : null;
-  const shouldConnect = !alreadyConnectedUser || alreadyConnectedUser !== tokenResult.userId;
-  if (shouldConnect) {
-    if (alreadyConnectedUser && typeof client.disconnectUser === 'function') await client.disconnectUser();
-    await client.connectUser({ id: tokenResult.userId }, tokenResult.token);
-  }
-
-  const mergedById = new Map(rows.map((row) => [row.conversationId, row]));
-  await Promise.all(acceptedRows.map(async (row) => {
-    try {
-      const config = getStreamDirectChannelConfig({
-        conversationId: row.conversationId,
-        currentUserId,
-        otherUserId: row.otherUserId,
-      });
-      const channel = client.channel(config.type, config.id, { members: config.members });
-      const state = await channel.query({ messages: { limit: 1 } });
-      const latest = Array.isArray(state?.messages) ? state.messages[state.messages.length - 1] : null;
-      if (!latest) return;
-      const preview = mapStreamMessagePreview(latest);
-      const createdAt = typeof latest.created_at === 'string' ? latest.created_at : null;
-      const updatedAt = typeof latest.updated_at === 'string' ? latest.updated_at : null;
-      const lastMessageAt = createdAt ?? updatedAt ?? row.lastMessageAt;
-      const unreadCount = typeof channel.countUnread === 'function' ? channel.countUnread() : row.unreadCount;
-      mergedById.set(row.conversationId, {
-        ...row,
-        lastMessageBody: preview ?? row.lastMessageBody,
-        lastMessageAt,
-        unreadCount: Number.isFinite(unreadCount) ? Math.max(0, unreadCount) : row.unreadCount,
-      });
-    } catch {
-      // Keep Supabase fallback per-conversation.
-    }
-  }));
-
-  return Array.from(mergedById.values()).sort((a, b) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a));
-}
+function getLastMessagePreview(body: string | null) { return body?.trim() || 'ابدأ المحادثة'; }
+function formatTime(value: string | null) { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; const now = new Date(); if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }); return date.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }); }
+function getSortTime(item: DirectConversationSummary) { const value = item.lastMessageAt ? Date.parse(item.lastMessageAt) : Number.NaN; return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY; }
+function mapStreamMessagePreview(message: any): string | null { const metaType = typeof message?.teswa_type === 'string' ? message.teswa_type : ''; if (metaType === 'exchange_offer_draft' || metaType === 'exchange_draft') return 'عرض تبادل مبدئي'; const attachments: StreamPreviewAttachment[] = Array.isArray(message?.attachments) ? message.attachments.filter((attachment: unknown) => Boolean(attachment) && typeof attachment === 'object') as StreamPreviewAttachment[] : []; if (attachments.some((a) => typeof a.mime_type === 'string' && a.mime_type.startsWith('audio/'))) return 'رسالة صوتية'; if (attachments.some((a) => a.type === 'image')) return 'صورة'; if (attachments.some((a) => a.type === 'video')) return 'فيديو'; if (attachments.some((a) => a.type === 'file')) return 'ملف'; if (typeof message?.text === 'string' && message.text.trim()) return message.text.trim(); return null; }
+async function mergeAcceptedStreamActivity(rows: DirectConversationSummary[], currentUserId: string) { const acceptedRows = rows.filter((row) => row.status === 'accepted'); if (!acceptedRows.length) return rows; const tokenResult = await fetchStreamChatToken(); if (!tokenResult.ok) return rows; const { StreamChat } = await import('stream-chat'); const client = StreamChat.getInstance(tokenResult.apiKey); const connectedUserId = typeof client.userID === 'string' ? client.userID : null; if (connectedUserId !== tokenResult.userId) { if (connectedUserId && typeof client.disconnectUser === 'function') await client.disconnectUser(); await client.connectUser({ id: tokenResult.userId }, tokenResult.token); } const merged = new Map(rows.map((row) => [row.conversationId, row])); await Promise.all(acceptedRows.map(async (row) => { try { const config = getStreamDirectChannelConfig({ conversationId: row.conversationId, currentUserId, otherUserId: row.otherUserId }); const channel = client.channel(config.type, config.id, { members: config.members }); const state = await channel.query({ messages: { limit: 1 } }); const latest = Array.isArray(state?.messages) ? state.messages[state.messages.length - 1] : null; if (!latest) return; const unreadCount = typeof channel.countUnread === 'function' ? channel.countUnread() : row.unreadCount; merged.set(row.conversationId, { ...row, lastMessageBody: mapStreamMessagePreview(latest) ?? row.lastMessageBody, lastMessageAt: (typeof latest.created_at === 'string' ? latest.created_at : null) ?? (typeof latest.updated_at === 'string' ? latest.updated_at : null) ?? row.lastMessageAt, unreadCount: Number.isFinite(unreadCount) ? Math.max(0, unreadCount) : row.unreadCount }); } catch { /* Preserve Supabase fallback. */ } })); return Array.from(merged.values()).sort((a, b) => getSortTime(b) - getSortTime(a)); }
 
 export default function DirectInboxScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [items, setItems] = useState<DirectConversationSummary[]>([]);
   const [requestBusyById, setRequestBusyById] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
-
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    const silent = !!opts?.silent;
-    if (!silent) setLoading(true);
-    try {
-      const rows = await fetchMyDirectConversations();
-      const hydratedRows = user?.id ? await mergeAcceptedStreamActivity(rows, user.id) : rows;
-      setItems(hydratedRows);
-      if (hydratedRows.some((row) => row.status === 'accepted')) {
-        void warmupDirectStreamClient();
-      }
-      setError(null);
-    } catch {
-      setError('تعذر تحميل المحادثات حالياً.');
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [user?.id]);
-
+  const load = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'initial') => { if (mode === 'initial') setLoading(true); if (mode === 'refresh') setRefreshing(true); try { const rows = await fetchMyDirectConversations(); const hydratedRows = user?.id ? await mergeAcceptedStreamActivity(rows, user.id) : rows; setItems(hydratedRows); if (hydratedRows.some((row) => row.status === 'accepted')) void warmupDirectStreamClient(); setError(null); } catch { setError('تعذر تحميل المحادثات حالياً.'); } finally { setLoading(false); setRefreshing(false); } }, [user?.id]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
-
-  const filtered = useMemo(() => items.filter((item) => {
-    if (filter === 'requested') return item.status === 'requested';
-    if (filter === 'accepted') return item.status === 'accepted';
-    return true;
-  }), [filter, items]);
-
-  const openConversation = useCallback((item: DirectConversationSummary) => {
-    if (item.status !== 'accepted' && item.status !== 'requested') return;
-    router.push(`/direct/${item.conversationId}`);
-  }, []);
-
-  return (
-    <AppScreen scrollable>
-      <View style={styles.root}>
-        <AppCard>
-          <View style={styles.heroRow}>
-            <View style={styles.heroTextBlock}>
-              <AppText weight="bold" style={styles.title}>الرسائل المباشرة</AppText>
-              <AppText muted>كل محادثاتك في مكان واحد بتصميم هادئ وواضح.</AppText>
-            </View>
-          </View>
-          <View style={styles.filterRow}>
-            {(['all', 'requested', 'accepted'] as InboxFilter[]).map((key) => {
-              const active = filter === key;
-              return <Pressable key={key} onPress={() => setFilter(key)} style={[styles.filterChip, active && styles.filterChipActive]}><AppText weight={active ? 'semibold' : 'regular'} style={active ? styles.filterChipTextActive : undefined}>{FILTER_LABELS[key]}</AppText></Pressable>;
-            })}
-          </View>
-        </AppCard>
-
-        {loading ? (
-          <AppCard>
-            <View style={styles.loadingWrap}><ActivityIndicator color={colors.primary} /><AppText muted>جاري تحميل المحادثات...</AppText></View>
-          </AppCard>
-        ) : null}
-
-        {!loading && error ? (
-          <AppCard>
-            <View style={styles.errorWrap}>
-              <AppText weight="semibold">تعذر تحميل المحادثات حالياً.</AppText>
-              <Pressable onPress={() => void load()} style={styles.retryBtn}><AppText style={styles.retryText}>إعادة المحاولة</AppText></Pressable>
-            </View>
-          </AppCard>
-        ) : null}
-
-        {!loading && !error && filter === 'requested' ? (
-          <AppCard>
-            <View style={styles.requestCenterInfo}>
-              <AppText weight="bold">طلبات المراسلة</AppText>
-              <AppText muted>الطلبات دي من أشخاص لسه ما بدأش بينكم شات مباشر. اقبل الطلب لو حابب تكملوا الكلام.</AppText>
-              <Pressable onPress={() => router.push('/settings/direct-privacy')}>
-                <AppText muted style={styles.privacyHint}>تقدر تتحكم في مين يبعتلك من إعدادات خصوصية الرسائل.</AppText>
-              </Pressable>
-            </View>
-          </AppCard>
-        ) : null}
-
-        {!loading && !error && feedback ? (
-          <AppCard><AppText muted>{feedback}</AppText></AppCard>
-        ) : null}
-
-        {!loading && !error && !filtered.length ? (
-          <AppCard>
-            <EmptyState title={filter === 'requested' ? 'مفيش طلبات مراسلة' : 'لسه مفيش محادثات'} description={filter === 'requested' ? 'أي طلب جديد هيظهر هنا قبل ما يتحول لمحادثة مباشرة.' : 'لما تبدأ تبادل أو حد يبعتلك طلب، هتلاقي المحادثات هنا.'} />
-          </AppCard>
-        ) : null}
-
-        {!loading && !error ? (
-          <View style={styles.list}>
-            {filtered.map((item) => {
-              const status = STATUS_META[item.status] ?? { label: 'في الانتظار', tone: 'neutral' as const };
-              const openable = item.status === 'accepted' || item.status === 'requested';
-              const preview = getLastMessagePreview(item.lastMessageBody);
-              const isRequested = item.status === 'requested';
-              const isRequester = !!user?.id && !!item.requestedBy && item.requestedBy === user.id;
-              const isReceiver = isRequested && !isRequester;
-              const requestHint = isRequested ? (isReceiver ? 'اقبل الطلب لو حابب تفتح المحادثة.' : 'مستني قبول الطرف التاني.') : null;
-              const requestChip = isRequested ? (isReceiver ? 'طلب جديد' : 'في الانتظار') : status.label;
-              const isRowBusy = !!requestBusyById[item.conversationId];
-              return (
-                <Pressable key={item.conversationId} onPress={() => openConversation(item)} disabled={!openable} style={[styles.rowCard, !openable && styles.rowDisabled]}>
-                  <View style={styles.rowTop}>
-                    {item.otherAvatarUrl ? <Image source={{ uri: item.otherAvatarUrl }} style={styles.avatar} /> : <View style={styles.avatarFallback}><AppText weight="bold">{(item.otherDisplayName?.[0] || item.otherUsername?.[0] || 'ت').toUpperCase()}</AppText></View>}
-                    <View style={styles.nameBlock}>
-                      <AppText weight="semibold" numberOfLines={1}>{item.otherDisplayName || 'مستخدم تِسوى'}</AppText>
-                      {item.otherUsername ? <AppText muted numberOfLines={1}>@{item.otherUsername}</AppText> : null}
-                    </View>
-                    <View style={[styles.statusChip, status.tone === 'highlight' ? styles.statusHighlight : status.tone === 'warn' ? styles.statusWarn : null]}>
-                      <AppText style={styles.statusText}>{requestChip}</AppText>
-                    </View>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <AppText muted numberOfLines={1} style={styles.preview}>{preview}</AppText>
-                    <View style={styles.trailingMeta}>
-                      {item.unreadCount > 0 ? <View style={styles.unreadBadge}><AppText style={styles.unreadText}>{item.unreadCount > 99 ? '+99' : item.unreadCount}</AppText></View> : null}
-                      {item.lastMessageAt ? <AppText muted style={styles.timeText}>{formatTime(item.lastMessageAt)}</AppText> : null}
-                    </View>
-                  </View>
-                  {requestHint ? <AppText muted style={styles.requestHint}>{requestHint}</AppText> : null}
-                  {filter === 'requested' && isReceiver ? (
-                    <View style={styles.inlineActions}>
-                      <AppButton
-                        label={isRowBusy ? 'جاري التنفيذ...' : 'قبول'}
-                        disabled={isRowBusy}
-                        onPress={async () => {
-                          setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: true }));
-                          try {
-                            const result = await acceptDirectMessageRequest(item.conversationId);
-                            if (!result.ok) { setFeedback('تعذر تنفيذ الطلب حالياً.'); return; }
-                            setFeedback('تم قبول الطلب.');
-                            await load({ silent: true });
-                          } catch {
-                            setFeedback('تعذر تنفيذ الطلب حالياً.');
-                          } finally {
-                            setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: false }));
-                          }
-                        }}
-                      />
-                      <AppButton
-                        label={isRowBusy ? 'جاري التنفيذ...' : 'تجاهل'}
-                        variant="neutral"
-                        disabled={isRowBusy}
-                        onPress={async () => {
-                          setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: true }));
-                          try {
-                            const result = await ignoreDirectMessageRequest(item.conversationId);
-                            if (!result.ok) { setFeedback('تعذر تنفيذ الطلب حالياً.'); return; }
-                            setFeedback('تم تجاهل الطلب.');
-                            await load({ silent: true });
-                          } catch {
-                            setFeedback('تعذر تنفيذ الطلب حالياً.');
-                          } finally {
-                            setRequestBusyById((prev) => ({ ...prev, [item.conversationId]: false }));
-                          }
-                        }}
-                      />
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-      </View>
-    </AppScreen>
-  );
+  const visibleItems = useMemo(() => items.filter((item) => item.status === 'requested' || item.status === 'accepted'), [items]);
+  const counts = useMemo(() => ({ requests: visibleItems.filter((item) => item.status === 'requested').length, accepted: visibleItems.filter((item) => item.status === 'accepted').length, unread: visibleItems.reduce((sum, item) => sum + item.unreadCount, 0) }), [visibleItems]);
+  const filtered = useMemo(() => visibleItems.filter((item) => filter === 'requested' ? item.status === 'requested' : filter === 'accepted' ? item.status === 'accepted' : true), [filter, visibleItems]);
+  const runRequestAction = useCallback(async (item: DirectConversationSummary, action: 'accept' | 'ignore') => { setRequestBusyById((previous) => ({ ...previous, [item.conversationId]: true })); setFeedback(null); try { const result = action === 'accept' ? await acceptDirectMessageRequest(item.conversationId) : await ignoreDirectMessageRequest(item.conversationId); if (!result.ok) { setFeedback('تعذر تنفيذ الطلب حالياً.'); return; } setFeedback(action === 'accept' ? 'تم قبول الطلب.' : 'تم تجاهل الطلب.'); await load('silent'); } catch { setFeedback('تعذر تنفيذ الطلب حالياً.'); } finally { setRequestBusyById((previous) => ({ ...previous, [item.conversationId]: false })); } }, [load]);
+  if (!user) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك لعرض الرسائل المباشرة." /></AppScreen>;
+  return <AppScreen scrollable backgroundVariant="soft"><View style={styles.root}>
+    <AppFadeIn><View style={styles.header}><View style={styles.headerCopy}><AppText muted style={styles.eyebrow}>المراسلة المباشرة</AppText><AppText weight="bold" style={styles.title}>طلباتك ومحادثاتك</AppText><AppText muted style={styles.subtitle}>راجع الطلبات الجديدة، وارجع للمحادثات المقبولة بسرعة.</AppText></View><Pressable accessibilityRole="button" accessibilityLabel="تحديث الرسائل المباشرة" disabled={refreshing} onPress={() => void load('refresh')} style={styles.refreshButton}>{refreshing ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="refresh-outline" size={20} color={colors.primary} />}</Pressable></View></AppFadeIn>
+    <View style={styles.summaryStrip}><View style={styles.summaryItem}><AppText weight="bold" style={styles.summaryValue}>{counts.unread}</AppText><AppText muted style={styles.summaryLabel}>غير مقروء</AppText></View><View style={styles.divider} /><View style={styles.summaryItem}><AppText weight="bold" style={styles.summaryValue}>{counts.requests}</AppText><AppText muted style={styles.summaryLabel}>طلبات</AppText></View><View style={styles.divider} /><View style={styles.summaryItem}><AppText weight="bold" style={styles.summaryValue}>{counts.accepted}</AppText><AppText muted style={styles.summaryLabel}>محادثات</AppText></View></View>
+    <View style={styles.filters}>{FILTERS.map((entry) => { const active = filter === entry.key; return <Pressable key={entry.key} accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => setFilter(entry.key)} style={[styles.filter, active && styles.filterActive]}><AppText weight="semibold" style={active ? styles.filterTextActive : styles.filterText}>{entry.label}</AppText></Pressable>; })}</View>
+    {filter === 'requested' ? <AppCard style={styles.requestInfo}><View style={styles.requestInfoHeader}><Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} /><AppText weight="bold">طلبات المراسلة</AppText></View><AppText muted>اقبل الطلب علشان تبدأ المحادثة، أو تجاهله من غير ما تفتح قناة جديدة.</AppText><Pressable onPress={() => router.push('/settings/direct-privacy')}><AppText weight="semibold" style={styles.privacyLink}>راجع خصوصية الرسائل</AppText></Pressable></AppCard> : null}
+    {feedback ? <View style={styles.feedback}><Ionicons name="information-circle-outline" size={17} color={colors.accent} /><AppText style={styles.feedbackText}>{feedback}</AppText></View> : null}
+    {error && visibleItems.length ? <View style={styles.errorBanner}><AppText style={styles.errorText}>{error}</AppText><Pressable onPress={() => void load('refresh')}><AppText weight="semibold" style={styles.retryText}>حاول تاني</AppText></Pressable></View> : null}
+    {loading ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><AppText muted>بنحدّث الرسائل المباشرة...</AppText></View> : error && !visibleItems.length ? <AppCard><EmptyState title="تعذر تحميل الرسائل" description={error} /><AppButton label="إعادة المحاولة" onPress={() => void load()} /></AppCard> : !filtered.length ? <AppCard><EmptyState title={filter === 'requested' ? 'مفيش طلبات مراسلة' : 'لسه مفيش محادثات هنا'} description={filter === 'requested' ? 'أي طلب جديد هيظهر هنا قبل ما يتحول لمحادثة.' : 'ابدأ مراسلة من بروفايل مستخدم، وهتظهر هنا.'} /></AppCard> : <View style={styles.list}>{filtered.map((item) => { const isRequested = item.status === 'requested'; const isRequester = item.requestedBy === user.id; const canRespond = isRequested && !isRequester; const canOpen = item.status === 'accepted' || item.status === 'requested'; const busy = !!requestBusyById[item.conversationId]; const label = item.status === 'accepted' ? 'محادثة' : isRequester ? 'في الانتظار' : 'طلب جديد'; return <Pressable key={item.conversationId} accessibilityRole="button" accessibilityState={{ disabled: !canOpen }} disabled={!canOpen} onPress={() => { if (canOpen) router.push(`/direct/${item.conversationId}`); }} style={({ pressed }) => [styles.row, item.unreadCount > 0 && styles.rowUnread, pressed && styles.pressed]}><View style={styles.avatarWrap}>{item.otherAvatarUrl ? <Image source={{ uri: item.otherAvatarUrl }} style={styles.avatar} /> : <View style={styles.avatarFallback}><AppText weight="bold">{(item.otherDisplayName?.[0] || item.otherUsername?.[0] || 'ت').toUpperCase()}</AppText></View>}{item.unreadCount > 0 ? <View style={styles.unreadDot} /> : null}</View><View style={styles.rowMain}><View style={styles.rowHeader}><AppText weight={item.unreadCount > 0 ? 'bold' : 'semibold'} numberOfLines={1} style={styles.name}>{item.otherDisplayName || 'مستخدم تِسوى'}</AppText><AppText muted style={styles.time}>{formatTime(item.lastMessageAt)}</AppText></View>{item.otherUsername ? <AppText muted numberOfLines={1} style={styles.username}>@{item.otherUsername}</AppText> : null}<AppText muted={item.unreadCount === 0} numberOfLines={1} style={styles.preview}>{getLastMessagePreview(item.lastMessageBody)}</AppText><View style={styles.rowFooter}><View style={[styles.statusPill, isRequested && styles.statusPillRequest]}><AppText weight="semibold" style={[styles.statusText, isRequested && styles.statusTextRequest]}>{label}</AppText></View>{item.unreadCount > 0 ? <View style={styles.unreadBadge}><AppText weight="bold" style={styles.unreadBadgeText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</AppText></View> : null}</View>{canRespond ? <View style={styles.actions}><AppButton label={busy ? 'جاري التنفيذ...' : 'قبول'} disabled={busy} onPress={() => void runRequestAction(item, 'accept')} /><AppButton label="تجاهل" variant="neutral" disabled={busy} onPress={() => void runRequestAction(item, 'ignore')} /></View> : null}</View></Pressable>; })}</View>}
+  </View></AppScreen>;
 }
 
-const styles = StyleSheet.create({
-  root: { gap: spacing.md },
-  requestCenterInfo: { gap: spacing.xs },
-  privacyHint: { textDecorationLine: 'underline' },
-  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroTextBlock: { flex: 1, gap: spacing.xs },
-  title: { fontSize: 20 },
-  filterRow: { marginTop: spacing.md, flexDirection: 'row', gap: spacing.sm },
-  filterChip: { borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.xs, paddingHorizontal: spacing.md, backgroundColor: colors.surface },
-  filterChipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  filterChipTextActive: { color: colors.primary },
-  loadingWrap: { alignItems: 'center', gap: spacing.sm },
-  errorWrap: { gap: spacing.sm },
-  retryBtn: { alignSelf: 'flex-start', backgroundColor: colors.primary, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  retryText: { color: colors.white },
-  list: { gap: spacing.sm },
-  rowCard: { borderRadius: radii.xl, padding: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
-  rowDisabled: { opacity: 0.7 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  avatar: { width: 48, height: 48, borderRadius: 24 },
-  avatarFallback: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
-  nameBlock: { flex: 1, gap: 2 },
-  statusChip: { borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: colors.surface },
-  statusHighlight: { backgroundColor: colors.primarySoft },
-  statusWarn: { backgroundColor: '#fff5e6' },
-  statusText: { fontSize: 12, color: colors.textMuted },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  preview: { flex: 1 },
-  trailingMeta: { alignItems: 'flex-end', gap: 4 },
-  requestHint: { fontSize: 12 },
-  inlineActions: { flexDirection: 'row-reverse', gap: spacing.xs },
-  unreadBadge: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, paddingHorizontal: 6 },
-  unreadText: { color: colors.white, fontSize: 12 },
-  timeText: { fontSize: 11 },
-});
+const styles = StyleSheet.create({ root: { gap: spacing.lg }, header: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md }, headerCopy: { flex: 1, alignItems: 'flex-end', gap: 3 }, eyebrow: { fontSize: 12 }, title: { fontSize: 28, lineHeight: 35, textAlign: 'right' }, subtitle: { textAlign: 'right', lineHeight: 20 }, refreshButton: { width: 42, height: 42, borderRadius: radii.round, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }, summaryStrip: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md }, summaryItem: { flex: 1, alignItems: 'center', gap: 2 }, summaryValue: { fontSize: 20 }, summaryLabel: { fontSize: 11 }, divider: { width: 1, height: 28, backgroundColor: colors.border }, filters: { flexDirection: 'row-reverse', gap: spacing.xs, backgroundColor: colors.primarySoft, padding: spacing.xs, borderRadius: radii.lg }, filter: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md }, filterActive: { backgroundColor: colors.primary }, filterText: { color: colors.textMuted, fontSize: 13 }, filterTextActive: { color: colors.white, fontSize: 13 }, requestInfo: { gap: spacing.sm, borderColor: colors.accent, backgroundColor: '#F7FBFA' }, requestInfoHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs }, privacyLink: { color: colors.accent, textAlign: 'right' }, feedback: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, borderRadius: radii.lg, backgroundColor: colors.accentSoft, padding: spacing.md }, feedbackText: { flex: 1, textAlign: 'right' }, errorBanner: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.dangerSoft, borderRadius: radii.lg, padding: spacing.md }, errorText: { flex: 1, color: colors.danger, textAlign: 'right' }, retryText: { color: colors.danger }, loading: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl }, list: { gap: spacing.sm }, row: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: spacing.md }, rowUnread: { borderColor: '#D8B39F', backgroundColor: '#FFF9F4' }, pressed: { opacity: 0.74, transform: [{ scale: 0.995 }] }, avatarWrap: { width: 50, height: 50, position: 'relative' }, avatar: { width: 50, height: 50, borderRadius: radii.round }, avatarFallback: { width: 50, height: 50, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }, unreadDot: { position: 'absolute', left: 1, bottom: 1, width: 12, height: 12, borderRadius: radii.round, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.surface }, rowMain: { flex: 1, gap: 4 }, rowHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, name: { flex: 1, textAlign: 'right' }, time: { fontSize: 11 }, username: { fontSize: 11, textAlign: 'right' }, preview: { textAlign: 'right' }, rowFooter: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, statusPill: { borderRadius: radii.round, backgroundColor: colors.accentSoft, paddingHorizontal: spacing.sm, paddingVertical: 4 }, statusPillRequest: { backgroundColor: colors.primarySoft }, statusText: { color: colors.accent, fontSize: 10 }, statusTextRequest: { color: colors.primary }, unreadBadge: { minWidth: 24, height: 24, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }, unreadBadgeText: { color: colors.white, fontSize: 11 }, actions: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: spacing.xs } });
