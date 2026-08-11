@@ -28,14 +28,38 @@ type Candidate = {
   route?: string;
 };
 
+type PreferenceRow = {
+  smart_reminders_enabled?: boolean | null;
+  discovery_digest_enabled?: boolean | null;
+  return_nudges_enabled?: boolean | null;
+  quiet_hours_enabled?: boolean | null;
+  quiet_hours_start?: string | number | null;
+  quiet_hours_end?: string | number | null;
+  timezone?: string | null;
+};
+
 const DAILY_CAP = 4;
 
 function json(status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function isWithinQuietHours(now: Date, timezone: string | null, start: number | null, end: number | null): boolean {
+function parseClockMinutes(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const minute = Math.trunc(value);
+    return minute >= 0 && minute < 24 * 60 ? minute : null;
+  }
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function isWithinQuietHours(now: Date, timezone: string | null, startValue: unknown, endValue: unknown): boolean {
+  const start = parseClockMinutes(startValue);
+  const end = parseClockMinutes(endValue);
   if (start === null || end === null || start === end) return false;
+
   let mins: number;
   try {
     const fmt = new Intl.DateTimeFormat("en-US", { timeZone: timezone || "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -44,9 +68,9 @@ function isWithinQuietHours(now: Date, timezone: string | null, start: number | 
     const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
     mins = h * 60 + m;
   } catch {
-    const h = now.getUTCHours();
-    mins = h * 60 + now.getUTCMinutes();
+    mins = now.getUTCHours() * 60 + now.getUTCMinutes();
   }
+
   if (start < end) return mins >= start && mins < end;
   return mins >= start || mins < end;
 }
@@ -69,27 +93,48 @@ Deno.serve(async (req) => {
 
   const dayStart = new Date(now); dayStart.setUTCHours(0, 0, 0, 0);
 
-  const prefCache = new Map<string, any>();
+  const prefCache = new Map<string, PreferenceRow>();
   const dailyCountCache = new Map<string, number>();
 
   const bumpFail = (k: string) => { failures[k] = (failures[k] ?? 0) + 1; };
 
-  async function getPrefs(userId: string) {
-    if (prefCache.has(userId)) return prefCache.get(userId);
-    const { data, error } = await db.from("notification_preferences").select("reminders_enabled,discovery_digest_enabled,return_nudges_enabled,quiet_hours_start,quiet_hours_end,timezone").eq("user_id", userId).maybeSingle();
+  async function getPrefs(userId: string): Promise<PreferenceRow> {
+    const cached = prefCache.get(userId);
+    if (cached) return cached;
+
+    const { data, error } = await db
+      .from("notification_preferences")
+      .select("smart_reminders_enabled,discovery_digest_enabled,return_nudges_enabled,quiet_hours_enabled,quiet_hours_start,quiet_hours_end,timezone")
+      .eq("user_id", userId)
+      .maybeSingle();
     if (error) throw new Error(`pref_query_failed:${error.message}`);
-    const pref = data ?? { reminders_enabled: true, discovery_digest_enabled: true, return_nudges_enabled: true, quiet_hours_start: null, quiet_hours_end: null, timezone: "UTC" };
+
+    const pref: PreferenceRow = data ?? {
+      smart_reminders_enabled: true,
+      discovery_digest_enabled: true,
+      return_nudges_enabled: true,
+      quiet_hours_enabled: false,
+      quiet_hours_start: "23:00",
+      quiet_hours_end: "08:00",
+      timezone: "UTC",
+    };
     prefCache.set(userId, pref);
     return pref;
   }
 
   async function canSend(candidate: Candidate): Promise<boolean> {
     const pref = await getPrefs(candidate.userId);
-    if ((candidate.prefCategory === "reminders" && pref.reminders_enabled === false) || (candidate.prefCategory === "discovery_digest" && pref.discovery_digest_enabled === false) || (candidate.prefCategory === "return_nudges" && pref.return_nudges_enabled === false)) {
+    const categoryDisabled =
+      (candidate.prefCategory === "reminders" && pref.smart_reminders_enabled === false) ||
+      (candidate.prefCategory === "discovery_digest" && pref.discovery_digest_enabled === false) ||
+      (candidate.prefCategory === "return_nudges" && pref.return_nudges_enabled === false);
+
+    if (categoryDisabled) {
       skipped.preferences += 1;
       return false;
     }
-    if (isWithinQuietHours(now, pref.timezone ?? "UTC", pref.quiet_hours_start, pref.quiet_hours_end)) {
+
+    if (pref.quiet_hours_enabled === true && isWithinQuietHours(now, pref.timezone ?? "UTC", pref.quiet_hours_start, pref.quiet_hours_end)) {
       skipped.quietHours += 1;
       return false;
     }
@@ -110,17 +155,21 @@ Deno.serve(async (req) => {
     if (!(await canSend(c))) return;
 
     const { data: reservation, error: reserveError } = await db
-      .from("smart_notification_dispatches")
-      .insert({ user_id: c.userId, notification_type: c.type, preference_category: c.prefCategory, entity_type: c.entityType ?? null, entity_id: c.entityId ?? null, dedupe_key: c.dedupeKey, metadata: { route: c.route ?? null }, status: "reserved" })
-      .select("id")
-      .single();
+      .rpc("reserve_smart_notification_dispatch", {
+        p_user_id: c.userId,
+        p_notification_type: c.type,
+        p_preference_category: c.prefCategory,
+        p_dedupe_key: c.dedupeKey,
+        p_entity_type: c.entityType ?? null,
+        p_entity_id: c.entityId ?? null,
+        p_metadata: { route: c.route ?? null },
+      })
+      .maybeSingle();
 
-    if (reserveError) {
-      if (reserveError.code === "23505") {
-        skipped.dedupe += 1;
-        return;
-      }
-      throw new Error(`reservation_failed:${reserveError.message}`);
+    if (reserveError) throw new Error(`reservation_failed:${reserveError.message}`);
+    if (!reservation?.id) {
+      skipped.dedupe += 1;
+      return;
     }
 
     const { data: notification, error: notifError } = await db
@@ -135,9 +184,7 @@ Deno.serve(async (req) => {
     }
 
     const { error: finalizeError } = await db.from("smart_notification_dispatches").update({ status: "sent", notification_id: notification.id }).eq("id", reservation.id);
-    if (finalizeError) {
-      throw new Error(`dispatch_finalize_failed:${finalizeError.message}`);
-    }
+    if (finalizeError) throw new Error(`dispatch_finalize_failed:${finalizeError.message}`);
 
     dailyCountCache.set(c.userId, (dailyCountCache.get(c.userId) ?? 0) + 1);
     sentByType[c.type] = (sentByType[c.type] ?? 0) + 1;
