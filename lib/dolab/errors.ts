@@ -31,14 +31,14 @@ export function normalizeDolabPersistenceError(error: { code?: string | null; me
   if (isSchemaMissingError(error)) {
     return {
       kind: 'schema_missing',
-      message: 'الحفظ السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.',
+      message: 'تعذر الوصول لبيانات الدولاب السحابية. نسخة الجهاز تفضل محفوظة وتقدر تعيد المزامنة لاحقًا.',
       code: error.code ?? undefined,
     };
   }
 
   return {
     kind: 'unknown',
-    message: 'تعذر إكمال الحفظ السحابي حاليًا. شغّال محليًا مؤقتًا.',
+    message: 'تعذرت المزامنة مع السحابة. آخر نسخة على الجهاز ما زالت محفوظة.',
     code: error.code ?? undefined,
   };
 }

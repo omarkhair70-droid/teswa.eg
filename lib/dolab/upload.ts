@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import { supabase } from '@/lib/supabase/client';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
@@ -37,7 +38,7 @@ function normalizeUploadError(error: { code?: string | null; message?: string | 
   if (isBucketMissingError(error)) {
     return {
       kind: 'schema_missing',
-      message: 'مخزن الدولاب السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.',
+      message: 'تعذر الوصول لمخزن الدولاب السحابي. نسخة الجهاز ما زالت محفوظة.',
       code: error.code ?? undefined,
     };
   }
@@ -57,6 +58,20 @@ function fallbackContentType(media: DolabPendingMedia): string {
   return 'application/octet-stream';
 }
 
+async function localUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  try {
+    return await new File(uri).arrayBuffer();
+  } catch (fileError) {
+    try {
+      const response = await fetch(uri);
+      if (!response.ok && response.status !== 0) throw new Error('file_read_failed');
+      return await response.arrayBuffer();
+    } catch {
+      throw fileError instanceof Error ? fileError : new Error('file_read_failed');
+    }
+  }
+}
+
 export function buildDolabStoragePath(userId: string, dolabItemIdOrInbox: string, media: DolabPendingMedia): string {
   const stamp = media.id || `${Date.now()}`;
   const fileName = safeFileName(media.fileName ?? media.uri.split('/').pop());
@@ -70,10 +85,15 @@ export async function uploadDolabPendingMedia(
 ): Promise<DolabResult<{ storagePath: string } | null>> {
   const storagePath = buildDolabStoragePath(userId, dolabItemId ?? 'inbox', media);
   try {
-    const response = await fetch(media.uri);
-    const blob = await response.blob();
+    const body = await localUriToArrayBuffer(media.uri);
+    if (body.byteLength === 0) {
+      return {
+        data: null,
+        error: { kind: 'unknown', message: 'الملف المحلي فاضي أو غير متاح. نسخة الدولاب ما اتغيرتش.' },
+      };
+    }
 
-    const { error } = await supabase.storage.from(DOLAB_BUCKET).upload(storagePath, blob, {
+    const { error } = await supabase.storage.from(DOLAB_BUCKET).upload(storagePath, body, {
       contentType: media.mimeType ?? fallbackContentType(media),
       upsert: false,
     });
@@ -84,7 +104,7 @@ export async function uploadDolabPendingMedia(
       data: null,
       error: {
         kind: 'unknown',
-        message: 'تعذر حفظ الميديا سحابيًا حاليًا. شغّال محليًا مؤقتًا.',
+        message: 'تعذر قراءة الملف من الجهاز أو رفعه. النسخة المحلية ما زالت محفوظة.',
       },
     };
   }
@@ -113,7 +133,7 @@ export async function saveDolabMediaRow(userId: string, input: SaveDolabMediaRow
   if (normalized?.kind === 'schema_missing') {
     return {
       data: null,
-      error: { ...normalized, message: 'حفظ الميديا السحابي لسه غير مفعّل. شغّال محليًا مؤقتًا.' },
+      error: { ...normalized, message: 'تعذر تسجيل الميديا في الدولاب السحابي. النسخة المحلية ما زالت محفوظة.' },
     };
   }
 

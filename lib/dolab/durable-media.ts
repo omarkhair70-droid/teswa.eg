@@ -2,6 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 
 const DOLAB_MEDIA_DIRECTORY_NAME = 'teswa-dolab-media';
+const DOLAB_INBOX_DIRECTORY_NAME = 'teswa-dolab-inbox';
 const DEFAULT_EXTENSION_BY_TYPE: Record<'image' | 'video' | 'audio', string> = {
   image: 'jpg',
   video: 'mp4',
@@ -24,6 +25,8 @@ const MIME_TYPE_EXTENSION_MAP: Record<string, string> = {
   'audio/wav': 'wav',
   'audio/x-wav': 'wav',
   'audio/aac': 'aac',
+  'application/pdf': 'pdf',
+  'text/plain': 'txt',
 };
 
 function extensionFromFileName(fileName?: string): string | null {
@@ -54,10 +57,9 @@ function inferExtension(input: { fileName?: string; mimeType?: string; uri: stri
   );
 }
 
-function dolabMediaDirectory(): Directory | null {
+function durableDirectory(name: string): Directory | null {
   try {
-    const documentDirectory = Paths.document;
-    const directory = new Directory(documentDirectory, DOLAB_MEDIA_DIRECTORY_NAME);
+    const directory = new Directory(Paths.document, name);
     directory.create({ idempotent: true, intermediates: true });
     return directory;
   } catch {
@@ -65,9 +67,18 @@ function dolabMediaDirectory(): Directory | null {
   }
 }
 
+function dolabMediaDirectory(): Directory | null {
+  return durableDirectory(DOLAB_MEDIA_DIRECTORY_NAME);
+}
+
 function generateDurableFileName(input: { mediaType: 'image' | 'video' | 'audio'; fileName?: string; mimeType?: string; uri: string }): string {
   const ext = inferExtension(input);
   return `dolab-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+}
+
+function generateInboxFileName(input: { fileName?: string; mimeType?: string; uri: string }): string {
+  const ext = extensionFromFileName(input.fileName) ?? extensionFromMimeType(input.mimeType) ?? extensionFromUri(input.uri) ?? 'bin';
+  return `inbox-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
 }
 
 export async function copyDolabMediaToDurableUri(input: {
@@ -83,6 +94,27 @@ export async function copyDolabMediaToDurableUri(input: {
 
   try {
     const targetFileName = generateDurableFileName(input);
+    const sourceFile = new File(input.uri);
+    const targetFile = new File(directory, targetFileName);
+    sourceFile.copy(targetFile);
+    return { uri: targetFile.uri, fileName: targetFileName, wasCopied: true };
+  } catch {
+    return { uri: input.uri, fileName: input.fileName, wasCopied: false };
+  }
+}
+
+export async function copyDolabInboxFileToDurableUri(input: {
+  uri: string;
+  fileName?: string;
+  mimeType?: string;
+}): Promise<{ uri: string; fileName?: string; wasCopied: boolean }> {
+  const directory = durableDirectory(DOLAB_INBOX_DIRECTORY_NAME);
+  if (!directory || !input.uri) {
+    return { uri: input.uri, fileName: input.fileName, wasCopied: false };
+  }
+
+  try {
+    const targetFileName = generateInboxFileName(input);
     const sourceFile = new File(input.uri);
     const targetFile = new File(directory, targetFileName);
     sourceFile.copy(targetFile);
