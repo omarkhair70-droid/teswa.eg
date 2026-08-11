@@ -2,19 +2,15 @@ import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerTitleAlign: 'center',
-      }}
-    >
-      <Stack.Screen name="login" options={{ title: 'تسجيل الدخول' }} />
-      <Stack.Screen name="signup" options={{ title: 'إنشاء حساب' }} />
-      <Stack.Screen name="adventure" options={{ headerShown: false }} />
-      <Stack.Screen name="onboarding" options={{ title: 'مرحبًا بك' }} />
-      <Stack.Screen name="profile-setup" options={{ title: 'إكمال الملف' }} />
-      <Stack.Screen name="policy-acceptance" options={{ title: 'الموافقة على السياسات' }} />
-      <Stack.Screen name="native-google-diagnostics" options={{ title: 'تشخيص Native Google' }} />
-      <Stack.Screen name="splash" options={{ headerShown: false }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="signup" />
+      <Stack.Screen name="adventure" />
+      <Stack.Screen name="onboarding" />
+      <Stack.Screen name="profile-setup" />
+      <Stack.Screen name="policy-acceptance" />
+      <Stack.Screen name="native-google-diagnostics" />
+      <Stack.Screen name="splash" />
     </Stack>
   );
 }
