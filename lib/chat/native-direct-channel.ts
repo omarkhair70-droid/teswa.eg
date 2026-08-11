@@ -227,9 +227,10 @@ export class NativeDirectCompatChannel {
       await this.resolveIdentity();
       const result = await fetchNativeDirectMessages(this.conversationId, { limit: 200 });
       if (!result.ok) throw new Error(result.message);
-      const byId = new Map(result.messages.map((message) => [message.id, message]));
-      this.state.messages = await Promise.all(result.messages.map((message) => this.mapMessage(message, byId)));
-      this.updateReadState(result.messages);
+      const nativeMessages = result.messages as NativeDirectMessage[];
+      const byId = new Map<string, NativeDirectMessage>(nativeMessages.map((message: NativeDirectMessage) => [message.id, message]));
+      this.state.messages = await Promise.all(nativeMessages.map((message: NativeDirectMessage) => this.mapMessage(message, byId)));
+      this.updateReadState(nativeMessages);
     })().finally(() => {
       this.refreshPromise = null;
     });
