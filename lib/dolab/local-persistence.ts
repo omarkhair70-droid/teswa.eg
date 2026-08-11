@@ -157,7 +157,6 @@ export function readLocalDolabWorkspaceSnapshot(): DolabLocalWorkspaceSnapshot {
     };
   }
 
-  // One-time compatibility path for users who already have the v1 local media/self-chat keys.
   return {
     ...EMPTY_WORKSPACE,
     pendingMedia: parseArray(getString(DOLAB_PENDING_MEDIA_KEY)).filter(isDolabPendingMedia),
@@ -179,28 +178,27 @@ export function writeLocalDolabWorkspaceSnapshot(input: Omit<DolabLocalWorkspace
   }
 }
 
-export async function readLocalDolabPendingMedia(): Promise<DolabPendingMedia[]> {
+function writeLegacyAndWorkspace<K extends 'pendingMedia' | 'selfMessages'>(key: K, items: DolabLocalWorkspaceSnapshot[K]) {
   const workspace = readLocalDolabWorkspaceSnapshot();
-  return workspace.pendingMedia;
+  const { version: _version, savedAt: _savedAt, ...payload } = workspace;
+  const ok = writeLocalDolabWorkspaceSnapshot({ ...payload, [key]: items });
+  if (!ok) throw new Error('dolab_workspace_write_failed');
+}
+
+export async function readLocalDolabPendingMedia(): Promise<DolabPendingMedia[]> {
+  return readLocalDolabWorkspaceSnapshot().pendingMedia;
 }
 
 export async function writeLocalDolabPendingMedia(items: DolabPendingMedia[]): Promise<void> {
-  try {
-    setString(DOLAB_PENDING_MEDIA_KEY, JSON.stringify(items));
-  } catch {
-    // Kept for compatibility with older call sites. The v2 workspace writer reports success/failure.
-  }
+  setString(DOLAB_PENDING_MEDIA_KEY, JSON.stringify(items));
+  writeLegacyAndWorkspace('pendingMedia', items);
 }
 
 export async function readLocalDolabSelfMessages(): Promise<DolabSelfMessage[]> {
-  const workspace = readLocalDolabWorkspaceSnapshot();
-  return workspace.selfMessages;
+  return readLocalDolabWorkspaceSnapshot().selfMessages;
 }
 
 export async function writeLocalDolabSelfMessages(items: DolabSelfMessage[]): Promise<void> {
-  try {
-    setString(DOLAB_LOCAL_SELF_MESSAGES_KEY, JSON.stringify(items));
-  } catch {
-    // Kept for compatibility with older call sites. The v2 workspace writer reports success/failure.
-  }
+  setString(DOLAB_LOCAL_SELF_MESSAGES_KEY, JSON.stringify(items));
+  writeLegacyAndWorkspace('selfMessages', items);
 }
