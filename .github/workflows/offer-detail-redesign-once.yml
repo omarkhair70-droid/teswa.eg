@@ -18,18 +18,46 @@ jobs:
         with:
           ref: agent/redesign-offer-decision
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+
       - run: npm ci
+
+      - name: Fix hook-order safety
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/offer/[id].tsx')
+          text = path.read_text()
+          text = text.replace("import { useCallback, useEffect, useMemo, useState } from 'react';", "import { useCallback, useEffect, useState } from 'react';")
+          old = """  const createdLabel = useMemo(() => {
+    if (!offer.createdAt) return null;
+    const date = new Date(offer.createdAt);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleString('ar-EG');
+  }, [offer.createdAt]);"""
+          new = """  const createdLabel = (() => {
+    if (!offer.createdAt) return null;
+    const date = new Date(offer.createdAt);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleString('ar-EG');
+  })();"""
+          if old not in text:
+              raise SystemExit('expected createdLabel hook block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - run: npm run typecheck
-      - run: git diff --check main...HEAD
-      - name: Remove one-shot workflow
+      - run: git diff --check origin/main...HEAD
+
+      - name: Commit validated redesign and remove runner
         shell: bash
         run: |
           git config user.name "omarkhair70-droid"
           git config user.email "omar.khair70@gmail.com"
+          git add 'app/offer/[id].tsx'
           git rm .github/workflows/offer-detail-redesign-once.yml
-          git commit -m "chore: remove offer detail validation runner"
+          git commit -m "Finalize Offer Detail decision redesign"
           git push origin HEAD:agent/redesign-offer-decision
