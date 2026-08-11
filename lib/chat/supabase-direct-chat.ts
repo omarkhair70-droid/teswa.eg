@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import { File } from 'expo-file-system';
 
 import { supabase } from '@/lib/supabase/client';
 
@@ -89,9 +90,17 @@ function extensionFor(input: NativeDirectUploadInput) {
 }
 
 async function localUriToArrayBuffer(uri: string) {
-  const response = await fetch(uri);
-  if (!response.ok && response.status !== 0) throw new Error('file_read_failed');
-  return response.arrayBuffer();
+  try {
+    return await new File(uri).arrayBuffer();
+  } catch (fileError) {
+    try {
+      const response = await fetch(uri);
+      if (!response.ok && response.status !== 0) throw new Error('file_read_failed');
+      return await response.arrayBuffer();
+    } catch {
+      throw fileError instanceof Error ? fileError : new Error('file_read_failed');
+    }
+  }
 }
 
 function normalizeStorageBucket(value: unknown): NativeDirectStorageBucket {
