@@ -1,0 +1,36 @@
+name: Direct image file read fix (one shot)
+
+on:
+  push:
+    branches:
+      - fix/direct-image-file-read
+    paths:
+      - .github/workflows/direct-image-file-read-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: python .github/scripts/fix_direct_image_file_read_once.py
+      - run: npm run typecheck
+      - run: git diff --check
+      - name: Commit validated fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/scripts/fix_direct_image_file_read_once.py
+          rm .github/workflows/direct-image-file-read-once.yml
+          git add app/direct/'[id].tsx' lib/chat/supabase-direct-chat.ts .github/scripts/fix_direct_image_file_read_once.py .github/workflows/direct-image-file-read-once.yml
+          git commit -m "Fix Direct Chat image file reading"
+          git push
