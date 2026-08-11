@@ -10,6 +10,7 @@ export type DolabItem = {
   description: string | null;
   category: string | null;
   condition: string | null;
+  exchange_intent: string | null;
   status: DolabItemStatus;
   source: DolabItemSource;
   published_item_id: string | null;
