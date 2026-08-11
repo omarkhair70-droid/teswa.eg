@@ -1,4 +1,5 @@
 export type DolabSelfMessageType = 'text' | 'idea' | 'checklist' | 'voice_placeholder';
+export type DolabSelfMessageSyncState = 'device_only' | 'pending' | 'synced' | 'error';
 
 export type DolabSelfMessage = {
   id: string;
@@ -7,6 +8,8 @@ export type DolabSelfMessage = {
   linkedDraftId?: string;
   linkedPendingMediaIds: string[];
   remoteNoteId?: string;
+  syncState?: DolabSelfMessageSyncState;
+  syncError?: string;
   createdAt: string;
 };
 
