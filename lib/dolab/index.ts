@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
+import { readLocalDolabWorkspaceSnapshot } from '@/lib/dolab/local-persistence';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabItem, DolabItemSource, DolabItemStatus, DolabMedia, DolabNote, DolabNoteType } from '@/lib/dolab/types';
 
@@ -112,13 +113,7 @@ export async function fetchDolabItems(userId: string): Promise<DolabResult<Dolab
     const { data, error } = await supabase.from('dolab_items').select('*').eq('user_id', userId).order('created_at', { ascending: false });
     return { data: (data as DolabItem[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
   } catch {
-    return {
-      data: [],
-      error: {
-        kind: 'unknown',
-        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
-      },
-    };
+    return { data: [], error: { kind: 'unknown', message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.' } };
   }
 }
 
@@ -127,13 +122,7 @@ export async function fetchDolabMedia(userId: string): Promise<DolabResult<Dolab
     const { data, error } = await supabase.from('dolab_media').select('*').eq('user_id', userId).order('created_at', { ascending: false });
     return { data: (data as DolabMedia[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
   } catch {
-    return {
-      data: [],
-      error: {
-        kind: 'unknown',
-        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
-      },
-    };
+    return { data: [], error: { kind: 'unknown', message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.' } };
   }
 }
 
@@ -142,13 +131,7 @@ export async function fetchDolabNotes(userId: string): Promise<DolabResult<Dolab
     const { data, error } = await supabase.from('dolab_notes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
     return { data: (data as DolabNote[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
   } catch {
-    return {
-      data: [],
-      error: {
-        kind: 'unknown',
-        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
-      },
-    };
+    return { data: [], error: { kind: 'unknown', message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.' } };
   }
 }
 
@@ -157,13 +140,7 @@ export async function deleteDolabNote(userId: string, noteId: string): Promise<D
     const { error } = await supabase.from('dolab_notes').delete().eq('id', noteId).eq('user_id', userId);
     return { data: error ? null : { id: noteId }, error: normalizeDolabPersistenceError(error) };
   } catch {
-    return {
-      data: null,
-      error: {
-        kind: 'unknown',
-        message: 'تعذر حذف الملاحظة من الدولاب حاليًا.',
-      },
-    };
+    return { data: null, error: { kind: 'unknown', message: 'تعذر حذف الملاحظة من الدولاب حاليًا.' } };
   }
 }
 
@@ -172,13 +149,7 @@ export async function deleteDolabItem(userId: string, itemId: string): Promise<D
     const { error } = await supabase.from('dolab_items').delete().eq('id', itemId).eq('user_id', userId);
     return { data: error ? null : { id: itemId }, error: normalizeDolabPersistenceError(error) };
   } catch {
-    return {
-      data: null,
-      error: {
-        kind: 'unknown',
-        message: 'تعذر حذف العنصر من الدولاب حاليًا.',
-      },
-    };
+    return { data: null, error: { kind: 'unknown', message: 'تعذر حذف العنصر من الدولاب حاليًا.' } };
   }
 }
 
@@ -188,36 +159,46 @@ export async function deleteDolabMedia(
   storagePath: string,
 ): Promise<DolabResult<{ id: string } | null>> {
   try {
-    // Delete the DB row first so the UI/source-of-truth no longer references this media.
     const { error } = await supabase.from('dolab_media').delete().eq('id', mediaId).eq('user_id', userId);
     if (error) {
-      return {
-        data: null,
-        error: normalizeDolabPersistenceError(error) ?? { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب.' },
-      };
+      return { data: null, error: normalizeDolabPersistenceError(error) ?? { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب.' } };
     }
 
     const storageResult = await supabase.storage.from(DOLAB_BUCKET).remove([storagePath]);
     if (storageResult.error) {
-      return {
-        data: { id: mediaId },
-        error: {
-          kind: 'unknown',
-          message: 'اتحذف سجل الميديا، لكن تنظيف ملف التخزين السحابي اتعطل.',
-        },
-      };
+      return { data: { id: mediaId }, error: { kind: 'unknown', message: 'اتحذف سجل الميديا، لكن تنظيف ملف التخزين السحابي اتعطل.' } };
     }
 
     return { data: { id: mediaId }, error: null };
   } catch {
-    return {
-      data: null,
-      error: {
-        kind: 'unknown',
-        message: 'تعذر حذف الميديا من الدولاب حاليًا.',
-      },
-    };
+    return { data: null, error: { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب حاليًا.' } };
   }
+}
+
+function localPublishMediaForItem(userId: string, dolabItemId: string, remoteRows: DolabMedia[]): DolabMedia[] {
+  const workspace = readLocalDolabWorkspaceSnapshot();
+  const localDraft = workspace.localDrafts.find((draft) => draft.remoteDolabItemId === dolabItemId);
+  if (!localDraft) return [];
+
+  const remoteIds = new Set(remoteRows.map((row) => row.id));
+  return workspace.pendingMedia
+    .filter((media) => localDraft.linkedPendingMediaIds.includes(media.id))
+    .filter((media) => !media.remoteMediaId || !remoteIds.has(media.remoteMediaId))
+    .map((media, index) => ({
+      id: `local:${media.id}`,
+      user_id: userId,
+      dolab_item_id: dolabItemId,
+      media_type: media.mediaType,
+      storage_path: media.uri,
+      thumbnail_path: null,
+      duration_ms: media.durationMs ?? null,
+      width: media.width ?? null,
+      height: media.height ?? null,
+      mime_type: media.mimeType ?? null,
+      size_bytes: media.sizeBytes ?? null,
+      sort_order: remoteRows.length + index,
+      created_at: media.createdAt,
+    } satisfies DolabMedia));
 }
 
 export async function fetchDolabPublishSource(userId: string, dolabItemId: string): Promise<DolabResult<{ item: DolabItem | null; media: DolabMedia[] }>> {
@@ -227,10 +208,13 @@ export async function fetchDolabPublishSource(userId: string, dolabItemId: strin
       supabase.from('dolab_media').select('*').eq('user_id', userId).eq('dolab_item_id', dolabItemId).order('sort_order', { ascending: true }),
     ]);
 
+    const remoteMedia = (mediaResult.data as DolabMedia[] | null) ?? [];
+    const localFallbackMedia = localPublishMediaForItem(userId, dolabItemId, remoteMedia);
+
     return {
       data: {
         item: (itemResult.data as DolabItem | null) ?? null,
-        media: (mediaResult.data as DolabMedia[] | null) ?? [],
+        media: [...remoteMedia, ...localFallbackMedia],
       },
       error: normalizeDolabPersistenceError(itemResult.error) ?? normalizeDolabPersistenceError(mediaResult.error),
     };
