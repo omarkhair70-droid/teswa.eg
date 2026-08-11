@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Video as VideoCompressor } from 'react-native-compressor';
+import { copyDolabMediaToDurableUri } from '@/lib/dolab/durable-media';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 
 export const IMAGE_COMPRESSION_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
@@ -29,6 +30,19 @@ function toJpegFileName(fileName?: string): string | undefined {
   if (!normalized) return undefined;
   if (/\.jpe?g$/i.test(normalized)) return normalized;
   return normalized.replace(/\.[^./]+$/, '') + '.jpg';
+}
+
+async function keepCompressedResultDurable(input: {
+  uri: string;
+  mediaType: 'image' | 'video';
+  fileName?: string;
+  mimeType?: string;
+}): Promise<{ uri: string; fileName?: string }> {
+  const durable = await copyDolabMediaToDurableUri(input);
+  return {
+    uri: durable.uri,
+    fileName: durable.fileName ?? input.fileName,
+  };
 }
 
 export async function resolveDolabMediaSize(media: DolabPendingMedia): Promise<DolabResult<DolabPendingMedia>> {
@@ -111,13 +125,20 @@ export async function compressDolabMedia(media: DolabPendingMedia): Promise<Dola
         };
       }
 
+      const durable = await keepCompressedResultDurable({
+        uri: imageResult.uri,
+        mediaType: 'image',
+        fileName: nextFileName ?? media.fileName,
+        mimeType: 'image/jpeg',
+      });
+
       return {
         data: {
           ...media,
           originalUri: media.originalUri ?? media.uri,
           originalSizeBytes: originalSizeBytes ?? media.sizeBytes,
-          uri: imageResult.uri,
-          fileName: nextFileName ?? media.fileName,
+          uri: durable.uri,
+          fileName: durable.fileName ?? nextFileName ?? media.fileName,
           mimeType: 'image/jpeg',
           compressedSizeBytes,
           sizeBytes: compressedSizeBytes ?? media.sizeBytes,
@@ -144,27 +165,48 @@ export async function compressDolabMedia(media: DolabPendingMedia): Promise<Dola
       };
     }
 
+    if (!compressedUri) {
+      return {
+        data: {
+          ...media,
+          originalUri: media.originalUri ?? media.uri,
+          originalSizeBytes: originalSizeBytes ?? media.sizeBytes,
+          compressionStatus: 'failed',
+          compressionError: 'تعذر ضغط الفيديو.',
+        },
+        error: 'تعذر ضغط الفيديو.',
+      };
+    }
+
+    const durable = await keepCompressedResultDurable({
+      uri: compressedUri,
+      mediaType: 'video',
+      fileName: media.fileName,
+      mimeType: media.mimeType ?? 'video/mp4',
+    });
+
     return {
       data: {
         ...media,
         originalUri: media.originalUri ?? media.uri,
         originalSizeBytes: originalSizeBytes ?? media.sizeBytes,
-        uri: compressedUri || media.uri,
+        uri: durable.uri,
+        fileName: durable.fileName ?? media.fileName,
         compressedSizeBytes,
         sizeBytes: compressedSizeBytes ?? media.sizeBytes,
-        compressionStatus: compressedUri ? 'compressed' : 'failed',
-        compressionError: compressedUri ? undefined : 'تعذر ضغط الفيديو.',
+        compressionStatus: 'compressed',
+        compressionError: undefined,
       },
-      error: compressedUri ? null : 'تعذر ضغط الفيديو.',
+      error: null,
     };
   } catch {
     return {
       data: {
         ...media,
         compressionStatus: 'failed',
-        compressionError: 'تعذر ضغط بعض الملفات. هنحاول نحفظ الأصل لو حجمه مناسب.',
+        compressionError: 'تعذر ضغط الملف. هنحتفظ بالأصل على الجهاز للمحاولة بعدين.',
       },
-      error: 'تعذر ضغط بعض الملفات. هنحاول نحفظ الأصل لو حجمه مناسب.',
+      error: 'تعذر ضغط الملف. هنحتفظ بالأصل على الجهاز للمحاولة بعدين.',
     };
   }
 }
