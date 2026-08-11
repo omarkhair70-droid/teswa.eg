@@ -116,6 +116,8 @@ export function ReportExperience({
               <Pressable
                 key={reason.value}
                 accessibilityRole="radio"
+                accessibilityLabel={reason.label}
+                accessibilityHint={reason.description}
                 accessibilityState={{ selected }}
                 onPress={() => onSelectReason(reason.value)}
                 style={[styles.reasonRow, selected && styles.reasonRowSelected]}
@@ -149,6 +151,8 @@ export function ReportExperience({
           placeholder="اكتب اللي حصل باختصار، من غير بيانات شخصية حساسة..."
           placeholderTextColor={colors.textMuted}
           textAlign="right"
+          accessibilityLabel="تفاصيل البلاغ"
+          accessibilityHint={needsDetails ? 'اكتب تفاصيل مختصرة لأنك اخترت سبب آخر.' : 'إضافة تفاصيل اختيارية تساعد في مراجعة البلاغ.'}
         />
         <View style={styles.inputFooter}>
           <AppText muted style={styles.helper}>{needsDetails ? 'لازم تكتب تفاصيل بسيطة مع "سبب آخر".' : 'المعلومات المختصرة والواضحة بتسهّل المراجعة.'}</AppText>
