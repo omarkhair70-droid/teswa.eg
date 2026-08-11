@@ -1,4 +1,3 @@
-import { isDirectChatProEnabled } from '@/lib/feature-flags';
 import { supabase } from '@/lib/supabase/client';
 
 type StreamTokenSuccess = { ok: true; apiKey: string; userId: string; token: string };
@@ -21,13 +20,6 @@ type StreamTokenInput = {
 };
 
 export async function fetchStreamChatToken(input?: StreamTokenInput): Promise<StreamTokenSuccess | StreamTokenFailure> {
-  // Stream is an optional enhancement. When it is disabled, callers should
-  // immediately use the Supabase conversation data instead of touching the
-  // external token endpoint.
-  if (!isDirectChatProEnabled()) {
-    return { ok: false, message: 'Stream Direct Chat is disabled.' };
-  }
-
   try {
     const {
       data: { session },
