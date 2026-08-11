@@ -33,6 +33,22 @@ function warnDev(scope: string, error: unknown) {
   if (__DEV__) console.warn(`[notification-preferences] ${scope}`, error);
 }
 
+function getDeviceTimezone(): string | null {
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof timezone === 'string' && timezone.trim() ? timezone.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function syncDeviceTimezone() {
+  const timezone = getDeviceTimezone();
+  if (!timezone) return;
+  const { error } = await supabase.rpc('set_my_notification_timezone', { p_timezone: timezone });
+  if (error) warnDev('timezone_sync_failed', error);
+}
+
 function mapRow(row: any): NotificationPreferences {
   return {
     offersEnabled: Boolean(row?.offers_enabled),
@@ -49,6 +65,7 @@ function mapRow(row: any): NotificationPreferences {
 }
 
 export async function fetchMyNotificationPreferences(): Promise<{ ok: true; data: NotificationPreferences } | { ok: false; message: string; error?: PostgrestError | null; data: NotificationPreferences }> {
+  await syncDeviceTimezone();
   const { data, error } = await supabase.rpc('get_my_notification_preferences');
   if (error) {
     warnDev('fetch_failed', error);
@@ -59,6 +76,7 @@ export async function fetchMyNotificationPreferences(): Promise<{ ok: true; data
 }
 
 export async function updateMyNotificationPreferences(patch: PreferencesPatch): Promise<{ ok: true; data: NotificationPreferences } | { ok: false; message: string; error?: PostgrestError | null }> {
+  await syncDeviceTimezone();
   const { data, error } = await supabase.rpc('update_my_notification_preferences', {
     p_offers_enabled: patch.offersEnabled,
     p_deals_enabled: patch.dealsEnabled,
