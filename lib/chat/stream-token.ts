@@ -21,9 +21,9 @@ type StreamTokenInput = {
 };
 
 export async function fetchStreamChatToken(input?: StreamTokenInput): Promise<StreamTokenSuccess | StreamTokenFailure> {
-  // Do not even hit the Edge Function while the Stream-backed chat layer is
-  // disabled. Inbox hydration and warmup callers can safely fall back to the
-  // Supabase conversation data without waiting on a broken external service.
+  // Stream is an optional enhancement. When it is disabled, callers should
+  // immediately use the Supabase conversation data instead of touching the
+  // external token endpoint.
   if (!isDirectChatProEnabled()) {
     return { ok: false, message: 'Stream Direct Chat is disabled.' };
   }
