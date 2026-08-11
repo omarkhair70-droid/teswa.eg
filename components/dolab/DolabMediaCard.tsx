@@ -25,24 +25,33 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
 
   const compressionLabel =
     item.compressionStatus === 'compressing'
-      ? 'بيتحسن...'
+      ? 'جاري التحسين'
       : item.compressionStatus === 'pending'
-        ? 'هيتحسن قبل الرفع'
+        ? 'يتحسن قبل الرفع'
         : item.compressionStatus === 'compressed'
-          ? 'مضغوط'
+          ? 'مضغوط للرفع'
           : item.compressionStatus === 'failed'
-            ? 'فشل الضغط'
+            ? 'تعذر الضغط'
             : 'بدون ضغط';
   const savingsResult = formatCompressionSavings(item.originalSizeBytes, item.compressedSizeBytes);
 
   const uploadLabel =
     item.uploadStatus === 'uploading'
-      ? 'بيتحفظ...'
+      ? 'جاري الرفع للسحابة'
       : item.uploadStatus === 'uploaded'
-        ? 'محفوظ'
+        ? 'في السحابة'
         : item.uploadStatus === 'failed'
-          ? 'فشل الحفظ'
+          ? 'تعذر الرفع'
           : 'على الجهاز';
+
+  const statusStyle =
+    item.uploadStatus === 'uploaded'
+      ? styles.statusBadgeSynced
+      : item.uploadStatus === 'failed'
+        ? styles.statusBadgeFailed
+        : item.uploadStatus === 'uploading'
+          ? styles.statusBadgePending
+          : styles.statusBadgeLocal;
 
   return (
     <DolabPressableCard
@@ -60,18 +69,19 @@ export function DolabMediaCard({ item, selectable = false, selected = false, onP
           <AppText muted style={styles.fileName} numberOfLines={1}>{item.fileName ?? 'video.mp4'}</AppText>
         </View>
       ) : (
-        <DolabAudioPlaceholderCard title={item.fileName ?? 'ملاحظة صوتية محلية'} subtitle={formatMediaDuration(item.durationMs) ?? 'بدون مدة'} />
+        <DolabAudioPlaceholderCard title={item.fileName ?? 'ملاحظة صوتية'} subtitle={formatMediaDuration(item.durationMs) ?? 'بدون مدة'} />
       )}
 
       <View style={styles.badge}><AppText style={styles.badgeText}>{item.mediaType === 'image' ? 'صورة' : item.mediaType === 'video' ? 'فيديو' : 'تسجيل صوتي'}</AppText></View>
-      <View style={styles.statusBadge}><AppText style={styles.statusBadgeText}>{uploadLabel}</AppText></View>
+      <View style={[styles.statusBadge, statusStyle]}><AppText style={styles.statusBadgeText}>{uploadLabel}</AppText></View>
       <View style={styles.compressionBadge}><AppText style={styles.compressionBadgeText}>{compressionLabel}</AppText></View>
+      {item.uploadError ? <AppText style={styles.errorText} numberOfLines={2}>{item.uploadError}</AppText> : null}
       {savingsResult.data ? <AppText muted style={styles.meta} numberOfLines={1}>{savingsResult.data}</AppText> : null}
       {details ? <AppText muted style={styles.meta} numberOfLines={1}>{details}</AppText> : null}
-      {item.mediaType === 'audio' ? <AppText muted style={styles.meta}>تقدر تلاقيه كمان في الكلام مع نفسي.</AppText> : null}
+      {item.mediaType === 'audio' ? <AppText muted style={styles.meta}>تقدر تلاقيه كمان في ملاحظاتك.</AppText> : null}
 
       {onRemove ? (
-        <Pressable style={styles.removeButton} onPress={onRemove} accessibilityRole="button" accessibilityLabel="حذف عنصر ميديا محلي">
+        <Pressable style={styles.removeButton} onPress={onRemove} accessibilityRole="button" accessibilityLabel="حذف عنصر ميديا من نسخة الجهاز">
           <Ionicons name="close-circle" size={18} color={colors.danger} />
         </Pressable>
       ) : null}
@@ -91,18 +101,9 @@ const styles = StyleSheet.create({
     gap: 6,
     position: 'relative',
   },
-  selectableCard: {
-    paddingBottom: spacing.sm,
-  },
-  selectedCard: {
-    borderColor: colors.primary,
-    backgroundColor: '#FFF7EE',
-  },
-  image: {
-    width: '100%',
-    height: 88,
-    borderRadius: radii.md,
-  },
+  selectableCard: { paddingBottom: spacing.sm },
+  selectedCard: { borderColor: colors.primary, backgroundColor: '#FFF7EE' },
+  image: { width: '100%', height: 88, borderRadius: radii.md },
   videoPlaceholder: {
     height: 88,
     borderRadius: radii.md,
@@ -113,10 +114,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     backgroundColor: '#FFF8F0',
   },
-  fileName: {
-    fontSize: 11,
-    maxWidth: 120,
-  },
+  fileName: { fontSize: 11, maxWidth: 120 },
   badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
@@ -124,24 +122,21 @@ const styles = StyleSheet.create({
     borderRadius: radii.round,
     backgroundColor: colors.primarySoft,
   },
-  badgeText: {
-    fontSize: 11,
-    color: colors.primary,
-  },
-  meta: {
-    fontSize: 11,
-  },
+  badgeText: { fontSize: 11, color: colors.primary },
+  meta: { fontSize: 11 },
+  errorText: { fontSize: 11, color: colors.danger },
   statusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radii.round,
-    backgroundColor: '#EEF3FF',
+    borderWidth: 1,
   },
-  statusBadgeText: {
-    fontSize: 11,
-    color: '#2F5FB3',
-  },
+  statusBadgeLocal: { backgroundColor: '#F4F1EC', borderColor: '#DDD4C8' },
+  statusBadgePending: { backgroundColor: '#FFF6E8', borderColor: '#E8C98F' },
+  statusBadgeSynced: { backgroundColor: '#EFFAF1', borderColor: '#B9DCC5' },
+  statusBadgeFailed: { backgroundColor: '#FFF0EF', borderColor: '#F1B8B4' },
+  statusBadgeText: { fontSize: 11, color: colors.text },
   compressionBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
@@ -149,20 +144,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.round,
     backgroundColor: '#EFFAF1',
   },
-  compressionBadgeText: {
-    fontSize: 11,
-    color: '#2F8A57',
-  },
-  removeButton: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-  },
-  selectedOverlay: {
-    position: 'absolute',
-    bottom: 6,
-    left: 6,
-    backgroundColor: colors.primary,
-    borderRadius: radii.round,
-  },
+  compressionBadgeText: { fontSize: 11, color: '#2F8A57' },
+  removeButton: { position: 'absolute', top: 6, left: 6 },
+  selectedOverlay: { position: 'absolute', bottom: 6, left: 6, backgroundColor: colors.primary, borderRadius: radii.round },
 });
