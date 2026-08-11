@@ -12,7 +12,7 @@ module.exports = {
     slug: 'teswa-mobile',
     owner: 'omarkhair70-droids-organization',
     scheme: IS_PREVIEW ? 'teswa-preview' : 'teswa',
-    version: '1.0.9',
+    version: '1.0.10',
     orientation: 'portrait',
     icon: './assets/branding/icon.png',
     userInterfaceStyle: 'automatic',
