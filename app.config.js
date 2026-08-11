@@ -131,6 +131,10 @@ module.exports = {
       'expo-font',
       'expo-asset',
       'expo-sharing',
+      // Expo mods run as an interceptor chain. Register the guard first so it
+      // executes after expo-updates writes expo_runtime_version to strings.xml.
+      './plugins/with-nontranslatable-expo-runtime-version',
+      'expo-updates',
     ],
     runtimeVersion: {
       policy: 'appVersion',
