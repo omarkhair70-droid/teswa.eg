@@ -1,6 +1,13 @@
 import { supabase } from '@/lib/supabase/client';
 
 export type UserBlockState = { blockedByMe: boolean; blockedMe: boolean; isBlockedEitherDirection: boolean };
+export type BlockedUserSummary = {
+  id: string;
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  blockedAt: string | null;
+};
 
 export async function fetchUserBlockState(currentUserId: string, targetUserId: string): Promise<{ ok: true; state: UserBlockState } | { ok: false; message: string }> {
   const me = currentUserId.trim();
@@ -18,6 +25,42 @@ export async function fetchUserBlockState(currentUserId: string, targetUserId: s
       blockedMe: Boolean(row?.blocked_me),
       isBlockedEitherDirection: Boolean(row?.is_blocked_either_direction),
     },
+  };
+}
+
+export async function fetchBlockedUsers(currentUserId: string): Promise<{ ok: true; users: BlockedUserSummary[] } | { ok: false; message: string }> {
+  const me = currentUserId.trim();
+  if (!me) return { ok: false, message: 'سجّل الدخول أولاً لمراجعة قائمة الحظر.' };
+
+  const { data: rows, error: blockError } = await supabase
+    .from('user_blocks')
+    .select('blocked_user_id,created_at')
+    .eq('blocker_id', me)
+    .order('created_at', { ascending: false });
+  if (blockError) return { ok: false, message: 'تعذر تحميل المستخدمين المحظورين حالياً.' };
+  if (!rows?.length) return { ok: true, users: [] };
+
+  const ids = rows.map((row) => row.blocked_user_id as string).filter(Boolean);
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id,display_name,username,avatar_url')
+    .in('id', ids);
+  if (profilesError) return { ok: false, message: 'تعذر تحميل بيانات المستخدمين المحظورين.' };
+
+  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id as string, profile]));
+  return {
+    ok: true,
+    users: rows.map((row) => {
+      const id = row.blocked_user_id as string;
+      const profile = profileMap.get(id);
+      return {
+        id,
+        displayName: (profile?.display_name as string | null | undefined) ?? null,
+        username: (profile?.username as string | null | undefined) ?? null,
+        avatarUrl: (profile?.avatar_url as string | null | undefined) ?? null,
+        blockedAt: (row.created_at as string | null | undefined) ?? null,
+      };
+    }),
   };
 }
 
