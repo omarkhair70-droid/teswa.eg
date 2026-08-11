@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   AudioModule,
   RecordingPresets,
@@ -53,6 +54,12 @@ type VoiceDraft = {
 const MAX_STORY_VOICE_MS = 45_000;
 const formatMs = (durationMs: number) =>
   `${String(Math.floor(Math.max(0, Math.floor(durationMs / 1000)) / 60)).padStart(2, '0')}:${String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}`;
+
+const formatMessageTime = (createdAt: string) => {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+};
 
 export default function Screen() {
   const { user } = useAuth();
@@ -323,105 +330,226 @@ export default function Screen() {
     }
   }, [refreshBadges, thread, user?.id, voiceDraft, voiceSending]);
 
-  const recordingLabel = useMemo(() => `جاري التسجيل ${formatMs(recorderState.durationMillis ?? 0)}`,[recorderState.durationMillis]);
+  const recordingLabel = useMemo(() => `جاري التسجيل ${formatMs(recorderState.durationMillis ?? 0)}`, [recorderState.durationMillis]);
+  const otherName = thread?.otherParticipant?.displayName ?? thread?.otherParticipant?.username ?? 'مستخدم تِسوى';
+  const otherInitial = String(otherName).trim()?.[0]?.toUpperCase() || 'ت';
+  const realtimeLabel = realtimeStatus === 'live'
+    ? 'متصل لحظيًا'
+    : realtimeStatus === 'connecting'
+      ? 'جاري الاتصال...'
+      : 'التحديث اللحظي متوقف مؤقتًا';
 
   if (!user?.id) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك للوصول للمحادثات." /></AppScreen>;
   if (!conversationId) return <AppScreen><View style={styles.group}><EmptyState title="تعذر فتح المحادثة" description="معرّف المحادثة غير صالح أو تم حذفها." /><AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} /></View></AppScreen>;
-  if (loading) return <AppScreen><EmptyState title="جاري التحميل" description="نحمّل المحادثة الآن." /></AppScreen>;
+  if (loading) return <AppScreen backgroundVariant="alive"><View style={styles.loadingState}><View style={styles.loadingIcon}><Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.primary} /></View><AppText weight="bold">بنفتح المحادثة...</AppText><AppText muted>بنحمّل الرسائل وسياق القصة.</AppText></View></AppScreen>;
   if (error && !thread) {
     return <AppScreen><View style={styles.group}><EmptyState title="تعذر فتح المحادثة" description={error} /><AppButton label="إعادة المحاولة" onPress={() => void load()} /><AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} /></View></AppScreen>;
   }
 
   return (
-    <AppScreen>
-      <KeyboardAwareScrollView contentContainerStyle={styles.group} bottomOffset={80}>
-        <Pressable style={styles.header} onPress={() => router.push(`/profile/${thread.otherParticipant.id}`)}>
-          <View style={styles.headerMain}>
-            <AppText weight="semibold">{thread.otherParticipant.displayName ?? 'رد على قصة'}</AppText>
-            <AppText muted>{realtimeStatus === 'unavailable' ? 'التحديث اللحظي غير متاح مؤقتًا' : 'الرسائل بتتحدث لحظيًا'}</AppText>
-          </View>
-          {thread.otherParticipant.avatarUrl ? <Image source={{ uri: thread.otherParticipant.avatarUrl }} style={styles.avatar} /> : <View style={styles.avatarFallback}><AppText>ر</AppText></View>}
+    <AppScreen backgroundVariant="alive">
+      <View style={styles.topHeader}>
+        <Pressable accessibilityRole="button" accessibilityLabel="رجوع للرسائل" onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-forward" size={20} color={colors.text} />
         </Pressable>
 
-        <View style={styles.card}><AppText weight="semibold">رد على قصة</AppText><AppText muted>هذه المحادثة بدأت من تفاعل داخل عالم تِسوى، وليست رسالة عامة.</AppText></View>
-
-        {thread.messages.length ? thread.messages.map((message: any) => (
-          <View key={message.id} style={[styles.row, message.senderId === user.id ? styles.mine : styles.other]}>
-            <View style={styles.bubble}>
-              {message.messageKind === 'voice' ? (
-                <View style={styles.voiceBubble}>
-                  <View style={styles.voiceHeader}>
-                    <AppText weight="semibold">رسالة صوتية</AppText>
-                    <AppButton label={activeVoiceId === message.id && voicePlayerStatus.playing ? 'إيقاف' : 'تشغيل'} variant="neutral" onPress={async () => {
-                      if (activeVoiceId === message.id) { if (voicePlayerStatus.playing) voicePlayer.pause(); else voicePlayer.play(); return; }
-                      previewPlayer.pause();
-                      await previewPlayer.seekTo(0).catch(() => undefined);
-                      const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? '');
-                      if (!signed) {
-                        setError('تعذر تشغيل الرسالة الصوتية حالياً. حاول مرة أخرى.');
-                        return;
-                      }
-                      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-                      voicePlayer.replace({ uri: signed });
-                      voicePlayer.play();
-                      setActiveVoiceId(message.id);
-                    }} />
-                  </View>
-                </View>
-              ) : (<AppText>{message.body}</AppText>)}
-              <AppText muted>{new Date(message.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</AppText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`فتح ملف ${otherName}`}
+          onPress={() => router.push(`/profile/${thread.otherParticipant.id}`)}
+          style={({ pressed }) => [styles.personHeader, pressed && styles.pressed]}
+        >
+          <View style={styles.personCopy}>
+            <AppText weight="bold" style={styles.personName} numberOfLines={1}>{otherName}</AppText>
+            <View style={styles.presenceRow}>
+              <View style={[styles.presenceDot, realtimeStatus === 'live' ? styles.presenceLive : realtimeStatus === 'unavailable' ? styles.presenceOffline : styles.presenceConnecting]} />
+              <AppText muted style={styles.presenceText}>{realtimeLabel}</AppText>
             </View>
           </View>
-        )) : <EmptyState title="ابدأوا المحادثة" description="اكتبوا أول رسالة بعد الرد على القصة." />}
+          {thread.otherParticipant.avatarUrl ? (
+            <Image source={{ uri: thread.otherParticipant.avatarUrl }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarFallback}><AppText weight="bold" style={styles.avatarInitial}>{otherInitial}</AppText></View>
+          )}
+        </Pressable>
+      </View>
+
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.messageContent}
+        bottomOffset={96}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.contextCard}>
+          <View style={styles.contextIcon}><Ionicons name="sparkles-outline" size={20} color={colors.accent} /></View>
+          <View style={styles.contextCopy}>
+            <AppText muted style={styles.contextEyebrow}>المحادثة بدأت من قصة</AppText>
+            <AppText weight="bold" style={styles.contextTitle}>رد على قصة فتح مساحة للكلام</AppText>
+            <AppText muted style={styles.contextText}>المحادثة دي مرتبطة بتفاعل بدأ جوه تِسوى، فالسياق موجود من قبل أول رسالة هنا.</AppText>
+          </View>
+          <View style={styles.contextPill}><Ionicons name="chatbubble-outline" size={13} color={colors.accent} /><AppText style={styles.contextPillText}>قصة</AppText></View>
+        </View>
+
+        {thread.messages.length ? (
+          <View style={styles.messageList}>
+            {thread.messages.map((message: any) => {
+              const mine = message.senderId === user.id;
+              const isVoice = message.messageKind === 'voice';
+              const isPlaying = activeVoiceId === message.id && voicePlayerStatus.playing;
+              return (
+                <View key={message.id} style={[styles.messageRow, mine ? styles.mineRow : styles.otherRow]}>
+                  {!mine ? (
+                    thread.otherParticipant.avatarUrl ? <Image source={{ uri: thread.otherParticipant.avatarUrl }} style={styles.messageAvatar} /> : <View style={styles.messageAvatarFallback}><AppText style={styles.messageAvatarInitial}>{otherInitial}</AppText></View>
+                  ) : null}
+
+                  <View style={[styles.bubble, mine ? styles.mineBubble : styles.otherBubble]}>
+                    {isVoice ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={isPlaying ? 'إيقاف الرسالة الصوتية' : 'تشغيل الرسالة الصوتية'}
+                        onPress={async () => {
+                          if (activeVoiceId === message.id) {
+                            if (voicePlayerStatus.playing) voicePlayer.pause();
+                            else voicePlayer.play();
+                            return;
+                          }
+                          previewPlayer.pause();
+                          await previewPlayer.seekTo(0).catch(() => undefined);
+                          const signed = await createContextualVoiceMessageSignedUrl(message.mediaStoragePath ?? '');
+                          if (!signed) {
+                            setError('تعذر تشغيل الرسالة الصوتية حالياً. حاول مرة أخرى.');
+                            return;
+                          }
+                          await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+                          voicePlayer.replace({ uri: signed });
+                          voicePlayer.play();
+                          setActiveVoiceId(message.id);
+                        }}
+                        style={styles.voiceMessage}
+                      >
+                        <View style={[styles.voicePlayButton, mine ? styles.voicePlayMine : styles.voicePlayOther]}>
+                          <Ionicons name={isPlaying ? 'pause' : 'play'} size={17} color={mine ? colors.primary : colors.white} />
+                        </View>
+                        <View style={styles.waveform}>
+                          {[10, 18, 13, 22, 16, 25, 12, 20, 15, 23].map((height, index) => (
+                            <View key={`${message.id}-bar-${index}`} style={[styles.waveBar, { height }, mine ? styles.waveBarMine : styles.waveBarOther]} />
+                          ))}
+                        </View>
+                        <AppText style={[styles.voiceDuration, mine && styles.mineMetaText]}>{formatMs(message.mediaDurationMs ?? 0)}</AppText>
+                      </Pressable>
+                    ) : (
+                      <AppText style={[styles.messageText, mine && styles.mineText]}>{message.body}</AppText>
+                    )}
+                    <View style={[styles.messageMeta, mine ? styles.mineMeta : styles.otherMeta]}>
+                      <AppText muted={!mine} style={[styles.timeText, mine && styles.mineMetaText]}>{formatMessageTime(message.createdAt)}</AppText>
+                      {mine ? <Ionicons name="checkmark-done" size={13} color="rgba(255,255,255,0.72)" /> : null}
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyConversation}>
+            <View style={styles.emptyConversationIcon}><Ionicons name="chatbubbles-outline" size={28} color={colors.primary} /></View>
+            <AppText weight="bold" style={styles.emptyConversationTitle}>كمّلوا الكلام من هنا</AppText>
+            <AppText muted style={styles.emptyConversationText}>القصة كانت البداية. ابعت أول رسالة وخلي المحادثة تكمل بشكل طبيعي.</AppText>
+          </View>
+        )}
       </KeyboardAwareScrollView>
 
       <KeyboardStickyView offset={{ opened: 0, closed: 0 }}>
-        <View style={styles.composerWrap}>
+        <View style={styles.composerShell}>
           {voiceOpen ? (
-            <View style={styles.voicePanel}>
+            <View style={styles.voiceComposerCard}>
               {recorderState.isRecording ? (
-                <>
-                  <AppText>{recordingLabel}</AppText>
-                  <View style={styles.voiceActions}>
-                    <AppButton label="إيقاف" variant="neutral" onPress={() => void finalizeRecording()} disabled={voiceBusy} />
-                    <AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceComposer()} disabled={voiceBusy} />
+                <View style={styles.recordingState}>
+                  <View style={styles.recordingTop}>
+                    <View style={styles.recordingPulse}><View style={styles.recordingDot} /></View>
+                    <View style={styles.recordingCopy}>
+                      <AppText weight="bold" style={styles.recordingTitle}>{recordingLabel}</AppText>
+                      <AppText muted style={styles.recordingHint}>الحد الأقصى 00:45 — التسجيل هيقف تلقائيًا.</AppText>
+                    </View>
                   </View>
-                </>
+                  <View style={styles.voiceActionRow}>
+                    <Pressable accessibilityRole="button" accessibilityLabel="إيقاف التسجيل" disabled={voiceBusy} onPress={() => void finalizeRecording()} style={[styles.voiceActionPrimary, voiceBusy && styles.disabled]}><Ionicons name="stop" size={18} color={colors.white} /><AppText style={styles.voiceActionPrimaryText}>إيقاف</AppText></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="إلغاء التسجيل" disabled={voiceBusy} onPress={() => void cancelVoiceComposer()} style={[styles.voiceActionNeutral, voiceBusy && styles.disabled]}><Ionicons name="trash-outline" size={17} color={colors.textMuted} /><AppText style={styles.voiceActionNeutralText}>إلغاء</AppText></Pressable>
+                  </View>
+                </View>
               ) : voiceDraft ? (
-                <>
-                  <Pressable style={styles.previewPlay} onPress={async () => {
-                    voicePlayer.pause();
-                    await voicePlayer.seekTo(0).catch(() => undefined);
-                    setActiveVoiceId(null);
-                    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-                    if (previewPlayerStatus.playing) previewPlayer.pause();
-                    else previewPlayer.play();
-                  }}>
-                    <AppText>{previewPlayerStatus.playing ? 'إيقاف المعاينة' : `تشغيل المعاينة ${formatMs(voiceDraft.durationMs)}`}</AppText>
+                <View style={styles.draftState}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={previewPlayerStatus.playing ? 'إيقاف معاينة التسجيل' : 'تشغيل معاينة التسجيل'}
+                    onPress={async () => {
+                      voicePlayer.pause();
+                      await voicePlayer.seekTo(0).catch(() => undefined);
+                      setActiveVoiceId(null);
+                      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+                      if (previewPlayerStatus.playing) previewPlayer.pause();
+                      else previewPlayer.play();
+                    }}
+                    style={styles.previewCard}
+                  >
+                    <View style={styles.previewPlayButton}><Ionicons name={previewPlayerStatus.playing ? 'pause' : 'play'} size={18} color={colors.white} /></View>
+                    <View style={styles.previewCopy}><AppText weight="semibold">راجع التسجيل قبل الإرسال</AppText><AppText muted style={styles.previewHint}>المدة {formatMs(voiceDraft.durationMs)}</AppText></View>
+                    <Ionicons name="waveform-outline" size={23} color={colors.accent} />
                   </Pressable>
-                  <View style={styles.voiceActions}>
-                    <AppButton label="إرسال الرسالة الصوتية" onPress={() => void sendVoiceDraft()} disabled={voiceSending || voiceBusy} />
-                    <AppButton label="إعادة التسجيل" variant="neutral" onPress={() => void startVoiceRecording()} disabled={voiceSending || voiceBusy} />
-                    <AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceComposer()} disabled={voiceSending || voiceBusy} />
+                  <View style={styles.voiceActionRow}>
+                    <Pressable accessibilityRole="button" accessibilityLabel="إرسال الرسالة الصوتية" disabled={voiceSending || voiceBusy} onPress={() => void sendVoiceDraft()} style={[styles.voiceActionPrimary, (voiceSending || voiceBusy) && styles.disabled]}><Ionicons name="send" size={17} color={colors.white} /><AppText style={styles.voiceActionPrimaryText}>{voiceSending ? 'بنبعت...' : 'إرسال'}</AppText></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="إعادة التسجيل" disabled={voiceSending || voiceBusy} onPress={() => void startVoiceRecording()} style={[styles.voiceActionNeutral, (voiceSending || voiceBusy) && styles.disabled]}><Ionicons name="refresh-outline" size={17} color={colors.textMuted} /><AppText style={styles.voiceActionNeutralText}>إعادة</AppText></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="إلغاء الرسالة الصوتية" disabled={voiceSending || voiceBusy} onPress={() => void cancelVoiceComposer()} style={[styles.iconOnlyAction, (voiceSending || voiceBusy) && styles.disabled]}><Ionicons name="close" size={20} color={colors.textMuted} /></Pressable>
                   </View>
-                </>
+                </View>
               ) : (
-                <View style={styles.voiceActions}>
-                  <AppButton label="بدء التسجيل" onPress={() => void startVoiceRecording()} disabled={voiceBusy} />
-                  <AppButton label="إلغاء" variant="neutral" onPress={() => void cancelVoiceComposer()} disabled={voiceBusy} />
+                <View style={styles.readyToRecord}>
+                  <View style={styles.readyIcon}><Ionicons name="mic-outline" size={22} color={colors.primary} /></View>
+                  <View style={styles.readyCopy}><AppText weight="semibold">رسالة صوتية</AppText><AppText muted style={styles.recordingHint}>سجّل لحد 45 ثانية.</AppText></View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="بدء التسجيل" disabled={voiceBusy} onPress={() => void startVoiceRecording()} style={[styles.voiceActionPrimary, voiceBusy && styles.disabled]}><AppText style={styles.voiceActionPrimaryText}>ابدأ</AppText></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="إلغاء" disabled={voiceBusy} onPress={() => void cancelVoiceComposer()} style={styles.iconOnlyAction}><Ionicons name="close" size={20} color={colors.textMuted} /></Pressable>
                 </View>
               )}
             </View>
           ) : null}
 
+          {error ? (
+            <View style={styles.inlineError}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><AppText style={styles.inlineErrorText}>{error}</AppText></View>
+          ) : null}
+
           <View style={styles.composer}>
-            <Pressable onPress={() => { setVoiceOpen(true); void startVoiceRecording(); }} disabled={voiceBusy || sending || voiceSending} style={styles.voiceEntry}>
-              <AppText style={styles.voiceEntryText}>صوت</AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="تسجيل رسالة صوتية"
+              onPress={() => { setVoiceOpen(true); void startVoiceRecording(); }}
+              disabled={voiceBusy || sending || voiceSending}
+              style={[styles.micButton, (voiceBusy || sending || voiceSending) && styles.disabled]}
+            >
+              <Ionicons name="mic-outline" size={21} color={colors.text} />
             </Pressable>
-            <Pressable onPress={() => void handleSend()} disabled={!messageBody.trim() || sending} style={styles.send}><AppText style={styles.sendText}>إرسال</AppText></Pressable>
-            <TextInput value={messageBody} onChangeText={setMessageBody} placeholder="اكتب رسالة..." placeholderTextColor={colors.textMuted} style={styles.input} textAlign="right" />
+
+            <View style={styles.inputShell}>
+              <TextInput
+                value={messageBody}
+                onChangeText={setMessageBody}
+                placeholder="اكتب رسالة..."
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+                textAlign="right"
+                multiline
+                maxLength={800}
+                accessibilityLabel="نص الرسالة"
+              />
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={sending ? 'جاري إرسال الرسالة' : 'إرسال الرسالة'}
+              onPress={() => void handleSend()}
+              disabled={!messageBody.trim() || sending}
+              style={[styles.sendButton, (!messageBody.trim() || sending) && styles.sendButtonDisabled]}
+            >
+              <Ionicons name={sending ? 'hourglass-outline' : 'arrow-back'} size={20} color={colors.white} />
+            </Pressable>
           </View>
-          {error ? <AppText muted>{error}</AppText> : null}
         </View>
       </KeyboardStickyView>
     </AppScreen>
@@ -430,25 +558,92 @@ export default function Screen() {
 
 const styles = StyleSheet.create({
   group: { gap: spacing.sm, paddingBottom: spacing.lg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerMain: { gap: 2, flex: 1 },
-  avatar: { width: 42, height: 42, borderRadius: radii.round },
-  avatarFallback: { width: 42, height: 42, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  card: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, backgroundColor: colors.surface, padding: spacing.sm, gap: 4 },
-  row: { width: '100%' },
-  mine: { alignItems: 'flex-start' },
-  other: { alignItems: 'flex-end' },
-  bubble: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.sm },
-  composerWrap: { borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: spacing.sm, gap: spacing.xs },
-  composer: { flexDirection: 'row', gap: spacing.xs },
-  input: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: colors.surface },
-  send: { borderRadius: radii.md, backgroundColor: colors.primary, justifyContent: 'center', paddingHorizontal: spacing.md },
-  sendText: { color: colors.background },
-  voiceEntry: { borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', paddingHorizontal: spacing.sm, backgroundColor: colors.surface },
-  voiceEntryText: { color: colors.text },
-  voicePanel: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.sm, gap: spacing.xs, backgroundColor: colors.surface },
-  voiceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  previewPlay: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  voiceBubble: { gap: spacing.xs },
-  voiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.xs },
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  loadingIcon: { width: 60, height: 60, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  topHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  backButton: { width: 42, height: 42, borderRadius: radii.round, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  personHeader: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  personCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  personName: { fontSize: 17, textAlign: 'right' },
+  presenceRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
+  presenceDot: { width: 7, height: 7, borderRadius: radii.round },
+  presenceLive: { backgroundColor: colors.success },
+  presenceOffline: { backgroundColor: colors.textMuted },
+  presenceConnecting: { backgroundColor: colors.accent },
+  presenceText: { fontSize: 10 },
+  avatar: { width: 46, height: 46, borderRadius: radii.round },
+  avatarFallback: { width: 46, height: 46, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { color: colors.primary, fontSize: 17 },
+  messageContent: { gap: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl },
+  contextCard: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md, padding: spacing.md, borderRadius: radii.xl, backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: '#E9D9C7' },
+  contextIcon: { width: 40, height: 40, borderRadius: radii.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  contextCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  contextEyebrow: { fontSize: 10 },
+  contextTitle: { fontSize: 15, textAlign: 'right' },
+  contextText: { fontSize: 11, lineHeight: 17, textAlign: 'right' },
+  contextPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round, backgroundColor: colors.surface },
+  contextPillText: { fontSize: 10, color: colors.accent },
+  messageList: { gap: spacing.sm },
+  messageRow: { width: '100%', flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs },
+  mineRow: { justifyContent: 'flex-start' },
+  otherRow: { justifyContent: 'flex-end', flexDirection: 'row-reverse' },
+  messageAvatar: { width: 26, height: 26, borderRadius: radii.round },
+  messageAvatarFallback: { width: 26, height: 26, borderRadius: radii.round, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  messageAvatarInitial: { fontSize: 10, color: colors.accent },
+  bubble: { maxWidth: '82%', minWidth: 78, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: 5 },
+  mineBubble: { backgroundColor: colors.primary, borderRadius: radii.lg, borderBottomLeftRadius: 6 },
+  otherBubble: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, borderBottomRightRadius: 6 },
+  messageText: { fontSize: 14, lineHeight: 21, textAlign: 'right' },
+  mineText: { color: colors.white },
+  messageMeta: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
+  mineMeta: { alignSelf: 'flex-start' },
+  otherMeta: { alignSelf: 'flex-end' },
+  timeText: { fontSize: 9 },
+  mineMetaText: { color: 'rgba(255,255,255,0.72)' },
+  voiceMessage: { minWidth: 210, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  voicePlayButton: { width: 34, height: 34, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center' },
+  voicePlayMine: { backgroundColor: colors.white },
+  voicePlayOther: { backgroundColor: colors.primary },
+  waveform: { flex: 1, minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
+  waveBar: { width: 3, borderRadius: 2 },
+  waveBarMine: { backgroundColor: 'rgba(255,255,255,0.72)' },
+  waveBarOther: { backgroundColor: colors.primary },
+  voiceDuration: { fontSize: 9, minWidth: 32, textAlign: 'center' },
+  emptyConversation: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg },
+  emptyConversationIcon: { width: 60, height: 60, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  emptyConversationTitle: { fontSize: 18, textAlign: 'center' },
+  emptyConversationText: { textAlign: 'center', lineHeight: 20 },
+  composerShell: { gap: spacing.xs, paddingTop: spacing.sm, paddingBottom: spacing.sm, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  voiceComposerCard: { padding: spacing.md, borderRadius: radii.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
+  recordingState: { gap: spacing.md },
+  recordingTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
+  recordingPulse: { width: 42, height: 42, borderRadius: radii.round, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
+  recordingDot: { width: 13, height: 13, borderRadius: radii.round, backgroundColor: colors.danger },
+  recordingCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  recordingTitle: { color: colors.danger },
+  recordingHint: { fontSize: 10, textAlign: 'right' },
+  voiceActionRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  voiceActionPrimary: { minHeight: 38, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.md, borderRadius: radii.round, backgroundColor: colors.primary },
+  voiceActionPrimaryText: { color: colors.white, fontSize: 11 },
+  voiceActionNeutral: { minHeight: 38, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: spacing.md, borderRadius: radii.round, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  voiceActionNeutralText: { fontSize: 11, color: colors.textMuted },
+  iconOnlyAction: { width: 38, height: 38, borderRadius: radii.round, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  draftState: { gap: spacing.sm },
+  previewCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, padding: spacing.sm, borderRadius: radii.lg, backgroundColor: colors.accentSoft },
+  previewPlayButton: { width: 38, height: 38, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  previewCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  previewHint: { fontSize: 10 },
+  readyToRecord: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  readyIcon: { width: 40, height: 40, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  readyCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  inlineError: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.dangerSoft },
+  inlineErrorText: { flex: 1, color: colors.danger, fontSize: 11, textAlign: 'right' },
+  composer: { flexDirection: 'row-reverse', alignItems: 'flex-end', gap: spacing.xs },
+  micButton: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  inputShell: { flex: 1, minHeight: 44, maxHeight: 110, borderRadius: radii.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, justifyContent: 'center' },
+  input: { minHeight: 42, maxHeight: 106, paddingHorizontal: spacing.md, paddingVertical: 9, color: colors.text, fontSize: 14, lineHeight: 20, textAlignVertical: 'center' },
+  sendButton: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  sendButtonDisabled: { backgroundColor: '#D9C2B5' },
+  disabled: { opacity: 0.45 },
+  pressed: { opacity: 0.72 },
 });
