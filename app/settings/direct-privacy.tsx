@@ -127,7 +127,9 @@ export default function DirectPrivacySettingsScreen() {
                 <Pressable
                   key={option.value}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.description}
+                  accessibilityState={{ selected: active, disabled: !!savingValue }}
                   onPress={() => void onSelect(option.value)}
                   disabled={!!savingValue}
                   style={({ pressed }) => [styles.optionCard, active && styles.optionCardActive, pressed && styles.pressed]}
