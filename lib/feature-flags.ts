@@ -3,9 +3,9 @@ const isDisabled = (value: string | undefined) => normalizeFlag(value) === 'fals
 const isExplicitlyEnabled = (value: string | undefined) => normalizeFlag(value) === 'true';
 
 export function isDirectChatProEnabled() {
-  // Stream-backed Direct Chat is an optional enhancement. Keep the proven
-  // Supabase direct-message path as the default so a Stream outage or missing
-  // Stream credentials can never make accepted conversations unusable.
+  // Stream-backed Direct Chat is optional. The proven Supabase direct-message
+  // path stays on by default so an external Stream outage cannot block chat.
+  // Set EXPO_PUBLIC_DIRECT_CHAT_PRO_ENABLED=true only when Stream is healthy.
   return isExplicitlyEnabled(process.env.EXPO_PUBLIC_DIRECT_CHAT_PRO_ENABLED);
 }
 
