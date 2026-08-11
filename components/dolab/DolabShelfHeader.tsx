@@ -9,29 +9,25 @@ export function DolabShelfHeader({ title, description, iconName, onBack, onAddHe
   return (
     <View style={styles.wrap}>
       <View style={styles.topRow}>
-        <View style={styles.iconWrap}><Ionicons name={iconName} size={16} color={colors.primary} /></View>
-        <AppText weight="bold">{title}</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel="رجوع للرفوف" onPress={onBack} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Ionicons name="chevron-forward" size={19} color={colors.text} /></Pressable>
+        <View style={styles.copy}><AppText muted style={styles.eyebrow}>رف داخل دولابك</AppText><AppText weight="bold" style={styles.title}>{title}</AppText><AppText muted style={styles.description}>{description}</AppText></View>
+        <View style={styles.iconWrap}><Ionicons name={iconName} size={20} color={colors.primary} /></View>
       </View>
-      <AppText muted>{description}</AppText>
-      <View style={styles.row}>
-        <Pressable style={styles.back} onPress={onBack} accessibilityRole="button" accessibilityLabel="رجوع للرفوف">
-          <AppText style={styles.backText}>رجوع للرفوف</AppText>
-        </Pressable>
-        <Pressable style={styles.addHere} onPress={onAddHere} accessibilityRole="button" accessibilityLabel="أضف هنا">
-          <AppText style={styles.addHereText}>أضف هنا</AppText>
-        </Pressable>
-      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`أضف داخل ${title}`} onPress={onAddHere} style={({ pressed }) => [styles.addHere, pressed && styles.pressed]}><Ionicons name="add" size={18} color={colors.white} /><AppText weight="semibold" style={styles.addHereText}>أضف داخل الرف</AppText></Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing.md, backgroundColor: 'rgba(255,255,255,0.92)', gap: spacing.xs },
-  topRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
-  iconWrap: { width: 28, height: 28, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
-  row: { flexDirection: 'row-reverse', gap: spacing.xs, alignItems: 'center' },
-  back: { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radii.round, backgroundColor: colors.primarySoft },
-  backText: { color: colors.primary, fontWeight: '700' },
-  addHere: { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radii.round, backgroundColor: colors.primary },
-  addHereText: { color: '#fff', fontWeight: '700' },
+  wrap: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.xl, padding: spacing.md, backgroundColor: colors.surface, gap: spacing.md },
+  topRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md },
+  backButton: { width: 40, height: 40, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  copy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  eyebrow: { fontSize: 9 },
+  title: { fontSize: 18, textAlign: 'right' },
+  description: { fontSize: 10, lineHeight: 16, textAlign: 'right' },
+  iconWrap: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  addHere: { minHeight: 42, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.primary },
+  addHereText: { color: colors.white, fontSize: 11 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
 });
