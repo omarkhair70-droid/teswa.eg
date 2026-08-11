@@ -140,6 +140,7 @@ export default function SettingsScreen() {
         <SettingsSection icon="shield" title="الخصوصية والأمان المجتمعي" description="حدود التواصل والقواعد اللي بتحمي استخدام تِسوى.">
           {showAdminReports ? <LinkRow icon="shield" label="لوحة البلاغات" description="مراجعة بلاغات الثقة والسلامة." badge="إدارة" onPress={() => router.push('/admin/reports')} /> : null}
           <LinkRow icon="user" label="خصوصية الرسائل" description="حدد مين يقدر يبدأ محادثة معاك." badge={privacyValue ? privacyLabels[privacyValue] : undefined} onPress={() => router.push('/settings/direct-privacy')} />
+          <LinkRow icon="x" label="المستخدمون المحظورون" description="راجع الحسابات اللي حظرتها أو فك الحظر." onPress={() => router.push('/settings/blocked-users')} />
           <LinkRow icon="lock" label="سياسة الخصوصية" onPress={() => router.push('/legal/privacy')} />
           <LinkRow icon="info" label="شروط الاستخدام" onPress={() => router.push('/legal/terms')} />
           <LinkRow icon="user" label="إرشادات المجتمع" onPress={() => router.push('/legal/community-guidelines')} />
