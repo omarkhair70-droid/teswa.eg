@@ -189,3 +189,16 @@ if "Stream مباشر" in text:
     raise SystemExit("stale user-visible Stream badge remains")
 
 path.write_text(text)
+
+runtime_path = Path("lib/chat/native-direct-channel.ts")
+runtime_text = runtime_path.read_text()
+old_runtime = """      const byId = new Map(result.messages.map((message) => [message.id, message]));
+      this.state.messages = await Promise.all(result.messages.map((message) => this.mapMessage(message, byId)));
+      this.updateReadState(result.messages);"""
+new_runtime = """      const nativeMessages = result.messages as NativeDirectMessage[];
+      const byId = new Map<string, NativeDirectMessage>(nativeMessages.map((message: NativeDirectMessage) => [message.id, message]));
+      this.state.messages = await Promise.all(nativeMessages.map((message: NativeDirectMessage) => this.mapMessage(message, byId)));
+      this.updateReadState(nativeMessages);"""
+if old_runtime not in runtime_text:
+    raise SystemExit("missing source block: native Direct message typing")
+runtime_path.write_text(runtime_text.replace(old_runtime, new_runtime, 1))
