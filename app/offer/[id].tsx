@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -138,11 +138,11 @@ export default function OfferDetailScreen() {
   const showSentMoment = moment === 'sent' && Boolean(offer.id);
   const swapCeremonyEnabled = isSwapCeremonyEnabled();
   const statusLabel = getOfferStatusLabel(offer.status);
-  const createdLabel = useMemo(() => {
+  const createdLabel = (() => {
     if (!offer.createdAt) return null;
     const date = new Date(offer.createdAt);
     return Number.isNaN(date.getTime()) ? null : date.toLocaleString('ar-EG');
-  }, [offer.createdAt]);
+  })();
 
   return (
     <AppScreen scrollable backgroundVariant="alive">
