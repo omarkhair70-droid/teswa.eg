@@ -3,14 +3,17 @@ import * as Crypto from 'expo-crypto';
 import { supabase } from '@/lib/supabase/client';
 
 const DIRECT_CHAT_MEDIA_BUCKET = 'direct-chat-media';
+const LEGACY_DIRECT_VOICE_BUCKET = 'direct-voice-messages';
 const DIRECT_CHAT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 
 export type NativeDirectAttachmentKind = 'image' | 'video' | 'file' | 'audio';
+export type NativeDirectStorageBucket = typeof DIRECT_CHAT_MEDIA_BUCKET | typeof LEGACY_DIRECT_VOICE_BUCKET;
 
 export type NativeDirectAttachment = {
   id?: string;
   kind: NativeDirectAttachmentKind;
   storagePath: string;
+  storageBucket?: NativeDirectStorageBucket;
   fileName?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
@@ -91,6 +94,10 @@ async function localUriToArrayBuffer(uri: string) {
   return response.arrayBuffer();
 }
 
+function normalizeStorageBucket(value: unknown): NativeDirectStorageBucket {
+  return value === LEGACY_DIRECT_VOICE_BUCKET ? LEGACY_DIRECT_VOICE_BUCKET : DIRECT_CHAT_MEDIA_BUCKET;
+}
+
 function parseAttachment(value: any): NativeDirectAttachment | null {
   if (!value || typeof value !== 'object') return null;
   const kind = value.kind;
@@ -100,6 +107,7 @@ function parseAttachment(value: any): NativeDirectAttachment | null {
     id: typeof value.id === 'string' ? value.id : undefined,
     kind,
     storagePath,
+    storageBucket: normalizeStorageBucket(value.storageBucket ?? value.storage_bucket),
     fileName: value.fileName ?? value.file_name ?? null,
     mimeType: value.mimeType ?? value.mime_type ?? null,
     sizeBytes: value.sizeBytes ?? value.size_bytes ?? null,
@@ -166,6 +174,7 @@ export async function uploadNativeDirectAttachment(input: NativeDirectUploadInpu
       attachment: {
         kind: input.kind,
         storagePath,
+        storageBucket: DIRECT_CHAT_MEDIA_BUCKET,
         fileName,
         mimeType: input.mimeType ?? null,
         sizeBytes: input.sizeBytes ?? body.byteLength,
@@ -187,9 +196,14 @@ export async function removeNativeDirectUploads(storagePaths: string[]) {
   return error ? { ok: false as const, message: error.message } : { ok: true as const };
 }
 
-export async function createNativeDirectAttachmentSignedUrl(storagePath: string, expiresInSeconds = 60 * 60) {
+export async function createNativeDirectAttachmentSignedUrl(
+  storagePath: string,
+  expiresInSeconds = 60 * 60,
+  storageBucket: NativeDirectStorageBucket = DIRECT_CHAT_MEDIA_BUCKET,
+) {
   if (!storagePath) return null;
-  const { data, error } = await supabase.storage.from(DIRECT_CHAT_MEDIA_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
+  const bucket = normalizeStorageBucket(storageBucket);
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresInSeconds);
   if (error) return null;
   return data?.signedUrl ?? null;
 }

@@ -1,13 +1,18 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
+
 import { useAuth } from '@/lib/auth';
 import { fetchUnreadNotificationCount } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase/client';
 import { fetchUnreadContextualMessagesCount } from '@/lib/contextual-conversations';
 import { fetchMyDirectConversations } from '@/lib/direct-messages';
-import { mergeDirectConversationStreamActivity } from '@/lib/chat/direct-inbox-stream';
 
-type Ctx = { notificationsUnreadCount: number; messagesUnreadCount: number; refreshBadges: () => Promise<void> };
+type Ctx = {
+  notificationsUnreadCount: number;
+  messagesUnreadCount: number;
+  refreshBadges: () => Promise<void>;
+};
+
 const UnreadBadgesContext = createContext<Ctx | null>(null);
 
 export function UnreadBadgesProvider({ children }: PropsWithChildren) {
@@ -18,44 +23,24 @@ export function UnreadBadgesProvider({ children }: PropsWithChildren) {
   const refreshBadges = useCallback(async () => {
     if (!user?.id) return;
 
-    const [
-      notif,
-      messages,
-      contextualUnread,
-      directConversations,
-    ] = await Promise.all([
+    const [notif, messages, contextualUnread, directConversations] = await Promise.all([
       fetchUnreadNotificationCount(user.id),
       supabase.rpc('get_unread_deal_messages_count'),
       fetchUnreadContextualMessagesCount(),
       fetchMyDirectConversations(),
     ]);
 
-    const hydratedDirectConversations =
-      await mergeDirectConversationStreamActivity(
-        directConversations,
-        user.id,
-      );
-
-    const directUnread =
-      hydratedDirectConversations.reduce(
-        (total, conversation) =>
-          total + Math.max(0, conversation.unreadCount),
-        0,
-      );
-
-    const dealUnread =
-      typeof messages.data === 'number'
-        ? Math.max(0, messages.data)
-        : 0;
-
-    setNotificationsUnreadCount(
-      notif.ok ? notif.count : 0,
+    const directUnread = directConversations.reduce(
+      (total, conversation) => total + Math.max(0, conversation.unreadCount),
+      0,
     );
 
-    setMessagesUnreadCount(
-      dealUnread + contextualUnread + directUnread,
-    );
+    const dealUnread = typeof messages.data === 'number' ? Math.max(0, messages.data) : 0;
+
+    setNotificationsUnreadCount(notif.ok ? notif.count : 0);
+    setMessagesUnreadCount(dealUnread + contextualUnread + directUnread);
   }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) {
       setNotificationsUnreadCount(0);
@@ -75,7 +60,11 @@ export function UnreadBadgesProvider({ children }: PropsWithChildren) {
     return () => sub.remove();
   }, [refreshBadges, user?.id]);
 
-  const value = useMemo(() => ({ notificationsUnreadCount, messagesUnreadCount, refreshBadges }), [messagesUnreadCount, notificationsUnreadCount, refreshBadges]);
+  const value = useMemo(
+    () => ({ notificationsUnreadCount, messagesUnreadCount, refreshBadges }),
+    [messagesUnreadCount, notificationsUnreadCount, refreshBadges],
+  );
+
   return <UnreadBadgesContext.Provider value={value}>{children}</UnreadBadgesContext.Provider>;
 }
 
