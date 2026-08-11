@@ -1,9 +1,8 @@
 import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { supabase } from '@/lib/supabase/client';
-
+import { validateUsername } from '@/lib/username';
 const PROFILE_FETCH_TIMEOUT_MS = 12_000;
 export const PROFILE_FETCH_TIMEOUT_CODE = 'PROFILE_FETCH_TIMEOUT';
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 export type AppProfile = {
   id: string;
@@ -118,8 +117,7 @@ export async function updateMyProfileFromMobile(
 ): Promise<UpdateMyProfileResult> {
   const userId = input.userId.trim();
   const normalizedDisplayName = input.displayName.trim();
-  const normalizedUsername = input.username.trim();
-  const normalizedUsernameLowercase = normalizedUsername.toLowerCase();
+  const usernameValidation = validateUsername(input.username);
   const normalizedTagline = normalizeOptional(input.profileTagline);
   const normalizedCity = normalizeOptional(input.city);
   const normalizedArea = normalizeOptional(input.area);
@@ -133,13 +131,13 @@ export async function updateMyProfileFromMobile(
     return { ok: false, reason: 'invalid_display_name', message: 'الاسم الظاهر مطلوب.' };
   }
 
-  if (!normalizedUsername || !USERNAME_REGEX.test(normalizedUsername)) {
-    return {
-      ok: false,
-      reason: 'invalid_username',
-      message: 'اسم المستخدم لازم يكون من 3 إلى 20 حرف أو رقم أو _.',
-    };
-  }
+if (!usernameValidation.ok) {
+  return {
+    ok: false,
+    reason: 'invalid_username',
+    message: usernameValidation.message,
+  };
+}
 
   if (normalizedTagline && normalizedTagline.length > 120) {
     return {
@@ -153,7 +151,7 @@ export async function updateMyProfileFromMobile(
     .from('profiles')
     .update({
       display_name: normalizedDisplayName,
-      username: normalizedUsernameLowercase,
+      username: usernameValidation.normalized,
       profile_tagline: normalizedTagline,
       city: normalizedCity,
       area: normalizedArea,

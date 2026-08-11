@@ -31,6 +31,7 @@ import { DiscoverStoryHighlightsRail } from '@/components/discover/DiscoverStory
 import { DiscoverSpotlightRail } from '@/components/discover/DiscoverSpotlightRail';
 import { DiscoverWorldHeader } from '@/components/discover/DiscoverWorldHeader';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 function DiscoverItemsLoadingState() {
   return (
@@ -460,6 +461,14 @@ export default function DiscoverScreen() {
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
+        renderScrollComponent={(props) => (
+          <KeyboardAwareScrollView
+            {...props}
+            bottomOffset={spacing.lg}
+          />
+        )}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ref={listRef}
         data={filtered}
         keyExtractor={(item) => item.id}
