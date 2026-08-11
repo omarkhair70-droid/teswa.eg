@@ -492,7 +492,7 @@ export default function Screen() {
                   >
                     <View style={styles.previewPlayButton}><Ionicons name={previewPlayerStatus.playing ? 'pause' : 'play'} size={18} color={colors.white} /></View>
                     <View style={styles.previewCopy}><AppText weight="semibold">راجع التسجيل قبل الإرسال</AppText><AppText muted style={styles.previewHint}>المدة {formatMs(voiceDraft.durationMs)}</AppText></View>
-                    <Ionicons name="waveform-outline" size={23} color={colors.accent} />
+                    <Ionicons name="musical-notes-outline" size={23} color={colors.accent} />
                   </Pressable>
                   <View style={styles.voiceActionRow}>
                     <Pressable accessibilityRole="button" accessibilityLabel="إرسال الرسالة الصوتية" disabled={voiceSending || voiceBusy} onPress={() => void sendVoiceDraft()} style={[styles.voiceActionPrimary, (voiceSending || voiceBusy) && styles.disabled]}><Ionicons name="send" size={17} color={colors.white} /><AppText style={styles.voiceActionPrimaryText}>{voiceSending ? 'بنبعت...' : 'إرسال'}</AppText></Pressable>
