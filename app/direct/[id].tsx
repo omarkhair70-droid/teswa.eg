@@ -560,7 +560,12 @@ export default function DirectScreen() {
       setPendingAttachment(null);
       setReplyTarget(null);
       setError(null);
-    } catch { showActionFeedbackToast('تعذر إرسال الميديا حالياً.'); }
+    } catch (sendError) {
+      const message = sendError instanceof Error && sendError.message.trim()
+        ? sendError.message
+        : 'تعذر إرسال الميديا حالياً.';
+      showActionFeedbackToast(message);
+    }
     finally { setMediaSending(false); setSending(false); }
   }, [body, hydrateFromChannel, pendingAttachment, replyTarget?.id, streamError, streamReady]);
   const cancelVoiceRecording = useCallback(async () => {
