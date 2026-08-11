@@ -44,9 +44,9 @@ type StreamMessageSource = 'none' | 'cached' | 'live';
 type ExchangeDraft = { mode: 'idle' | 'drafting'; title?: string; note?: string; selectedItemId?: string; selectedDolabItemId?: string };
 
 const statusMeta = {
-  accepted: { label: 'Direct Chat', sub: 'مساحة تفاوض مباشرة' },
+  accepted: { label: 'محادثة مباشرة', sub: 'مساحة خاصة للتفاهم والتبادل' },
   requested: { label: 'طلب مراسلة', sub: 'في انتظار قبول الطلب' },
-  ignored: { label: 'تم التجاهل', sub: 'المحادثة غير متاحة' },
+  ignored: { label: 'تم التجاهل', sub: 'المحادثة متوقفة حالياً' },
   blocked: { label: 'محظور', sub: 'المحادثة غير متاحة' },
 } as const;
 
@@ -235,7 +235,7 @@ export default function DirectScreen() {
   }, [clearStreamSubs]);
   const connectStream = useCallback(async () => {
     if (!DIRECT_CHAT_PRO_ENABLED || streamConvoStatus !== 'accepted') return;
-    if (!streamOtherUserId) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); setDirectConnectionState('unavailable'); return; }
+    if (!streamOtherUserId) { setStreamError('المحادثة مش متاحة دلوقتي. جرّب تاني بعد لحظات.'); setDirectConnectionState('unavailable'); return; }
     const seq = ++streamConnectionSeqRef.current;
     setStreamConnecting(true);
     setStreamReady(false);
@@ -306,7 +306,7 @@ export default function DirectScreen() {
       setDirectConnectionState('ready');
     } catch {
       if (seq !== streamConnectionSeqRef.current) return;
-      setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.');
+      setStreamError('المحادثة مش متاحة دلوقتي. جرّب تاني بعد لحظات.');
       await cleanupStream();
       setStreamConnecting(false);
       setStreamReady(false);
@@ -532,7 +532,7 @@ export default function DirectScreen() {
   const sendViaStream = useCallback(async () => {
     const trimmed = body.trim();
     if (!trimmed && !pendingAttachment) return;
-    if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    if (!streamReady || !streamChannelRef.current || streamError) { setStreamError('المحادثة مش متاحة دلوقتي. جرّب تاني بعد لحظات.'); return; }
     setSending(true);
     if (pendingAttachment) setMediaSending(true);
     try {
@@ -587,7 +587,7 @@ export default function DirectScreen() {
   }, [canUseVoice, isRecordingVoice, voiceRecorder]);
   const sendVoiceMessage = useCallback(async () => {
     if (voiceSending) return;
-    if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('Direct Chat مش متاح دلوقتي. جرّب تاني بعد لحظات.'); return; }
+    if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) { setStreamError('المحادثة مش متاحة دلوقتي. جرّب تاني بعد لحظات.'); return; }
     if (!voiceRecorderState.isRecording && !voiceRecorder.uri) { showActionFeedbackToast('سجل رسالة صوتية الأول.'); return; }
     setVoiceSending(true);
     showActionFeedbackToast('جاري إرسال الرسالة الصوتية...');
@@ -781,7 +781,7 @@ ${item.body}` : item.body ?? ''));
     const note = exchangeDraft.note?.trim();
     if (!note) { showActionFeedbackToast('اكتب تفاصيل العرض الأول.'); return; }
     if (!acceptedDirectProActive || !streamReady || !streamChannelRef.current || streamError) {
-      showActionFeedbackToast('إرسال عرض التبادل متاح داخل Direct Chat المقبول فقط.');
+      showActionFeedbackToast('إرسال عرض التبادل متاح داخل المحادثات المقبولة فقط.');
       return;
     }
     setSending(true);
@@ -802,17 +802,37 @@ ${note}
   if (loading) return <AppScreen><EmptyState title="بنجهز المحادثة..." description="" /></AppScreen>;
   if (!convo && initialLoadFailed) return <AppScreen><View style={styles.retryState}><EmptyState title="تعذر تجهيز المحادثة." description="حاول تفتحها مرة تانية." /><AppButton label="إعادة المحاولة" onPress={() => { void load(); }} /></View></AppScreen>;
 
-  return <AppScreen>
+  return <AppScreen backgroundVariant="soft">
     <View style={styles.header}>
-      <Pressable style={styles.headerIdentity} onPress={() => { if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); }} disabled={!convo?.otherUserId}>
-        <View style={styles.avatarWrap}>{convo?.otherAvatarUrl ? <Image source={{ uri: convo.otherAvatarUrl }} style={styles.avatar} /> : <Ionicons name="person-circle" size={34} color={colors.textMuted} />}</View>
-        <View style={{ flex: 1, gap: 2 }}><AppText weight="semibold">{convo?.otherDisplayName ?? 'رسالة من تِسوى'}</AppText><AppText muted>@{convo?.otherUsername ?? 'teswa'}</AppText>{status ? <AppText muted style={styles.subtleLine}>{status.sub}</AppText> : null}</View>
-        {status ? <View style={styles.pill}><AppText muted>{status.label}</AppText></View> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="رجوع" style={styles.headerIconButton} onPress={() => router.back()}>
+        <Ionicons name="chevron-forward" size={21} color={colors.text} />
       </Pressable>
-      <Pressable style={styles.headerMenuBtn} onPress={() => directActionsSheetRef.current?.present()}><Ionicons name="ellipsis-horizontal" size={20} color={colors.text} /></Pressable>
+      <Pressable style={styles.headerIdentity} onPress={() => { if (convo?.otherUserId) router.push(`/profile/${convo.otherUserId}`); }} disabled={!convo?.otherUserId}>
+        <View style={styles.avatarWrap}>{convo?.otherAvatarUrl ? <Image source={{ uri: convo.otherAvatarUrl }} style={styles.avatar} /> : <Ionicons name="person-outline" size={22} color={colors.textMuted} />}</View>
+        <View style={styles.headerCopy}>
+          <AppText weight="bold" numberOfLines={1}>{convo?.otherDisplayName ?? 'رسالة من تِسوى'}</AppText>
+          <View style={styles.headerMetaRow}>
+            <AppText muted style={styles.username}>@{convo?.otherUsername ?? 'teswa'}</AppText>
+            {status ? <><View style={styles.headerMetaDot} /><AppText style={styles.statusText}>{status.label}</AppText></> : null}
+          </View>
+          {status ? <AppText muted style={styles.subtleLine}>{status.sub}</AppText> : null}
+        </View>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="خيارات المحادثة" style={styles.headerIconButton} onPress={() => directActionsSheetRef.current?.present()}>
+        <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
+      </Pressable>
     </View>
 
-    {acceptedDirectProActive ? <AppCard style={styles.contextStrip}><View style={styles.contextHead}><AppText weight="semibold">غرفة التبادل</AppText><View style={styles.streamBadge}><AppText muted>Stream مباشر</AppText></View></View><AppText muted>اتكلموا، وضّحوا التفاصيل، وجهزوا العرض لما تكونوا متفقين.</AppText>{convo?.itemId ? <View style={styles.itemContextCard}><AppText weight="semibold">الحاجة محل الكلام</AppText><AppText muted>{convo?.itemTitle || 'عنصر مرتبط بالمحادثة'}</AppText><AppButton label="عرض التفاصيل" variant="neutral" onPress={() => { if (convo?.itemId) router.push(`/item/${convo.itemId}`); else showActionFeedbackToast('تفاصيل الحاجة جايه قريبًا.'); }} /></View> : null}</AppCard> : null}
+    {acceptedDirectProActive ? (
+      <View style={styles.contextStrip}>
+        <View style={styles.contextIcon}><Ionicons name="swap-horizontal" size={17} color={colors.primary} /></View>
+        <View style={styles.contextCopy}>
+          <AppText weight="semibold">مساحة التبادل</AppText>
+          <AppText muted style={styles.contextDescription}>اتفقوا على التفاصيل بهدوء، ولما الصورة تبقى واضحة حوّلوها لعرض رسمي.</AppText>
+        </View>
+        {convo?.itemId ? <Pressable accessibilityRole="button" accessibilityLabel="عرض تفاصيل العنصر" style={styles.contextAction} onPress={() => router.push(`/item/${convo.itemId}`)}><Ionicons name="cube-outline" size={17} color={colors.accent} /></Pressable> : null}
+      </View>
+    ) : null}
 
     {isReceiverOnRequest ? <AppCard style={styles.requestCard}><View style={styles.requestHead}><AppText weight="semibold">طلب مراسلة</AppText><AppText muted>الشخص ده بعتلك رسالة. اقبل الطلب لو حابب تكملوا الكلام.</AppText></View><View style={styles.requestActions}><AppButton disabled={busy} label="قبول" onPress={async()=>{setBusy(true); try { const r=await acceptDirectMessageRequest(conversationId); if (r.ok) { setError(null); showActionFeedbackToast('تم قبول الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /><AppButton disabled={busy} label="تجاهل" variant="neutral" onPress={async()=>{setBusy(true); try { const r=await ignoreDirectMessageRequest(conversationId); if (r.ok) { setError(null); showActionFeedbackToast('تم تجاهل الطلب.'); } else setError(r.message || 'تعذر تنفيذ الطلب حالياً.'); await load({ background: true }); } catch { setError('تعذر تنفيذ الطلب حالياً.'); } finally { setBusy(false); }}} /></View></AppCard> : null}
     {isRequesterOnRequest ? <AppCard style={styles.infoCard}><AppText muted>طلب المراسلة اتبعت. هتكملوا الكلام لما الطرف التاني يقبل.</AppText></AppCard> : null}
@@ -822,8 +842,8 @@ ${note}
     <KeyboardAwareScrollView bottomOffset={102} contentContainerStyle={styles.messagesWrap}>
       {usingStreamChat ? (
         streamError && streamMessages.length === 0 ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> :
-        !streamInitialHydrated && streamMessages.length === 0 ? <EmptyState title="بنجهز Direct Chat..." description="بنفتح مساحة المحادثة الآمنة." /> :
-        streamMessages.length === 0 ? <EmptyState title="ابدأوا الاتفاق" description="اسأل سؤال بسيط أو وضّح تفاصيل الحاجة اللي بتتكلموا عليها." /> :
+        !streamInitialHydrated && streamMessages.length === 0 ? <EmptyState title="بنجهز المحادثة..." description="ثواني وتظهر الرسائل." /> :
+        streamMessages.length === 0 ? <EmptyState title="ابدأوا الكلام" description="رسالة بسيطة كفاية لفتح النقاش، وبعدها اتفقوا على التفاصيل براحتكم." /> :
         <>
           {streamError ? <AppCard style={styles.errorCard}><AppText muted>{streamError}</AppText><AppButton label="إعادة المحاولة" variant="neutral" onPress={() => { void connectStream(); }} /></AppCard> : null}
           {hasCachedStreamMessages && streamConnecting ? <AppCard style={styles.infoCard}><AppText muted>بنحدّث الرسائل في الخلفية...</AppText></AppCard> : null}
@@ -922,7 +942,7 @@ ${note}
     </KeyboardAwareScrollView>
 
     {isRecordingVoice && acceptedDirectProActive ? <View style={styles.recordingCard}><View style={styles.recordingHeader}><View style={styles.recordingDot} /><AppText weight="semibold">جاري التسجيل...</AppText></View><AppText muted>{formatDuration(voiceRecordingDurationSeconds)}</AppText><View style={styles.recordingActions}><AppButton label="إلغاء" variant="neutral" onPress={() => { void cancelVoiceRecording(); }} /><AppButton label={voiceSending ? 'جاري إرسال الرسالة الصوتية...' : 'إرسال'} disabled={voiceSending} onPress={() => { void sendVoiceMessage(); }} /></View></View> : null}
-    {typingText && usingStreamChat ? <AppText muted style={styles.info}>{typingText}</AppText> : null}
+    {typingText && usingStreamChat ? <View style={styles.typingBar}><View style={styles.typingDot} /><AppText muted style={styles.typingText}>{typingText}</AppText></View> : null}
     {composerState.note ? <AppText muted style={styles.info}>{composerState.note}</AppText> : null}
 
     <KeyboardStickyView offset={{ opened: 6, closed: 0 }}>
@@ -936,8 +956,8 @@ ${note}
         </View> : null}
         {exchangeDraft.mode === 'drafting' ? <View style={styles.exchangeDraftCard}><AppText weight="semibold">جهّز عرض التبادل</AppText><AppText muted>اكتب تفاصيل الاتفاق أو اختار حاجة من دولابك، وبعدها ابعته كرسالة أو كمّل العرض الرسمي.</AppText>{exchangeDraft.selectedDolabItemId ? <AppText muted>مرتبط بحاجة من دولابك.</AppText> : null}{(exchangeDraft.selectedItemId || convo?.itemId) ? <AppText muted>مرتبط بالحاجة محل الكلام.</AppText> : null}<TextInput value={exchangeDraft.note ?? ''} onChangeText={(value) => setExchangeDraft((prev) => ({ ...prev, note: value }))} placeholder="اكتب تفاصيل العرض..." placeholderTextColor={colors.textMuted} style={styles.exchangeDraftInput} multiline /><View style={styles.exchangeActions}><AppButton label="إرسال كرسالة" onPress={() => { void sendExchangeDraftMessage(); }} /><AppButton label="كمّل كعرض رسمي" variant="neutral" onPress={() => continueExchangeDraftAsFormalOffer({ itemId: exchangeDraft.selectedItemId, note: exchangeDraft.note, conversationId })} /><AppButton label="اختار من دولابي" variant="neutral" onPress={() => { void openDolabShareables(); }} /><AppButton label="إلغاء" variant="neutral" onPress={() => setExchangeDraft({ mode: 'idle' })} /></View></View> : null}
         <View style={styles.composer}>
-          <Pressable style={styles.plus} disabled={!canOpenAttachments} onPress={() => composerActionsSheetRef.current?.present()}><Ionicons name="add" size={20} color={colors.textMuted} /></Pressable>
-          {acceptedDirectProActive ? <Pressable style={[styles.plus, !canUseVoice && styles.sendDisabled]} disabled={!canUseVoice || isRecordingVoice} onPress={() => { void startVoiceRecording(); }}><Ionicons name="mic" size={18} color={canUseVoice ? colors.primary : colors.textMuted} /></Pressable> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="إضافة للمحادثة" style={styles.plus} disabled={!canOpenAttachments} onPress={() => composerActionsSheetRef.current?.present()}><Ionicons name="add" size={21} color={canOpenAttachments ? colors.text : colors.textMuted} /></Pressable>
+          {acceptedDirectProActive ? <Pressable accessibilityRole="button" accessibilityLabel="تسجيل رسالة صوتية" style={[styles.plus, !canUseVoice && styles.sendDisabled]} disabled={!canUseVoice || isRecordingVoice} onPress={() => { void startVoiceRecording(); }}><Ionicons name="mic-outline" size={19} color={canUseVoice ? colors.primary : colors.textMuted} /></Pressable> : null}
           <TextInput value={body} onChangeText={(value) => { setBody(value); if (acceptedDirectProActive && streamReady && streamChannelRef.current) { const now = Date.now(); if (now - typingThrottleRef.current > 1700) { typingThrottleRef.current = now; try { if (typeof streamChannelRef.current.keystroke === 'function') streamChannelRef.current.keystroke(); } catch {} } } }} placeholder={composerPlaceholder} placeholderTextColor={colors.textMuted} style={styles.input} editable={!composerDisabled} multiline />
           <Pressable disabled={composerDisabled || (!body.trim() && !pendingAttachment)} style={[styles.send, (composerDisabled || (!body.trim() && !pendingAttachment)) && styles.sendDisabled]} onPress={async () => { const trimmed = body.trim(); if (!trimmed && !pendingAttachment) return; if (acceptedDirectProActive) { await sendViaStream(); return; } if (!trimmed) return; setSending(true); try { const res = await sendDirectMessage(conversationId, trimmed); if (!res.ok) { setError(res.message); return; } setMessages((prev) => mergeById(prev, [{ id: res.messageId ?? `local-${Date.now()}`, senderId: user?.id, body: trimmed, messageType: 'text', createdAt: res.createdAt ?? new Date().toISOString(), readAt: null }])); void load({ background: true }); setBody(''); setError(null); } catch { setError('تعذر إرسال الرسالة حالياً.'); } finally { setSending(false); } }}><Ionicons name="paper-plane" size={18} color={colors.background} /></Pressable>
         </View>
@@ -1139,54 +1159,62 @@ ${note}
       },
     },
   ]}
-/>    <AppActionSheet ref={composerActionsSheetRef} title="إجراءات الرسالة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { showActionFeedbackToast(result.message); return; } if (result.alreadySaved && !result.savedText && !result.savedMedia) showActionFeedbackToast('موجود بالفعل في دولابك.'); else if (result.savedText) showActionFeedbackToast('اتحفظ في دولابك.'); else if (result.savedMedia) showActionFeedbackToast('اتحفظ في دولابك.'); else showActionFeedbackToast('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
+/>    <AppActionSheet ref={composerActionsSheetRef} title="أضف للمحادثة" actions={[{ label: 'صورة', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickImage(); } }, { label: 'فيديو', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickVideo(); } }, { label: 'ملف', onPress: () => { composerActionsSheetRef.current?.dismiss(); void pickFile(); } }, { label: 'من دولابي', onPress: () => { composerActionsSheetRef.current?.dismiss(); void openDolabShareables(); } }, ...(acceptedDirectProActive ? [{ label: 'جهّز عرض تبادل', onPress: () => { composerActionsSheetRef.current?.dismiss(); openExchangeDraft(); } }] : []), { label: 'مسودة في الدولاب', onPress: () => { composerActionsSheetRef.current?.dismiss(); void (async () => { const result = await saveComposerDraftToDolab({ text: body, attachment: pendingAttachment }); if (!result.ok) { showActionFeedbackToast(result.message); return; } if (result.alreadySaved && !result.savedText && !result.savedMedia) showActionFeedbackToast('موجود بالفعل في دولابك.'); else if (result.savedText) showActionFeedbackToast('اتحفظ في دولابك.'); else if (result.savedMedia) showActionFeedbackToast('اتحفظ في دولابك.'); else showActionFeedbackToast('اكتب حاجة أو اختار ميديا الأول.'); })(); } }, { label: 'إلغاء', onPress: () => { composerActionsSheetRef.current?.dismiss(); } }]} />
     <AppActionSheet ref={dolabShareSheetRef} title="من دولابي" actions={[...(recentDolabItems.length > 0 ? recentDolabItems.map((item) => ({ label: item.kind === 'text' ? `📝 ${item.title}` : item.kind === 'image' ? `🖼️ ${item.title}` : item.kind === 'video' ? `🎬 ${item.title}` : item.kind === 'audio' ? `🎙️ ${item.title}` : `📎 ${item.title}`, onPress: () => { onSelectDolabShareable(item); } })) : [{ label: 'مفيش عناصر جاهزة للمشاركة من دولابك حالياً.', disabled: true, onPress: () => {} }]), { label: 'إلغاء', onPress: () => { dolabShareSheetRef.current?.dismiss(); } }]} />
   </AppScreen>;
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
-  headerIdentity: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, borderRadius: radii.xl, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
-  headerMenuBtn: { width: 38, height: 38, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  avatarWrap: { width: 54, height: 54, borderRadius: radii.round, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xs, backgroundColor: 'transparent' },
+  headerIdentity: { flex: 1, minHeight: 54, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  headerIconButton: { width: 40, height: 40, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  avatarWrap: { width: 46, height: 46, borderRadius: radii.round, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: '#D9B8A3', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatar: { width: '100%', height: '100%' },
-  subtleLine: { fontSize: 11 },
-  pill: { backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 4 },
-  contextStrip: { marginHorizontal: spacing.sm, marginTop: spacing.sm, gap: spacing.xs },
-  contextHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  streamBadge: { borderRadius: radii.round, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.xs, paddingVertical: 2 },
-  itemContextCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.lg, padding: spacing.xs, gap: spacing.xs },
-  requestCard: { margin: spacing.sm, gap: spacing.sm },
-  requestHead: { gap: spacing.xs },
+  headerCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  headerMetaRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  username: { fontSize: 11 },
+  headerMetaDot: { width: 4, height: 4, borderRadius: radii.round, backgroundColor: colors.border },
+  statusText: { color: colors.primary, fontSize: 11 },
+  subtleLine: { fontSize: 11, textAlign: 'right' },
+  contextStrip: { marginHorizontal: spacing.md, marginTop: 2, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.xl, paddingHorizontal: spacing.sm, paddingVertical: 10, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  contextIcon: { width: 36, height: 36, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  contextCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
+  contextDescription: { fontSize: 11, textAlign: 'right', lineHeight: 17 },
+  contextAction: { width: 34, height: 34, borderRadius: radii.round, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  requestCard: { marginHorizontal: spacing.md, marginTop: spacing.xs, marginBottom: 2, gap: spacing.sm, borderColor: '#D9B8A3' },
+  requestHead: { gap: 4 },
   requestActions: { flexDirection: 'row-reverse', gap: spacing.xs },
   retryState: { padding: spacing.md, gap: spacing.sm },
-  infoCard: { marginHorizontal: spacing.sm, marginBottom: spacing.xs },
+  infoCard: { marginHorizontal: spacing.md, marginBottom: 2, borderColor: colors.border },
   info: { paddingHorizontal: spacing.md, paddingBottom: spacing.xs },
-  messagesWrap: { padding: spacing.md, gap: spacing.xs },
+  typingBar: { paddingHorizontal: spacing.lg, paddingBottom: 4, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-start', gap: 6 },
+  typingDot: { width: 6, height: 6, borderRadius: radii.round, backgroundColor: colors.accent },
+  typingText: { fontSize: 11 },
+  messagesWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.lg, gap: 5, flexGrow: 1 },
   bubbleRow: { width: '100%' },
-  bubble: { maxWidth: '86%', borderRadius: 18, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: 3 },
+  bubble: { maxWidth: '82%', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 9, gap: 4, borderWidth: 1 },
   bubbleMineRow: { alignItems: 'flex-end' },
   bubbleOtherRow: { alignItems: 'flex-start' },
-  mine: { backgroundColor: colors.primarySoft, borderTopRightRadius: 8 },
-  other: { backgroundColor: colors.surface, borderTopLeftRadius: 8, borderWidth: 1, borderColor: colors.border },
-  bodyText: { textAlign: 'right' },
-  senderHint: { fontSize: 11 },
-  time: { fontSize: 11 },
-  recordingCard: { marginHorizontal: spacing.md, marginBottom: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: spacing.xs },
-  recordingHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
-  recordingDot: { width: 8, height: 8, borderRadius: radii.round, backgroundColor: '#ef4444' },
+  mine: { backgroundColor: '#F1DDCF', borderColor: '#D9B8A3', borderTopRightRadius: 7 },
+  other: { backgroundColor: colors.surface, borderTopLeftRadius: 7, borderColor: colors.border },
+  bodyText: { textAlign: 'right', lineHeight: 20 },
+  senderHint: { fontSize: 10 },
+  time: { fontSize: 10, marginTop: 1 },
+  recordingCard: { marginHorizontal: spacing.md, marginBottom: spacing.xs, borderRadius: radii.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#E2B7B7', paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, gap: spacing.xs },
+  recordingHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-end', gap: 7 },
+  recordingDot: { width: 8, height: 8, borderRadius: radii.round, backgroundColor: colors.danger },
   recordingActions: { flexDirection: 'row-reverse', gap: spacing.xs },
-  composerWrap: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm, gap: spacing.xs },
-  replyCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
-  replyClose: { width: 26, height: 26, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center' },
-  composer: { flexDirection: 'row-reverse', alignItems: 'flex-end', gap: spacing.xs },
-  plus: { width: 40, height: 40, borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, opacity: 0.75 },
-  input: { flex: 1, minHeight: 44, maxHeight: 110, borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, textAlign: 'right', color: colors.text, backgroundColor: colors.surface },
-  send: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  composerWrap: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: spacing.md, paddingTop: 8, paddingBottom: spacing.sm, gap: spacing.xs },
+  replyCard: { borderWidth: 1, borderColor: colors.border, borderRightWidth: 3, borderRightColor: colors.primary, backgroundColor: colors.background, borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: 8, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  replyClose: { width: 28, height: 28, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  composer: { flexDirection: 'row-reverse', alignItems: 'flex-end', gap: 6 },
+  plus: { width: 40, height: 44, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', opacity: 0.9 },
+  input: { flex: 1, minHeight: 46, maxHeight: 112, borderWidth: 1, borderColor: colors.border, borderRadius: 23, paddingHorizontal: spacing.md, paddingVertical: 9, textAlign: 'right', color: colors.text, backgroundColor: colors.background },
+  send: { width: 46, height: 46, borderRadius: radii.round, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   sendDisabled: { opacity: 0.45 },
   comingSoon: { fontSize: 11, textAlign: 'right' },
-  quotedWrap: { borderRightWidth: 2, borderRightColor: colors.primary, backgroundColor: colors.background, borderRadius: radii.md, paddingHorizontal: spacing.xs, paddingVertical: 4, gap: 2 },
-  quotedUser: { fontSize: 11 },
+  quotedWrap: { borderRightWidth: 3, borderRightColor: colors.accent, backgroundColor: 'rgba(255,255,255,0.46)', borderRadius: radii.md, paddingHorizontal: spacing.xs, paddingVertical: 6, gap: 2 },
+  quotedUser: { fontSize: 10, color: colors.accent },
   inlineImage: { width: 160, height: 120, borderRadius: radii.md, marginTop: 6, marginBottom: 3 },
   fileCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.md, padding: spacing.xs, marginTop: 6, gap: 2 },
   videoThumbnailCard: { width: 190, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.lg, overflow: 'hidden', marginTop: 6 },
@@ -1209,10 +1237,10 @@ const styles = StyleSheet.create({
   exchangeDraftCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.sm, gap: spacing.xs },
   exchangeDraftInput: { minHeight: 58, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, textAlign: 'right', color: colors.text, backgroundColor: colors.background },
   exchangeActions: { flexDirection: 'row-reverse', gap: spacing.xs, flexWrap: 'wrap' },
-  pendingCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xs, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
-  pendingImage: { width: 52, height: 52, borderRadius: radii.md },
-  reactionsRow: { flexDirection: 'row-reverse', gap: spacing.xs, marginTop: 4 },
-  reactionChip: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 2 },
+  pendingCard: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, borderRadius: radii.xl, padding: 8, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  pendingImage: { width: 54, height: 54, borderRadius: radii.md },
+  reactionsRow: { flexDirection: 'row-reverse', gap: 5, marginTop: 4 },
+  reactionChip: { borderWidth: 1, borderColor: '#C6DDD8', backgroundColor: colors.accentSoft, borderRadius: radii.round, paddingHorizontal: 7, paddingVertical: 2 },
   errorCard: { marginHorizontal: spacing.sm, marginBottom: spacing.sm, gap: spacing.xs },
   viewerOverlay: {
     flex: 1,
