@@ -1,12 +1,7 @@
-const normalizeFlag = (value: string | undefined) => value?.trim().toLowerCase();
-const isDisabled = (value: string | undefined) => normalizeFlag(value) === 'false';
-const isExplicitlyEnabled = (value: string | undefined) => normalizeFlag(value) === 'true';
+const isDisabled = (value: string | undefined) => value?.trim().toLowerCase() === 'false';
 
 export function isDirectChatProEnabled() {
-  // Stream-backed Direct Chat is optional. The proven Supabase direct-message
-  // path stays on by default so an external Stream outage cannot block chat.
-  // Set EXPO_PUBLIC_DIRECT_CHAT_PRO_ENABLED=true only when Stream is healthy.
-  return isExplicitlyEnabled(process.env.EXPO_PUBLIC_DIRECT_CHAT_PRO_ENABLED);
+  return !isDisabled(process.env.EXPO_PUBLIC_DIRECT_CHAT_PRO_ENABLED);
 }
 
 export function isSwapCeremonyEnabled() {
