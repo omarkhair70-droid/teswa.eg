@@ -9,7 +9,6 @@ import { spacing } from '@/constants/spacing';
 
 export function DolabVaultHero() {
   const glow = useRef(new Animated.Value(0)).current;
-  const drift = useRef(new Animated.Value(0)).current;
   const ring = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -19,12 +18,6 @@ export function DolabVaultHero() {
         Animated.timing(glow, { toValue: 0, duration: 2400, useNativeDriver: true }),
       ]),
     );
-    const driftLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(drift, { toValue: 1, duration: 3200, useNativeDriver: true }),
-        Animated.timing(drift, { toValue: 0, duration: 3200, useNativeDriver: true }),
-      ]),
-    );
     const ringLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(ring, { toValue: 1, duration: 2800, useNativeDriver: true }),
@@ -32,30 +25,19 @@ export function DolabVaultHero() {
       ]),
     );
     glowLoop.start();
-    driftLoop.start();
     ringLoop.start();
     return () => {
       glowLoop.stop();
-      driftLoop.stop();
       ringLoop.stop();
       glow.stopAnimation();
-      drift.stopAnimation();
       ring.stopAnimation();
     };
-  }, [drift, glow, ring]);
+  }, [glow, ring]);
 
   return (
     <LinearGradient colors={['#FFF8EE', '#F4EDE4', '#F2F7F6']} style={styles.hero}>
       <Animated.View style={[styles.heroGlow, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.5] }) }]} />
       <Animated.View style={[styles.ring, { opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.36] }), transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }]} />
-      <Animated.View style={[styles.floatingChip, { transform: [{ translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }]}>
-        <Ionicons name="lock-closed-outline" size={14} color={colors.primary} />
-        <AppText style={styles.chipText}>خاص بيك</AppText>
-      </Animated.View>
-      <Animated.View style={[styles.floatingChipSecondary, { transform: [{ translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [-2, 6] }) }] }]}>
-        <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
-        <AppText style={styles.chipText}>جاهز للأفكار</AppText>
-      </Animated.View>
 
       <View style={styles.heroTopRow}>
         <View style={styles.heroTopIcon}><Ionicons name="archive-outline" size={22} color={colors.primary} /></View>
@@ -92,7 +74,4 @@ const styles = StyleSheet.create({
   capabilities: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
   capability: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round, backgroundColor: 'rgba(255,255,255,0.68)' },
   capabilityText: { fontSize: 10, color: colors.textMuted },
-  floatingChip: { position: 'absolute', top: 16, right: 16, flexDirection: 'row-reverse', gap: 4, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.84)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round, opacity: 0 },
-  floatingChipSecondary: { position: 'absolute', bottom: 18, left: 14, flexDirection: 'row-reverse', gap: 4, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.84)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round, opacity: 0 },
-  chipText: { fontSize: 12 },
 });
