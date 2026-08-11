@@ -40,9 +40,13 @@ export const mapDolabItemToAddItemFields = (
     conditionNotes: conditionMap[normalizedCondition] ? '' : rawCondition,
     categoryId: matchedCategory?.id ?? null,
     categoryMatched: Boolean(matchedCategory),
-    desireText: '',
+    desireText: item.exchange_intent ?? '',
   };
 };
+
+function isLocalDolabMedia(media: DolabMedia) {
+  return media.id.startsWith('local:') || media.storage_path.startsWith('file://') || media.storage_path.startsWith('content://');
+}
 
 export async function importDolabImagesToAssets(mediaRows: DolabMedia[]): Promise<{ assets: ImagePicker.ImagePickerAsset[]; warnings: string[] }> {
   const imageMedia = mediaRows.filter((row) => row.media_type === 'image').slice(0, 4);
@@ -50,6 +54,29 @@ export async function importDolabImagesToAssets(mediaRows: DolabMedia[]): Promis
   const assets: ImagePicker.ImagePickerAsset[] = [];
 
   for (const media of imageMedia) {
+    if (isLocalDolabMedia(media)) {
+      try {
+        const source = new File(media.storage_path);
+        const info = source.info();
+        if (!info.exists) {
+          warnings.push('صورة محلية مرتبطة بالمسودة لم تعد موجودة على الجهاز.');
+          continue;
+        }
+        assets.push({
+          uri: source.uri,
+          fileName: `dolab-${media.id.replace('local:', '')}.${media.mime_type?.split('/')[1] || 'jpg'}`,
+          fileSize: typeof info.size === 'number' ? info.size : (media.size_bytes ?? undefined),
+          mimeType: media.mime_type ?? undefined,
+          width: media.width ?? 0,
+          height: media.height ?? 0,
+        });
+        continue;
+      } catch {
+        warnings.push('تعذر تجهيز صورة محلية من الدولاب.');
+        continue;
+      }
+    }
+
     const signedUrlResult = await createDolabMediaSignedUrl(media.storage_path);
     if (!signedUrlResult.data) {
       warnings.push('تعذر تجهيز بعض صور الدولاب الآن.');
