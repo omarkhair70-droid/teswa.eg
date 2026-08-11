@@ -255,6 +255,7 @@ export default function ItemDetailsScreen() {
 
   const desireModeLabel = item?.desireMode ? { specific: 'محدد', flexible: 'مرن', surprise: 'مفاجأة' }[item.desireMode] : null;
   const owner = item?.ownerPresence;
+  const ownedByMe = Boolean(user?.id && owner?.id === user.id);
 
   if (!id) return <AppScreen backgroundVariant="soft"><EmptyState title="معرّف غير صالح" description="تعذر تحديد العنصر المطلوب." /></AppScreen>;
   if (loading) return <ItemDetailLoadingState />;
@@ -263,6 +264,23 @@ export default function ItemDetailsScreen() {
 
   return (
     <AppScreen scrollable backgroundVariant="alive">
+      <View style={styles.detailTopBar}>
+        <Pressable accessibilityRole="button" accessibilityLabel="رجوع" style={styles.detailTopIconButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-forward" size={20} color={colors.text} />
+        </Pressable>
+        <View style={styles.detailTopCopy}>
+          <AppText muted style={styles.detailEyebrow}>السوق</AppText>
+          <AppText weight="bold">تفاصيل العنصر</AppText>
+        </View>
+        <View style={styles.detailTopActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel={item.likedByMe ? 'إلغاء الإعجاب' : 'إعجاب'} disabled={likePending} style={styles.detailActionButton} onPress={onToggleLike}>
+            <Ionicons name={item.likedByMe ? 'heart' : 'heart-outline'} size={19} color={item.likedByMe ? colors.primary : colors.text} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="خيارات العنصر" style={styles.detailActionButton} onPress={() => itemActionsSheetRef.current?.present()}>
+            <Ionicons name="ellipsis-horizontal" size={19} color={colors.text} />
+          </Pressable>
+        </View>
+      </View>
       <Animated.View entering={FadeInDown.duration(220).delay(40)}>
         <View style={styles.heroShell}>
           {activeImage ? (
@@ -312,11 +330,32 @@ export default function ItemDetailsScreen() {
       {itemCacheNotice ? <Animated.View entering={FadeInDown.duration(220).delay(80)}><AppCard style={styles.noticeCard}><View style={styles.noticeRow}><Ionicons name="cloud-offline-outline" size={16} color={colors.primary} /><AppText muted style={styles.noticeText}>{itemCacheNotice}</AppText></View></AppCard></Animated.View> : null}
 
       <Animated.View entering={FadeInDown.duration(220).delay(90)}>
-        <AppCard style={styles.premiumCard}><View style={styles.infoBlock}><AppText weight="bold" style={styles.title}>{item.title}</AppText>
-          <View style={styles.metaRow}><Pressable onPress={onToggleLike} disabled={likePending} accessibilityRole="button" accessibilityLabel={item.likedByMe ? "إلغاء الإعجاب" : "إعجاب"} style={styles.likePill}><Ionicons name={item.likedByMe ? "heart" : "heart-outline"} size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.likeCount}</AppText></Pressable><View style={styles.metaPill}><Ionicons name="pricetag-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.category || 'فئة غير محددة'}</AppText></View><View style={styles.metaPill}><Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.condition || 'حالة غير محددة'}</AppText></View><View style={styles.metaPill}><Ionicons name="location-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{locationText}</AppText></View></View>
-          {!owner && !!item.ownerDisplayName ? <AppText muted>صاحب العنصر: {item.ownerDisplayName}</AppText> : null}
-          {item.description ? <AppText>{item.description}</AppText> : null}
-        </View></AppCard>
+        <AppCard style={styles.premiumCard}>
+          <View style={styles.infoBlock}>
+            <View style={styles.titleBlock}>
+              <AppText muted style={styles.sectionEyebrow}>متاح للتبادل</AppText>
+              <AppText weight="bold" style={styles.title}>{item.title}</AppText>
+              {item.description ? <AppText style={styles.descriptionText}>{item.description}</AppText> : null}
+            </View>
+            <View style={styles.metaRow}>
+              <View style={styles.metaPill}><Ionicons name="heart-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.likeCount} إعجاب</AppText></View>
+              <View style={styles.metaPill}><Ionicons name="pricetag-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.category || 'فئة غير محددة'}</AppText></View>
+              <View style={styles.metaPill}><Ionicons name="shield-checkmark-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{item.condition || 'حالة غير محددة'}</AppText></View>
+              <View style={styles.metaPill}><Ionicons name="location-outline" size={14} color={colors.primary} /><AppText muted style={styles.metaText}>{locationText}</AppText></View>
+            </View>
+            {!owner && !!item.ownerDisplayName ? <AppText muted>صاحب العنصر: {item.ownerDisplayName}</AppText> : null}
+            {(desireModeLabel || item.desireText || item.wantedTags.length) ? (
+              <View style={styles.desireHighlight}>
+                <View style={styles.desireIcon}><Ionicons name="swap-horizontal" size={18} color={colors.primary} /></View>
+                <View style={styles.desireCopy}>
+                  <AppText weight="semibold">إيه اللي ممكن يناسبه؟</AppText>
+                  {item.desireText ? <AppText style={styles.desireText}>{item.desireText}</AppText> : desireModeLabel ? <AppText muted>مرونة التبادل: {desireModeLabel}</AppText> : null}
+                  {item.wantedTags.length ? <View style={styles.tagsWrap}>{item.wantedTags.slice(0, 4).map((tag) => <View key={tag} style={styles.tagPill}><AppText style={styles.tagText}>{tag}</AppText></View>)}</View> : null}
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </AppCard>
       </Animated.View>
 
       {owner?.id ? <Animated.View entering={FadeInDown.duration(220).delay(110)}><Pressable onPress={() => router.push(`/profile/${owner.id}`)}><AppCard style={styles.ownerCard}><View style={styles.ownerHeader}><AppText muted>صاحب العنصر</AppText><Ionicons name="chevron-back" size={16} color={colors.textMuted} /></View><View style={styles.ownerMain}>{owner.avatarUrl ? (
@@ -325,19 +364,65 @@ export default function ItemDetailsScreen() {
                 <View style={styles.avatar}><AppText weight="bold" style={styles.avatarText}>{(owner.displayName?.[0] || owner.username?.[0] || '؟').toUpperCase()}</AppText></View>
               )}<View style={styles.ownerTextBlock}><AppText weight="bold">{owner.displayName || 'صاحب العنصر'}</AppText>{owner.username ? <AppText muted>@{owner.username}</AppText> : null}{owner.profileTagline ? <AppText muted>{owner.profileTagline}</AppText> : null}</View></View>{(owner.city || owner.area) ? <AppText muted>{[owner.city, owner.area].filter(Boolean).join(' • ')}</AppText> : null}<View style={styles.ownerSignals}>{owner.successfulSwapsCount != null ? <View style={styles.signalPill}><Ionicons name="swap-horizontal-outline" size={12} color={colors.primary} /><AppText style={styles.signalText}>{owner.successfulSwapsCount} مقايضات ناجحة</AppText></View> : null}{owner.responseRate != null ? <View style={styles.signalPill}><Ionicons name="flash-outline" size={12} color={colors.primary} /><AppText style={styles.signalText}>{owner.responseRate}% معدل الرد</AppText></View> : null}</View></AppCard></Pressable></Animated.View> : null}
 
-      <Animated.View entering={FadeInDown.duration(220).delay(140)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="sparkles-outline" size={16} color={colors.primary} /><AppText weight="semibold">حالة العنصر</AppText></View><View style={styles.infoBlock}><AppText>{item.condition || 'غير محددة'}</AppText>{item.conditionNotes ? <AppText muted>{item.conditionNotes}</AppText> : null}</View></AppCard></Animated.View>
-      {item.itemStory ? <Animated.View entering={FadeInDown.duration(220).delay(170)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="book-outline" size={16} color={colors.primary} /><AppText weight="semibold">قصة العنصر</AppText></View><AppText>{item.itemStory}</AppText></AppCard></Animated.View> : null}
-      {item.swapReason ? <Animated.View entering={FadeInDown.duration(220).delay(190)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="swap-horizontal-outline" size={16} color={colors.primary} /><AppText weight="semibold">ليه صاحبه بيبدله</AppText></View><AppText>{item.swapReason}</AppText></AppCard></Animated.View> : null}
-      {item.goodFor ? <Animated.View entering={FadeInDown.duration(220).delay(210)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="people-outline" size={16} color={colors.primary} /><AppText weight="semibold">مفيد لمين</AppText></View><AppText>{item.goodFor}</AppText></AppCard></Animated.View> : null}
-      {(desireModeLabel || item.desireText) ? <Animated.View entering={FadeInDown.duration(220).delay(230)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="compass-outline" size={16} color={colors.primary} /><AppText weight="semibold">المقابل المطلوب</AppText></View>{desireModeLabel ? <AppText muted>النمط: {desireModeLabel}</AppText> : null}{item.desireText ? <AppText>{item.desireText}</AppText> : null}</AppCard></Animated.View> : null}
-      {item.wantedTags.length ? <Animated.View entering={FadeInDown.duration(220).delay(250)}><AppCard style={styles.storyCard}><View style={styles.storyHeader}><Ionicons name="pricetag-outline" size={16} color={colors.primary} /><AppText weight="semibold">وسوم مطلوبة</AppText></View><View style={styles.tagsWrap}>{item.wantedTags.map((tag) => <View key={tag} style={styles.tagPill}><AppText style={styles.tagText}>{tag}</AppText></View>)}</View></AppCard></Animated.View> : null}
+      {(item.condition || item.conditionNotes || item.itemStory || item.swapReason || item.goodFor) ? (
+        <Animated.View entering={FadeInDown.duration(220).delay(150)}>
+          <AppCard style={styles.storyStackCard}>
+            <View style={styles.storyStackHeader}>
+              <View style={styles.storyStackIcon}><Ionicons name="reader-outline" size={18} color={colors.primary} /></View>
+              <View style={styles.storyStackCopy}>
+                <AppText weight="bold">عن العنصر</AppText>
+                <AppText muted>الحالة والقصة وسبب التبديل في مكان واحد.</AppText>
+              </View>
+            </View>
+            <View style={styles.storySegments}>
+              {(item.condition || item.conditionNotes) ? <View style={styles.storySegment}><View style={styles.storySegmentHead}><Ionicons name="sparkles-outline" size={14} color={colors.primary} /><AppText weight="semibold" style={styles.storySegmentLabel}>الحالة</AppText></View><AppText>{item.condition || 'غير محددة'}</AppText>{item.conditionNotes ? <AppText muted>{item.conditionNotes}</AppText> : null}</View> : null}
+              {item.itemStory ? <View style={[styles.storySegment, styles.storySegmentDivider]}><View style={styles.storySegmentHead}><Ionicons name="book-outline" size={14} color={colors.primary} /><AppText weight="semibold" style={styles.storySegmentLabel}>القصة</AppText></View><AppText>{item.itemStory}</AppText></View> : null}
+              {item.swapReason ? <View style={[styles.storySegment, styles.storySegmentDivider]}><View style={styles.storySegmentHead}><Ionicons name="swap-horizontal-outline" size={14} color={colors.primary} /><AppText weight="semibold" style={styles.storySegmentLabel}>سبب التبديل</AppText></View><AppText>{item.swapReason}</AppText></View> : null}
+              {item.goodFor ? <View style={[styles.storySegment, styles.storySegmentDivider]}><View style={styles.storySegmentHead}><Ionicons name="people-outline" size={14} color={colors.primary} /><AppText weight="semibold" style={styles.storySegmentLabel}>مناسب لمين</AppText></View><AppText>{item.goodFor}</AppText></View> : null}
+            </View>
+          </AppCard>
+        </Animated.View>
+      ) : null}
 
-      <Animated.View entering={FadeInDown.duration(220).delay(190)} style={styles.ctaPanel}><AppText muted>لو العنصر مناسبك، افتح عرض تبديل من هنا.</AppText><AppButton label="اعرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} /><AppButton label="خيارات العنصر" variant="neutral" onPress={() => itemActionsSheetRef.current?.present()} />{shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}</Animated.View>
+      <Animated.View entering={FadeInDown.duration(220).delay(190)} style={[styles.ctaPanel, ownedByMe && styles.ownerCtaPanel]}>
+        <View style={styles.ctaHeader}>
+          <View style={styles.ctaIcon}><Ionicons name={ownedByMe ? 'create-outline' : 'swap-horizontal'} size={20} color={colors.primary} /></View>
+          <View style={styles.ctaCopy}>
+            <AppText weight="bold" style={styles.ctaTitle}>{ownedByMe ? 'ده عنصرك' : 'شايفه مناسب ليك؟'}</AppText>
+            <AppText muted style={styles.ctaHint}>{ownedByMe ? 'راجع ظهوره وعدّل التفاصيل في أي وقت.' : (item.desireText ? `صاحبه بيدور على: ${item.desireText}` : 'اختار حاجة من عندك وابعت عرض واضح ومباشر.')}</AppText>
+          </View>
+        </View>
+        {ownedByMe ? <AppButton label="تعديل العنصر" onPress={() => router.push(`/item/edit/${item.id}`)} /> : <AppButton label="ابدأ عرض تبديل" onPress={() => router.push(`/offer/create/${item.id}`)} />}
+        <AppButton label="خيارات العنصر" variant="neutral" onPress={() => itemActionsSheetRef.current?.present()} />
+        {shareError ? <AppText style={styles.shareErrorText}>{shareError}</AppText> : null}
+      </Animated.View>
       <AppActionSheet
         ref={itemActionsSheetRef}
         title="خيارات العنصر"
-        description="اختار إجراء مناسب لهذا العنصر."
-        actions={[
+        description={ownedByMe ? 'شارك العنصر أو عدّل بياناته.' : 'شارك العنصر أو بلّغ عنه لو فيه مشكلة.'}
+        actions={ownedByMe ? [
+          {
+            label: 'تعديل العنصر',
+            onPress: () => {
+              itemActionsSheetRef.current?.dismiss();
+              router.push(`/item/edit/${item.id}`);
+            },
+          },
+          {
+            label: 'مشاركة العنصر',
+            onPress: () => {
+              itemActionsSheetRef.current?.dismiss();
+              void handleShareItem();
+            },
+          },
+          {
+            label: 'مشاركة كارت',
+            onPress: () => {
+              itemActionsSheetRef.current?.dismiss();
+              void handleShareItemCard();
+            },
+          },
+        ] : [
           {
             label: 'مشاركة العنصر',
             onPress: () => {
@@ -354,7 +439,7 @@ export default function ItemDetailsScreen() {
           },
           {
             label: 'الإبلاغ عن العنصر',
-            tone: 'danger',
+            tone: 'danger' as const,
             onPress: () => {
               itemActionsSheetRef.current?.dismiss();
               router.push(`/report/item/${item.id}`);
@@ -450,6 +535,12 @@ export default function ItemDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+  detailTopBar: { minHeight: 52, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+  detailTopIconButton: { width: 40, height: 40, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  detailTopCopy: { flex: 1, alignItems: 'flex-end', gap: 1 },
+  detailEyebrow: { fontSize: 10 },
+  detailTopActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  detailActionButton: { width: 40, height: 40, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   heroShell: { borderRadius: radii.xl, padding: spacing.xs, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   hero: { width: '100%', height: 252, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
   heroPressable: {
@@ -539,8 +630,10 @@ galleryCounterText: {
   gap8: { gap: spacing.xs },
   noticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   noticeText: { flex: 1 },
-  title: { fontSize: 26 },
-  infoBlock: { gap: spacing.sm },
+  title: { fontSize: 28, lineHeight: 35, textAlign: 'right' },
+  titleBlock: { gap: 5, alignItems: 'flex-end' },
+  descriptionText: { lineHeight: 22, textAlign: 'right' },
+  infoBlock: { gap: spacing.md },
   metaRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
   likePill: {
     maxWidth: "100%",
@@ -556,6 +649,10 @@ galleryCounterText: {
   },
   metaPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   metaText: { fontSize: 12 },
+  desireHighlight: { borderRadius: radii.xl, borderWidth: 1, borderColor: '#D9B8A3', backgroundColor: '#F7E8DD', padding: spacing.sm, flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm },
+  desireIcon: { width: 38, height: 38, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  desireCopy: { flex: 1, gap: 5, alignItems: 'flex-end' },
+  desireText: { textAlign: 'right', lineHeight: 20 },
   ownerCard: { gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
   ownerHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   ownerMain: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
@@ -568,10 +665,25 @@ galleryCounterText: {
   signalText: { fontSize: 12 },
   storyCard: { gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
   storyHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  storyStackCard: { gap: spacing.md, borderWidth: 1, borderColor: colors.border },
+  storyStackHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  storyStackIcon: { width: 40, height: 40, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  storyStackCopy: { flex: 1, gap: 2, alignItems: 'flex-end' },
+  storySegments: { gap: 0 },
+  storySegment: { gap: 5, paddingVertical: spacing.xs },
+  storySegmentDivider: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs },
+  storySegmentHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  storySegmentLabel: { fontSize: 12 },
   tagsWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
   tagPill: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   tagText: { fontSize: 12 },
-  ctaPanel: { marginTop: spacing.sm, gap: spacing.sm, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.72)' },
+  ctaPanel: { marginTop: spacing.sm, gap: spacing.sm, padding: spacing.md, borderRadius: radii.xl, borderWidth: 1, borderColor: '#D9B8A3', backgroundColor: '#F6E4D8' },
+  ownerCtaPanel: { borderColor: colors.border, backgroundColor: colors.surface },
+  ctaHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
+  ctaIcon: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+  ctaCopy: { flex: 1, alignItems: 'flex-end', gap: 3 },
+  ctaTitle: { fontSize: 18 },
+  ctaHint: { textAlign: 'right', lineHeight: 19 },
   stateBox: { gap: spacing.md },
   detailLoadingShell: { gap: spacing.md },
   detailSkeletonBlock: { backgroundColor: colors.primarySoft, opacity: 0.72 },
