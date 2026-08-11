@@ -1,3 +1,5 @@
+export type DolabDraftSyncState = 'device_only' | 'pending' | 'synced' | 'error';
+
 export type DolabDraftItem = {
   id: string;
   title: string;
@@ -7,6 +9,8 @@ export type DolabDraftItem = {
   exchangeIntent?: string;
   linkedPendingMediaIds: string[];
   remoteDolabItemId?: string;
+  syncState?: DolabDraftSyncState;
+  syncError?: string;
   createdAt: string;
   updatedAt: string;
 };
