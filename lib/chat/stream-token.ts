@@ -1,63 +1,36 @@
 import { supabase } from '@/lib/supabase/client';
 
-type StreamTokenSuccess = { ok: true; apiKey: string; userId: string; token: string };
-type StreamTokenFailure = { ok: false; message: string };
+type DirectRuntimeAuthSuccess = { ok: true; apiKey: string; userId: string; token: string };
+type DirectRuntimeAuthFailure = { ok: false; message: string };
 
-type TokenResponse = {
-  ok?: unknown;
-  userId?: unknown;
-  token?: unknown;
-  apiKey?: unknown;
-  error?: unknown;
-  message?: unknown;
-};
-
-type StreamTokenInput = {
+type DirectRuntimeAuthInput = {
   conversationId?: string;
   otherUserId?: string;
   displayName?: string;
   avatarUrl?: string;
 };
 
-export async function fetchStreamChatToken(input?: StreamTokenInput): Promise<StreamTokenSuccess | StreamTokenFailure> {
+// Compatibility export kept temporarily so the existing Direct Chat screen can
+// cut over without a risky UI rewrite. No Stream endpoint or Stream secret is
+// touched here: authentication is the existing Supabase session.
+export async function fetchStreamChatToken(_input?: DirectRuntimeAuthInput): Promise<DirectRuntimeAuthSuccess | DirectRuntimeAuthFailure> {
   try {
     const {
       data: { session },
-      error: sessionError,
+      error,
     } = await supabase.auth.getSession();
 
-    if (sessionError || !session?.access_token) {
+    if (error || !session?.user?.id || !session.access_token) {
       return { ok: false, message: 'Missing authenticated session.' };
-    }
-
-    const { data, error } = await supabase.functions.invoke<TokenResponse>('stream-chat-token', {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: input ?? {},
-    });
-
-    if (error) {
-      return { ok: false, message: error.message || 'Token endpoint request failed.' };
-    }
-
-    if (data?.ok === false) {
-      const message = typeof data.message === 'string' ? data.message : 'Token endpoint rejected the request.';
-      return { ok: false, message };
-    }
-
-    if (!data || typeof data.userId !== 'string' || typeof data.token !== 'string' || typeof data.apiKey !== 'string') {
-      const message = typeof data?.message === 'string' ? data.message : 'Malformed token response.';
-      return { ok: false, message };
     }
 
     return {
       ok: true,
-      apiKey: data.apiKey,
-      userId: data.userId,
-      token: data.token,
+      apiKey: 'teswa-native-direct',
+      userId: session.user.id,
+      token: session.access_token,
     };
   } catch {
-    return { ok: false, message: 'Unable to fetch Stream token right now.' };
+    return { ok: false, message: 'Unable to resolve Direct Chat session right now.' };
   }
 }
