@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 import { readLocalDolabWorkspaceSnapshot } from '@/lib/dolab/local-persistence';
+import { attachDolabMediaToItem } from '@/lib/dolab/media-item-link';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
 import type { DolabItem, DolabItemSource, DolabItemStatus, DolabMedia, DolabNote, DolabNoteType } from '@/lib/dolab/types';
 
@@ -175,9 +176,14 @@ export async function deleteDolabMedia(
   }
 }
 
-function localPublishMediaForItem(userId: string, dolabItemId: string, remoteRows: DolabMedia[]): DolabMedia[] {
+function getLocalPublishDraft(dolabItemId: string) {
   const workspace = readLocalDolabWorkspaceSnapshot();
-  const localDraft = workspace.localDrafts.find((draft) => draft.remoteDolabItemId === dolabItemId);
+  const localDraft = workspace.localDrafts.find((draft) => draft.remoteDolabItemId === dolabItemId) ?? null;
+  return { workspace, localDraft };
+}
+
+function localPublishMediaForItem(userId: string, dolabItemId: string, remoteRows: DolabMedia[]): DolabMedia[] {
+  const { workspace, localDraft } = getLocalPublishDraft(dolabItemId);
   if (!localDraft) return [];
 
   const remoteIds = new Set(remoteRows.map((row) => row.id));
@@ -201,8 +207,23 @@ function localPublishMediaForItem(userId: string, dolabItemId: string, remoteRow
     } satisfies DolabMedia));
 }
 
+async function repairLinkedRemoteMedia(userId: string, dolabItemId: string) {
+  const { workspace, localDraft } = getLocalPublishDraft(dolabItemId);
+  if (!localDraft) return;
+  const remoteIds = Array.from(new Set(
+    workspace.pendingMedia
+      .filter((media) => localDraft.linkedPendingMediaIds.includes(media.id))
+      .map((media) => media.remoteMediaId)
+      .filter((id): id is string => Boolean(id)),
+  ));
+  if (!remoteIds.length) return;
+  await Promise.all(remoteIds.map((mediaId) => attachDolabMediaToItem(userId, mediaId, dolabItemId)));
+}
+
 export async function fetchDolabPublishSource(userId: string, dolabItemId: string): Promise<DolabResult<{ item: DolabItem | null; media: DolabMedia[] }>> {
   try {
+    await repairLinkedRemoteMedia(userId, dolabItemId);
+
     const [itemResult, mediaResult] = await Promise.all([
       supabase.from('dolab_items').select('*').eq('user_id', userId).eq('id', dolabItemId).maybeSingle(),
       supabase.from('dolab_media').select('*').eq('user_id', userId).eq('dolab_item_id', dolabItemId).order('sort_order', { ascending: true }),
