@@ -38,6 +38,7 @@ function formatMemberSince(value?: string | null) {
 }
 
 function ListingTile({ listing }: { listing: PublicProfileListing }) {
+  const meta = listing.category ?? ([listing.city, listing.area].filter(Boolean).join(' · ') || 'معروض للتبديل');
   return (
     <Pressable
       accessibilityRole="button"
@@ -55,7 +56,7 @@ function ListingTile({ listing }: { listing: PublicProfileListing }) {
       </View>
       <View style={styles.listingCopy}>
         <AppText weight="semibold" numberOfLines={1} style={styles.listingTitle}>{listing.title}</AppText>
-        <AppText muted numberOfLines={1} style={styles.listingMeta}>{listing.category ?? [listing.city, listing.area].filter(Boolean).join(' · ') || 'معروض للتبديل'}</AppText>
+        <AppText muted numberOfLines={1} style={styles.listingMeta}>{meta}</AppText>
       </View>
     </Pressable>
   );
