@@ -660,47 +660,42 @@ export default function Screen() {
   return (
     <AppScreen>
       <View style={styles.screen}>
-        <View style={styles.chatHeaderWrap}>
-          <View style={styles.chatHeaderRow}>
+        <View style={styles.dealHeaderWrap}>
+          <View style={styles.dealHeader}>
             <Pressable
-              style={styles.chatHeader}
+              accessibilityRole="button"
+              accessibilityLabel="رجوع"
+              style={styles.headerIconButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="chevron-forward" size={20} color={colors.text} />
+            </Pressable>
+            <Pressable
+              style={styles.headerIdentity}
               onPress={() => router.push(`/profile/${deal.otherParticipant.id}`)}
             >
               {deal.otherParticipant.avatarUrl ? (
-                <Image
-                  source={{ uri: deal.otherParticipant.avatarUrl }}
-                  style={styles.avatar}
-                />
+                <Image source={{ uri: deal.otherParticipant.avatarUrl }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarFallback}>
-                  <AppText weight="bold">
-                    {(
-                      deal.otherParticipant.displayName?.trim()?.[0] ?? "؟"
-                    ).toUpperCase()}
-                  </AppText>
+                  <AppText weight="bold">{(deal.otherParticipant.displayName?.trim()?.[0] ?? "؟").toUpperCase()}</AppText>
                 </View>
               )}
               <View style={styles.chatIdentity}>
-                <AppText weight="semibold" style={styles.chatName}>
-                  {deal.otherParticipant.displayName ?? "مستخدم"}
-                </AppText>
-                {deal.otherParticipant.username ? (
-                  <AppText muted style={styles.chatUsername}>
-                    @{deal.otherParticipant.username}
-                  </AppText>
-                ) : null}
-                <AppText muted style={styles.chatTrust}>
-                  مقايضات ناجحة: {deal.otherParticipant.successfulSwapsCount ?? 0}{" "}
-                  • معدل الرد:{" "}
-                  {formatResponseRate(deal.otherParticipant.responseRate)}
-                </AppText>
-                <AppText muted style={styles.chatStatusLine}>
-                  {realtimeLabel}
-                </AppText>
+                <AppText weight="bold" style={styles.chatName} numberOfLines={1}>{deal.otherParticipant.displayName ?? "مستخدم"}</AppText>
+                <View style={styles.identityMetaRow}>
+                  {deal.otherParticipant.username ? <AppText muted style={styles.chatUsername}>@{deal.otherParticipant.username}</AppText> : null}
+                  <View style={styles.identityMetaDot} />
+                  <AppText muted style={styles.chatTrust}>{deal.otherParticipant.successfulSwapsCount ?? 0} مقايضات • {formatResponseRate(deal.otherParticipant.responseRate)} رد</AppText>
+                </View>
+                <View style={styles.liveStatusRow}>
+                  <View style={[styles.liveDot, realtimeStatus !== "live" && styles.liveDotMuted]} />
+                  <AppText muted style={styles.chatStatusLine}>{realtimeLabel}</AppText>
+                </View>
               </View>
             </Pressable>
             <Pressable
-              style={styles.menuTrigger}
+              style={styles.headerIconButton}
               onPress={() => dealActionsSheetRef.current?.present()}
               accessibilityRole="button"
               accessibilityLabel="فتح إجراءات الصفقة"
@@ -708,13 +703,26 @@ export default function Screen() {
               <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
             </Pressable>
           </View>
-          <View style={styles.contextPill}>
-            <AppText weight="semibold" style={styles.contextTitle} numberOfLines={1}>
-              {deal.requestedItem?.title ?? "غير متاح"} ↔ {deal.offeredItem?.title ?? "غير متاح"}
-            </AppText>
-            <AppText muted style={styles.contextHint}>
-              {getDealStatusLabel(deal.status)}
-            </AppText>
+
+          <View style={styles.dealContextCard}>
+            <View style={styles.dealContextHeader}>
+              <View style={styles.dealContextCopy}>
+                <AppText muted style={styles.contextEyebrow}>الصفقة</AppText>
+                <AppText weight="bold" style={styles.contextHeading}>تنسيق التبديل</AppText>
+              </View>
+              <View style={styles.dealStatusPill}><AppText style={styles.dealStatusText}>{getDealStatusLabel(deal.status)}</AppText></View>
+            </View>
+            <View style={styles.tradePairRow}>
+              <View style={styles.tradeMiniCard}>
+                {deal.requestedItem?.imageUrl ? <Image source={{ uri: deal.requestedItem.imageUrl }} style={styles.tradeMiniImage} /> : <View style={[styles.tradeMiniImage, styles.tradeMiniPlaceholder]}><Ionicons name="image-outline" size={16} color={colors.textMuted} /></View>}
+                <View style={styles.tradeMiniCopy}><AppText muted style={styles.tradeMiniLabel}>المطلوب</AppText><AppText weight="semibold" numberOfLines={1}>{deal.requestedItem?.title ?? "غير متاح"}</AppText></View>
+              </View>
+              <View style={styles.tradeArrow}><Ionicons name="swap-horizontal" size={18} color={colors.primary} /></View>
+              <View style={[styles.tradeMiniCard, styles.tradeMiniCardAccent]}>
+                {deal.offeredItem?.imageUrl ? <Image source={{ uri: deal.offeredItem.imageUrl }} style={styles.tradeMiniImage} /> : <View style={[styles.tradeMiniImage, styles.tradeMiniPlaceholder]}><Ionicons name="image-outline" size={16} color={colors.textMuted} /></View>}
+                <View style={styles.tradeMiniCopy}><AppText muted style={styles.tradeMiniLabel}>المعروض</AppText><AppText weight="semibold" numberOfLines={1}>{deal.offeredItem?.title ?? "غير متاح"}</AppText></View>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -723,16 +731,8 @@ export default function Screen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {!!error ? (
-            <AppCard>
-              <AppText muted>{error}</AppText>
-            </AppCard>
-          ) : null}
-          {!!voiceMessage ? (
-            <AppCard>
-              <AppText muted>{voiceMessage}</AppText>
-            </AppCard>
-          ) : null}
+          {!!error ? <View style={[styles.inlineNotice, styles.errorNotice]}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><AppText style={styles.noticeErrorText}>{error}</AppText></View> : null}
+          {!!voiceMessage ? <View style={styles.inlineNotice}><Ionicons name="information-circle-outline" size={17} color={colors.primary} /><AppText muted style={styles.noticeText}>{voiceMessage}</AppText></View> : null}
           {moment === "accepted" && deal.status !== "cancelled" && SWAP_CEREMONY_ENABLED ? (
             <SwapCeremony
               status="accepted"
@@ -766,20 +766,25 @@ export default function Screen() {
             </View>
           ) : null}
           {["coordinating", "completed_pending_confirmation"].includes(deal.status) ? (
-            <AppCard style={styles.compactActionGroup}>
-              <AppText weight="semibold">تأكيد إتمام المقايضة</AppText>
-              <AppText muted style={styles.compactStatusRow}>
-                {deal.iConfirmed ? "أنت أكدت" : "لسه ما أكدتش"} •{" "}
-                {deal.otherConfirmed ? "الطرف التاني أكد" : "مستني الطرف التاني"}
-              </AppText>
+            <View style={styles.completionPanel}>
+              <View style={styles.completionHeader}>
+                <View style={styles.completionIcon}><Ionicons name="checkmark-done-outline" size={20} color={colors.primary} /></View>
+                <View style={styles.completionCopy}>
+                  <AppText muted style={styles.contextEyebrow}>خطوة الصفقة</AppText>
+                  <AppText weight="bold" style={styles.completionTitle}>أكدوا لما التبديل يتم</AppText>
+                  <AppText muted style={styles.completionHint}>الإتمام بيتقفل لما الطرفين يأكدوا إن المقايضة حصلت فعلًا.</AppText>
+                </View>
+              </View>
+              <View style={styles.confirmationRow}>
+                <View style={[styles.confirmationChip, deal.iConfirmed && styles.confirmationChipDone]}><Ionicons name={deal.iConfirmed ? "checkmark-circle" : "ellipse-outline"} size={15} color={deal.iConfirmed ? colors.primary : colors.textMuted} /><AppText muted>{deal.iConfirmed ? "أنت أكدت" : "تأكيدك مستني"}</AppText></View>
+                <View style={[styles.confirmationChip, deal.otherConfirmed && styles.confirmationChipDone]}><Ionicons name={deal.otherConfirmed ? "checkmark-circle" : "ellipse-outline"} size={15} color={deal.otherConfirmed ? colors.primary : colors.textMuted} /><AppText muted>{deal.otherConfirmed ? "الطرف التاني أكد" : "تأكيده مستني"}</AppText></View>
+              </View>
               <AppButton
-                label={confirming ? "جاري التأكيد..." : "أكد إن المقايضة تمت"}
-                onPress={() => {
-                  void confirmCompletion();
-                }}
+                label={confirming ? "جاري التأكيد..." : deal.iConfirmed ? "تم تسجيل تأكيدك" : "أكد إن المقايضة تمت"}
+                onPress={() => { void confirmCompletion(); }}
                 disabled={!deal.canConfirmCompletion || confirming}
               />
-            </AppCard>
+            </View>
           ) : null}
           {blockError ? (
             <AppCard style={styles.blockErrorCard}>
@@ -788,7 +793,8 @@ export default function Screen() {
           ) : null}
           <View style={styles.threadSection}>
             <View style={styles.threadTopLine}>
-              <AppText weight="semibold">المحادثة</AppText>
+              <View style={styles.threadHeadingCopy}><AppText muted style={styles.contextEyebrow}>تنسيق الصفقة</AppText><AppText weight="bold" style={styles.threadHeading}>المحادثة</AppText></View>
+              <View style={styles.threadLivePill}><View style={[styles.liveDot, realtimeStatus !== "live" && styles.liveDotMuted]} /><AppText muted style={styles.threadLiveText}>{realtimeStatus === "live" ? "مباشر" : "غير متصل"}</AppText></View>
             </View>
             {deal.messages.length === 0 ? (
               <View style={styles.emptyThread}>
@@ -1047,93 +1053,73 @@ const styles = StyleSheet.create({
   group: { gap: spacing.sm },
   groupGap: { gap: spacing.sm },
   row: { flexDirection: "row", gap: spacing.sm },
-  chatHeaderWrap: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  chatHeader: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    flexDirection: "row-reverse",
-    gap: spacing.sm,
-    alignItems: "center",
-  },
-  avatar: { width: 48, height: 48, borderRadius: radii.round },
-  avatarFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.round,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chatIdentity: { flex: 1, gap: 2 },
+  dealHeaderWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.sm },
+  dealHeader: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm },
+  headerIconButton: { width: 40, height: 40, borderRadius: radii.round, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  headerIdentity: { flex: 1, minHeight: 52, flexDirection: "row-reverse", gap: spacing.sm, alignItems: "center" },
+  avatar: { width: 44, height: 44, borderRadius: radii.round },
+  avatarFallback: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: '#D9B8A3', alignItems: "center", justifyContent: "center" },
+  chatIdentity: { flex: 1, gap: 2, alignItems: "flex-end" },
   chatName: { fontSize: 16, color: colors.text },
-  chatUsername: { fontSize: 12 },
-  chatTrust: { fontSize: 12 },
-  chatStatusLine: { fontSize: 12 },
-  chatHeaderRow: { flexDirection: "row", gap: spacing.xs, alignItems: "center" },
-  menuTrigger: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.round,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-  },
-  contextPill: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radii.round,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    gap: 2,
-  },
-  contextTitle: { color: colors.text },
-  contextHint: { fontSize: 12 },
+  chatUsername: { fontSize: 11 },
+  chatTrust: { fontSize: 10 },
+  identityMetaRow: { flexDirection: "row-reverse", alignItems: "center", gap: 5 },
+  identityMetaDot: { width: 3, height: 3, borderRadius: radii.round, backgroundColor: colors.border },
+  liveStatusRow: { flexDirection: "row-reverse", alignItems: "center", gap: 5 },
+  liveDot: { width: 6, height: 6, borderRadius: radii.round, backgroundColor: colors.accent },
+  liveDotMuted: { backgroundColor: colors.textMuted },
+  chatStatusLine: { fontSize: 10 },
+  dealContextCard: { borderWidth: 1, borderColor: '#D9B8A3', backgroundColor: '#F7E8DD', borderRadius: radii.xl, padding: spacing.sm, gap: spacing.sm },
+  dealContextHeader: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  dealContextCopy: { flex: 1, alignItems: "flex-end", gap: 1 },
+  contextEyebrow: { fontSize: 10 },
+  contextHeading: { fontSize: 17 },
+  dealStatusPill: { borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  dealStatusText: { color: colors.primary, fontSize: 10 },
+  tradePairRow: { flexDirection: "row-reverse", alignItems: "center", gap: 7 },
+  tradeMiniCard: { flex: 1, minWidth: 0, flexDirection: "row-reverse", alignItems: "center", gap: 7, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 7 },
+  tradeMiniCardAccent: { borderColor: '#C7DDD7', backgroundColor: colors.accentSoft },
+  tradeMiniImage: { width: 42, height: 42, borderRadius: radii.md, backgroundColor: colors.primarySoft },
+  tradeMiniPlaceholder: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderStyle: "dashed" },
+  tradeMiniCopy: { flex: 1, minWidth: 0, gap: 1, alignItems: "flex-end" },
+  tradeMiniLabel: { fontSize: 9 },
+  tradeArrow: { width: 30, height: 30, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
   },
-  threadSection: { flex: 1, gap: spacing.sm, paddingVertical: spacing.sm },
-  threadTopLine: { gap: 2 },
+  threadSection: { flex: 1, gap: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.sm },
+  threadTopLine: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  threadHeadingCopy: { flex: 1, alignItems: "flex-end", gap: 1 },
+  threadHeading: { fontSize: 17 },
+  threadLivePill: { flexDirection: "row-reverse", alignItems: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radii.round, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  threadLiveText: { fontSize: 9 },
   emptyThread: { paddingVertical: spacing.lg },
   messageRow: { width: "100%" },
   myMessageRow: { alignItems: "flex-end" },
   otherMessageRow: { alignItems: "flex-start" },
-  bubble: {
-    maxWidth: "82%",
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.xl,
-    gap: spacing.xs,
-  },
-  myBubble: {
-    backgroundColor: colors.primarySoft,
-    borderBottomRightRadius: radii.sm,
-  },
-  otherBubble: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  subtleSender: { fontSize: 11 },
-  messageBody: { lineHeight: 22, fontSize: 15, color: colors.text },
-  metaText: { fontSize: 11 },
+  bubble: { maxWidth: "82%", paddingVertical: 9, paddingHorizontal: 12, borderRadius: 20, gap: 4, borderWidth: 1 },
+  myBubble: { backgroundColor: '#F1DDCF', borderColor: '#D9B8A3', borderTopRightRadius: 7 },
+  otherBubble: { backgroundColor: colors.surface, borderColor: colors.border, borderTopLeftRadius: 7 },
+  subtleSender: { fontSize: 10 },
+  messageBody: { lineHeight: 21, fontSize: 15, color: colors.text, textAlign: "right" },
+  metaText: { fontSize: 10 },
   voiceBubble: { gap: spacing.xs },
-  compactActionGroup: { gap: spacing.xs },
-  compactStatusRow: { fontSize: 13 },
+  completionPanel: { gap: spacing.sm, borderWidth: 1, borderColor: '#C7DDD7', backgroundColor: colors.accentSoft, borderRadius: radii.xl, padding: spacing.md },
+  completionHeader: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm },
+  completionIcon: { width: 44, height: 44, borderRadius: radii.round, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  completionCopy: { flex: 1, gap: 3, alignItems: "flex-end" },
+  completionTitle: { fontSize: 18 },
+  completionHint: { textAlign: "right", lineHeight: 19 },
+  confirmationRow: { flexDirection: "row-reverse", gap: spacing.xs, flexWrap: "wrap" },
+  confirmationChip: { flexDirection: "row-reverse", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  confirmationChipDone: { borderColor: '#C7DDD7', backgroundColor: colors.background },
+  inlineNotice: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.xs, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.sm },
+  errorNotice: { borderColor: '#F0C7C1', backgroundColor: '#FFF2F0' },
+  noticeText: { flex: 1, textAlign: "right" },
+  noticeErrorText: { flex: 1, color: '#B42318', textAlign: "right" },
   blockErrorCard: { gap: spacing.xs },
   voiceBubbleHeader: {
     flexDirection: "row-reverse",
@@ -1151,30 +1137,13 @@ const styles = StyleSheet.create({
   voiceProgressFill: { height: "100%", backgroundColor: colors.primary },
   voiceErrorText: { fontSize: 11, color: "#B42318" },
   composerSticky: { paddingTop: spacing.xs },
-  composerShell: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
+  composerShell: { backgroundColor: colors.surface, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingTop: 8, paddingBottom: spacing.sm, gap: spacing.xs },
   composerRow: {
     flexDirection: "row-reverse",
     alignItems: "flex-end",
     gap: spacing.sm,
   },
-  inputShell: {
-    flex: 1,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.round,
-    paddingHorizontal: spacing.sm,
-    minHeight: 46,
-    justifyContent: "center",
-  },
+  inputShell: { flex: 1, backgroundColor: '#FBF7F2', borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.md, minHeight: 46, justifyContent: "center" },
   input: { color: colors.text, maxHeight: 120, minHeight: 36, fontSize: 15 },
   actionBtn: {
     width: 44,
