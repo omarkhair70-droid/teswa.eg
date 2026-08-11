@@ -6,6 +6,7 @@ on:
       - hotfix/1.0.9-direct-image-ota
     paths:
       - .github/workflows/publish-109-image-ota-once.yml
+      - .github/scripts/apply_109_image_ota_fix.py
 
 permissions:
   contents: write
@@ -33,7 +34,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm .github/scripts/apply_109_image_ota_fix.py
           rm .github/workflows/publish-109-image-ota-once.yml
-          git add lib/chat/supabase-direct-chat.ts .github/scripts/apply_109_image_ota_fix.py .github/workflows/publish-109-image-ota-once.yml
+          git add lib/chat/supabase-direct-chat.ts lib/chat/native-direct-channel.ts .github/scripts/apply_109_image_ota_fix.py .github/workflows/publish-109-image-ota-once.yml
           git commit -m "Fix 1.0.9 Direct Chat image file reading"
           git push
       - name: Publish Android OTA to production runtime 1.0.9
