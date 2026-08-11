@@ -16,32 +16,33 @@ type Props = {
 
 export function DolabShelfCard({ title, description, iconName, count, ctaLabel = 'افتح الرف', onPress }: Props) {
   return (
-    <Pressable style={styles.card} onPress={onPress} accessibilityRole="button" accessibilityLabel={`فتح ${title}`}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`فتح ${title}`} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.topRow}>
-        <View style={styles.iconWrap}><Ionicons name={iconName} size={18} color={colors.primary} /></View>
-        <View style={styles.countBadge}><AppText style={styles.countText}>{count}</AppText></View>
+        <View style={styles.iconWrap}><Ionicons name={iconName} size={19} color={colors.primary} /></View>
+        <View style={styles.countBadge}><AppText weight="bold" style={styles.countText}>{count > 99 ? '99+' : count}</AppText></View>
       </View>
       <View style={styles.copy}>
-        <AppText weight="bold">{title}</AppText>
-        <AppText muted>{description}</AppText>
+        <AppText weight="bold" style={styles.title}>{title}</AppText>
+        <AppText muted style={styles.description} numberOfLines={2}>{description}</AppText>
       </View>
       <View style={styles.footerRow}>
-        <View style={styles.shelfTag}><AppText style={styles.shelfTagText}>على الرف</AppText></View>
-        <AppText style={styles.cta}>{ctaLabel}</AppText>
+        <AppText weight="semibold" style={styles.cta}>{ctaLabel}</AppText>
+        <Ionicons name="chevron-back" size={16} color={colors.primary} />
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderColor: 'rgba(184,98,63,0.18)', borderRadius: radii.xl, padding: spacing.md, backgroundColor: '#FFF9F1', gap: spacing.xs },
+  card: { width: '48.5%', minHeight: 154, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', borderRadius: radii.xl, padding: spacing.md, backgroundColor: '#FFF9F1', gap: spacing.sm },
   topRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  iconWrap: { width: 34, height: 34, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  countBadge: { minWidth: 30, borderRadius: radii.round, paddingHorizontal: spacing.xs, paddingVertical: 4, alignItems: 'center', backgroundColor: '#FFF2DE', borderWidth: 1, borderColor: 'rgba(184,98,63,0.24)' },
-  countText: { color: colors.primary, fontWeight: '700' },
-  copy: { gap: 2 },
-  footerRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  shelfTag: { paddingHorizontal: spacing.xs, paddingVertical: 3, borderRadius: radii.round, backgroundColor: '#FFF2DE' },
-  shelfTagText: { color: '#8A5A34', fontSize: 12 },
-  cta: { color: colors.primary, fontWeight: '700' },
+  iconWrap: { width: 38, height: 38, borderRadius: radii.lg, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  countBadge: { minWidth: 32, height: 28, borderRadius: radii.round, paddingHorizontal: spacing.xs, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  countText: { color: colors.primary, fontSize: 11 },
+  copy: { flex: 1, alignItems: 'flex-end', gap: 3 },
+  title: { fontSize: 14, textAlign: 'right' },
+  description: { fontSize: 10, lineHeight: 16, textAlign: 'right' },
+  footerRow: { flexDirection: 'row-reverse', justifyContent: 'flex-start', alignItems: 'center', gap: 3 },
+  cta: { color: colors.primary, fontSize: 10 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
 });
