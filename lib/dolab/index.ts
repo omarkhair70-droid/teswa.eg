@@ -7,6 +7,7 @@ import type { DolabItem, DolabItemSource, DolabItemStatus, DolabMedia, DolabNote
 type DolabResult<T> = { data: T; error: DolabPersistenceError | null };
 
 type SaveDolabDraftInput = Pick<DolabDraftItem, 'title' | 'description' | 'category' | 'condition'> & {
+  exchangeIntent?: string;
   status?: Extract<DolabItemStatus, 'draft' | 'ready'>;
   source?: DolabItemSource;
 };
@@ -37,6 +38,7 @@ export async function saveDolabDraftItem(userId: string, input: SaveDolabDraftIn
       description: input.description || null,
       category: input.category || null,
       condition: input.condition || null,
+      exchange_intent: input.exchangeIntent || null,
       status: input.status ?? 'draft',
       source: input.source ?? 'manual',
     })
@@ -54,6 +56,7 @@ export async function updateDolabDraftItem(userId: string, id: string, input: Sa
       description: input.description || null,
       category: input.category || null,
       condition: input.condition || null,
+      exchange_intent: input.exchangeIntent || null,
       status: input.status ?? 'draft',
       source: input.source ?? 'manual',
     })
@@ -113,7 +116,7 @@ export async function fetchDolabItems(userId: string): Promise<DolabResult<Dolab
       data: [],
       error: {
         kind: 'unknown',
-        message: 'تعذر تحديث الدولاب حاليًا. شغّال محليًا مؤقتًا.',
+        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
       },
     };
   }
@@ -128,7 +131,7 @@ export async function fetchDolabMedia(userId: string): Promise<DolabResult<Dolab
       data: [],
       error: {
         kind: 'unknown',
-        message: 'تعذر تحديث الدولاب حاليًا. شغّال محليًا مؤقتًا.',
+        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
       },
     };
   }
@@ -143,7 +146,7 @@ export async function fetchDolabNotes(userId: string): Promise<DolabResult<Dolab
       data: [],
       error: {
         kind: 'unknown',
-        message: 'تعذر تحديث الدولاب حاليًا. شغّال محليًا مؤقتًا.',
+        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
       },
     };
   }
@@ -217,7 +220,6 @@ export async function deleteDolabMedia(
   }
 }
 
-
 export async function fetchDolabPublishSource(userId: string, dolabItemId: string): Promise<DolabResult<{ item: DolabItem | null; media: DolabMedia[] }>> {
   try {
     const [itemResult, mediaResult] = await Promise.all([
@@ -252,7 +254,6 @@ export async function markDolabItemPublished(userId: string, dolabItemId: string
     return { data: null, error: { kind: 'unknown', message: 'تم نشر العنصر لكن تعذر تحديث حالة الدولاب.' } };
   }
 }
-
 
 export async function markDolabNoteShared(userId: string, noteId: string, conversationId: string): Promise<void> {
   try {
