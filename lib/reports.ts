@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase/client';
 
 export type ReportReason =
@@ -85,6 +86,8 @@ export async function reportItem(input: { itemId: string; reason: string; detail
   });
 }
 
+// Compatibility entrypoint used by the large Direct screen. Instead of silently
+// assuming harassment, route the user into the shared report-reason experience.
 export async function reportDirectMessage(input: {
   conversationId: string;
   streamMessageId: string;
@@ -92,9 +95,33 @@ export async function reportDirectMessage(input: {
   reason: string;
   details?: string | null;
 }): Promise<ReportResult> {
+  const conversationId = input.conversationId.trim();
+  const messageId = input.streamMessageId.trim();
+  const reportedUserId = input.reportedUserId.trim();
+
+  if (!conversationId || !messageId || !reportedUserId) {
+    return { ok: false, message: 'تعذر فتح البلاغ حالياً.', reason: 'invalid_target' };
+  }
+
+  router.push({
+    pathname: '/report/direct-message/[messageId]',
+    params: { messageId, conversationId, reportedUserId },
+  });
+
+  return { ok: false, message: 'اختار سبب البلاغ وكمل الإرسال.', reason: 'reason_required' };
+}
+
+export async function submitDirectMessageReport(input: {
+  conversationId: string;
+  messageId: string;
+  reportedUserId: string;
+  reason: ReportReason;
+  details?: string;
+}): Promise<ReportResult> {
+  if (!ALLOWED_REASONS.includes(input.reason)) return { ok: false, message: 'سبب البلاغ غير صالح.' };
   return callReportRpc('report_direct_message', {
     p_conversation_id: input.conversationId,
-    p_stream_message_id: input.streamMessageId,
+    p_stream_message_id: input.messageId,
     p_reported_user_id: input.reportedUserId,
     p_reason: input.reason,
     p_details: input.details ?? null,
@@ -143,6 +170,62 @@ export async function fetchItemReportContext(itemId: string, currentUserId?: str
     ok: true as const,
     context: { itemId, title: ((data.title as string | null)?.trim() || 'عنصر بدون عنوان'), owner },
   };
+}
+
+export async function fetchDirectMessageReportContext(input: {
+  conversationId: string;
+  messageId: string;
+  reportedUserId: string;
+  currentUserId: string;
+}) {
+  const conversationId = input.conversationId.trim();
+  const messageId = input.messageId.trim();
+  const reportedUserId = input.reportedUserId.trim();
+  const currentUserId = input.currentUserId.trim();
+  if (!conversationId || !messageId || !reportedUserId || !currentUserId) {
+    return { ok: false as const, message: 'بيانات البلاغ غير مكتملة.' };
+  }
+
+  const { data: conversation } = await supabase
+    .from('direct_conversations')
+    .select('id,participant_a,participant_b')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (!conversation) return { ok: false as const, message: 'المحادثة لم تعد متاحة.' };
+
+  const participantA = conversation.participant_a as string;
+  const participantB = conversation.participant_b as string;
+  if (currentUserId !== participantA && currentUserId !== participantB) {
+    return { ok: false as const, message: 'غير مسموح لك بالإبلاغ عن رسالة من هذه المحادثة.' };
+  }
+
+  const otherUserId = currentUserId === participantA ? participantB : participantA;
+  if (reportedUserId !== otherUserId) {
+    return { ok: false as const, message: 'تعذر التحقق من صاحب الرسالة.' };
+  }
+
+  const { data: message } = await supabase
+    .from('direct_messages')
+    .select('id,sender_id,body,message_type')
+    .eq('id', messageId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+  if (!message) return { ok: false as const, message: 'الرسالة لم تعد متاحة.' };
+  if ((message.sender_id as string) === currentUserId) return { ok: false as const, message: 'لا يمكنك الإبلاغ عن رسالتك.' };
+  if ((message.sender_id as string) !== reportedUserId) return { ok: false as const, message: 'تعذر التحقق من صاحب الرسالة.' };
+
+  const reportedUser = await fetchProfile(reportedUserId);
+  if (!reportedUser) return { ok: false as const, message: 'تعذر تحميل بيانات صاحب الرسالة.' };
+
+  const rawBody = ((message.body as string | null) ?? '').trim();
+  const messageType = message.message_type === 'voice' ? 'voice' : 'text';
+  const preview = messageType === 'voice'
+    ? 'رسالة صوتية داخل المحادثة المباشرة.'
+    : rawBody
+      ? `“${rawBody.slice(0, 120)}${rawBody.length > 120 ? '…' : ''}”`
+      : 'رسالة داخل المحادثة المباشرة.';
+
+  return { ok: true as const, context: { conversationId, messageId, reportedUser, preview } };
 }
 
 export async function fetchDealReportContext(dealId: string, currentUserId: string) {
