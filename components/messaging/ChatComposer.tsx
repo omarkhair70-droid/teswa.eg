@@ -238,8 +238,8 @@ const styles = StyleSheet.create({
   wrap: {
     gap: 8,
     paddingHorizontal: 10,
-    paddingTop: 7,
-    paddingBottom: 8,
+    paddingTop: 6,
+    paddingBottom: 3,
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
