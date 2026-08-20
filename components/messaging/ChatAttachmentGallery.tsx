@@ -14,6 +14,8 @@ export type ChatAttachmentGalleryItem = {
   fileName?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
+  storagePath?: string | null;
+  storageBucket?: 'direct-chat-media' | 'direct-voice-messages' | null;
 };
 
 function formatFileSize(bytes?: number | null) {
