@@ -648,7 +648,7 @@ export default function AddScreen() {
 
   return (
     <AppScreen scrollable backgroundVariant="alive" style={styles.screen}>
-      <LinearGradient colors={['#FFF6EC', '#FFE8D3']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+      <LinearGradient colors={[colors.surface, colors.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <View style={styles.heroOrb} />
         <View style={styles.heroTop}>
           <View style={styles.heroIcon}><Ionicons name="add" size={22} color={colors.primary} /></View>
@@ -879,7 +879,7 @@ export default function AddScreen() {
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: spacing.lg },
   hero: { borderRadius: radii.xl, padding: spacing.lg, gap: spacing.lg, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(184,98,63,0.12)' },
-  heroOrb: { position: 'absolute', width: 210, height: 210, borderRadius: 105, right: -65, top: -85, backgroundColor: 'rgba(255,255,255,0.42)' },
+  heroOrb: { position: 'absolute', width: 210, height: 210, borderRadius: 105, right: -65, top: -85, backgroundColor: colors.primarySoft, opacity: 0.55 },
   heroTop: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.md },
   heroIcon: { width: 46, height: 46, borderRadius: radii.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   heroCopy: { flex: 1, alignItems: 'flex-end', gap: 3 },
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
   twoActions: { flexDirection: 'row-reverse', gap: spacing.sm },
   infoStrip: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radii.lg, backgroundColor: colors.accentSoft },
   infoStripText: { flex: 1, lineHeight: 19, textAlign: 'right' },
-  offlineStrip: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radii.lg, backgroundColor: '#EEE7DF' },
+  offlineStrip: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radii.lg, backgroundColor: colors.neutralSoft },
   errorStrip: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radii.lg, backgroundColor: colors.dangerSoft },
   errorText: { flex: 1, color: colors.danger, fontSize: 12, lineHeight: 18, textAlign: 'right' },
   successStrip: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.successSoft },
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
   progressCount: { flexDirection: 'row-reverse', alignItems: 'baseline', paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radii.round, backgroundColor: colors.primarySoft },
   progressCountValue: { color: colors.primary, fontSize: 18 },
   progressCountLabel: { fontSize: 11 },
-  photoDropzone: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl, borderRadius: radii.xl, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(184,98,63,0.38)', backgroundColor: '#FFF9F4' },
+  photoDropzone: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl, borderRadius: radii.xl, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(184,98,63,0.38)', backgroundColor: colors.selectionSoft },
   photoDropIcon: { width: 62, height: 62, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   photoDropTitle: { fontSize: 18, textAlign: 'center' },
   photoDropText: { maxWidth: 280, textAlign: 'center', lineHeight: 20 },
@@ -934,7 +934,7 @@ const styles = StyleSheet.create({
   coverBadge: { position: 'absolute', top: spacing.sm, right: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: radii.round, backgroundColor: 'rgba(28,25,23,0.74)' },
   coverBadgeText: { color: colors.white, fontSize: 10 },
   coverActions: { position: 'absolute', left: spacing.sm, bottom: spacing.sm, flexDirection: 'row-reverse', gap: spacing.xs },
-  mediaAction: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 6, borderRadius: radii.round, backgroundColor: 'rgba(255,255,255,0.92)' },
+  mediaAction: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 6, borderRadius: radii.round, backgroundColor: colors.surface },
   mediaActionText: { fontSize: 10 },
   dragHint: { fontSize: 11, textAlign: 'right' },
   draggableList: { marginHorizontal: -spacing.xs },
@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
   videoSectionIcon: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
   videoSectionCopy: { flex: 1, alignItems: 'flex-end', gap: 3 },
   labelRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
-  optionalPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radii.round, backgroundColor: '#EEE7DF' },
+  optionalPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radii.round, backgroundColor: colors.neutralSoft },
   optionalText: { fontSize: 9, color: colors.textMuted },
   videoReady: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radii.lg, backgroundColor: colors.accentSoft },
   videoReadyIcon: { width: 42, height: 42, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
   locationAssistCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
   choiceList: { gap: spacing.sm },
   choiceCard: { minHeight: 74, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  choiceCardSelected: { borderColor: colors.primary, backgroundColor: '#FFF8F3' },
+  choiceCardSelected: { borderColor: colors.primary, backgroundColor: colors.selectionSoft },
   choiceIcon: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   choiceIconSelected: { backgroundColor: colors.primarySoft },
   choiceCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
