@@ -10,4 +10,4 @@ They preserve SQL that was found in source control but was not present in the pr
 4. deploy the migration through the normal reviewed release path;
 5. remove the pending copy once the new migration is authoritative.
 
-`allow_performance_metric_analytics_event.sql` is intentionally deferred to the Observability PR. Production currently does not accept the `performance_metric` analytics event, so the repository must not pretend that historical migration was already deployed.
+The previously deferred performance telemetry change shipped in PR #7 and its pending copy was removed after the production migrations became authoritative.
