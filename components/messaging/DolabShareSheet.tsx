@@ -6,7 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { AppBottomSheet } from '@/components/sheets/AppBottomSheet';
 import { AppText } from '@/components/ui/AppText';
-import { colors } from '@/constants/colors';
+import type { TeswaThemeColors } from '@/constants/themes';
+import { useTeswaColors, useTeswaStyles } from '@/lib/theme/use-teswa-theme';
 import { generateDirectVideoThumbnail, type GeneratedVideoThumbnail } from '@/lib/media/video-thumbnails';
 
 export type DolabShareItem = {
@@ -20,31 +21,34 @@ export type DolabShareItem = {
   sizeBytes?: number;
 };
 
+const createStyles = (colors: TeswaThemeColors) => ({
+  content: { gap: 8, paddingBottom: 22 },
+  row: { minHeight: 72, flexDirection: 'row-reverse' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 15, backgroundColor: colors.surface, borderWidth: 0.5, borderColor: colors.border },
+  preview: { width: 52, height: 52, borderRadius: 12, overflow: 'hidden' as const, backgroundColor: colors.background, alignItems: 'center' as const, justifyContent: 'center' as const },
+  copy: { flex: 1, minWidth: 0, alignItems: 'flex-end' as const, gap: 2 },
+  meta: { fontSize: 11.5, textAlign: 'right' as const },
+  state: { minHeight: 180, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 9, paddingHorizontal: 20 },
+  center: { textAlign: 'center' as const },
+  error: { color: colors.danger, textAlign: 'center' as const },
+  retry: { color: colors.primary },
+  pressed: { opacity: 0.68 },
+});
+
 function DolabVideoThumb({ item }: { item: DolabShareItem }) {
+  const colors = useTeswaColors();
   const [thumb, setThumb] = useState<GeneratedVideoThumbnail | null>(null);
   useEffect(() => {
     let cancelled = false;
     if (!item.uri) return;
-    void generateDirectVideoThumbnail({
-      videoUrl: item.uri,
-      cacheKeyParts: ['dolab-share', item.id, item.fileName],
-      timeSeconds: 0.5,
-      maxWidth: 180,
-      maxHeight: 180,
-    }).then((value) => { if (!cancelled) setThumb(value); });
+    void generateDirectVideoThumbnail({ videoUrl: item.uri, cacheKeyParts: ['dolab-share', item.id, item.fileName], timeSeconds: 0.5, maxWidth: 180, maxHeight: 180 }).then((value) => { if (!cancelled) setThumb(value); });
     return () => { cancelled = true; };
   }, [item.fileName, item.id, item.uri]);
-  return thumb?.source ? (
-    <ExpoImage source={thumb.source as any} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
-  ) : (
-    <Ionicons name="videocam-outline" size={20} color={colors.textMuted} />
-  );
+  return thumb?.source ? <ExpoImage source={thumb.source as any} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" /> : <Ionicons name="videocam-outline" size={20} color={colors.textMuted} />;
 }
 
 function ItemPreview({ item }: { item: DolabShareItem }) {
-  if (item.kind === 'image' && item.uri) {
-    return <ExpoImage source={{ uri: item.uri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />;
-  }
+  const colors = useTeswaColors();
+  if (item.kind === 'image' && item.uri) return <ExpoImage source={{ uri: item.uri }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />;
   if (item.kind === 'video') return <DolabVideoThumb item={item} />;
   return <Ionicons name={item.kind === 'audio' ? 'musical-notes-outline' : item.kind === 'text' ? 'document-text-outline' : 'document-outline'} size={20} color={colors.primary} />;
 }
@@ -56,28 +60,18 @@ export const DolabShareSheet = forwardRef<BottomSheetModal, {
   onSelect: (item: DolabShareItem) => void;
   onReload?: () => void;
 }>(function DolabShareSheet({ items, loading = false, error, onSelect, onReload }, ref) {
+  const colors = useTeswaColors();
+  const styles = useTeswaStyles(createStyles);
   const selectAndClose = (item: DolabShareItem) => {
     onSelect(item);
     if (ref && typeof ref !== 'function') ref.current?.dismiss();
   };
 
   return (
-    <AppBottomSheet
-      ref={ref}
-      title="من الدولاب"
-      description="اختار ملاحظة أو ميديا وابعتها في المحادثة."
-      titleIconName="file-tray-stacked-outline"
-      snapPoints={['62%', '88%']}
-    >
-      <BottomSheetScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.content}
-      >
+    <AppBottomSheet ref={ref} title="من الدولاب" description="اختار ملاحظة أو ميديا وابعتها في المحادثة." titleIconName="file-tray-stacked-outline" snapPoints={['62%', '88%']}>
+      <BottomSheetScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         {loading ? (
-          <View style={styles.state}>
-            <AppText muted>بنفتح الدولاب...</AppText>
-          </View>
+          <View style={styles.state}><AppText muted>بنفتح الدولاب...</AppText></View>
         ) : error ? (
           <View style={styles.state}>
             <AppText style={styles.error}>{error}</AppText>
@@ -85,19 +79,11 @@ export const DolabShareSheet = forwardRef<BottomSheetModal, {
           </View>
         ) : items.length ? (
           items.map((item) => (
-            <Pressable
-              key={item.id}
-              accessibilityRole="button"
-              accessibilityLabel={`اختيار ${item.title}`}
-              onPress={() => selectAndClose(item)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-            >
+            <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`اختيار ${item.title}`} onPress={() => selectAndClose(item)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
               <View style={styles.preview}><ItemPreview item={item} /></View>
               <View style={styles.copy}>
                 <AppText weight="semibold" numberOfLines={1}>{item.title}</AppText>
-                <AppText muted numberOfLines={2} style={styles.meta}>
-                  {item.body?.trim() || (item.kind === 'image' ? 'صورة' : item.kind === 'video' ? 'فيديو' : item.kind === 'audio' ? 'صوت' : 'ملف')}
-                </AppText>
+                <AppText muted numberOfLines={2} style={styles.meta}>{item.body?.trim() || (item.kind === 'image' ? 'صورة' : item.kind === 'video' ? 'فيديو' : item.kind === 'audio' ? 'صوت' : 'ملف')}</AppText>
               </View>
               <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
             </Pressable>
@@ -112,36 +98,4 @@ export const DolabShareSheet = forwardRef<BottomSheetModal, {
       </BottomSheetScrollView>
     </AppBottomSheet>
   );
-});
-
-const styles = StyleSheet.create({
-  content: { gap: 8, paddingBottom: 22 },
-  row: {
-    minHeight: 72,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 15,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  preview: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  copy: { flex: 1, minWidth: 0, alignItems: 'flex-end', gap: 2 },
-  meta: { fontSize: 11.5, textAlign: 'right' },
-  state: { minHeight: 180, alignItems: 'center', justifyContent: 'center', gap: 9, paddingHorizontal: 20 },
-  center: { textAlign: 'center' },
-  error: { color: colors.danger, textAlign: 'center' },
-  retry: { color: colors.primary },
-  pressed: { opacity: 0.68 },
 });

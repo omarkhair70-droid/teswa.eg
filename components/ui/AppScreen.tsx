@@ -1,12 +1,13 @@
 import { PropsWithChildren } from 'react';
-import { StyleSheet, type ViewStyle } from 'react-native';
+import { type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { TeswaAmbientBackground } from '@/components/ui/TeswaAmbientBackground';
 import type { TeswaAmbientBackgroundVariant } from '@/components/ui/TeswaAmbientBackground';
-import { colors } from '@/constants/colors';
 import { spacing } from '@/constants/spacing';
+import type { TeswaThemeColors } from '@/constants/themes';
+import { useTeswaStyles } from '@/lib/theme/use-teswa-theme';
 
 type AppScreenBackgroundVariant = TeswaAmbientBackgroundVariant | 'none';
 
@@ -16,12 +17,26 @@ type AppScreenProps = PropsWithChildren<{
   backgroundVariant?: AppScreenBackgroundVariant;
 }>;
 
+const createStyles = (colors: TeswaThemeColors) => ({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    overflow: 'hidden' as const,
+  },
+  content: {
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+});
+
 export function AppScreen({
   children,
   scrollable = false,
   style,
   backgroundVariant = 'soft',
 }: AppScreenProps) {
+  const styles = useTeswaStyles(createStyles);
   const content = scrollable ? (
     <KeyboardAwareScrollView
       contentContainerStyle={styles.content}
@@ -38,24 +53,8 @@ export function AppScreen({
 
   return (
     <SafeAreaView style={[styles.container, style]}>
-      {backgroundVariant !== 'none' ? (
-        <TeswaAmbientBackground variant={backgroundVariant} />
-      ) : null}
-
+      {backgroundVariant !== 'none' ? <TeswaAmbientBackground variant={backgroundVariant} /> : null}
       {content}
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: spacing.lg,
-    overflow: 'hidden',
-  },
-  content: {
-    paddingBottom: spacing.xxl,
-    gap: spacing.lg,
-  },
-});

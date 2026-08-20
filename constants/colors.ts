@@ -1,16 +1,9 @@
-export const colors = {
-  background: '#F9F3EA',
-  surface: '#FFFDF8',
-  primary: '#B8623F',
-  primarySoft: '#EED8CB',
-  text: '#1D1A16',
-  textMuted: '#746A61',
-  border: '#DDD0C5',
-  accent: '#3E7C73',
-  accentSoft: '#D7E8E5',
-  danger: '#B44343',
-  dangerSoft: '#F6DFDF',
-  success: '#2F7D4B',
-  successSoft: '#DBEEDC',
-  white: '#FFFFFF',
-};
+import { Appearance } from 'react-native';
+
+import { teswaThemeTokens, type TeswaThemeColors } from '@/constants/themes';
+
+const initialMode = Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
+
+// Compatibility bridge for screens that still create static StyleSheets at module load.
+// New UI should prefer useTeswaColors/useTeswaStyles so it can react live to theme changes.
+export const colors: TeswaThemeColors = { ...teswaThemeTokens[initialMode] };

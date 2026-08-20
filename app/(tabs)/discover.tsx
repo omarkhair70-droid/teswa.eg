@@ -428,9 +428,7 @@ export default function DiscoverScreen() {
         {showEditorial && editorialMode === 'stories' ? (
           <AppFadeIn delay={40} duration={220} fromY={8} style={styles.editorialModule}>
             <AppCard padding="md" style={styles.editorialCard}>
-              <DiscoverStoryHighlightsRail
-                items={storyHighlights}
-              />
+              <DiscoverStoryHighlightsRail items={storyHighlights} />
             </AppCard>
           </AppFadeIn>
         ) : null}
@@ -450,22 +448,13 @@ export default function DiscoverScreen() {
         ) : null}
       </View>
     );
-  }, [
-    editorialInsertIndex,
-    editorialMode,
-    spotlightItems,
-    storyHighlights,
-    videoMoments,
-  ]);
+  }, [editorialInsertIndex, editorialMode, spotlightItems, storyHighlights, videoMoments]);
 
   return (
     <AppScreen backgroundVariant="alive" style={styles.screen}>
       <FlatList
         renderScrollComponent={(props) => (
-          <KeyboardAwareScrollView
-            {...props}
-            bottomOffset={spacing.lg}
-          />
+          <KeyboardAwareScrollView {...props} bottomOffset={spacing.lg} />
         )}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -609,9 +598,7 @@ export default function DiscoverScreen() {
             <View style={styles.resultsHeading}>
               <View style={styles.resultsHeadingCopy}>
                 <AppText weight="semibold" style={styles.eyebrow}>عناصر جاهزة للتبديل</AppText>
-                <AppText weight="bold" style={styles.resultsTitle}>
-                  {hasActiveFilters ? 'النتائج الأقرب لاختيارك' : 'اكتشف الجديد'}
-                </AppText>
+                <AppText weight="bold" style={styles.resultsTitle}>{hasActiveFilters ? 'النتائج الأقرب لاختيارك' : 'اكتشف الجديد'}</AppText>
                 <AppText muted style={styles.resultsDescription}>
                   {loading ? 'بنجهّز المشهد الآن.' : hasActiveFilters ? `ظهر ${filtered.length} عنصر من النتائج المحمّلة.` : `${filtered.length} عنصر ظاهر للتصفح الآن.`}
                 </AppText>
@@ -622,9 +609,7 @@ export default function DiscoverScreen() {
                   <AppText weight="semibold" style={styles.clearButtonText}>ابدأ من جديد</AppText>
                 </Pressable>
               ) : (
-                <View style={styles.resultsCountBadge}>
-                  <AppText weight="bold" style={styles.resultsCountText}>{filtered.length}</AppText>
-                </View>
+                <View style={styles.resultsCountBadge}><AppText weight="bold" style={styles.resultsCountText}>{filtered.length}</AppText></View>
               )}
             </View>
           </View>
@@ -636,42 +621,20 @@ export default function DiscoverScreen() {
             <DiscoverItemsLoadingState />
           ) : error ? (
             <View style={styles.stateBox}>
-              <EmptyState
-                title="المشهد مش متاح دلوقتي"
-                description={error}
-                iconName="cloud-offline-outline"
-                actionLabel="حاول مرة أخرى"
-                onAction={() => void loadItems()}
-              />
+              <EmptyState title="المشهد مش متاح دلوقتي" description={error} iconName="cloud-offline-outline" actionLabel="حاول مرة أخرى" onAction={() => void loadItems()} />
             </View>
           ) : isFilteredEmptyWithMore ? (
             <View style={styles.stateBox}>
-              <EmptyState
-                title="لسه ما لقيناش تطابق"
-                description="في نتائج أكثر لم تُحمّل بعد. افتح صفحة إضافية أو وسّع اختيارك."
-                iconName="search-outline"
-              />
+              <EmptyState title="لسه ما لقيناش تطابق" description="في نتائج أكثر لم تُحمّل بعد. افتح صفحة إضافية أو وسّع اختيارك." iconName="search-outline" />
               <AppButton label="حمّل نتائج أكثر" onPress={loadMoreItems} disabled={loadingMore} fullWidth />
               <AppButton label="وسّع الاختيار" variant="neutral" onPress={clearAllFilters} fullWidth />
             </View>
           ) : hasActiveFilters && filtered.length === 0 ? (
             <View style={styles.stateBox}>
-              <EmptyState
-                title="مفيش نتيجة بنفس الاختيار"
-                description="جرّب كلمة أوسع أو امسح فلتر واحد عشان نفتح لك المشهد."
-                iconName="options-outline"
-                actionLabel="مسح الفلاتر"
-                onAction={clearAllFilters}
-              />
+              <EmptyState title="مفيش نتيجة بنفس الاختيار" description="جرّب كلمة أوسع أو امسح فلتر واحد عشان نفتح لك المشهد." iconName="options-outline" actionLabel="مسح الفلاتر" onAction={clearAllFilters} />
             </View>
           ) : (
-            <EmptyState
-              title="المشهد هادئ حاليًا"
-              description="أول ما تتضاف عناصر جديدة هتظهر هنا مباشرة."
-              iconName="cube-outline"
-              actionLabel="اعرض حاجة"
-              onAction={() => router.push('/(tabs)/add')}
-            />
+            <EmptyState title="المشهد هادئ حاليًا" description="أول ما تتضاف عناصر جديدة هتظهر هنا مباشرة." iconName="cube-outline" actionLabel="اعرض حاجة" onAction={() => router.push('/(tabs)/add')} />
           )
         }
       />
@@ -680,13 +643,8 @@ export default function DiscoverScreen() {
         <View style={styles.filterSheetContent}>
           <View style={styles.filterSection}>
             <View style={styles.filterSectionHeading}>
-              <View style={styles.filterSectionIcon}>
-                <Ionicons name="navigate-outline" size={16} color={colors.accent} />
-              </View>
-              <View style={styles.filterSectionCopy}>
-                <AppText weight="bold">الأقرب ليك</AppText>
-                <AppText muted style={styles.filterSectionDescription}>نستخدم موقعك مرة واحدة ونبحث داخل 3 كم تقريبًا.</AppText>
-              </View>
+              <View style={styles.filterSectionIcon}><Ionicons name="navigate-outline" size={16} color={colors.accent} /></View>
+              <View style={styles.filterSectionCopy}><AppText weight="bold">الأقرب ليك</AppText><AppText muted style={styles.filterSectionDescription}>نستخدم موقعك مرة واحدة ونبحث داخل 3 كم تقريبًا.</AppText></View>
             </View>
             {activeNearbyLocation ? (
               <View style={styles.sheetLocationState}>
@@ -694,49 +652,25 @@ export default function DiscoverScreen() {
                 <AppButton label="عرض كل العناصر" variant="neutral" size="sm" onPress={clearNearbyFilter} />
               </View>
             ) : (
-              <AppButton
-                label={nearbyLoading ? 'بنحدد موقعك' : 'اعرض الأقرب لي'}
-                iconName="location-outline"
-                onPress={handleUseMyLocation}
-                loading={nearbyLoading}
-                fullWidth
-              />
+              <AppButton label={nearbyLoading ? 'بنحدد موقعك' : 'اعرض الأقرب لي'} iconName="location-outline" onPress={handleUseMyLocation} loading={nearbyLoading} fullWidth />
             )}
             {nearbyError ? <AppText muted style={styles.sheetErrorText}>{nearbyError}</AppText> : null}
-            {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? (
-              <AppText muted style={styles.filterSectionDescription}>لا توجد عناصر دقيقة في هذا النطاق بعد. جرّب عرض الكل أو عُد لاحقًا.</AppText>
-            ) : null}
+            {activeNearbyLocation && items.length === 0 && !hasActiveSearchOrFacetFilter ? <AppText muted style={styles.filterSectionDescription}>لا توجد عناصر دقيقة في هذا النطاق بعد. جرّب عرض الكل أو عُد لاحقًا.</AppText> : null}
           </View>
 
           <View style={styles.filterSection}>
             <View style={styles.filterSectionHeading}>
-              <View style={styles.filterSectionIconPrimary}>
-                <Ionicons name="pricetag-outline" size={16} color={colors.primary} />
-              </View>
-              <View style={styles.filterSectionCopy}>
-                <AppText weight="bold">الفئة</AppText>
-                <AppText muted style={styles.filterSectionDescription}>اختار نوع الحاجة اللي بتدور عليها.</AppText>
-              </View>
+              <View style={styles.filterSectionIconPrimary}><Ionicons name="pricetag-outline" size={16} color={colors.primary} /></View>
+              <View style={styles.filterSectionCopy}><AppText weight="bold">الفئة</AppText><AppText muted style={styles.filterSectionDescription}>اختار نوع الحاجة اللي بتدور عليها.</AppText></View>
             </View>
             <View style={styles.chipsRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: !selectedCategory }}
-                onPress={() => setSelectedCategory(null)}
-                style={({ pressed }) => [styles.chip, !selectedCategory && styles.chipActive, pressed && styles.chipPressed]}
-              >
+              <Pressable accessibilityRole="button" accessibilityState={{ selected: !selectedCategory }} onPress={() => setSelectedCategory(null)} style={({ pressed }) => [styles.chip, !selectedCategory && styles.chipActive, pressed && styles.chipPressed]}>
                 <AppText weight="semibold" style={!selectedCategory ? styles.chipTextActive : styles.chipText}>الكل</AppText>
               </Pressable>
               {availableCategories.map((category) => {
                 const isActive = selectedCategory?.toLocaleLowerCase() === category.toLocaleLowerCase();
                 return (
-                  <Pressable
-                    key={category}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                    onPress={() => setSelectedCategory(category)}
-                    style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}
-                  >
+                  <Pressable key={category} accessibilityRole="button" accessibilityState={{ selected: isActive }} onPress={() => setSelectedCategory(category)} style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}>
                     <AppText weight="semibold" style={isActive ? styles.chipTextActive : styles.chipText}>{category}</AppText>
                   </Pressable>
                 );
@@ -746,33 +680,17 @@ export default function DiscoverScreen() {
 
           <View style={styles.filterSection}>
             <View style={styles.filterSectionHeading}>
-              <View style={styles.filterSectionIconPrimary}>
-                <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
-              </View>
-              <View style={styles.filterSectionCopy}>
-                <AppText weight="bold">الحالة</AppText>
-                <AppText muted style={styles.filterSectionDescription}>قرّب مستوى الاستخدام المناسب ليك.</AppText>
-              </View>
+              <View style={styles.filterSectionIconPrimary}><Ionicons name="sparkles-outline" size={16} color={colors.primary} /></View>
+              <View style={styles.filterSectionCopy}><AppText weight="bold">الحالة</AppText><AppText muted style={styles.filterSectionDescription}>قرّب مستوى الاستخدام المناسب ليك.</AppText></View>
             </View>
             <View style={styles.chipsRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: !selectedCondition }}
-                onPress={() => setSelectedCondition(null)}
-                style={({ pressed }) => [styles.chip, !selectedCondition && styles.chipActive, pressed && styles.chipPressed]}
-              >
+              <Pressable accessibilityRole="button" accessibilityState={{ selected: !selectedCondition }} onPress={() => setSelectedCondition(null)} style={({ pressed }) => [styles.chip, !selectedCondition && styles.chipActive, pressed && styles.chipPressed]}>
                 <AppText weight="semibold" style={!selectedCondition ? styles.chipTextActive : styles.chipText}>الكل</AppText>
               </Pressable>
               {availableConditions.map((condition) => {
                 const isActive = selectedCondition?.toLocaleLowerCase() === condition.toLocaleLowerCase();
                 return (
-                  <Pressable
-                    key={condition}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                    onPress={() => setSelectedCondition(condition)}
-                    style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}
-                  >
+                  <Pressable key={condition} accessibilityRole="button" accessibilityState={{ selected: isActive }} onPress={() => setSelectedCondition(condition)} style={({ pressed }) => [styles.chip, isActive && styles.chipActive, pressed && styles.chipPressed]}>
                     <AppText weight="semibold" style={isActive ? styles.chipTextActive : styles.chipText}>{getConditionLabel(condition)}</AppText>
                   </Pressable>
                 );
@@ -800,7 +718,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.primary, fontSize: 11 },
   searchTitle: { fontSize: 19, lineHeight: 25 },
   searchDescription: { fontSize: 11, lineHeight: 17 },
-  searchIconShell: { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.1)' },
+  searchIconShell: { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   controlRow: { flexDirection: 'row-reverse', gap: spacing.sm },
   controlButton: {
     flex: 1,
@@ -812,7 +730,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.sm,
   },
   controlButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
@@ -822,18 +740,18 @@ const styles = StyleSheet.create({
   controlButtonTextActive: { color: colors.white },
   filterCountBadge: { minWidth: 21, height: 21, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
   filterCountText: { color: colors.white, fontSize: 10 },
-  locationBanner: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: 'rgba(62,124,115,0.09)' },
+  locationBanner: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.accentSoft },
   locationBannerCopy: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   locationBannerText: { flex: 1, color: colors.accent, fontSize: 11, lineHeight: 17 },
-  bannerCloseButton: { width: 30, height: 30, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
+  bannerCloseButton: { width: 30, height: 30, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   inlineError: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
   inlineErrorText: { flex: 1, fontSize: 11 },
   activeChipsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
-  activeChip: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: 'rgba(184,98,63,0.09)' },
+  activeChip: { maxWidth: '100%', flexDirection: 'row-reverse', alignItems: 'center', gap: 5, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.primarySoft },
   activeChipText: { maxWidth: 160, color: colors.primary, fontSize: 11 },
-  noticeCard: { borderColor: 'rgba(184,98,63,0.16)', borderRadius: radii.lg },
+  noticeCard: { borderColor: colors.border, borderRadius: radii.lg },
   noticeRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
-  noticeIcon: { width: 34, height: 34, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.09)' },
+  noticeIcon: { width: 34, height: 34, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   noticeText: { flex: 1, fontSize: 11, lineHeight: 18 },
   resultsHeading: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: spacing.xs },
   resultsHeadingCopy: { flex: 1, gap: 3 },
@@ -841,37 +759,37 @@ const styles = StyleSheet.create({
   resultsDescription: { fontSize: 12, lineHeight: 18 },
   resultsCountBadge: { minWidth: 38, height: 38, paddingHorizontal: spacing.sm, borderRadius: radii.round, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   resultsCountText: { color: colors.primary, fontSize: 14 },
-  clearButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: radii.round, backgroundColor: 'rgba(184,98,63,0.09)' },
+  clearButton: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: radii.round, backgroundColor: colors.primarySoft },
   clearButtonText: { color: colors.primary, fontSize: 10 },
   editorialModule: { marginBottom: spacing.md },
   editorialCard: { borderRadius: radii.lg },
   loadingList: { gap: spacing.md },
-  loadingCard: { borderRadius: radii.xl, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', backgroundColor: colors.surface },
-  loadingImage: { height: 184, backgroundColor: 'rgba(221,208,197,0.48)' },
+  loadingCard: { borderRadius: radii.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  loadingImage: { height: 184, backgroundColor: colors.neutralSoft },
   loadingCardCopy: { gap: spacing.sm, padding: spacing.md },
-  loadingLine: { height: 13, borderRadius: radii.round, backgroundColor: 'rgba(221,208,197,0.52)' },
+  loadingLine: { height: 13, borderRadius: radii.round, backgroundColor: colors.neutralSoft },
   loadingLineTitle: { width: '62%', height: 18 },
   loadingPillsRow: { flexDirection: 'row-reverse', gap: spacing.xs },
-  loadingPill: { width: 86, height: 26, borderRadius: radii.round, backgroundColor: 'rgba(221,208,197,0.42)' },
+  loadingPill: { width: 86, height: 26, borderRadius: radii.round, backgroundColor: colors.neutralSoft },
   loadingPillShort: { width: 62 },
   loadingLineOwner: { width: '44%' },
   stateBox: { gap: spacing.md },
   footerBox: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
   footerText: { fontSize: 12 },
-  footerErrorBox: { gap: spacing.sm, marginVertical: spacing.md, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: 'rgba(184,98,63,0.16)', backgroundColor: 'rgba(184,98,63,0.05)' },
+  footerErrorBox: { gap: spacing.sm, marginVertical: spacing.md, padding: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft },
   footerErrorCopy: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
   filterSheetContent: { gap: spacing.md, paddingBottom: spacing.xl },
-  filterSection: { gap: spacing.md, padding: spacing.md, borderRadius: radii.xl, borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', backgroundColor: 'rgba(255,253,248,0.78)' },
+  filterSection: { gap: spacing.md, padding: spacing.md, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   filterSectionHeading: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm },
-  filterSectionIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(62,124,115,0.1)' },
-  filterSectionIconPrimary: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(184,98,63,0.1)' },
+  filterSectionIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
+  filterSectionIconPrimary: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   filterSectionCopy: { flex: 1, gap: 2 },
   filterSectionDescription: { fontSize: 11, lineHeight: 17 },
   sheetLocationState: { gap: spacing.sm },
   sheetLocationText: { fontSize: 12, lineHeight: 19 },
   sheetErrorText: { color: colors.primary, fontSize: 11 },
   chipsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: spacing.xs },
-  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white },
+  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipPressed: { opacity: 0.76 },
   chipText: { fontSize: 12 },
