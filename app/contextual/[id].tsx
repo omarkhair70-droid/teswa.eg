@@ -10,7 +10,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
-import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
+import { KeyboardAwareScrollView, KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
@@ -67,6 +67,7 @@ export default function Screen() {
   const { refreshBadges } = useUnreadBadges();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const conversationId = Array.isArray(id) ? id[0]?.trim() ?? '' : id?.trim() ?? '';
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const loadRequestRef = useRef(0);
 
   const messageIdsRef = useRef<Set<string>>(new Set());
@@ -333,11 +334,7 @@ export default function Screen() {
   const recordingLabel = useMemo(() => `جاري التسجيل ${formatMs(recorderState.durationMillis ?? 0)}`, [recorderState.durationMillis]);
   const otherName = thread?.otherParticipant?.displayName ?? thread?.otherParticipant?.username ?? 'مستخدم تِسوى';
   const otherInitial = String(otherName).trim()?.[0]?.toUpperCase() || 'ت';
-  const realtimeLabel = realtimeStatus === 'live'
-    ? 'متصل لحظيًا'
-    : realtimeStatus === 'connecting'
-      ? 'جاري الاتصال...'
-      : 'التحديث اللحظي متوقف مؤقتًا';
+  const realtimeLabel = realtimeStatus === 'unavailable' ? 'جاري إعادة الاتصال...' : 'رد على قصة';
 
   if (!user?.id) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل دخولك للوصول للمحادثات." /></AppScreen>;
   if (!conversationId) return <AppScreen><View style={styles.group}><EmptyState title="تعذر فتح المحادثة" description="معرّف المحادثة غير صالح أو تم حذفها." /><AppButton label="العودة إلى الرسائل" variant="neutral" onPress={() => router.replace('/(tabs)/messages')} /></View></AppScreen>;
@@ -362,7 +359,6 @@ export default function Screen() {
           <View style={styles.personCopy}>
             <AppText weight="bold" style={styles.personName} numberOfLines={1}>{otherName}</AppText>
             <View style={styles.presenceRow}>
-              <View style={[styles.presenceDot, realtimeStatus === 'live' ? styles.presenceLive : realtimeStatus === 'unavailable' ? styles.presenceOffline : styles.presenceConnecting]} />
               <AppText muted style={styles.presenceText}>{realtimeLabel}</AppText>
             </View>
           </View>
@@ -457,7 +453,7 @@ export default function Screen() {
         )}
       </KeyboardAwareScrollView>
 
-      <KeyboardStickyView offset={{ opened: 0, closed: 0 }}>
+      <KeyboardStickyView enabled={keyboardVisible} offset={{ opened: 0, closed: 0 }}>
         <View style={styles.composerShell}>
           {voiceOpen ? (
             <View style={styles.voiceComposerCard}>
@@ -566,10 +562,6 @@ const styles = StyleSheet.create({
   personCopy: { flex: 1, alignItems: 'flex-end', gap: 2 },
   personName: { fontSize: 17, textAlign: 'right' },
   presenceRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  presenceDot: { width: 7, height: 7, borderRadius: radii.round },
-  presenceLive: { backgroundColor: colors.success },
-  presenceOffline: { backgroundColor: colors.textMuted },
-  presenceConnecting: { backgroundColor: colors.accent },
   presenceText: { fontSize: 10 },
   avatar: { width: 46, height: 46, borderRadius: radii.round },
   avatarFallback: { width: 46, height: 46, borderRadius: radii.round, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
