@@ -38,6 +38,7 @@ type ChatComposerProps = {
   sending?: boolean;
   attachmentDisabled?: boolean;
   voiceDisabled?: boolean;
+  hasPendingPayload?: boolean;
   reply?: ComposerReply | null;
   recording?: ComposerRecording | null;
   topSlot?: React.ReactNode;
@@ -56,13 +57,15 @@ export function ChatComposer({
   sending = false,
   attachmentDisabled = false,
   voiceDisabled = false,
+  hasPendingPayload = false,
   reply,
   recording,
   topSlot,
 }: ChatComposerProps) {
   const pulse = useRef(new Animated.Value(0.45)).current;
   const hasText = value.trim().length > 0;
-  const canSend = !disabled && !sending && hasText;
+  const hasSendablePayload = hasText || hasPendingPayload;
+  const canSend = !disabled && !sending && hasSendablePayload;
 
   useEffect(() => {
     if (!recording?.active) {
@@ -189,7 +192,7 @@ export function ChatComposer({
           />
         </View>
 
-        {hasText ? (
+        {hasSendablePayload ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="إرسال الرسالة"
