@@ -6,17 +6,10 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
-import { SettingsStatusCard } from '@/components/settings/SettingsStatusCard';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { checkIsAdminUser } from '@/lib/admin';
-import {
-  getCurrentLayoutDirectionNote,
-  getLanguagePreference,
-  setLanguagePreference,
-  type LanguagePreference,
-} from '@/lib/i18n';
 import { fetchDirectPrivacySetting, type DirectPrivacySetting } from '@/lib/direct-privacy';
 import { useThemePreferences, type AppearancePreference } from '@/lib/preferences/appearance';
 
@@ -27,11 +20,6 @@ const appearanceOptions: SettingsOption<AppearancePreference>[] = [
   { label: 'حسب النظام', value: 'system', description: 'يتبع إعدادات جهازك تلقائيًا.' },
   { label: 'فاتح', value: 'light', description: 'واجهة فاتحة للاستخدام اليومي.' },
   { label: 'داكن', value: 'dark', description: 'يستخدم الوضع الداكن في الشاشات المدعومة.' },
-];
-const languageOptions: SettingsOption<LanguagePreference>[] = [
-  { label: 'العربية', value: 'ar', description: 'اللغة الأساسية وتجربة RTL.' },
-  { label: 'English', value: 'en', description: 'هيتوفر بعد اكتمال ترجمة التجربة.', disabled: true },
-  { label: 'حسب النظام', value: 'system', description: 'يتبع لغة الجهاز عند اكتمال دعم اللغات.' },
 ];
 const privacyLabels: Record<DirectPrivacySetting, string> = { everyone: 'أي حد', followers_only: 'المتابعين فقط', no_one: 'لا أحد' };
 const toneStyles = {
@@ -78,7 +66,6 @@ function LinkRow({ icon, label, description, onPress, badge, danger = false }: {
 
 export default function SettingsScreen() {
   const [showAdminReports, setShowAdminReports] = useState(false);
-  const [languagePreference, setLanguagePreferenceState] = useState<LanguagePreference>(getLanguagePreference);
   const [privacyValue, setPrivacyValue] = useState<DirectPrivacySetting | null>(null);
   const [privacyLoaded, setPrivacyLoaded] = useState(false);
   const { appearancePreference, setAppearancePreference, resolvedThemeMode } = useThemePreferences();
@@ -105,9 +92,7 @@ export default function SettingsScreen() {
   }, []));
 
   const appearanceLabel = useMemo(() => appearancePreference === 'system' ? `النظام · ${resolvedThemeMode === 'dark' ? 'داكن' : 'فاتح'}` : appearancePreference === 'dark' ? 'داكن' : 'فاتح', [appearancePreference, resolvedThemeMode]);
-  const languageLabel = languagePreference === 'system' ? 'النظام' : languagePreference === 'en' ? 'English' : 'العربية';
   const privacyLabel = privacyValue ? privacyLabels[privacyValue] : privacyLoaded ? 'غير متاح' : '...';
-  const setLanguage = (value: LanguagePreference) => { setLanguagePreferenceState(value); setLanguagePreference(value); };
 
   return (
     <AppScreen scrollable backgroundVariant="alive">
@@ -121,8 +106,6 @@ export default function SettingsScreen() {
 
         <View style={styles.summaryStrip}>
           <View style={styles.summaryItem}><AppIcon name="palette" size={15} color={colors.primary} /><AppText weight="semibold" style={styles.summaryValue}>{appearanceLabel}</AppText><AppText muted style={styles.summaryLabel}>المظهر</AppText></View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}><AppIcon name="globe" size={15} color={colors.accent} /><AppText weight="semibold" style={styles.summaryValue}>{languageLabel}</AppText><AppText muted style={styles.summaryLabel}>اللغة</AppText></View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}><AppIcon name="shield" size={15} color={colors.text} /><AppText weight="semibold" style={styles.summaryValue}>{privacyLabel}</AppText><AppText muted style={styles.summaryLabel}>الرسائل</AppText></View>
         </View>
@@ -148,15 +131,6 @@ export default function SettingsScreen() {
 
         <SettingsSection icon="palette" tone="neutral" title="المظهر" description="شكل تِسوى على جهازك.">
           {appearanceOptions.map((option) => <OptionRow key={option.value} option={option} selected={appearancePreference === option.value} onSelect={setAppearancePreference} />)}
-        </SettingsSection>
-
-        <SettingsSection icon="globe" tone="neutral" title="اللغة" description="تِسوى عربية أولًا، ودعم اللغات بيتوسع تدريجيًا.">
-          {languageOptions.map((option) => <OptionRow key={option.value} option={option} selected={languagePreference === option.value} onSelect={setLanguage} />)}
-          <View style={styles.noteRow}><AppIcon name="info" size={14} color={colors.textMuted} /><AppText muted style={styles.note}>{getCurrentLayoutDirectionNote()}</AppText></View>
-        </SettingsSection>
-
-        <SettingsSection icon="info" tone="neutral" title="عن تِسوى" description="حالة الخدمات والإعدادات المدعومة حاليًا.">
-          <SettingsStatusCard />
         </SettingsSection>
       </View>
     </AppScreen>
@@ -199,8 +173,6 @@ const styles = StyleSheet.create({
   radioDot: { width: 12, height: 12, borderRadius: radii.round, backgroundColor: colors.primary },
   soonPill: { borderRadius: radii.round, backgroundColor: '#EEE7DF', paddingHorizontal: 7, paddingVertical: 2 },
   soonText: { fontSize: 9, color: colors.textMuted },
-  noteRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: spacing.xs },
-  note: { flex: 1, fontSize: 11, lineHeight: 17, textAlign: 'right' },
   disabled: { opacity: 0.55 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.995 }] },
 });
