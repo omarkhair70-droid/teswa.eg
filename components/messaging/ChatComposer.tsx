@@ -39,6 +39,7 @@ type ChatComposerProps = {
   attachmentDisabled?: boolean;
   voiceDisabled?: boolean;
   hasPendingPayload?: boolean;
+  maxLength?: number;
   reply?: ComposerReply | null;
   recording?: ComposerRecording | null;
   topSlot?: React.ReactNode;
@@ -58,6 +59,7 @@ export function ChatComposer({
   attachmentDisabled = false,
   voiceDisabled = false,
   hasPendingPayload = false,
+  maxLength = 1200,
   reply,
   recording,
   topSlot,
@@ -163,7 +165,7 @@ export function ChatComposer({
         {onPressAttachment ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="إضافة صورة أو ملف"
+            accessibilityLabel="إضافة للمحادثة"
             hitSlop={6}
             disabled={disabled || attachmentDisabled}
             style={({ pressed }) => [styles.leadingAction, pressed && styles.pressed]}
@@ -185,7 +187,7 @@ export function ChatComposer({
             placeholder={placeholder}
             placeholderTextColor={colors.textMuted}
             multiline
-            maxLength={2000}
+            maxLength={maxLength}
             style={styles.input}
             textAlignVertical="center"
             accessibilityLabel="اكتب رسالة"
