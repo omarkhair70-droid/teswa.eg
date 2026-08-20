@@ -16,6 +16,7 @@ export type FetchDirectMessagesResult =
   | { ok: true; messages: DirectMessage[] }
   | { ok: false; message: string; messages: DirectMessage[] };
 export type StartDirectConversationResult = { ok: boolean; conversationId: string | null; status: DirectConversationStatus | null; requiresRequest: boolean; message: string };
+export type StartDirectConversationWithMessageResult = { ok: boolean; conversationId: string | null; messageId: string | null; status: DirectConversationStatus | null; createdAt: string | null; message: string };
 export type SendDirectMessageResult = { ok: boolean; message: string; messageId: string | null; conversationId: string | null; createdAt: string | null };
 export type DirectRequestActionResult = { ok: boolean; message: string };
 
@@ -34,7 +35,6 @@ async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
   const response = await fetch(uri);
   return response.arrayBuffer();
 }
-
 
 function normalizeConversationSummaryRow(r: any): DirectConversationSummary {
   return {
@@ -58,8 +58,44 @@ function getConversationSortTimestamp(item: DirectConversationSummary): number {
   return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
 }
 
-export async function startOrGetDirectConversation(targetUserId: string): Promise<StartDirectConversationResult> { const { data, error } = await supabase.rpc('start_or_get_direct_conversation', { p_target_user_id: targetUserId }); if (error) return { ok: false, conversationId: null, status: null, requiresRequest: false, message: 'تعذر فتح المراسلة حالياً.' }; const row = Array.isArray(data) ? data[0] : null; return { ok: !!row?.ok, conversationId: row?.conversation_id ?? null, status: row?.status ?? null, requiresRequest: !!row?.requires_request, message: row?.message ?? 'تعذر فتح المراسلة حالياً.' }; }
-export async function fetchMyDirectConversations(): Promise<DirectConversationSummary[]> { const { data, error } = await supabase.rpc('get_my_direct_conversations'); if (error) return []; const rows: DirectConversationSummary[] = (data ?? []).map(normalizeConversationSummaryRow); return rows.sort((a: DirectConversationSummary, b: DirectConversationSummary) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a)); }
+export async function startOrGetDirectConversation(targetUserId: string): Promise<StartDirectConversationResult> {
+  const { data, error } = await supabase.rpc('start_or_get_direct_conversation', { p_target_user_id: targetUserId });
+  if (error) return { ok: false, conversationId: null, status: null, requiresRequest: false, message: 'تعذر فتح المراسلة حالياً.' };
+  const row = Array.isArray(data) ? data[0] : null;
+  return { ok: !!row?.ok, conversationId: row?.conversation_id ?? null, status: row?.status ?? null, requiresRequest: !!row?.requires_request, message: row?.message ?? 'تعذر فتح المراسلة حالياً.' };
+}
+
+export async function startDirectConversationWithMessage(targetUserId: string, body: string): Promise<StartDirectConversationWithMessageResult> {
+  const trimmed = body.trim();
+  if (!trimmed || trimmed.length > 1200) {
+    return { ok: false, conversationId: null, messageId: null, status: null, createdAt: null, message: 'الرسالة يجب أن تكون بين 1 و1200 حرف.' };
+  }
+  const { data, error } = await supabase.rpc('start_direct_conversation_with_message', {
+    p_target_user_id: targetUserId,
+    p_body: trimmed,
+  });
+  if (error) {
+    if (__DEV__) console.warn('[direct] start_direct_conversation_with_message failed', { code: error.code, message: error.message });
+    return { ok: false, conversationId: null, messageId: null, status: null, createdAt: null, message: 'تعذر إرسال الرسالة حالياً.' };
+  }
+  const row = Array.isArray(data) ? data[0] : null;
+  return {
+    ok: !!row?.ok,
+    conversationId: row?.conversation_id ?? null,
+    messageId: row?.message_id ?? null,
+    status: row?.status ?? null,
+    createdAt: row?.created_at ?? null,
+    message: row?.message ?? 'تعذر إرسال الرسالة حالياً.',
+  };
+}
+
+export async function fetchMyDirectConversations(): Promise<DirectConversationSummary[]> {
+  const { data, error } = await supabase.rpc('get_my_direct_conversations');
+  if (error) return [];
+  const rows: DirectConversationSummary[] = (data ?? []).map(normalizeConversationSummaryRow);
+  return rows.sort((a: DirectConversationSummary, b: DirectConversationSummary) => getConversationSortTimestamp(b) - getConversationSortTimestamp(a));
+}
+
 export async function fetchDirectConversation(conversationId: string): Promise<DirectConversationSummary | null> {
   const { data, error } = await supabase.rpc('get_direct_conversation', { p_conversation_id: conversationId });
   if (error) return null;
@@ -75,7 +111,18 @@ export async function fetchDirectConversationMessages(conversationId: string): P
   }
   return { ok: true, messages: (data ?? []).map((r: any) => ({ id: r.id, senderId: r.sender_id, body: r.body, messageType: r.message_type === 'voice' ? 'voice' : 'text', audioStoragePath: r.audio_storage_path ?? null, audioDurationMs: r.audio_duration_ms ?? null, audioMimeType: r.audio_mime_type ?? null, audioSizeBytes: r.audio_size_bytes ?? null, createdAt: r.created_at, readAt: r.read_at ?? null })) };
 }
-export async function sendDirectMessage(conversationId: string, body: string): Promise<SendDirectMessageResult> { const trimmed = body.trim(); if (!trimmed) return { ok: false, message: 'اكتب رسالة الأول.', messageId: null, conversationId: conversationId ?? null, createdAt: null }; const { data, error } = await supabase.rpc('send_direct_message', { p_conversation_id: conversationId, p_body: trimmed }); if (error) { if (__DEV__) console.warn('[direct] send_direct_message rpc failed', { code: error.code, message: error.message }); const friendly = error.code === '42501' ? 'غير مسموح بإرسال الرسائل في هذه المحادثة حالياً.' : 'تعذر إرسال الرسالة حالياً. حاول تاني بعد لحظات.'; return { ok: false, message: friendly, messageId: null, conversationId: null, createdAt: null }; } const row = Array.isArray(data) ? data[0] : null; return { ok: !!row?.ok, message: row?.message ?? 'تعذر إرسال الرسالة حالياً.', messageId: row?.message_id ?? null, conversationId: row?.conversation_id ?? null, createdAt: row?.created_at ?? null }; }
+export async function sendDirectMessage(conversationId: string, body: string): Promise<SendDirectMessageResult> {
+  const trimmed = body.trim();
+  if (!trimmed) return { ok: false, message: 'اكتب رسالة الأول.', messageId: null, conversationId: conversationId ?? null, createdAt: null };
+  const { data, error } = await supabase.rpc('send_direct_message', { p_conversation_id: conversationId, p_body: trimmed });
+  if (error) {
+    if (__DEV__) console.warn('[direct] send_direct_message rpc failed', { code: error.code, message: error.message });
+    const friendly = error.code === '42501' ? 'غير مسموح بإرسال الرسائل في هذه المحادثة حالياً.' : 'تعذر إرسال الرسالة حالياً. حاول تاني بعد لحظات.';
+    return { ok: false, message: friendly, messageId: null, conversationId: null, createdAt: null };
+  }
+  const row = Array.isArray(data) ? data[0] : null;
+  return { ok: !!row?.ok, message: row?.message ?? 'تعذر إرسال الرسالة حالياً.', messageId: row?.message_id ?? null, conversationId: row?.conversation_id ?? null, createdAt: row?.created_at ?? null };
+}
 
 export async function createDirectVoiceMessageSignedUrl(storagePath: string, expiresInSeconds = 60 * 60): Promise<string | null> {
   const { data, error } = await supabase.storage.from(DIRECT_VOICE_MESSAGES_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
@@ -112,7 +159,6 @@ async function runRequestAction(rpc: 'accept_direct_message_request' | 'ignore_d
 
 export async function acceptDirectMessageRequest(conversationId: string): Promise<DirectRequestActionResult> { return runRequestAction('accept_direct_message_request', conversationId); }
 export async function ignoreDirectMessageRequest(conversationId: string): Promise<DirectRequestActionResult> { return runRequestAction('ignore_direct_message_request', conversationId); }
-
 
 export async function markDirectConversationRead(conversationId: string): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!conversationId) return { ok: false, message: 'تعذر تحديث حالة القراءة حالياً.' };
