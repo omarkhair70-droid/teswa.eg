@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { ActivityIndicator, FlatList, Image, Keyboard, Pressable, StyleSheet, View } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -90,6 +90,7 @@ export default function DealConversationScreen() {
   const router = useRouter();
   const { id, moment } = useLocalSearchParams<{ id?: string | string[]; moment?: string }>();
   const dealId = (Array.isArray(id) ? id[0] : id)?.trim() ?? '';
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const { refreshBadges } = useUnreadBadges();
 
   const listRef = useRef<FlatList<UiDealMessage>>(null);
@@ -521,7 +522,7 @@ export default function DealConversationScreen() {
           <View style={styles.avatarWrap}>{deal.otherParticipant.avatarUrl ? <Image source={{ uri: deal.otherParticipant.avatarUrl }} style={styles.avatar} /> : <Ionicons name="person" size={21} color={colors.textMuted} />}</View>
           <View style={styles.identityCopy}>
             <AppText weight="bold" numberOfLines={1}>{deal.otherParticipant.displayName ?? 'مستخدم تِسوى'}</AppText>
-            <View style={styles.liveRow}><View style={[styles.liveDot, realtimeStatus !== 'live' && styles.liveDotMuted]} /><AppText muted style={styles.liveText}>{realtimeStatus === 'live' ? 'دردشة الصفقة • متصل' : realtimeStatus === 'connecting' ? 'دردشة الصفقة • جاري الاتصال' : 'دردشة الصفقة • سيُعاد الاتصال'}</AppText></View>
+            <AppText muted style={styles.liveText}>{realtimeStatus === 'offline' ? 'دردشة الصفقة • جاري إعادة الاتصال' : 'دردشة الصفقة'}</AppText>
           </View>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="خيارات الصفقة" style={styles.headerButton} onPress={() => presentActions(actionsRef)}><Ionicons name="ellipsis-horizontal" size={21} color={colors.text} /></Pressable>
@@ -578,7 +579,7 @@ export default function DealConversationScreen() {
         {newMessagesAvailable ? <Pressable style={styles.newMessageButton} onPress={() => { setNewMessagesAvailable(false); listRef.current?.scrollToEnd({ animated: true }); }}><Ionicons name="arrow-down" size={15} color={colors.background} /><AppText weight="semibold" style={styles.newMessageText}>رسائل جديدة</AppText></Pressable> : null}
       </View>
 
-      <KeyboardStickyView offset={{ opened: 4, closed: 0 }}>
+      <KeyboardStickyView enabled={keyboardVisible} offset={{ opened: 0, closed: 0 }}>
         <ChatComposer
           value={body}
           onChangeText={setBody}
@@ -630,9 +631,6 @@ const styles = StyleSheet.create({
   avatarWrap: { width: 42, height: 42, borderRadius: 21, overflow: 'hidden', backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: '100%', height: '100%' },
   identityCopy: { flex: 1, minWidth: 0, gap: 2, alignItems: 'flex-end' },
-  liveRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
-  liveDotMuted: { backgroundColor: colors.textMuted },
   liveText: { fontSize: 11.5 },
   listArea: { flex: 1, position: 'relative' },
   messagesContent: { paddingBottom: 18, gap: 4 },
