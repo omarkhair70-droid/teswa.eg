@@ -14,7 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate-repository:
+    name: Repository contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Database migration history
+        run: node scripts/check-db-migration-history.mjs
+
   validate-mobile:
+    name: Mobile validation
+    needs: validate-repository
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -28,17 +47,47 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.11.0'
+          node-version: '22.13.0'
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
       - name: Expo Doctor
-        run: npx expo-doctor@latest
+        run: npx expo-doctor@1.20.2
 
       - name: TypeScript
         run: npm run typecheck
 
       - name: Production Android bundle
         run: npx expo export --platform android --clear
+
+  database-contracts:
+    name: Live database contracts
+    needs: validate-repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Database contract credential status
+        if: env.SUPABASE_DB_URL == ''
+        run: echo "::warning::SUPABASE_DB_URL is not configured; live SQL contract execution is skipped."
+
+      - name: Install PostgreSQL client
+        if: env.SUPABASE_DB_URL != ''
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run database contract suite
+        if: env.SUPABASE_DB_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in supabase/tests/*.sql; do
+            echo "Running ${file}"
+            psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -f "$file"
+          done
