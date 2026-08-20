@@ -3,9 +3,8 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
+  Keyboard,
   Linking,
-  Modal,
   Pressable,
   StyleSheet,
   View,
@@ -16,6 +15,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { Image as ExpoImage } from 'expo-image';
 import { File } from 'expo-file-system';
 import {
   AudioModule,
@@ -29,11 +29,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
+import { ChatAttachmentGallery, type ChatAttachmentGalleryItem } from '@/components/messaging/ChatAttachmentGallery';
 import { ChatComposer } from '@/components/messaging/ChatComposer';
+import { ChatMediaViewer, type ChatMediaViewerItem } from '@/components/messaging/ChatMediaViewer';
+import { DolabShareSheet, type DolabShareItem } from '@/components/messaging/DolabShareSheet';
 import { MessageBubble } from '@/components/messaging/MessageBubble';
+import { PendingAttachmentStrip, type PendingChatAttachment } from '@/components/messaging/PendingAttachmentStrip';
 import { VoiceMessageBubble } from '@/components/messaging/VoiceMessageBubble';
 import { AppButton } from '@/components/ui/AppButton';
-import { AppCard } from '@/components/ui/AppCard';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -61,6 +64,8 @@ import {
   type NativeDirectAttachment,
   type NativeDirectMessage,
 } from '@/lib/chat/supabase-direct-chat';
+import { directAttachmentLimits, prepareDirectAttachment } from '@/lib/chat/direct-media-preflight';
+import { loadRecentDolabShareables, saveDirectMessageToDolab } from '@/lib/dolab/chat-bridge';
 import {
   blockUserFromMobile,
   fetchUserBlockState,
@@ -68,19 +73,17 @@ import {
 } from '@/lib/user-blocks';
 import { showToast } from '@/lib/toast';
 
-type UiMessage = NativeDirectMessage & { localStatus?: 'sending' | 'failed' };
-type LocalAttachment = {
-  kind: 'image' | 'video' | 'file';
-  uri: string;
-  fileName?: string | null;
-  mimeType?: string | null;
-  sizeBytes?: number | null;
+type UiMessage = NativeDirectMessage & {
+  localStatus?: 'sending' | 'failed';
+  localPreviewAttachments?: PendingChatAttachment[];
 };
 
-type SelectedMedia = { url: string; title?: string | null } | null;
+type SendProgress = { label: string; done: number; total: number } | null;
 
 const PAGE_SIZE = 50;
 const MAX_VOICE_DURATION_MS = 120_000;
+const SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
+const MEDIA_PREVIEW_BODIES = new Set(['صورة', 'فيديو', 'ملف', 'رسالة صوتية']);
 
 function mergeMessages(previous: UiMessage[], next: UiMessage[]) {
   const map = new Map<string, UiMessage>();
@@ -131,15 +134,29 @@ function attachmentKey(attachment: NativeDirectAttachment) {
   return `${attachment.storageBucket ?? 'direct-chat-media'}:${attachment.storagePath}`;
 }
 
+function pendingId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function displayMessageBody(message: UiMessage) {
+  const text = message.body?.trim() ?? '';
+  if ((message.attachments.length || message.localPreviewAttachments?.length) && MEDIA_PREVIEW_BODIES.has(text)) return '';
+  return text;
+}
+
 export default function DirectConversationScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const conversationId = (Array.isArray(id) ? id[0] : id)?.trim() ?? '';
+
   const listRef = useRef<FlatList<UiMessage>>(null);
   const messageActionsRef = useRef<BottomSheetModal>(null);
   const conversationActionsRef = useRef<BottomSheetModal>(null);
   const attachmentActionsRef = useRef<BottomSheetModal>(null);
+  const dolabShareRef = useRef<BottomSheetModal>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sheetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentAtRef = useRef(0);
   const isNearBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
@@ -155,14 +172,19 @@ export default function DirectConversationScreen() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<LocalAttachment | null>(null);
+  const [sendProgress, setSendProgress] = useState<SendProgress>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingChatAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<UiMessage | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<UiMessage | null>(null);
   const [resolvedUrls, setResolvedUrls] = useState<Record<string, string | null>>({});
-  const [selectedMedia, setSelectedMedia] = useState<SelectedMedia>(null);
+  const [mediaViewer, setMediaViewer] = useState<ChatMediaViewerItem | null>(null);
   const [newMessagesAvailable, setNewMessagesAvailable] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
+  const [blockedMe, setBlockedMe] = useState(false);
   const [blockBusy, setBlockBusy] = useState(false);
+  const [dolabItems, setDolabItems] = useState<DolabShareItem[]>([]);
+  const [dolabLoading, setDolabLoading] = useState(false);
+  const [dolabError, setDolabError] = useState<string | null>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 200);
@@ -175,11 +197,32 @@ export default function DirectConversationScreen() {
   const [voiceLoadingId, setVoiceLoadingId] = useState<string | null>(null);
 
   const accepted = conversation?.status === 'accepted';
-  const canCompose = !!accepted && !blockedByMe && !sending;
+  const interactionBlocked = blockedByMe || blockedMe;
+  const canCompose = !!accepted && !interactionBlocked && !sending;
   const isReceiverOnRequest = conversation?.status === 'requested' && conversation.requestedBy !== user?.id;
   const isRequesterOnRequest = conversation?.status === 'requested' && conversation.requestedBy === user?.id;
 
   const notify = useCallback((title: string) => showToast({ title }), []);
+
+  const presentAfterKeyboard = useCallback((ref: React.RefObject<BottomSheetModal | null>, delay = 180) => {
+    Keyboard.dismiss();
+    if (sheetTimerRef.current) clearTimeout(sheetTimerRef.current);
+    sheetTimerRef.current = setTimeout(() => ref.current?.present(), delay);
+  }, []);
+
+  useEffect(() => () => {
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    if (sheetTimerRef.current) clearTimeout(sheetTimerRef.current);
+    if (realtimeRefreshTimerRef.current) clearTimeout(realtimeRefreshTimerRef.current);
+  }, []);
+
+  const loadBlockState = useCallback(async () => {
+    if (!user?.id || !conversation?.otherUserId) return;
+    const result = await fetchUserBlockState(user.id, conversation.otherUserId);
+    if (!result.ok) return;
+    setBlockedByMe(result.state.blockedByMe);
+    setBlockedMe(result.state.blockedMe);
+  }, [conversation?.otherUserId, user?.id]);
 
   const loadConversation = useCallback(async () => {
     if (!conversationId) return null;
@@ -252,61 +295,63 @@ export default function DirectConversationScreen() {
   }, [conversationId, loadConversation]);
 
   useEffect(() => { void initialLoad(); }, [initialLoad]);
-
-  useEffect(() => {
-    if (!user?.id || !conversation?.otherUserId) return;
-    let cancelled = false;
-    void fetchUserBlockState(user.id, conversation.otherUserId).then((result) => {
-      if (!cancelled && result.ok) setBlockedByMe(result.state.blockedByMe);
-    });
-    return () => { cancelled = true; };
-  }, [conversation?.otherUserId, user?.id]);
+  useEffect(() => { void loadBlockState(); }, [loadBlockState]);
 
   const refreshTyping = useCallback(async () => {
     if (!accepted || !conversationId || !user?.id) return;
     const users = await fetchNativeDirectTypingUsers(conversationId);
-    setTypingUsers(users.filter((idValue) => idValue !== user.id));
+    setTypingUsers(users.filter((value) => value !== user.id));
   }, [accepted, conversationId, user?.id]);
 
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (realtimeRefreshTimerRef.current) clearTimeout(realtimeRefreshTimerRef.current);
+    realtimeRefreshTimerRef.current = setTimeout(() => {
+      void loadLatestMessages({ silent: true, keepExisting: true }).then(() => {
+        if (isNearBottomRef.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+        else setNewMessagesAvailable(true);
+      });
+    }, 90);
+  }, [loadLatestMessages]);
+
   useEffect(() => {
-    if (!accepted || !conversationId) {
-      setRealtimeStatus('offline');
-      setTypingUsers([]);
-      return;
-    }
+    if (!conversationId || !user?.id) return;
     setRealtimeStatus('connecting');
     const stop = subscribeToNativeDirectConversation(conversationId, {
-      onMessagesChanged: () => {
-        void loadLatestMessages({ silent: true, keepExisting: true }).then(() => {
-          if (isNearBottomRef.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-          else setNewMessagesAvailable(true);
+      onConversationChanged: () => {
+        void loadConversation().then(() => {
+          void loadBlockState();
+          scheduleRealtimeRefresh();
         });
       },
-      onAttachmentsChanged: () => { void loadLatestMessages({ silent: true, keepExisting: true }); },
-      onReactionsChanged: () => { void loadLatestMessages({ silent: true, keepExisting: true }); },
+      onMessagesChanged: scheduleRealtimeRefresh,
+      onAttachmentsChanged: scheduleRealtimeRefresh,
+      onReactionsChanged: scheduleRealtimeRefresh,
       onTypingChanged: () => { void refreshTyping(); },
       onStatus: (status) => {
         if (status === 'SUBSCRIBED') setRealtimeStatus('live');
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setRealtimeStatus('offline');
       },
     });
-    void refreshTyping();
+    if (accepted) void refreshTyping();
     return () => stop();
-  }, [accepted, conversationId, loadLatestMessages, refreshTyping]);
+  }, [accepted, conversationId, loadBlockState, loadConversation, refreshTyping, scheduleRealtimeRefresh, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
-    const missing = messages.flatMap((message) => message.attachments).filter((attachment) => resolvedUrls[attachmentKey(attachment)] === undefined);
-    if (!missing.length) return;
-    void Promise.all(missing.map(async (attachment) => {
+    const unique = new Map<string, NativeDirectAttachment>();
+    messages.flatMap((message) => message.attachments).forEach((attachment) => {
       const key = attachmentKey(attachment);
-      const url = await createNativeDirectAttachmentSignedUrl(
+      if (resolvedUrls[key] === undefined) unique.set(key, attachment);
+    });
+    if (!unique.size) return;
+    void Promise.all(Array.from(unique.entries()).map(async ([key, attachment]) => ({
+      key,
+      url: await createNativeDirectAttachmentSignedUrl(
         attachment.storagePath,
-        60 * 60,
+        SIGNED_URL_TTL_SECONDS,
         attachment.storageBucket,
-      );
-      return { key, url };
-    })).then((entries) => {
+      ),
+    }))).then((entries) => {
       if (cancelled) return;
       setResolvedUrls((prev) => {
         const next = { ...prev };
@@ -343,7 +388,7 @@ export default function DirectConversationScreen() {
 
   const onChangeBody = useCallback((value: string) => {
     setBody(value);
-    if (!accepted) return;
+    if (!accepted || interactionBlocked) return;
     const now = Date.now();
     if (now - lastTypingSentAtRef.current > 1200) {
       lastTypingSentAtRef.current = now;
@@ -351,84 +396,106 @@ export default function DirectConversationScreen() {
     }
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => { void setNativeDirectTypingState(conversationId, false); }, 1800);
-  }, [accepted, conversationId]);
+  }, [accepted, conversationId, interactionBlocked]);
 
   useEffect(() => () => {
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     if (accepted) void setNativeDirectTypingState(conversationId, false);
   }, [accepted, conversationId]);
 
+  const appendPendingAttachments = useCallback((incoming: PendingChatAttachment[]) => {
+    const existingUris = new Set(pendingAttachments.map((item) => item.uri));
+    const unique = incoming.filter((item) => item.uri && !existingUris.has(item.uri));
+    const remaining = directAttachmentLimits.maxAttachmentsPerMessage - pendingAttachments.length;
+    if (remaining <= 0) {
+      notify('يمكن إرسال حتى 5 مرفقات في الرسالة الواحدة.');
+      return;
+    }
+    const acceptedItems = unique.slice(0, remaining);
+    setPendingAttachments((prev) => [...prev, ...acceptedItems]);
+    if (unique.length > acceptedItems.length) notify('اختارنا أول 5 مرفقات فقط.');
+  }, [notify, pendingAttachments]);
+
   const sendCurrent = useCallback(async () => {
     if (!canCompose || !user?.id) return;
     const trimmed = body.trim();
-    if (!trimmed && !pendingAttachment) return;
-    setSending(true);
-    setError(null);
+    const attachmentSnapshot = pendingAttachments.slice(0, directAttachmentLimits.maxAttachmentsPerMessage);
+    if (!trimmed && !attachmentSnapshot.length) return;
+
+    const replySnapshot = replyTarget;
     const localId = `local-${Date.now()}`;
-    const optimistic: UiMessage | null = !pendingAttachment && trimmed ? {
+    const optimistic: UiMessage = {
       id: localId,
       senderId: user.id,
       body: trimmed,
       messageType: 'text',
       createdAt: new Date().toISOString(),
       readAt: null,
-      replyToMessageId: replyTarget?.id ?? null,
-      replySenderId: replyTarget?.senderId ?? null,
-      replyBody: replyTarget?.body ?? null,
+      replyToMessageId: replySnapshot?.id ?? null,
+      replySenderId: replySnapshot?.senderId ?? null,
+      replyBody: replySnapshot?.body ?? null,
       metadata: {},
       deletedAt: null,
       attachments: [],
       reactions: [],
       localStatus: 'sending',
-    } : null;
-    if (optimistic) {
-      setMessages((prev) => [...prev, optimistic]);
-      setBody('');
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-    }
+      localPreviewAttachments: attachmentSnapshot,
+    };
 
-    let uploaded: NativeDirectAttachment | null = null;
+    setSending(true);
+    setError(null);
+    setMessages((prev) => [...prev, optimistic]);
+    setBody('');
+    setPendingAttachments([]);
+    setReplyTarget(null);
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+
+    const uploaded: NativeDirectAttachment[] = [];
     try {
-      if (pendingAttachment) {
+      for (let index = 0; index < attachmentSnapshot.length; index += 1) {
+        const local = attachmentSnapshot[index];
+        setSendProgress({ label: local.kind === 'video' ? 'بنجهّز الفيديو...' : 'بنجهّز المرفقات...', done: index, total: attachmentSnapshot.length });
+        const prepared = await prepareDirectAttachment(local);
+        if (!prepared.ok) throw new Error(prepared.message);
+
+        setSendProgress({ label: `بنرفع المرفق ${index + 1} من ${attachmentSnapshot.length}...`, done: index, total: attachmentSnapshot.length });
         const upload = await uploadNativeDirectAttachment({
           conversationId,
           currentUserId: user.id,
-          localUri: pendingAttachment.uri,
-          kind: pendingAttachment.kind,
-          fileName: pendingAttachment.fileName,
-          mimeType: pendingAttachment.mimeType,
-          sizeBytes: pendingAttachment.sizeBytes,
+          localUri: prepared.attachment.uri,
+          kind: prepared.attachment.kind,
+          fileName: prepared.attachment.fileName,
+          mimeType: prepared.attachment.mimeType,
+          sizeBytes: prepared.attachment.sizeBytes,
         });
         if (!upload.ok) throw new Error(upload.message);
-        uploaded = upload.attachment;
+        uploaded.push(upload.attachment);
+        setSendProgress({ label: 'المرفقات اترفعت، بنرسل الرسالة...', done: index + 1, total: attachmentSnapshot.length });
       }
 
       const result = await sendNativeDirectMessage({
         conversationId,
         body: trimmed || null,
-        replyToMessageId: replyTarget?.id ?? null,
-        attachments: uploaded ? [uploaded] : [],
+        replyToMessageId: replySnapshot?.id ?? null,
+        attachments: uploaded,
       });
       if (!result.ok) throw new Error(result.message);
 
-      if (optimistic) setMessages((prev) => prev.filter((message) => message.id !== localId));
-      setBody('');
-      setPendingAttachment(null);
-      setReplyTarget(null);
+      setMessages((prev) => prev.filter((message) => message.id !== localId));
+      setSendProgress(null);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       await loadLatestMessages({ silent: true, keepExisting: true });
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     } catch (sendError) {
-      if (uploaded) await removeNativeDirectUploads([uploaded.storagePath]);
-      const message = sendError instanceof Error ? sendError.message : 'تعذر إرسال الرسالة حالياً.';
-      if (optimistic) {
-        setMessages((prev) => prev.map((item) => item.id === localId ? { ...item, localStatus: 'failed' } : item));
-      }
-      notify(message);
+      if (uploaded.length) await removeNativeDirectUploads(uploaded.map((item) => item.storagePath));
+      setMessages((prev) => prev.map((item) => item.id === localId ? { ...item, localStatus: 'failed' } : item));
+      setSendProgress(null);
+      await loadBlockState();
+      notify(sendError instanceof Error ? sendError.message : 'تعذر إرسال الرسالة حالياً.');
     } finally {
       setSending(false);
     }
-  }, [body, canCompose, conversationId, loadLatestMessages, notify, pendingAttachment, replyTarget, user?.id]);
+  }, [body, canCompose, conversationId, loadBlockState, loadLatestMessages, notify, pendingAttachments, replyTarget, user?.id]);
 
   const startVoiceRecording = useCallback(async () => {
     if (!canCompose || recordingActive) return;
@@ -439,6 +506,7 @@ export default function DirectConversationScreen() {
         notify('محتاجين إذن الميكروفون لتسجيل رسالة صوتية.');
         return;
       }
+      Keyboard.dismiss();
       player.pause();
       setPlayingVoiceId(null);
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
@@ -465,6 +533,7 @@ export default function DirectConversationScreen() {
     setVoiceSending(true);
     setRecordingBusy(true);
     const preStopDuration = recorderState.durationMillis ?? 0;
+    let uploadedPath: string | null = null;
     try {
       await recorder.stop();
       const uri = recorder.uri;
@@ -475,6 +544,8 @@ export default function DirectConversationScreen() {
         const info = await new File(uri).info();
         sizeBytes = typeof info.size === 'number' ? info.size : null;
       } catch {}
+      setRecordingActive(false);
+      setSendProgress({ label: 'بنرفع الرسالة الصوتية...', done: 0, total: 1 });
       const upload = await uploadNativeDirectAttachment({
         conversationId,
         currentUserId: user.id,
@@ -486,25 +557,26 @@ export default function DirectConversationScreen() {
         durationMs,
       });
       if (!upload.ok) throw new Error(upload.message);
+      uploadedPath = upload.attachment.storagePath;
+      setSendProgress({ label: 'بنرسل الرسالة الصوتية...', done: 1, total: 1 });
       const result = await sendNativeDirectMessage({
         conversationId,
         body: body.trim() || null,
         replyToMessageId: replyTarget?.id ?? null,
         attachments: [upload.attachment],
       });
-      if (!result.ok) {
-        await removeNativeDirectUploads([upload.attachment.storagePath]);
-        throw new Error(result.message);
-      }
+      if (!result.ok) throw new Error(result.message);
       setBody('');
       setReplyTarget(null);
-      setRecordingActive(false);
+      setSendProgress(null);
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
       await loadLatestMessages({ silent: true, keepExisting: true });
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     } catch (voiceError) {
-      notify(voiceError instanceof Error ? voiceError.message : 'تعذر إرسال الرسالة الصوتية.');
+      if (uploadedPath) await removeNativeDirectUploads([uploadedPath]);
+      setSendProgress(null);
       setRecordingActive(false);
+      notify(voiceError instanceof Error ? voiceError.message : 'تعذر إرسال الرسالة الصوتية.');
     } finally {
       setRecordingBusy(false);
       setVoiceSending(false);
@@ -522,7 +594,7 @@ export default function DirectConversationScreen() {
     setVoiceLoadingId(idValue);
     try {
       if (!url) {
-        url = await createNativeDirectAttachmentSignedUrl(attachment.storagePath, 60 * 60, attachment.storageBucket);
+        url = await createNativeDirectAttachmentSignedUrl(attachment.storagePath, SIGNED_URL_TTL_SECONDS, attachment.storageBucket);
         setResolvedUrls((prev) => ({ ...prev, [key]: url ?? null }));
       }
       if (!url) throw new Error('voice_url_missing');
@@ -546,36 +618,105 @@ export default function DirectConversationScreen() {
     try { player.pause(); } catch {}
   }, [player, playerStatus.didJustFinish, playingVoiceId]);
 
-  const pickImage = useCallback(async () => {
+  const pickMedia = useCallback(async () => {
+    attachmentActionsRef.current?.dismiss();
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { notify('نحتاج إذن الصور لاختيار صورة.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: false, quality: 0.86 });
+    if (!permission.granted) { notify('نحتاج إذن الصور لاختيار الميديا.'); return; }
+    const remaining = directAttachmentLimits.maxAttachmentsPerMessage - pendingAttachments.length;
+    if (remaining <= 0) { notify('يمكن إرسال حتى 5 مرفقات في الرسالة الواحدة.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsMultipleSelection: true,
+      selectionLimit: remaining,
+      quality: 0.86,
+    });
     if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset?.uri) return;
-    setPendingAttachment({ kind: 'image', uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType, sizeBytes: asset.fileSize });
-    attachmentActionsRef.current?.dismiss();
-  }, [notify]);
+    appendPendingAttachments((result.assets ?? []).filter((asset) => !!asset.uri).map((asset) => ({
+      id: pendingId('media'),
+      kind: asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' as const : 'image' as const,
+      uri: asset.uri,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.fileSize,
+    })));
+  }, [appendPendingAttachments, notify, pendingAttachments.length]);
 
-  const pickVideo = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { notify('نحتاج إذن الصور لاختيار فيديو.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsMultipleSelection: false });
+  const captureMedia = useCallback(async () => {
+    attachmentActionsRef.current?.dismiss();
+    if (pendingAttachments.length >= directAttachmentLimits.maxAttachmentsPerMessage) {
+      notify('يمكن إرسال حتى 5 مرفقات في الرسالة الواحدة.');
+      return;
+    }
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) { notify('نحتاج إذن الكاميرا لالتقاط صورة أو فيديو.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.86, videoMaxDuration: 120 });
     if (result.canceled) return;
     const asset = result.assets?.[0];
     if (!asset?.uri) return;
-    setPendingAttachment({ kind: 'video', uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType, sizeBytes: asset.fileSize });
-    attachmentActionsRef.current?.dismiss();
-  }, [notify]);
+    appendPendingAttachments([{
+      id: pendingId('camera'),
+      kind: asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image',
+      uri: asset.uri,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.fileSize,
+    }]);
+  }, [appendPendingAttachments, notify, pendingAttachments.length]);
 
-  const pickFile = useCallback(async () => {
-    const result = await DocumentPicker.getDocumentAsync({ multiple: false });
-    if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset?.uri) return;
-    setPendingAttachment({ kind: 'file', uri: asset.uri, fileName: asset.name, mimeType: asset.mimeType, sizeBytes: asset.size });
+  const pickFiles = useCallback(async () => {
     attachmentActionsRef.current?.dismiss();
+    const remaining = directAttachmentLimits.maxAttachmentsPerMessage - pendingAttachments.length;
+    if (remaining <= 0) { notify('يمكن إرسال حتى 5 مرفقات في الرسالة الواحدة.'); return; }
+    const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+    if (result.canceled) return;
+    appendPendingAttachments((result.assets ?? []).slice(0, remaining).filter((asset) => !!asset.uri).map((asset) => ({
+      id: pendingId('file'),
+      kind: 'file' as const,
+      uri: asset.uri,
+      fileName: asset.name,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.size,
+    })));
+  }, [appendPendingAttachments, notify, pendingAttachments.length]);
+
+  const loadDolabItems = useCallback(async () => {
+    setDolabLoading(true);
+    setDolabError(null);
+    const result = await loadRecentDolabShareables();
+    if (result.ok) setDolabItems(result.items as DolabShareItem[]);
+    else {
+      setDolabItems([]);
+      setDolabError(result.message);
+    }
+    setDolabLoading(false);
   }, []);
+
+  const openDolab = useCallback(() => {
+    attachmentActionsRef.current?.dismiss();
+    setDolabLoading(true);
+    setDolabError(null);
+    setTimeout(() => presentAfterKeyboard(dolabShareRef, 40), 90);
+    void loadDolabItems();
+  }, [loadDolabItems, presentAfterKeyboard]);
+
+  const selectDolabItem = useCallback((item: DolabShareItem) => {
+    if (item.kind === 'text') {
+      const text = item.body?.trim();
+      if (!text) { notify('الملاحظة دي فاضية.'); return; }
+      setBody((prev) => prev.trim() ? `${prev}\n${text}`.slice(0, 1200) : text.slice(0, 1200));
+      notify('اتضافت للرسالة.');
+      return;
+    }
+    if (!item.uri) { notify('الميديا دي مش متاحة دلوقتي.'); return; }
+    appendPendingAttachments([{
+      id: pendingId('dolab'),
+      kind: item.kind,
+      uri: item.uri,
+      fileName: item.fileName || item.title,
+      mimeType: item.mimeType,
+      sizeBytes: item.sizeBytes,
+    }]);
+  }, [appendPendingAttachments, notify]);
 
   const onToggleBlock = useCallback(async () => {
     if (!user?.id || !conversation?.otherUserId || blockBusy) return;
@@ -586,32 +727,68 @@ export default function DirectConversationScreen() {
         : await blockUserFromMobile(user.id, conversation.otherUserId);
       notify(result.message);
       if (result.ok) {
-        const state = await fetchUserBlockState(user.id, conversation.otherUserId);
-        if (state.ok) setBlockedByMe(state.state.blockedByMe);
+        await loadBlockState();
         await loadConversation();
       }
     } finally {
       setBlockBusy(false);
     }
-  }, [blockBusy, blockedByMe, conversation?.otherUserId, loadConversation, notify, user?.id]);
+  }, [blockBusy, blockedByMe, conversation?.otherUserId, loadBlockState, loadConversation, notify, user?.id]);
 
-  const runMessageAction = useCallback(async (action: 'reply' | 'copy' | 'love' | 'thumbs_up' | 'delete' | 'report' | 'retry') => {
+  const saveMessageToDolab = useCallback(async (message: UiMessage) => {
+    const attachments = await Promise.all(message.attachments.map(async (attachment) => {
+      const key = attachmentKey(attachment);
+      let url = resolvedUrls[key];
+      if (!url) {
+        url = await createNativeDirectAttachmentSignedUrl(attachment.storagePath, SIGNED_URL_TTL_SECONDS, attachment.storageBucket);
+        setResolvedUrls((prev) => ({ ...prev, [key]: url ?? null }));
+      }
+      return {
+        type: attachment.kind,
+        title: attachment.fileName ?? undefined,
+        name: attachment.fileName ?? undefined,
+        imageUrl: attachment.kind === 'image' ? url ?? undefined : undefined,
+        assetUrl: attachment.kind !== 'image' ? url ?? undefined : undefined,
+        mimeType: attachment.mimeType ?? undefined,
+        fileSize: attachment.sizeBytes ?? undefined,
+        durationSeconds: attachment.durationMs ? attachment.durationMs / 1000 : undefined,
+      };
+    }));
+    const result = await saveDirectMessageToDolab({
+      conversationId,
+      messageId: message.id,
+      text: displayMessageBody(message),
+      attachments,
+    });
+    if (!result.ok) notify(result.message);
+    else if (result.alreadySaved && !result.savedText && !result.savedMediaCount) notify('موجودة بالفعل في دولابك.');
+    else notify('اتحفظت في دولابك.');
+  }, [conversationId, notify, resolvedUrls]);
+
+  const runMessageAction = useCallback(async (action: 'reply' | 'copy' | 'love' | 'thumbs_up' | 'delete' | 'report' | 'retry' | 'save_dolab') => {
     const message = selectedMessage;
     messageActionsRef.current?.dismiss();
     if (!message) return;
     const mine = message.senderId === user?.id;
+    const visibleBody = displayMessageBody(message);
     if (action === 'reply') { setReplyTarget(message); return; }
     if (action === 'copy') {
-      if (!message.body.trim()) { notify('مفيش نص للنسخ.'); return; }
-      await Clipboard.setStringAsync(message.body);
+      if (!visibleBody) { notify('مفيش نص للنسخ.'); return; }
+      await Clipboard.setStringAsync(visibleBody);
       notify('تم نسخ الرسالة.');
       return;
     }
     if (action === 'love' || action === 'thumbs_up') {
       if (message.localStatus) return;
+      void Haptics.selectionAsync().catch(() => undefined);
       const result = await toggleNativeDirectReaction(message.id, action);
       if (!result.ok) notify('تعذر تحديث التفاعل.');
       await loadLatestMessages({ silent: true, keepExisting: true });
+      return;
+    }
+    if (action === 'save_dolab') {
+      if (message.localStatus) return;
+      await saveMessageToDolab(message);
       return;
     }
     if (action === 'delete') {
@@ -631,58 +808,26 @@ export default function DirectConversationScreen() {
     }
     if (action === 'retry' && message.localStatus === 'failed') {
       setMessages((prev) => prev.filter((item) => item.id !== message.id));
-      setBody(message.body);
-      setReplyTarget(null);
+      setBody(visibleBody);
+      setPendingAttachments(message.localPreviewAttachments ?? []);
+      setReplyTarget(message.replyToMessageId ? messages.find((item) => item.id === message.replyToMessageId) ?? null : null);
     }
-  }, [conversation?.otherUserId, conversationId, loadLatestMessages, notify, selectedMessage, user?.id]);
+  }, [conversation?.otherUserId, conversationId, loadLatestMessages, messages, notify, saveMessageToDolab, selectedMessage, user?.id]);
 
-  const openAttachment = useCallback(async (attachment: NativeDirectAttachment) => {
-    const url = resolvedUrls[attachmentKey(attachment)];
-    if (!url) { notify('المرفق لسه بيتجهز.'); return; }
-    if (attachment.kind === 'image') {
-      setSelectedMedia({ url, title: attachment.fileName });
+  const openGalleryItem = useCallback(async (item: ChatAttachmentGalleryItem) => {
+    if (!item.uri) { notify('المرفق لسه بيتجهز.'); return; }
+    Keyboard.dismiss();
+    if (item.kind === 'image' || item.kind === 'video') {
+      setMediaViewer({ kind: item.kind, url: item.uri, title: item.fileName });
       return;
     }
-    try { await Linking.openURL(url); } catch { notify('تعذر فتح المرفق.'); }
-  }, [notify, resolvedUrls]);
+    try { await Linking.openURL(item.uri); } catch { notify('تعذر فتح الملف.'); }
+  }, [notify]);
 
-  const renderAttachment = useCallback((message: UiMessage, attachment: NativeDirectAttachment) => {
-    const url = resolvedUrls[attachmentKey(attachment)];
-    if (attachment.kind === 'audio') {
-      const voiceId = `${message.id}:${attachment.storagePath}`;
-      const active = playingVoiceId === voiceId;
-      return (
-        <VoiceMessageBubble
-          mine={message.senderId === user?.id}
-          durationMs={attachment.durationMs ?? (active ? (playerStatus.duration ?? 0) * 1000 : 0)}
-          positionMs={active ? (playerStatus.currentTime ?? 0) * 1000 : 0}
-          playing={active && !!playerStatus.playing}
-          loading={voiceLoadingId === voiceId}
-          onPress={() => { void toggleVoice(message, attachment); }}
-        />
-      );
-    }
-    if (attachment.kind === 'image' && url) {
-      return (
-        <Pressable onPress={() => { void openAttachment(attachment); }} style={({ pressed }) => pressed && styles.mediaPressed}>
-          <Image source={{ uri: url }} style={styles.inlineImage} />
-        </Pressable>
-      );
-    }
-    return (
-      <Pressable onPress={() => { void openAttachment(attachment); }} style={({ pressed }) => [styles.fileCard, pressed && styles.mediaPressed]}>
-        <View style={styles.fileIcon}>
-          <Ionicons name={attachment.kind === 'video' ? 'play' : 'document-text-outline'} size={19} color={colors.primary} />
-        </View>
-        <View style={styles.fileCopy}>
-          <AppText weight="semibold" numberOfLines={1}>{attachment.fileName || (attachment.kind === 'video' ? 'فيديو' : 'ملف')}</AppText>
-          <AppText muted style={styles.fileMeta}>{url ? 'اضغط للفتح' : 'جاري تجهيز المرفق...'}</AppText>
-        </View>
-      </Pressable>
-    );
-  }, [openAttachment, playerStatus.currentTime, playerStatus.duration, playerStatus.playing, playingVoiceId, resolvedUrls, toggleVoice, user?.id, voiceLoadingId]);
-
-  const lastOwnMessageId = useMemo(() => [...messages].reverse().find((message) => message.senderId === user?.id && !message.localStatus)?.id ?? null, [messages, user?.id]);
+  const lastOwnMessageId = useMemo(
+    () => [...messages].reverse().find((message) => message.senderId === user?.id && !message.localStatus)?.id ?? null,
+    [messages, user?.id],
+  );
 
   if (!user?.id) return <AppScreen><EmptyState title="تسجيل الدخول مطلوب" description="سجّل الدخول لفتح الرسائل." /></AppScreen>;
   if (!conversationId) return <AppScreen><EmptyState title="محادثة غير صالحة" description="تعذر فتح المحادثة." /></AppScreen>;
@@ -700,7 +845,7 @@ export default function DirectConversationScreen() {
         </Pressable>
         <Pressable style={styles.identity} onPress={() => router.push(`/profile/${conversation.otherUserId}`)}>
           <View style={styles.avatarWrap}>
-            {conversation.otherAvatarUrl ? <Image source={{ uri: conversation.otherAvatarUrl }} style={styles.avatar} /> : <Ionicons name="person" size={21} color={colors.textMuted} />}
+            {conversation.otherAvatarUrl ? <ExpoImage source={{ uri: conversation.otherAvatarUrl }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" /> : <Ionicons name="person" size={21} color={colors.textMuted} />}
           </View>
           <View style={styles.identityCopy}>
             <AppText weight="bold" numberOfLines={1} style={styles.name}>{conversation.otherDisplayName ?? 'مستخدم تِسوى'}</AppText>
@@ -710,7 +855,7 @@ export default function DirectConversationScreen() {
             </View>
           </View>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="خيارات المحادثة" style={styles.headerButton} onPress={() => conversationActionsRef.current?.present()}>
+        <Pressable accessibilityRole="button" accessibilityLabel="خيارات المحادثة" style={styles.headerButton} onPress={() => presentAfterKeyboard(conversationActionsRef)}>
           <Ionicons name="ellipsis-horizontal" size={21} color={colors.text} />
         </Pressable>
       </View>
@@ -729,6 +874,7 @@ export default function DirectConversationScreen() {
       ) : null}
       {isRequesterOnRequest ? <View style={styles.slimBanner}><Ionicons name="time-outline" size={15} color={colors.textMuted} /><AppText muted style={styles.slimBannerText}>طلبك اتبعت. تقدر تكمل لما الطرف التاني يقبل.</AppText></View> : null}
       {blockedByMe ? <View style={styles.slimBanner}><Ionicons name="ban-outline" size={15} color={colors.danger} /><AppText muted style={styles.slimBannerText}>أنت حاظر المستخدم. ألغِ الحظر لاستكمال المراسلة.</AppText></View> : null}
+      {blockedMe && !blockedByMe ? <View style={styles.slimBanner}><Ionicons name="lock-closed-outline" size={15} color={colors.textMuted} /><AppText muted style={styles.slimBannerText}>المراسلة غير متاحة بين الحسابين حاليًا.</AppText></View> : null}
 
       <View style={styles.listArea}>
         <FlatList
@@ -766,13 +912,28 @@ export default function DirectConversationScreen() {
             const likeCount = item.reactions.filter((reaction) => reaction.reaction === 'thumbs_up').length;
             const ownLove = item.reactions.some((reaction) => reaction.userId === user.id && reaction.reaction === 'love');
             const ownLike = item.reactions.some((reaction) => reaction.userId === user.id && reaction.reaction === 'thumbs_up');
-            const status = item.localStatus === 'sending' ? 'جاري الإرسال' : item.localStatus === 'failed' ? 'فشل الإرسال' : item.id === lastOwnMessageId ? (item.readAt ? 'شوهدت' : 'تم الإرسال') : null;
+            const status = item.localStatus === 'sending' ? 'جاري الإرسال' : item.localStatus === 'failed' ? 'فشل الإرسال • اضغط مطولًا للمحاولة' : item.id === lastOwnMessageId ? (item.readAt ? 'شوهدت' : 'تم الإرسال') : null;
+            const remoteGallery: ChatAttachmentGalleryItem[] = item.attachments
+              .filter((attachment) => attachment.kind !== 'audio')
+              .map((attachment) => ({
+                id: attachment.id ?? attachment.storagePath,
+                kind: attachment.kind as 'image' | 'video' | 'file',
+                uri: resolvedUrls[attachmentKey(attachment)] ?? null,
+                fileName: attachment.fileName,
+                mimeType: attachment.mimeType,
+                sizeBytes: attachment.sizeBytes,
+              }));
+            const localGallery: ChatAttachmentGalleryItem[] = (item.localPreviewAttachments ?? [])
+              .filter((attachment) => attachment.kind !== 'audio')
+              .map((attachment) => ({ id: attachment.id, kind: attachment.kind as 'image' | 'video' | 'file', uri: attachment.uri, fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes }));
+            const audioAttachments = item.attachments.filter((attachment) => attachment.kind === 'audio');
+            const visibleBody = displayMessageBody(item);
             return (
-              <View style={styles.messageBlock}>
+              <View style={[styles.messageBlock, (loveCount || likeCount) ? styles.messageBlockWithReaction : null]}>
                 {showDay ? <View style={styles.dayWrap}><AppText muted style={styles.dayText}>{formatDay(item.createdAt)}</AppText></View> : null}
                 <MessageBubble
                   mine={mine}
-                  text={item.attachments.length ? item.body : item.body}
+                  text={visibleBody}
                   timeLabel={formatClock(item.createdAt)}
                   statusLabel={status}
                   deleted={!!item.deletedAt}
@@ -782,9 +943,25 @@ export default function DirectConversationScreen() {
                     { key: 'love', label: '❤️', count: loveCount, active: ownLove },
                     { key: 'thumbs_up', label: '👍', count: likeCount, active: ownLike },
                   ]}
-                  onLongPress={() => { setSelectedMessage(item); messageActionsRef.current?.present(); }}
+                  onLongPress={() => { setSelectedMessage(item); presentAfterKeyboard(messageActionsRef); }}
                 >
-                  {item.attachments.map((attachment) => <View key={attachmentKey(attachment)}>{renderAttachment(item, attachment)}</View>)}
+                  {audioAttachments.map((attachment) => {
+                    const voiceId = `${item.id}:${attachment.storagePath}`;
+                    const activeVoice = playingVoiceId === voiceId;
+                    return (
+                      <VoiceMessageBubble
+                        key={attachmentKey(attachment)}
+                        mine={mine}
+                        durationMs={attachment.durationMs ?? (activeVoice ? (playerStatus.duration ?? 0) * 1000 : 0)}
+                        positionMs={activeVoice ? (playerStatus.currentTime ?? 0) * 1000 : 0}
+                        playing={activeVoice && !!playerStatus.playing}
+                        loading={voiceLoadingId === voiceId}
+                        onPress={() => { void toggleVoice(item, attachment); }}
+                      />
+                    );
+                  })}
+                  {remoteGallery.length ? <ChatAttachmentGallery items={remoteGallery} onPress={(galleryItem) => { void openGalleryItem(galleryItem); }} /> : null}
+                  {localGallery.length ? <ChatAttachmentGallery items={localGallery} onPress={(galleryItem) => { void openGalleryItem(galleryItem); }} /> : null}
                 </MessageBubble>
               </View>
             );
@@ -804,65 +981,70 @@ export default function DirectConversationScreen() {
           value={body}
           onChangeText={onChangeBody}
           onSend={() => { void sendCurrent(); }}
-          onPressAttachment={accepted ? () => attachmentActionsRef.current?.present() : undefined}
-          onPressVoice={accepted ? () => { void startVoiceRecording(); } : undefined}
-          disabled={!accepted || blockedByMe}
+          onPressAttachment={accepted && !interactionBlocked ? () => presentAfterKeyboard(attachmentActionsRef) : undefined}
+          onPressVoice={accepted && !interactionBlocked ? () => { void startVoiceRecording(); } : undefined}
+          disabled={!accepted || interactionBlocked}
           sending={sending}
-          hasPendingPayload={!!pendingAttachment}
-          voiceDisabled={recordingBusy || sending}
-          attachmentDisabled={sending}
-          placeholder={accepted ? 'رسالة...' : 'المراسلة متاحة بعد قبول الطلب'}
-          reply={replyTarget ? { label: `رد على ${replyTarget.senderId === user.id ? 'رسالتك' : conversation.otherDisplayName ?? 'الرسالة'}`, text: replyTarget.body || 'رسالة', onClear: () => setReplyTarget(null) } : null}
+          hasPendingPayload={pendingAttachments.length > 0}
+          maxLength={1200}
+          voiceDisabled={recordingBusy || sending || pendingAttachments.length > 0}
+          attachmentDisabled={sending || recordingActive}
+          placeholder={accepted ? (interactionBlocked ? 'المراسلة غير متاحة' : 'رسالة...') : 'المراسلة متاحة بعد قبول الطلب'}
+          reply={replyTarget ? { label: `رد على ${replyTarget.senderId === user.id ? 'رسالتك' : conversation.otherDisplayName ?? 'الرسالة'}`, text: displayMessageBody(replyTarget) || 'مرفق', onClear: () => setReplyTarget(null) } : null}
           recording={recordingActive ? { active: true, elapsedLabel: formatDuration(recorderState.durationMillis ?? 0), busy: recordingBusy, sending: voiceSending, onCancel: () => { void cancelVoiceRecording(); }, onSend: () => { void stopAndSendVoice(); } } : null}
-          topSlot={pendingAttachment ? (
-            <View style={styles.pendingAttachment}>
-              {pendingAttachment.kind === 'image' ? <Image source={{ uri: pendingAttachment.uri }} style={styles.pendingThumb} /> : <View style={styles.pendingFileIcon}><Ionicons name={pendingAttachment.kind === 'video' ? 'videocam-outline' : 'document-outline'} size={20} color={colors.primary} /></View>}
-              <View style={styles.pendingCopy}><AppText weight="semibold" numberOfLines={1}>{pendingAttachment.fileName || (pendingAttachment.kind === 'image' ? 'صورة' : pendingAttachment.kind === 'video' ? 'فيديو' : 'ملف')}</AppText><AppText muted style={styles.pendingMeta}>جاهز للإرسال</AppText></View>
-              <Pressable hitSlop={8} onPress={() => setPendingAttachment(null)} style={styles.pendingClose}><Ionicons name="close-circle" size={21} color={colors.textMuted} /></Pressable>
-            </View>
-          ) : null}
+          topSlot={<PendingAttachmentStrip items={pendingAttachments} onRemove={(attachmentId) => setPendingAttachments((prev) => prev.filter((item) => item.id !== attachmentId))} progress={sendProgress} />}
         />
       </KeyboardStickyView>
 
       {error ? <View style={styles.errorToast}><Ionicons name="alert-circle-outline" size={16} color={colors.danger} /><AppText style={styles.errorText}>{error}</AppText><Pressable onPress={() => { setError(null); void loadLatestMessages(); }}><AppText weight="semibold" style={styles.retryText}>حاول تاني</AppText></Pressable></View> : null}
 
-      <Modal visible={!!selectedMedia} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setSelectedMedia(null)}>
-        <View style={styles.viewerOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedMedia(null)} />
-          {selectedMedia ? <Image source={{ uri: selectedMedia.url }} style={styles.viewerImage} resizeMode="contain" /> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="إغلاق الصورة" onPress={() => setSelectedMedia(null)} style={styles.viewerClose}><Ionicons name="close" size={24} color={colors.background} /></Pressable>
-        </View>
-      </Modal>
+      <ChatMediaViewer item={mediaViewer} onClose={() => setMediaViewer(null)} />
 
       <AppActionSheet
         ref={attachmentActionsRef}
         title="إضافة للمحادثة"
+        description="اختار ميديا، ملف، أو حاجة من دولابك."
+        snapPoints={['58%']}
         actions={[
-          { label: 'صورة', onPress: () => { void pickImage(); } },
-          { label: 'فيديو', onPress: () => { void pickVideo(); } },
-          { label: 'ملف', onPress: () => { void pickFile(); } },
+          { label: 'صور وفيديوهات', iconName: 'images-outline', onPress: () => { void pickMedia(); } },
+          { label: 'الكاميرا', iconName: 'camera-outline', onPress: () => { void captureMedia(); } },
+          { label: 'ملفات', iconName: 'document-outline', onPress: () => { void pickFiles(); } },
+          { label: 'من الدولاب', iconName: 'file-tray-stacked-outline', onPress: openDolab },
         ]}
       />
+
+      <DolabShareSheet
+        ref={dolabShareRef}
+        items={dolabItems}
+        loading={dolabLoading}
+        error={dolabError}
+        onReload={() => { void loadDolabItems(); }}
+        onSelect={selectDolabItem}
+      />
+
       <AppActionSheet
         ref={conversationActionsRef}
         title="خيارات المحادثة"
         actions={[
-          { label: 'عرض البروفايل', onPress: () => { conversationActionsRef.current?.dismiss(); router.push(`/profile/${conversation.otherUserId}`); } },
-          { label: 'الإبلاغ عن المستخدم', tone: 'danger', onPress: () => { conversationActionsRef.current?.dismiss(); router.push(`/report/user/${conversation.otherUserId}`); } },
-          { label: blockBusy ? 'جاري التنفيذ...' : blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم', tone: 'danger', disabled: blockBusy, onPress: () => { conversationActionsRef.current?.dismiss(); void onToggleBlock(); } },
+          { label: 'عرض البروفايل', iconName: 'person-outline', onPress: () => { conversationActionsRef.current?.dismiss(); router.push(`/profile/${conversation.otherUserId}`); } },
+          { label: 'الإبلاغ عن المستخدم', iconName: 'flag-outline', tone: 'danger', onPress: () => { conversationActionsRef.current?.dismiss(); router.push(`/report/user/${conversation.otherUserId}`); } },
+          { label: blockBusy ? 'جاري التنفيذ...' : blockedByMe ? 'إلغاء الحظر' : 'حظر المستخدم', iconName: 'ban-outline', tone: 'danger', disabled: blockBusy, onPress: () => { conversationActionsRef.current?.dismiss(); void onToggleBlock(); } },
         ]}
       />
+
       <AppActionSheet
         ref={messageActionsRef}
         title="خيارات الرسالة"
+        snapPoints={['64%', '82%']}
         actions={[
-          { label: 'رد', onPress: () => { void runMessageAction('reply'); } },
-          { label: 'نسخ النص', disabled: !selectedMessage?.body?.trim(), onPress: () => { void runMessageAction('copy'); } },
-          { label: '❤️ تفاعل', disabled: !!selectedMessage?.localStatus, onPress: () => { void runMessageAction('love'); } },
-          { label: '👍 تفاعل', disabled: !!selectedMessage?.localStatus, onPress: () => { void runMessageAction('thumbs_up'); } },
-          ...(selectedMessage?.localStatus === 'failed' ? [{ label: 'إعادة الإرسال', onPress: () => { void runMessageAction('retry'); } }] : []),
-          ...(selectedMessage?.senderId === user.id && !selectedMessage?.localStatus ? [{ label: 'حذف رسالتي', tone: 'danger' as const, onPress: () => { void runMessageAction('delete'); } }] : []),
-          ...(selectedMessage?.senderId !== user.id && !selectedMessage?.localStatus ? [{ label: 'الإبلاغ عن الرسالة', tone: 'danger' as const, onPress: () => { void runMessageAction('report'); } }] : []),
+          { label: 'رد', iconName: 'arrow-undo-outline', onPress: () => { void runMessageAction('reply'); } },
+          { label: 'نسخ النص', iconName: 'copy-outline', disabled: !selectedMessage || !displayMessageBody(selectedMessage), onPress: () => { void runMessageAction('copy'); } },
+          { label: '❤️ تفاعل', onPress: () => { void runMessageAction('love'); }, disabled: !!selectedMessage?.localStatus },
+          { label: '👍 تفاعل', onPress: () => { void runMessageAction('thumbs_up'); }, disabled: !!selectedMessage?.localStatus },
+          { label: 'احفظ في الدولاب', iconName: 'file-tray-stacked-outline', disabled: !!selectedMessage?.localStatus, onPress: () => { void runMessageAction('save_dolab'); } },
+          ...(selectedMessage?.localStatus === 'failed' ? [{ label: 'إعادة الإرسال', iconName: 'refresh-outline' as const, onPress: () => { void runMessageAction('retry'); } }] : []),
+          ...(selectedMessage?.senderId === user.id && !selectedMessage?.localStatus ? [{ label: 'حذف رسالتي', iconName: 'trash-outline' as const, tone: 'danger' as const, onPress: () => { void runMessageAction('delete'); } }] : []),
+          ...(selectedMessage?.senderId !== user.id && !selectedMessage?.localStatus ? [{ label: 'الإبلاغ عن الرسالة', iconName: 'flag-outline' as const, tone: 'danger' as const, onPress: () => { void runMessageAction('report'); } }] : []),
         ]}
       />
     </AppScreen>
@@ -903,6 +1085,7 @@ const styles = StyleSheet.create({
   messagesContent: { paddingHorizontal: 0, paddingBottom: 18, gap: 4 },
   emptyMessagesContent: { flexGrow: 1, justifyContent: 'center' },
   messageBlock: { gap: 3, marginBottom: 3 },
+  messageBlockWithReaction: { marginBottom: 15 },
   dayWrap: { alignItems: 'center', paddingVertical: 12 },
   dayText: { fontSize: 11, backgroundColor: colors.surface, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, overflow: 'hidden' },
   loadOlder: { alignSelf: 'center', flexDirection: 'row-reverse', alignItems: 'center', gap: 5, marginVertical: 10, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: colors.surface },
@@ -918,22 +1101,7 @@ const styles = StyleSheet.create({
   typingLabel: { fontSize: 11.5 },
   newMessagesButton: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row-reverse', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, backgroundColor: colors.primary },
   newMessagesText: { color: colors.background, fontSize: 12 },
-  inlineImage: { width: 230, maxWidth: '100%', height: 200, borderRadius: 14, backgroundColor: colors.background },
-  fileCard: { minWidth: 220, maxWidth: 270, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, padding: 9, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.10)' },
-  fileIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  fileCopy: { flex: 1, minWidth: 0, alignItems: 'flex-end', gap: 2 },
-  fileMeta: { fontSize: 10.5 },
-  mediaPressed: { opacity: 0.68 },
-  pendingAttachment: { minHeight: 58, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, padding: 8, borderRadius: 14, backgroundColor: colors.surface },
-  pendingThumb: { width: 46, height: 46, borderRadius: 10 },
-  pendingFileIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  pendingCopy: { flex: 1, minWidth: 0, alignItems: 'flex-end', gap: 2 },
-  pendingMeta: { fontSize: 11 },
-  pendingClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   errorToast: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.surface },
   errorText: { flex: 1, color: colors.danger, fontSize: 12, textAlign: 'right' },
   retryText: { color: colors.primary, fontSize: 12 },
-  viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
-  viewerImage: { width: '100%', height: '82%' },
-  viewerClose: { position: 'absolute', top: 54, right: 18, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
 });
