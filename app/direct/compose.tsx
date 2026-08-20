@@ -42,7 +42,7 @@ export default function DirectComposeScreen() {
         fetchMyDirectConversations(),
         fetchPublicProfileById(targetUserId),
       ]);
-      const existing = rows.find((row) => row.otherUserId === targetUserId);
+      const existing = rows.find((row) => row.otherUserId === targetUserId && row.status !== 'ignored');
       if (existing) {
         router.replace(`/direct/${existing.conversationId}`);
         return;
