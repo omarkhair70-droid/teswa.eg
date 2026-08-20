@@ -115,7 +115,7 @@ export function ChatComposer({
             </View>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="إرسال الرسالة الصوتية" style={({ pressed }) => [styles.primaryAction, pressed && styles.primaryPressed]} disabled={recording.busy || recording.sending} onPress={recording.onSend}>
-            {recording.busy || recording.sending ? <ActivityIndicator size="small" color={colors.background} /> : <Ionicons name="arrow-up" size={21} color={colors.background} />}
+            {recording.busy || recording.sending ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="arrow-up" size={21} color={colors.white} />}
           </Pressable>
         </View>
       </View>
@@ -148,7 +148,7 @@ export function ChatComposer({
         </View>
         {hasSendablePayload ? (
           <Pressable accessibilityRole="button" accessibilityLabel="إرسال الرسالة" disabled={!canSend} onPress={onSend} style={({ pressed }) => [styles.primaryAction, !canSend && styles.primaryActionDisabled, pressed && canSend && styles.primaryPressed]}>
-            {sending ? <ActivityIndicator size="small" color={colors.background} /> : <Ionicons name="arrow-up" size={21} color={colors.background} />}
+            {sending ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="arrow-up" size={21} color={colors.white} />}
           </Pressable>
         ) : onPressVoice ? (
           <Pressable accessibilityRole="button" accessibilityLabel="تسجيل رسالة صوتية" disabled={disabled || voiceDisabled} onPress={onPressVoice} style={({ pressed }) => [styles.voiceAction, pressed && styles.pressed]}>
