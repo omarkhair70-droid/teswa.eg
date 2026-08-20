@@ -3,7 +3,7 @@ import { Appearance, Platform, type ColorSchemeName } from 'react-native';
 import { ThemeProvider as RestyleThemeProvider } from '@shopify/restyle';
 import { setStatusBarBackgroundColor, setStatusBarStyle } from 'expo-status-bar';
 
-import { darkTheme, lightTheme, type TeswaThemeMode } from '@/constants/themes';
+import { SYSTEM_DARK_MODE_ENABLED, darkTheme, lightTheme, type TeswaThemeMode } from '@/constants/themes';
 
 type SystemColorScheme = 'light' | 'dark' | null;
 
@@ -20,16 +20,19 @@ function normalizeSystemColorScheme(value: ColorSchemeName | null | undefined): 
 }
 
 export function ThemePreferencesProvider({ children }: PropsWithChildren) {
-  const [systemColorScheme, setSystemColorScheme] = useState<SystemColorScheme>(() => normalizeSystemColorScheme(Appearance.getColorScheme()));
+  const [systemColorScheme, setSystemColorScheme] = useState<SystemColorScheme>(() => (
+    SYSTEM_DARK_MODE_ENABLED ? normalizeSystemColorScheme(Appearance.getColorScheme()) : null
+  ));
 
   useEffect(() => {
+    if (!SYSTEM_DARK_MODE_ENABLED) return;
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
       setSystemColorScheme(normalizeSystemColorScheme(colorScheme));
     });
     return () => subscription.remove();
   }, []);
 
-  const resolvedThemeMode: TeswaThemeMode = systemColorScheme === 'dark' ? 'dark' : 'light';
+  const resolvedThemeMode: TeswaThemeMode = SYSTEM_DARK_MODE_ENABLED && systemColorScheme === 'dark' ? 'dark' : 'light';
   const theme = resolvedThemeMode === 'dark' ? darkTheme : lightTheme;
 
   useEffect(() => {
