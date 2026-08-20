@@ -1,3 +1,7 @@
+-- Pending observability change.
+-- This SQL existed in the repository as a migration but was never applied to production.
+-- PR #7 must recreate it with a fresh migration timestamp, verify it, and deploy it.
+
 -- Allow sampled real-user performance metrics through the existing safe analytics RPC.
 create or replace function public.track_analytics_event(
   p_event_name text,
