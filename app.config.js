@@ -130,6 +130,8 @@ module.exports = {
       ],
       'expo-font',
       'expo-asset',
+      'expo-localization',
+      'expo-web-browser',
       'expo-sharing',
       // Expo mods run as an interceptor chain. Register the guard first so it
       // executes after expo-updates writes expo_runtime_version to strings.xml.
