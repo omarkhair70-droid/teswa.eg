@@ -1,5 +1,5 @@
 -- Read-only contract assertions for PR #1 security lockdown.
--- Run against a database where the matching migration has been applied.
+-- Run against a database where the matching migrations have been applied.
 
 do $$
 begin
@@ -12,6 +12,29 @@ begin
       and coalesce(c.reloptions, '{}') @> array['security_invoker=true']
   ) then
     raise exception 'marketplace_items must use security_invoker=true';
+  end if;
+
+  if exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prosecdef
+      and p.proname not in (
+        'get_public_moving_items',
+        'get_public_city_pulse_moving_items'
+      )
+      and has_function_privilege('anon', p.oid, 'execute')
+  ) then
+    raise exception 'anon still has EXECUTE on a non-public SECURITY DEFINER function';
+  end if;
+
+  if not has_function_privilege('anon', 'public.get_public_moving_items(integer)', 'execute') then
+    raise exception 'anonymous public moving-items discovery contract was removed';
+  end if;
+
+  if not has_function_privilege('anon', 'public.get_public_city_pulse_moving_items(text[],integer)', 'execute') then
+    raise exception 'anonymous city-pulse discovery contract was removed';
   end if;
 
   if has_function_privilege('anon', 'public.increment_successful_swaps_for_users(uuid,uuid)', 'execute') then
