@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
@@ -36,8 +37,11 @@ export function MessageBubble({
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther]}>
       <Pressable
         disabled={!onLongPress}
-        delayLongPress={220}
-        onLongPress={onLongPress}
+        delayLongPress={200}
+        onLongPress={onLongPress ? () => {
+          void Haptics.selectionAsync().catch(() => undefined);
+          onLongPress();
+        } : undefined}
         style={({ pressed }) => [styles.pressable, pressed && onLongPress && styles.pressed]}
       >
         <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
