@@ -99,6 +99,7 @@ export default function DealConversationScreen() {
   const realtimeReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialScrollDoneRef = useRef(false);
+  const isNearBottomRef = useRef(true);
 
   const [deal, setDeal] = useState<LoadedDeal | null>(null);
   const [messages, setMessages] = useState<UiDealMessage[]>([]);
@@ -136,14 +137,13 @@ export default function DealConversationScreen() {
     sheetTimerRef.current = setTimeout(() => ref.current?.present(), 170);
   }, []);
 
-  const loadBlockState = useCallback(async (nextDeal?: LoadedDeal | null) => {
-    const target = nextDeal ?? deal;
-    if (!user?.id || !target?.otherParticipant.id) return;
-    const result = await fetchUserBlockState(user.id, target.otherParticipant.id);
+  const loadBlockStateFor = useCallback(async (otherUserId: string | null | undefined) => {
+    if (!user?.id || !otherUserId) return;
+    const result = await fetchUserBlockState(user.id, otherUserId);
     if (!result.ok) return;
     setBlockedByMe(result.state.blockedByMe);
     setBlockedMe(result.state.blockedMe);
-  }, [deal, user?.id]);
+  }, [user?.id]);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!dealId || !user?.id) return;
@@ -161,14 +161,14 @@ export default function DealConversationScreen() {
       setDeal(result.deal);
       setMessages((previous) => mergeDealMessages(previous.filter((message) => !!message.localStatus), result.deal.messages));
       setError(null);
-      void loadBlockState(result.deal);
+      void loadBlockStateFor(result.deal.otherParticipant.id);
       void markDealThreadReadFromMobile(dealId).finally(() => { void refreshBadges(); });
     } catch {
       if (sequence === loadSequenceRef.current) setError('تعذر تحميل بيانات الصفقة.');
     } finally {
       if (!options?.silent) setRefreshing(false);
     }
-  }, [dealId, loadBlockState, refreshBadges, user?.id]);
+  }, [dealId, loadBlockStateFor, refreshBadges, user?.id]);
 
   useEffect(() => {
     if (!dealId || !user?.id) return;
@@ -205,11 +205,19 @@ export default function DealConversationScreen() {
           audioSizeBytes: row.audio_size_bytes ?? null,
           createdAt: row.created_at ?? new Date().toISOString(),
         };
-        setMessages((previous) => mergeDealMessages(previous.filter((message) => !message.id.startsWith('local-')), [incoming]));
+        setMessages((previous) => {
+          let base = previous;
+          if (incoming.senderId === user.id) {
+            const localIndex = base.findIndex((message) => message.localStatus === 'sending' && message.body === incoming.body && message.messageType === incoming.messageType);
+            if (localIndex >= 0) base = base.filter((_, index) => index !== localIndex);
+          }
+          return mergeDealMessages(base, [incoming]);
+        });
         if (incoming.senderId !== user.id) {
           void markDealThreadReadFromMobile(dealId).finally(() => { void refreshBadges(); });
         }
-        requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+        if (isNearBottomRef.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+        else setNewMessagesAvailable(true);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'swap_deals', filter: `id=eq.${dealId}` }, scheduleReload)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'deal_confirmations', filter: `deal_id=eq.${dealId}` }, scheduleReload)
@@ -257,12 +265,12 @@ export default function DealConversationScreen() {
       void trackEvent('deal_message_sent', { route: '/deal/[id]', entityType: 'deal', entityId: deal.id, metadata: { messageType: 'text' } });
     } catch (sendError) {
       setMessages((previous) => previous.map((message) => message.id === localId ? { ...message, localStatus: 'failed' } : message));
-      await loadBlockState();
+      await loadBlockStateFor(deal.otherParticipant.id);
       notify(sendError instanceof Error ? sendError.message : 'تعذر إرسال الرسالة حالياً.');
     } finally {
       setSending(false);
     }
-  }, [body, canSend, deal, loadBlockState, notify, sending, user?.id]);
+  }, [body, canSend, deal, loadBlockStateFor, notify, sending, user?.id]);
 
   const startVoice = useCallback(async () => {
     if (!canSend || recordingActive || recordingBusy || voiceSending) return;
@@ -402,11 +410,11 @@ export default function DealConversationScreen() {
         ? await unblockUserFromMobile(user.id, deal.otherParticipant.id)
         : await blockUserFromMobile(user.id, deal.otherParticipant.id);
       notify(result.message);
-      if (result.ok) await loadBlockState();
+      if (result.ok) await loadBlockStateFor(deal.otherParticipant.id);
     } finally {
       setBlockBusy(false);
     }
-  }, [blockBusy, blockedByMe, deal?.otherParticipant.id, loadBlockState, notify, user?.id]);
+  }, [blockBusy, blockedByMe, deal?.otherParticipant.id, loadBlockStateFor, notify, user?.id]);
 
   const runMessageAction = useCallback(async (action: 'copy' | 'retry') => {
     const message = selectedMessage;
@@ -532,6 +540,7 @@ export default function DealConversationScreen() {
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
             const distance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+            isNearBottomRef.current = distance < 150;
             if (distance < 90) setNewMessagesAvailable(false);
           }}
           scrollEventThrottle={80}
