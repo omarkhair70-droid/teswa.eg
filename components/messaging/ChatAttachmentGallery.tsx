@@ -61,16 +61,10 @@ function VideoThumb({ item }: { item: ChatAttachmentGalleryItem }) {
   );
 }
 
-function MediaTile({
-  item,
-  size,
-  onPress,
-  moreCount,
-}: {
+function MediaTile({ item, size, onPress }: {
   item: ChatAttachmentGalleryItem;
   size: 'large' | 'grid';
   onPress: () => void;
-  moreCount?: number;
 }) {
   return (
     <Pressable
@@ -88,9 +82,9 @@ function MediaTile({
           <Ionicons name="image-outline" size={24} color={colors.textMuted} />
         </View>
       )}
-      {moreCount && moreCount > 0 ? (
-        <View style={styles.moreOverlay}>
-          <AppText weight="bold" style={styles.moreText}>+{moreCount}</AppText>
+      {!item.uri ? (
+        <View pointerEvents="none" style={styles.preparingOverlay}>
+          <Ionicons name="cloud-download-outline" size={17} color={colors.textMuted} />
         </View>
       ) : null}
     </Pressable>
@@ -106,23 +100,15 @@ export function ChatAttachmentGallery({
 }) {
   const media = useMemo(() => items.filter((item) => item.kind === 'image' || item.kind === 'video'), [items]);
   const files = useMemo(() => items.filter((item) => item.kind === 'file'), [items]);
-  const visibleMedia = media.slice(0, 4);
-  const moreCount = Math.max(0, media.length - visibleMedia.length);
 
   return (
     <View style={styles.wrap}>
-      {visibleMedia.length === 1 ? (
-        <MediaTile item={visibleMedia[0]} size="large" onPress={() => onPress(visibleMedia[0])} />
-      ) : visibleMedia.length > 1 ? (
+      {media.length === 1 ? (
+        <MediaTile item={media[0]} size="large" onPress={() => onPress(media[0])} />
+      ) : media.length > 1 ? (
         <View style={styles.grid}>
-          {visibleMedia.map((item, index) => (
-            <MediaTile
-              key={item.id}
-              item={item}
-              size="grid"
-              onPress={() => onPress(item)}
-              moreCount={index === visibleMedia.length - 1 ? moreCount : 0}
-            />
+          {media.map((item) => (
+            <MediaTile key={item.id} item={item} size="grid" onPress={() => onPress(item)} />
           ))}
         </View>
       ) : null}
@@ -144,7 +130,7 @@ export function ChatAttachmentGallery({
               {[formatFileSize(item.sizeBytes), item.mimeType].filter(Boolean).join(' • ') || (item.uri ? 'اضغط للفتح' : 'جاري تجهيز الملف...')}
             </AppText>
           </View>
-          <Ionicons name="open-outline" size={17} color={colors.textMuted} />
+          <Ionicons name={item.uri ? 'open-outline' : 'cloud-download-outline'} size={17} color={colors.textMuted} />
         </Pressable>
       ))}
     </View>
@@ -183,13 +169,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingLeft: 2,
   },
-  moreOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  preparingOverlay: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(249,243,234,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.48)',
   },
-  moreText: { color: '#fff', fontSize: 25 },
   fileCard: {
     width: 264,
     maxWidth: '100%',
