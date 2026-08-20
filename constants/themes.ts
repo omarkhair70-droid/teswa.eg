@@ -1,5 +1,9 @@
 import { createTheme } from '@shopify/restyle';
 
+// Temporary release switch: keep the app on the light theme until the dark
+// theme pass is ready to ship. Flip this back to true to restore system mode.
+export const SYSTEM_DARK_MODE_ENABLED = false;
+
 export const teswaThemeTokens = {
   light: {
     background: '#F9F3EA',
