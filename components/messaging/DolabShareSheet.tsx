@@ -56,6 +56,11 @@ export const DolabShareSheet = forwardRef<BottomSheetModal, {
   onSelect: (item: DolabShareItem) => void;
   onReload?: () => void;
 }>(function DolabShareSheet({ items, loading = false, error, onSelect, onReload }, ref) {
+  const selectAndClose = (item: DolabShareItem) => {
+    onSelect(item);
+    if (ref && typeof ref !== 'function') ref.current?.dismiss();
+  };
+
   return (
     <AppBottomSheet
       ref={ref}
@@ -84,7 +89,7 @@ export const DolabShareSheet = forwardRef<BottomSheetModal, {
               key={item.id}
               accessibilityRole="button"
               accessibilityLabel={`اختيار ${item.title}`}
-              onPress={() => onSelect(item)}
+              onPress={() => selectAndClose(item)}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
               <View style={styles.preview}><ItemPreview item={item} /></View>
