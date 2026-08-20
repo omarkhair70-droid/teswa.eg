@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEventListener } from 'expo';
 import { Image as ExpoImage } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { StoryPager } from '@/components/story/StoryPager';
 import { AppActionSheet } from '@/components/sheets/AppActionSheet';
 import { AppText } from '@/components/ui/AppText';
@@ -24,7 +25,6 @@ const VIDEO_FALLBACK_DURATION_MS = 8000;
 
 const MAX_STORY_VOICE_MS = 45_000;
 const formatMs = (durationMs: number) => `${String(Math.floor(Math.max(0, Math.floor(durationMs / 1000)) / 60)).padStart(2, '0')}:${String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}`;
-
 
 function StoryVideo({
   uri,
@@ -108,6 +108,7 @@ export default function StoryViewerScreen() {
   const [urlsByStoryId, setUrlsByStoryId] = useState<Record<string, string | null>>({});
   const [mediaFailedIds, setMediaFailedIds] = useState<Record<string, boolean>>({});
   const [activeIndex, setActiveIndex] = useState(0);
+  const [readyImageStoryIds, setReadyImageStoryIds] = useState<Record<string, boolean>>({});
   const [readyVideoStoryIds, setReadyVideoStoryIds] = useState<Record<string, boolean>>({});
   const [likedStoryIds, setLikedStoryIds] = useState<Record<string, boolean>>({});
   const [likeBusyStoryIds, setLikeBusyStoryIds] = useState<Record<string, boolean>>({});
@@ -130,6 +131,12 @@ export default function StoryViewerScreen() {
   const voicePlayer = useAudioPlayer(voiceDraft?.uri ?? null, { updateInterval: 250 });
   const voicePlayerStatus = useAudioPlayerStatus(voicePlayer);
 
+  useFocusEffect(useCallback(() => {
+    setNavigatingAwayFromViewer(false);
+    return () => {
+      progressAnim.stopAnimation();
+    };
+  }, [progressAnim]));
 
   const voiceReplyInteractionActive =
     voiceOpen ||
@@ -280,10 +287,9 @@ export default function StoryViewerScreen() {
     if (!currentStory) return false;
     if (!currentStorySignedUrl) return true;
     if (mediaFailedIds[currentStory.id]) return true;
-    if (currentStory.mediaType === 'image') return true;
+    if (currentStory.mediaType === 'image') return !!readyImageStoryIds[currentStory.id];
     return !!readyVideoStoryIds[currentStory.id];
-  }, [currentStory, currentStorySignedUrl, mediaFailedIds, readyVideoStoryIds]);
-
+  }, [currentStory, currentStorySignedUrl, mediaFailedIds, readyImageStoryIds, readyVideoStoryIds]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -298,7 +304,6 @@ export default function StoryViewerScreen() {
     markedViewedStoryIdsRef.current.add(storyId);
     void markStoryViewedFromMobile({ storyId, viewerId: user.id });
   }, [currentStory, currentStorySignedUrl, isViewingOwnStories, user?.id]);
-
 
   useEffect(() => {
     if (!user?.id || !context?.stories.length || isViewingOwnStories) {
@@ -326,7 +331,6 @@ export default function StoryViewerScreen() {
   useEffect(() => {
     setLikeActionError(null);
   }, [activeIndex, currentStory?.id]);
-
 
   useEffect(() => {
     progressAnim.stopAnimation();
@@ -378,8 +382,6 @@ export default function StoryViewerScreen() {
     };
   }, [activeIndex, context?.stories.length, currentStoryCanStart, goNext, navigatingAwayFromViewer, progressAnim, storyDurationMs, storyPlaybackPaused]);
 
-
-
   useEffect(() => () => {
     progressAnim.stopAnimation();
   }, [progressAnim]);
@@ -423,7 +425,6 @@ export default function StoryViewerScreen() {
     }
   }, [currentStory, currentStoryLiked, isViewingOwnStories, likeBusyStoryIds, user?.id]);
 
-
   const replyComposerVisible = !!user?.id && !!currentStory && !isViewingOwnStories;
 
   const handleSendStoryReply = useCallback(async () => {
@@ -449,7 +450,6 @@ export default function StoryViewerScreen() {
     setStoryReplyFeedback(null);
   }, [currentStory?.id]);
 
-  
   const handleStartVoiceReply = useCallback(async () => {
     if (!user?.id || !currentStory) return;
     setStoryReplyError(null); setStoryReplyFeedback(null); setVoiceOpen(true); setVoiceBusy(true);
@@ -523,7 +523,6 @@ export default function StoryViewerScreen() {
     } finally { setVoiceSending(false); }
   }, [voiceDraft, user?.id, currentStory]);
 
-
   const cancelVoiceComposer = useCallback(async () => {
     try {
       if (recorderState.isRecording) {
@@ -564,7 +563,21 @@ export default function StoryViewerScreen() {
     storyActionsSheetRef.current?.present();
   }, [isViewingOwnStories, progressAnim, router]);
 
-const renderUnavailableState = () => {
+  const openAuthorProfile = useCallback(() => {
+    if (!context?.author.id) return;
+    setNavigatingAwayFromViewer(true);
+    progressAnim.stopAnimation();
+    router.push(`/profile/${context.author.id}`);
+  }, [context?.author.id, progressAnim, router]);
+
+  const openStoryReport = useCallback(() => {
+    if (!currentStory) return;
+    setNavigatingAwayFromViewer(true);
+    progressAnim.stopAnimation();
+    router.push(`/report/story/${currentStory.id}`);
+  }, [currentStory, progressAnim, router]);
+
+  const renderUnavailableState = () => {
     if (isViewingOwnStories) {
       return (
         <View style={styles.centerState}>
@@ -610,6 +623,9 @@ const renderUnavailableState = () => {
         {context.stories.map((story: StoryRecord, index) => {
           const signedUrl = urlsByStoryId[story.id];
           const failed = mediaFailedIds[story.id] || !signedUrl;
+          const mediaReady = story.mediaType === 'image'
+            ? Boolean(readyImageStoryIds[story.id])
+            : Boolean(readyVideoStoryIds[story.id]);
 
           return (
             <View key={story.id} style={styles.page}>
@@ -622,27 +638,28 @@ const renderUnavailableState = () => {
                   contentFit="contain"
                   cachePolicy="memory-disk"
                   transition={120}
+                  onLoad={() => setReadyImageStoryIds((prev) => (
+                    prev[story.id] ? prev : { ...prev, [story.id]: true }
+                  ))}
                   onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
                 />
               ) : (
-                <>
-                  <StoryVideo
-                    uri={signedUrl}
-                    active={index === activeIndex && !storyPlaybackPaused}
-                    onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
-                    onReady={() => setReadyVideoStoryIds((prev) => (
-                      prev[story.id] ? prev : { ...prev, [story.id]: true }
-                    ))}
-                  />
-                  {index === activeIndex && !mediaFailedIds[story.id] && !readyVideoStoryIds[story.id] ? (
-                    <View pointerEvents="none" style={styles.videoLoadingOverlay}>
-                      <View style={styles.videoLoadingChip}>
-                        <AppText style={styles.videoLoadingText}>نجهّز الفيديو...</AppText>
-                      </View>
-                    </View>
-                  ) : null}
-                </>
+                <StoryVideo
+                  uri={signedUrl}
+                  active={index === activeIndex && !storyPlaybackPaused}
+                  onError={() => setMediaFailedIds((prev) => ({ ...prev, [story.id]: true }))}
+                  onReady={() => setReadyVideoStoryIds((prev) => (
+                    prev[story.id] ? prev : { ...prev, [story.id]: true }
+                  ))}
+                />
               )}
+              {index === activeIndex && !failed && !mediaReady ? (
+                <View pointerEvents="none" style={styles.videoLoadingOverlay}>
+                  <View style={styles.videoLoadingChip}>
+                    <AppText style={styles.videoLoadingText}>{story.mediaType === 'video' ? 'نجهّز الفيديو...' : 'نجهّز القصة...'}</AppText>
+                  </View>
+                </View>
+              ) : null}
             </View>
           );
         })}
@@ -666,10 +683,7 @@ const renderUnavailableState = () => {
         <View style={styles.headerRow}>
           <Pressable
             style={styles.authorRow}
-            onPress={() => {
-              if (!context.author.id) return;
-              router.push(`/profile/${context.author.id}`);
-            }}
+            onPress={openAuthorProfile}
           >
             <View style={styles.authorAvatar}>
               {context.author.avatarUrl ? (
@@ -707,40 +721,40 @@ const renderUnavailableState = () => {
         <Pressable style={styles.rightZone} onPressIn={handleStoryPressIn} onPressOut={handleStoryPressOut} onPress={handleRightZonePress} />
       </View>
 
-
       {replyComposerVisible ? (
-        <View style={styles.replyComposerOverlay}>
-          {likeActionError ? (
-            <View style={styles.likeErrorBoxBottom}>
-              <AppText style={styles.likeErrorText}>{likeActionError}</AppText>
-            </View>
-          ) : null}
-          {storyReplyError ? <AppText style={styles.replyErrorText}>{storyReplyError}</AppText> : null}
-          {!storyReplyError && storyReplyFeedback ? <AppText style={styles.replyFeedbackText}>{storyReplyFeedback}</AppText> : null}
-          <View style={styles.bottomActionsRow}>
-            {!isViewingOwnStories ? (
-              <Pressable
-                style={[styles.headerCircleButton, currentStoryLikeBusy && styles.likeDisabled]}
-                onPress={() => void handleToggleStoryLike()}
-                disabled={currentStoryLikeBusy}
-              >
-                <Ionicons name={currentStoryLiked ? 'heart' : 'heart-outline'} size={18} color="#fff" />
-              </Pressable>
+        <KeyboardStickyView offset={{ opened: 10, closed: 0 }} style={styles.replyComposerSticky}>
+          <View style={styles.replyComposerOverlay}>
+            {likeActionError ? (
+              <View style={styles.likeErrorBoxBottom}>
+                <AppText style={styles.likeErrorText}>{likeActionError}</AppText>
+              </View>
             ) : null}
+            {storyReplyError ? <AppText style={styles.replyErrorText}>{storyReplyError}</AppText> : null}
+            {!storyReplyError && storyReplyFeedback ? <AppText style={styles.replyFeedbackText}>{storyReplyFeedback}</AppText> : null}
+            <View style={styles.bottomActionsRow}>
+              {!isViewingOwnStories ? (
+                <Pressable
+                  style={[styles.headerCircleButton, currentStoryLikeBusy && styles.likeDisabled]}
+                  onPress={() => void handleToggleStoryLike()}
+                  disabled={currentStoryLikeBusy}
+                >
+                  <Ionicons name={currentStoryLiked ? 'heart' : 'heart-outline'} size={18} color="#fff" />
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.replyComposerRow}>
+              <Pressable style={[styles.replySendButton, (storyReplySending || !storyReplyBody.trim()) && styles.replySendButtonDisabled]} onPress={() => void handleSendStoryReply()} disabled={storyReplySending || !storyReplyBody.trim()}>
+                <AppText style={styles.replySendButtonText}>{storyReplySending ? '...' : 'إرسال'}</AppText>
+              </Pressable>
+              <TextInput value={storyReplyBody} onChangeText={setStoryReplyBody} onFocus={() => setReplyInputFocused(true)} onBlur={() => setReplyInputFocused(false)} placeholder="رد على القصة..." placeholderTextColor="rgba(255,255,255,0.6)" style={styles.replyInput} editable={!storyReplySending} textAlign="right" />
+            </View>
+            <Pressable onPress={() => void handleStartVoiceReply()} disabled={voiceBusy || recorderState.isRecording || voiceSending} style={styles.replyVoiceButton}><AppText style={styles.replySendButtonText}>رد بصوتك</AppText></Pressable>
+            {voiceOpen ? (<View style={styles.voiceBox}>
+              {recorderState.isRecording ? (<View style={styles.replyComposerRow}><AppText style={styles.replyFeedbackText}>جاري التسجيل {formatMs(recorderState.durationMillis)}</AppText><Pressable onPress={() => void stopVoice()}><AppText style={styles.replySendButtonText}>إيقاف</AppText></Pressable><Pressable onPress={() => void cancelVoiceComposer()}><AppText style={styles.replySendButtonText}>إلغاء</AppText></Pressable></View>) : null}
+              {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={async () => { if (voicePlayerStatus.playing) { voicePlayer.pause(); return; } await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => { setVoiceDraft(null); void handleStartVoiceReply(); }}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
+            </View>) : null}
           </View>
-          <View style={styles.replyComposerRow}>
-            <Pressable style={[styles.replySendButton, (storyReplySending || !storyReplyBody.trim()) && styles.replySendButtonDisabled]} onPress={() => void handleSendStoryReply()} disabled={storyReplySending || !storyReplyBody.trim()}>
-              <AppText style={styles.replySendButtonText}>{storyReplySending ? '...' : 'إرسال'}</AppText>
-            </Pressable>
-            <TextInput value={storyReplyBody} onChangeText={setStoryReplyBody} onFocus={() => setReplyInputFocused(true)} onBlur={() => setReplyInputFocused(false)} placeholder="رد على القصة..." placeholderTextColor="rgba(255,255,255,0.6)" style={styles.replyInput} editable={!storyReplySending} textAlign="right" />
-          </View>
-          <Pressable onPress={() => void handleStartVoiceReply()} disabled={voiceBusy || recorderState.isRecording || voiceSending} style={styles.replyVoiceButton}><AppText style={styles.replySendButtonText}>رد بصوتك</AppText></Pressable>
-          {voiceOpen ? (<View style={styles.voiceBox}>
-            {recorderState.isRecording ? (<View style={styles.replyComposerRow}><AppText style={styles.replyFeedbackText}>جاري التسجيل {formatMs(recorderState.durationMillis)}</AppText><Pressable onPress={() => void stopVoice()}><AppText style={styles.replySendButtonText}>إيقاف</AppText></Pressable><Pressable onPress={() => void cancelVoiceComposer()}><AppText style={styles.replySendButtonText}>إلغاء</AppText></Pressable></View>) : null}
-            {!recorderState.isRecording && voiceDraft ? (<View style={styles.replyComposerRow}><Pressable onPress={async () => { if (voicePlayerStatus.playing) { voicePlayer.pause(); return; } await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }); voicePlayer.play(); }}><AppText style={styles.replySendButtonText}>{voicePlayerStatus.playing ? 'إيقاف المعاينة' : 'تشغيل المعاينة'}</AppText></Pressable><Pressable onPress={() => void sendVoiceReply()} disabled={voiceSending}><AppText style={styles.replySendButtonText}>{voiceSending ? '...' : 'إرسال الرد الصوتي'}</AppText></Pressable><Pressable onPress={() => { setVoiceDraft(null); void handleStartVoiceReply(); }}><AppText style={styles.replySendButtonText}>إعادة التسجيل</AppText></Pressable></View>) : null}
-          </View>) : null}
-
-        </View>
+        </KeyboardStickyView>
       ) : null}
 
       {currentStory?.caption ? (
@@ -757,8 +771,7 @@ const renderUnavailableState = () => {
               iconName: 'flag-outline',
               onPress: () => {
                 storyActionsSheetRef.current?.dismiss();
-                if (!currentStory) return;
-                router.push(`/report/story/${currentStory.id}`);
+                openStoryReport();
               },
             },
             {
@@ -825,7 +838,8 @@ const styles = StyleSheet.create({
   likeErrorText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, textAlign: 'right' },
   captionBox: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 24, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 3 },
   captionBoxWithReplyComposer: { bottom: 76 },
-  replyComposerOverlay: { position: 'absolute', left: 12, right: 12, bottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 12, padding: 8, gap: 6, zIndex: 4 },
+  replyComposerSticky: { position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 4 },
+  replyComposerOverlay: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 12, padding: 8, gap: 6 },
   bottomActionsRow: { flexDirection: 'row', justifyContent: 'flex-end' },
   replyComposerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   replyInput: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 10, color: '#fff', backgroundColor: 'rgba(255,255,255,0.08)' },
