@@ -38,6 +38,9 @@ export function VoiceMessageBubble({
   const completedBars = Math.round(ratio * WAVE.length);
   const primary = mine ? colors.background : colors.primary;
   const muted = mine ? 'rgba(249,243,234,0.42)' : colors.primarySoft;
+  const durationLabel = safeDuration > 0
+    ? (playing ? `${formatDuration(safePosition)} / ${formatDuration(safeDuration)}` : formatDuration(safeDuration))
+    : (playing && safePosition > 0 ? formatDuration(safePosition) : '--:--');
 
   return (
     <View style={[styles.shell, compact && styles.shellCompact]}>
@@ -72,9 +75,7 @@ export function VoiceMessageBubble({
           ))}
         </View>
         <View style={styles.metaRow}>
-          <AppText style={[styles.duration, mine && styles.mineMeta]}>
-            {playing && safeDuration > 0 ? `${formatDuration(safePosition)} / ${formatDuration(safeDuration)}` : formatDuration(safeDuration)}
-          </AppText>
+          <AppText style={[styles.duration, mine && styles.mineMeta]}>{durationLabel}</AppText>
           <Ionicons name="mic" size={12} color={mine ? 'rgba(249,243,234,0.68)' : colors.textMuted} />
         </View>
       </View>
