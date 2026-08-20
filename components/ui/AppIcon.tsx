@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 import { Bell, Check, ChevronLeft, ChevronRight, Globe2, Info, Lock, Moon, Palette, Shield, Sun, User, X } from 'lucide-react-native';
-import { colors } from '@/constants/colors';
+
+import { useTeswaColors } from '@/lib/theme/use-teswa-theme';
 
 const icons = {
   bell: Bell,
@@ -25,7 +26,8 @@ type AppIconProps = Omit<ComponentProps<typeof Bell>, 'color'> & {
   color?: string;
 };
 
-export function AppIcon({ name, color = colors.text, size = 20, strokeWidth = 2, ...props }: AppIconProps) {
+export function AppIcon({ name, color, size = 20, strokeWidth = 2, ...props }: AppIconProps) {
+  const colors = useTeswaColors();
   const Icon = icons[name];
-  return <Icon color={color} size={size} strokeWidth={strokeWidth} {...props} />;
+  return <Icon color={color ?? colors.text} size={size} strokeWidth={strokeWidth} {...props} />;
 }
