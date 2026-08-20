@@ -9,7 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
@@ -148,6 +148,7 @@ export default function DirectConversationScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const conversationId = (Array.isArray(id) ? id[0] : id)?.trim() ?? '';
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
 
   const listRef = useRef<FlatList<UiMessage>>(null);
   const messageActionsRef = useRef<BottomSheetModal>(null);
@@ -835,7 +836,7 @@ export default function DirectConversationScreen() {
   if (!conversation) return <AppScreen><View style={styles.centerState}><EmptyState title="تعذر فتح المحادثة" description={error ?? 'المحادثة لم تعد متاحة.'} /><AppButton label="إعادة المحاولة" onPress={() => { void initialLoad(); }} /></View></AppScreen>;
 
   const typingLabel = typingUsers.length ? `${conversation.otherDisplayName ?? 'الطرف الآخر'} يكتب...` : null;
-  const statusLabel = realtimeStatus === 'live' ? 'متصل' : realtimeStatus === 'connecting' ? 'جاري الاتصال' : 'سيُعاد الاتصال تلقائيًا';
+  const statusLabel = realtimeStatus === 'offline' ? 'جاري إعادة الاتصال...' : 'مراسلة';
 
   return (
     <AppScreen style={styles.fullScreen} backgroundVariant="none">
@@ -850,7 +851,6 @@ export default function DirectConversationScreen() {
           <View style={styles.identityCopy}>
             <AppText weight="bold" numberOfLines={1} style={styles.name}>{conversation.otherDisplayName ?? 'مستخدم تِسوى'}</AppText>
             <View style={styles.statusRow}>
-              {accepted ? <View style={[styles.statusDot, realtimeStatus !== 'live' && styles.statusDotMuted]} /> : null}
               <AppText muted style={styles.headerStatus} numberOfLines={1}>{typingLabel ?? (conversation.status === 'accepted' ? statusLabel : conversation.status === 'requested' ? 'طلب مراسلة' : 'المحادثة متوقفة')}</AppText>
             </View>
           </View>
@@ -872,7 +872,7 @@ export default function DirectConversationScreen() {
           </View>
         </View>
       ) : null}
-      {isRequesterOnRequest ? <View style={styles.slimBanner}><Ionicons name="time-outline" size={15} color={colors.textMuted} /><AppText muted style={styles.slimBannerText}>طلبك اتبعت. تقدر تكمل لما الطرف التاني يقبل.</AppText></View> : null}
+      {isRequesterOnRequest ? <View style={styles.slimBanner}><Ionicons name="time-outline" size={15} color={colors.textMuted} /><AppText muted style={styles.slimBannerText}>رسالتك اتبعت كطلب. تقدر تكمل لما الطرف التاني يقبل.</AppText></View> : null}
       {blockedByMe ? <View style={styles.slimBanner}><Ionicons name="ban-outline" size={15} color={colors.danger} /><AppText muted style={styles.slimBannerText}>أنت حاظر المستخدم. ألغِ الحظر لاستكمال المراسلة.</AppText></View> : null}
       {blockedMe && !blockedByMe ? <View style={styles.slimBanner}><Ionicons name="lock-closed-outline" size={15} color={colors.textMuted} /><AppText muted style={styles.slimBannerText}>المراسلة غير متاحة بين الحسابين حاليًا.</AppText></View> : null}
 
@@ -976,7 +976,7 @@ export default function DirectConversationScreen() {
         ) : null}
       </View>
 
-      <KeyboardStickyView offset={{ opened: 4, closed: 0 }}>
+      <KeyboardStickyView enabled={keyboardVisible} offset={{ opened: 0, closed: 0 }}>
         <ChatComposer
           value={body}
           onChangeText={onChangeBody}
@@ -1072,8 +1072,6 @@ const styles = StyleSheet.create({
   identityCopy: { flex: 1, minWidth: 0, gap: 2, alignItems: 'flex-end' },
   name: { fontSize: 15.5 },
   statusRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
-  statusDotMuted: { backgroundColor: colors.textMuted },
   headerStatus: { fontSize: 11.5, textAlign: 'right' },
   requestBanner: { margin: 10, gap: 10, padding: 13, borderRadius: 16, borderWidth: 1, borderColor: colors.primarySoft, backgroundColor: colors.surface },
   requestCopy: { gap: 3 },
