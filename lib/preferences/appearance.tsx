@@ -1,6 +1,7 @@
 import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Appearance, type ColorSchemeName } from 'react-native';
+import { Appearance, Platform, type ColorSchemeName } from 'react-native';
 import { ThemeProvider as RestyleThemeProvider } from '@shopify/restyle';
+import { setStatusBarBackgroundColor, setStatusBarStyle } from 'expo-status-bar';
 
 import { darkTheme, lightTheme, type TeswaThemeMode } from '@/constants/themes';
 
@@ -30,6 +31,12 @@ export function ThemePreferencesProvider({ children }: PropsWithChildren) {
 
   const resolvedThemeMode: TeswaThemeMode = systemColorScheme === 'dark' ? 'dark' : 'light';
   const theme = resolvedThemeMode === 'dark' ? darkTheme : lightTheme;
+
+  useEffect(() => {
+    setStatusBarStyle(resolvedThemeMode === 'dark' ? 'light' : 'dark', true);
+    if (Platform.OS === 'android') setStatusBarBackgroundColor(theme.colors.background, true);
+  }, [resolvedThemeMode, theme.colors.background]);
+
   const value = useMemo<ThemePreferencesContextValue>(() => ({ systemColorScheme, resolvedThemeMode }), [resolvedThemeMode, systemColorScheme]);
 
   return (
