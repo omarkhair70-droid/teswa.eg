@@ -11,11 +11,9 @@ import { AppText } from '@/components/ui/AppText';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
 import { useAuth } from '@/lib/auth';
-import { sendNativeDirectMessage } from '@/lib/chat/supabase-direct-chat';
 import {
-  fetchDirectConversation,
   fetchMyDirectConversations,
-  startOrGetDirectConversation,
+  startDirectConversationWithMessage,
 } from '@/lib/direct-messages';
 import { fetchPublicProfileById, type PublicProfile } from '@/lib/profiles';
 import { showToast } from '@/lib/toast';
@@ -69,25 +67,21 @@ export default function DirectComposeScreen() {
     setSending(true);
     setError(null);
     try {
-      const start = await startOrGetDirectConversation(targetUserId);
-      if (!start.ok || !start.conversationId) throw new Error(start.message);
+      const result = await startDirectConversationWithMessage(targetUserId, text);
 
-      const current = await fetchDirectConversation(start.conversationId);
-      if (current?.status === 'requested' && current.requestedBy !== user.id) {
-        showToast({ title: 'عندك طلب مراسلة من الشخص ده.' });
-        router.replace(`/direct/${start.conversationId}`);
-        return;
+      if (!result.ok) {
+        if (result.conversationId) {
+          showToast({ title: result.message });
+          router.replace(`/direct/${result.conversationId}`);
+          return;
+        }
+        throw new Error(result.message);
       }
-
-      const result = await sendNativeDirectMessage({
-        conversationId: start.conversationId,
-        body: text,
-      });
-      if (!result.ok) throw new Error(result.message);
+      if (!result.conversationId) throw new Error('تعذر فتح المحادثة بعد الإرسال.');
 
       setBody('');
-      showToast({ title: start.status === 'accepted' ? 'تم إرسال الرسالة.' : 'تم إرسال طلب المراسلة.' });
-      router.replace(`/direct/${start.conversationId}`);
+      showToast({ title: result.message });
+      router.replace(`/direct/${result.conversationId}`);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : 'تعذر إرسال الرسالة حالياً.');
     } finally {
