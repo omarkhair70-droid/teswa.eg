@@ -59,6 +59,7 @@ export type NativeDirectUploadInput = {
 };
 
 export type NativeDirectSubscriptionHandlers = {
+  onConversationChanged?: () => void;
   onMessagesChanged?: () => void;
   onAttachmentsChanged?: () => void;
   onReactionsChanged?: () => void;
@@ -310,6 +311,7 @@ export async function deleteNativeDirectMessage(messageId: string) {
 export function subscribeToNativeDirectConversation(conversationId: string, handlers: NativeDirectSubscriptionHandlers) {
   const channel = supabase
     .channel(`direct-native:${conversationId}:${Crypto.randomUUID()}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'direct_conversations', filter: `id=eq.${conversationId}` }, () => handlers.onConversationChanged?.())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onMessagesChanged?.())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_message_attachments', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onAttachmentsChanged?.())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_message_reactions', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onReactionsChanged?.())
