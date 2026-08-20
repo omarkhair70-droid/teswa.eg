@@ -453,7 +453,7 @@ export default function Screen() {
         )}
       </KeyboardAwareScrollView>
 
-      <KeyboardStickyView enabled={keyboardVisible} offset={{ opened: 0, closed: 0 }}>
+      <KeyboardStickyView enabled={keyboardVisible} offset={{ opened: 6, closed: 0 }}>
         <View style={styles.composerShell}>
           {voiceOpen ? (
             <View style={styles.voiceComposerCard}>

@@ -30,7 +30,7 @@ type ChatComposerProps = {
 const WAVE = [7, 13, 9, 18, 11, 22, 14, 19, 8, 16, 12, 21, 10, 17, 7, 14, 9, 18];
 
 const createStyles = (colors: TeswaThemeColors) => ({
-  wrap: { gap: 8, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 3, backgroundColor: colors.background, borderTopWidth: 0.5, borderTopColor: colors.border },
+  wrap: { gap: 8, paddingHorizontal: 10, paddingTop: 6, paddingBottom: 1, backgroundColor: colors.background, borderTopWidth: 0.5, borderTopColor: colors.border },
   composerShell: { minHeight: 50, flexDirection: 'row-reverse' as const, alignItems: 'flex-end' as const, gap: 7 },
   leadingAction: { width: 42, height: 48, alignItems: 'center' as const, justifyContent: 'center' as const },
   inputShell: { flex: 1, minHeight: 48, maxHeight: 116, justifyContent: 'center' as const, borderRadius: 25, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 16, paddingVertical: 4 },
