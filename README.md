@@ -1,10 +1,75 @@
+<p align="center">
+  <img src="assets/branding/icon.png" alt="Teswa app icon" width="120" />
+</p>
+
 # Teswa Mobile (تِسوى)
 
-Teswa is an Arabic-first mobile swap marketplace evolving into a living social exchange world where items, stories, people, and local activity create value beyond traditional buying/selling.
+<p align="center">
+  <strong>An Arabic-first social swap marketplace for giving useful things a second life.</strong>
+</p>
 
-Core lines:
-- "حاجتك لسه لها قيمة."
-- "قبل ما تسيبها، شوف تِسوى إيه."
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.teswa.mobile"><strong>Google Play</strong></a>
+  ·
+  <a href="https://teswa-eg.vercel.app"><strong>Web</strong></a>
+</p>
+
+> **حاجتك لسه لها قيمة.**  
+> قبل ما تسيبها، شوف تِسوى إيه.
+
+Teswa is a published Android product that combines item swapping, social discovery, stories, messaging, local activity, and native mobile capabilities in an Arabic-first experience.
+
+## What Teswa Is
+
+Teswa helps people discover new value in things they already own. Users can publish items, explore people and activity around them, exchange offers, coordinate through messaging, and build trust through profiles and completed-deal signals.
+
+The product is built as a native mobile experience rather than a simple marketplace listing surface: marketplace activity, stories, motion/video discovery, social communication, offline memory, local signals, and device-level capabilities work together as one product system.
+
+## Strongest Product Systems
+
+1. **Marketplace & Creator Studio** — item discovery, rich item detail, multi-step publishing, image/video media surfaces, offers, and deal lifecycle flows.
+2. **Social Messaging & Deal Coordination** — direct/deal conversations, voice-enabled messaging, warm communication states, and milestone-driven deal UX.
+3. **Stories & Motion** — story creation/viewing, replies, voice moments, fullscreen vertical video discovery, and item/story media crossover.
+4. **Living World & Local Discovery** — personal recap surfaces, Discover intelligence, spotlight rails, City Pulse, nearby items, stories, people, and local activity signals.
+5. **Offline Memory & Media Performance** — SQLite-backed public cache, warm-start behavior, foreground recovery, image/video prefetch, and graceful media loading.
+6. **Native Mobile Capabilities** — camera, audio, video, notifications, location, haptics, sharing, media-library flows, local authentication, and secure local storage.
+7. **Trust, Security & Release Operations** — biometric app lock, privacy-bounded analytics foundations, trust/badge presentation, push-delivery infrastructure, EAS builds, and OTA release workflows.
+
+## Product Screens
+
+<!--
+Asset Curator handoff:
+- Add one curated hero/product composite here.
+- Add 4–6 final product screenshots below it.
+- Reuse the shared portfolio-curated Teswa assets as the source of truth.
+- Do not create an independent GitHub screenshot selection.
+-->
+
+The final curated screen set will be added here from the shared portfolio asset source of truth.
+
+## Architecture
+
+```text
+React Native / Expo SDK 55
+        │
+        ├── Expo Router + TypeScript product UI
+        ├── Native Expo device/media capabilities
+        ├── SQLite offline memory + recovery
+        │
+        └── Supabase
+            ├── Auth
+            ├── PostgreSQL data
+            ├── Storage
+            └── Edge Functions / backend operations
+```
+
+**Core stack:** React Native, Expo, Expo Router, TypeScript, Supabase, SQLite, Reanimated, Skia, Lottie, Google Sign-In, Expo Notifications, Expo Location, Expo Camera/Audio/Video, EAS Build, and EAS Update.
+
+---
+
+## Detailed Product & Engineering Notes
+
+The sections below preserve the detailed implementation, operational, release, and product-history record for maintainers and technical review.
 
 ## Current Product Status
 
