@@ -37,15 +37,19 @@ The product is built as a native mobile experience rather than a simple marketpl
 
 ## Product Screens
 
-<!--
-Asset Curator handoff:
-- Add one curated hero/product composite here.
-- Add 4–6 final product screenshots below it.
-- Reuse the shared portfolio-curated Teswa assets as the source of truth.
-- Do not create an independent GitHub screenshot selection.
--->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/01-discovery-hub.webp" alt="Teswa discovery hub" width="23%" />
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/03-marketplace-feed.webp" alt="Teswa marketplace feed" width="23%" />
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/04-item-detail.webp" alt="Teswa item detail" width="23%" />
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/06-exchange-chat.webp" alt="Teswa exchange chat" width="23%" />
+</p>
 
-The final curated screen set will be added here from the shared portfolio asset source of truth.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/07-create-listing.webp" alt="Teswa create listing" width="23%" />
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/08-profile.webp" alt="Teswa profile" width="23%" />
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/09-trust.webp" alt="Teswa trust" width="23%" />
+  <img src="https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/10-movement.webp" alt="Teswa movement" width="23%" />
+</p>
 
 ## Architecture
 
