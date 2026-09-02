@@ -40,7 +40,9 @@ module.exports = {
     },
     web: {
       bundler: 'metro',
-      output: 'static',
+      // Authenticated app shell: keep web client-rendered so native-only route modules
+      // are not executed by Expo's Node static renderer during Vercel builds.
+      output: 'single',
     },
     plugins: [
       [
