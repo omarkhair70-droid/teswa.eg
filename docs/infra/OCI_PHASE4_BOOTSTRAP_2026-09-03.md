@@ -768,3 +768,19 @@ The helper now queries those scalar values directly through OCI CLI JMESPath:
 It also rejects an empty/non-numeric connection count instead of attempting to parse an empty JSON file.
 
 No OCI resource, guest file, Core lifecycle state, Nova, Supabase, DNS, or data changed during the failed preflight.
+
+
+## Serial-console empty-list normalization
+
+The second serial-console preflight reached the console-connection lookup but reported `console_connection_count_unresolved`.
+
+This is a CLI representation issue for an empty instance-console-connection list: the JMESPath `length(...)` expression can render an empty/null raw result instead of the numeric string `0`.
+
+The preflight does not need an exact count; it only needs to know whether any ACTIVE/CREATING connection exists. It now queries the first matching connection ID:
+
+- empty / `null` / `None` => zero active connections;
+- any ID => one-or-more active connections.
+
+The guarded connection-creation helper independently refuses to create a second connection when an ACTIVE/CREATING connection exists.
+
+No OCI resource, guest state, Core lifecycle, Nova, Supabase, DNS, or data changed during this failed preflight.
