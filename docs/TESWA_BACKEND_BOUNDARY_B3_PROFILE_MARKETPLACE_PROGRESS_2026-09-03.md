@@ -76,3 +76,29 @@ Supabase table/view/RPC names for these Marketplace reads now live inside the pr
 Profile bans, image ordering, wanted-tag normalization, video teaser enrichment, like counts, and viewer-like state retain their existing behavior.
 
 No Marketplace writes/lifecycle operations were migrated in this slice.
+
+
+## Slice B3.3 — Close core Profile module provider access
+
+Completed provider decoupling for `lib/profiles.ts`.
+
+Migrated:
+
+- profile update/write through `ProfileCoreContract.updateMine`;
+- active public-profile listing reads through `MarketplaceReadContract.listActiveByOwner`.
+
+Preserved in feature code:
+
+- username validation;
+- Arabic product-facing error messages;
+- profile tagline length rule;
+- profile bootstrap timeout;
+- item-video presence enrichment for public profile listings.
+
+### Result
+
+`lib/profiles.ts` no longer imports or calls Supabase directly.
+
+The Profile adapter owns profile row read/write mapping; the Marketplace adapter owns active owner-listing table joins.
+
+No production backend switch was made.
