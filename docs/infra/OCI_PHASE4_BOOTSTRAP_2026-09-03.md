@@ -634,3 +634,19 @@ Because the replacement destroys the currently allocated A1 instance before OCI 
 Lane 3 therefore adds a read-only capacity preflight for `VM.Standard.A1.Flex` at exactly 1 OCPU / 6 GB in the Core's current availability domain. The guarded apply helper reruns this check immediately before Terraform apply and refuses to proceed unless capacity status is `AVAILABLE`.
 
 **Plan decision:** structurally approved, conditional on a fresh `capacity_preflight=PASS` immediately before apply.
+
+
+## Core replacement capacity preflight numeric normalization
+
+The first capacity preflight stopped before making a capacity-report request with `unexpected_core_shape`.
+
+The live Core is already known and Terraform-managed as A1 Flex 1 OCPU / 6 GB. The helper compared OCI JSON numeric values as shell strings against literal `1` and `6`; OCI may serialize those values as `1.0` and `6.0`.
+
+The helper now:
+
+- prints the observed shape/OCPU/memory values;
+- validates OCPU and memory numerically rather than by exact string formatting;
+- remains read-only;
+- does not alter the reviewed replacement plan.
+
+No OCI compute resource changed during the failed preflight.
