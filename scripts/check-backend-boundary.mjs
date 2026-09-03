@@ -73,6 +73,21 @@ const legacyDirectSupabaseEnvReads = new Set([
   'lib/supabase/client.ts',
 ]);
 
+const legacyDirectStorageAccess = new Set([
+  'lib/chat/supabase-direct-chat.ts',
+  'lib/contextual-conversations.ts',
+  'lib/deals.ts',
+  'lib/direct-messages.ts',
+  'lib/dolab/index.ts',
+  'lib/dolab/upload.ts',
+  'lib/edit-listing-images.ts',
+  'lib/item-videos.ts',
+  'lib/listing-lifecycle.ts',
+  'lib/publish-item.ts',
+  'lib/stories.ts',
+]);
+
+
 function normalize(filePath) {
   return filePath.split(path.sep).join('/');
 }
@@ -116,6 +131,12 @@ for (const sourceRoot of sourceRoots) {
       }
     }
 
+    if (content.includes('supabase.storage')) {
+      if (!isAdapter && !legacyDirectStorageAccess.has(relativePath)) {
+        violations.push(`${relativePath}: new direct Supabase Storage access must go through MediaStorageContract`);
+      }
+    }
+
     if (content.includes('EXPO_PUBLIC_SUPABASE_URL') || content.includes('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY')) {
       if (!isAdapter && !legacyDirectSupabaseEnvReads.has(relativePath)) {
         violations.push(`${relativePath}: new direct Supabase environment dependency`);
@@ -132,6 +153,16 @@ const staleLegacyClientImports = [...legacyDirectClientImports].filter((relative
 
 if (staleLegacyClientImports.length > 0) {
   violations.push(...staleLegacyClientImports.map((relativePath) => `${relativePath}: stale legacy allowlist entry; remove it so coupling debt cannot grow back`));
+}
+
+const staleLegacyStorageAccess = [...legacyDirectStorageAccess].filter((relativePath) => {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) return true;
+  return !fs.readFileSync(absolutePath, 'utf8').includes('supabase.storage');
+});
+
+if (staleLegacyStorageAccess.length > 0) {
+  violations.push(...staleLegacyStorageAccess.map((relativePath) => `${relativePath}: stale Storage allowlist entry; remove it after MediaStorageContract migration`));
 }
 
 if (violations.length > 0) {
