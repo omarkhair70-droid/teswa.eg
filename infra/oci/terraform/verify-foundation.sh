@@ -43,13 +43,24 @@ do
 done
 
 NSG_COUNT="$(oci network nsg list --compartment-id "$COMPARTMENT" --all --query 'length(data)' --raw-output)"
-INSTANCE_JSON="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json)"
-INSTANCE_COUNT="$(printf '%s' "$INSTANCE_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("data", [])))')"
+set +e
+INSTANCE_JSON="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json 2>/tmp/teswa-compute-list.err)"
+INSTANCE_RC=$?
+set -e
 
-if [ -z "$INSTANCE_COUNT" ]; then
+if [ "$INSTANCE_RC" -ne 0 ]; then
   echo "compute_instances=UNKNOWN"
-  echo "Compute count query returned blank; verification is not green." >&2
+  echo "OCI compute list failed:" >&2
+  cat /tmp/teswa-compute-list.err >&2
   exit 3
+fi
+
+# OCI CLI 3.90.x in Cloud Shell can emit an empty stdout for a successful
+# empty ListInstances result. A successful blank response therefore means 0.
+if [ -z "$(printf '%s' "$INSTANCE_JSON" | tr -d '[:space:]')" ]; then
+  INSTANCE_COUNT=0
+else
+  INSTANCE_COUNT="$(printf '%s' "$INSTANCE_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("data", [])))')"
 fi
 
 echo "nsg_count=$NSG_COUNT"
