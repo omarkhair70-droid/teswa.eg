@@ -426,3 +426,18 @@ Observed plan:
 `phase4_bastion_connectivity_plan_guard=PASS`
 
 **Decision:** APPROVED FOR APPLY using the reviewed saved plan only.
+
+
+## Bastion connectivity verifier port-shape correction
+
+The first post-apply Bastion connectivity verifier reported:
+
+- egress security list attached: true
+- security list state: AVAILABLE
+- Core TCP/22 egress rule: false
+
+Review found the verifier was checking `tcp-options.min/max` directly. OCI's Security List API represents destination ports under `tcp-options.destination-port-range.min/max`.
+
+The Terraform rule itself is correct; only the verifier's JSON path was wrong. The verifier now checks the documented nested destination-port-range structure.
+
+No OCI mutation is required. Re-run the verifier only.
