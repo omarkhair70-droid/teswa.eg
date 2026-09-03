@@ -25,9 +25,10 @@ export type NotificationPreferences = {
   quietHoursEnabled: boolean;
   quietHoursStart: string;
   quietHoursEnd: string;
+  updatedAt: IsoDateTime | null;
 };
 
-export interface NotificationsContract {
+export interface NotificationsContract extends NotificationDispatchContract {
   list(userId: string, limit?: number): Promise<TeswaNotification[]>;
   getUnreadCount(userId: string): Promise<number>;
   markRead(userId: string, notificationId: string): Promise<TeswaResult<void, 'not_found' | 'unknown'>>;
@@ -46,4 +47,21 @@ export interface NotificationsContract {
     userId: string;
     expoPushToken: string;
   }): Promise<TeswaResult<void, 'unknown'>>;
+}
+
+
+export type NotificationDispatchInput = {
+  targetUserId: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  itemId?: string | null;
+  offerId?: string | null;
+  dealId?: string | null;
+  messageId?: string | null;
+};
+
+export interface NotificationDispatchContract {
+  dispatch(input: NotificationDispatchInput): Promise<TeswaResult<void, 'unknown'>>;
+  syncTimezone(timezone: string): Promise<TeswaResult<void, 'validation' | 'unknown'>>;
 }
