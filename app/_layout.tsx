@@ -587,7 +587,7 @@ function RootLayout() {
     <ShareIntentProvider>
       <KeyboardProvider preload={false}>
         <GestureHandlerRootView style={styles.gestureRoot}>
-          <StatusBar style="dark" backgroundColor={colors.background} translucent={false} />
+          <StatusBar style="dark" />
           <BottomSheetModalProvider>
             <ThemePreferencesProvider>
               <AuthProvider>
