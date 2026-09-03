@@ -280,7 +280,12 @@ export async function sendNativeDirectMessage(input: {
     };
   }
 
-  return result.data;
+  return {
+    ok: result.data.ok,
+    message: result.data.message ?? 'تعذر إرسال الرسالة حالياً.',
+    messageId: result.data.messageId,
+    createdAt: result.data.createdAt,
+  };
 }
 
 export async function markNativeDirectConversationRead(conversationId: string) {
