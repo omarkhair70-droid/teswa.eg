@@ -387,7 +387,7 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     );
     const inPublicAccountDeletionRoute = rootGroup === 'account-deletion';
     const inPublicLandingPreviewRoute = rootGroup === 'landing-preview';
-    const inPublicWebFrontDoor = Platform.OS === 'web' && atRoot;
+    const inPublicWebFrontDoor = Platform.OS === 'web' && (atRoot || rootGroup === 'index');
     const inPublicComplianceRoute = inPublicLegalRoute || inPublicAccountDeletionRoute;
 
     if (inOAuthCallback && !user) return;
