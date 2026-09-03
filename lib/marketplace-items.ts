@@ -1,22 +1,10 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
+import type { MarketplaceFeedRecord } from '@/lib/backend/contracts/marketplace';
 import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { fetchItemVideoTeaserByItemId, type ItemVideoTeaser } from '@/lib/item-videos';
 import { fetchItemLikesSummaryForViewer } from '@/lib/item-likes';
 
 const MARKETPLACE_PAGE_SIZE = 20;
-
-type MarketplaceItemRow = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  cover_image_url: string | null;
-  category: string | null;
-  item_condition: string | null;
-  city: string | null;
-  owner_display_name: string | null;
-  created_at: string;
-  distance_km?: number | null;
-};
 
 export type MarketplaceItem = {
   id: string;
@@ -77,89 +65,71 @@ export type MarketplaceItemDetail = MarketplaceItem & {
   ownerPresence?: MarketplaceItemOwnerPresence | null;
 };
 
-function mapRowToMarketplaceItem(row: MarketplaceItemRow, hasVideoTeaser = false, likeCount = 0, likedByMe = false): MarketplaceItem {
+function mapRecordToMarketplaceItem(
+  row: MarketplaceFeedRecord,
+  hasVideoTeaser = false,
+  likeCount = 0,
+  likedByMe = false,
+): MarketplaceItem {
   return {
     id: row.id,
     title: row.title?.trim() || 'عنصر بدون عنوان',
     description: row.description,
-    imageUrl: row.cover_image_url,
+    imageUrl: row.coverImageUrl,
     category: row.category,
-    condition: row.item_condition,
+    condition: row.condition,
     location: row.city,
-    ownerDisplayName: row.owner_display_name,
+    ownerDisplayName: row.ownerDisplayName,
     hasVideoTeaser,
-    distanceKm: row.distance_km ?? null,
+    distanceKm: row.distanceKm ?? null,
     likeCount,
     likedByMe,
   };
 }
 
-const itemSelect = `
-  id,
-  title,
-  description,
-  cover_image_url,
-  category,
-  item_condition,
-  city,
-  owner_display_name,
-  created_at
-`;
-
-export async function fetchMarketplaceItemsPage(options?: { offset?: number; limit?: number; filters?: MarketplaceItemFilters; viewerId?: string | null }): Promise<MarketplaceItemsPage> {
+export async function fetchMarketplaceItemsPage(options?: {
+  offset?: number;
+  limit?: number;
+  filters?: MarketplaceItemFilters;
+  viewerId?: string | null;
+}): Promise<MarketplaceItemsPage> {
   const offset = options?.offset ?? 0;
   const limit = options?.limit ?? MARKETPLACE_PAGE_SIZE;
-  const query = options?.filters?.query?.trim();
-  const category = options?.filters?.category?.trim();
-  const condition = options?.filters?.condition?.trim();
-  const city = options?.filters?.city?.trim();
 
-  let queryBuilder = supabase.from('marketplace_items').select(itemSelect);
-
-  if (query) {
-    const safeQuery = query.replace(/[%_,]/g, '').trim();
-    if (safeQuery) {
-      queryBuilder = queryBuilder.or(`title.ilike.%${safeQuery}%,description.ilike.%${safeQuery}%,city.ilike.%${safeQuery}%,category.ilike.%${safeQuery}%`);
-    }
-  }
-
-  if (category) {
-    queryBuilder = queryBuilder.eq('category', category);
-  }
-
-  if (condition) {
-    queryBuilder = queryBuilder.eq('item_condition', condition);
-  }
-
-  if (city) {
-    queryBuilder = queryBuilder.eq('city', city);
-  }
-
-  const { data, error } = await queryBuilder
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit);
-
-  if (error) {
-    throw error;
-  }
-
-  const rows = (data ?? []) as MarketplaceItemRow[];
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const page = await teswaBackendRuntime.marketplace.listFeed({
+    offset,
+    limit,
+    filters: options?.filters,
+  });
 
   const [videoPresenceByItemId, likesByItemId] = await Promise.all([
-    fetchItemVideoPresenceMap(pageRows.map((row) => row.id)),
-    fetchItemLikesSummaryForViewer({ itemIds: pageRows.map((row) => row.id), viewerId: options?.viewerId ?? null }),
+    fetchItemVideoPresenceMap(page.items.map((row) => row.id)),
+    fetchItemLikesSummaryForViewer({
+      itemIds: page.items.map((row) => row.id),
+      viewerId: options?.viewerId ?? null,
+    }),
   ]);
 
   return {
-    items: pageRows.map((row) => { const likes = likesByItemId.get(row.id); return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true, likes?.likeCount ?? 0, likes?.likedByMe ?? false); }),
-    hasMore,
+    items: page.items.map((row) => {
+      const likes = likesByItemId.get(row.id);
+      return mapRecordToMarketplaceItem(
+        row,
+        videoPresenceByItemId.get(row.id) === true,
+        likes?.likeCount ?? 0,
+        likes?.likedByMe ?? false,
+      );
+    }),
+    hasMore: page.hasMore,
   };
 }
 
 export async function fetchMarketplaceItems(): Promise<MarketplaceItem[]> {
-  const page = await fetchMarketplaceItemsPage({ offset: 0, limit: MARKETPLACE_PAGE_SIZE, viewerId: null });
+  const page = await fetchMarketplaceItemsPage({
+    offset: 0,
+    limit: MARKETPLACE_PAGE_SIZE,
+    viewerId: null,
+  });
   return page.items;
 }
 
@@ -171,203 +141,128 @@ export async function fetchNearbyMarketplaceItemsPage(options: {
   limit?: number;
   viewerId?: string | null;
 }): Promise<MarketplaceItemsPage> {
-  const offset = options.offset ?? 0;
-  const limit = options.limit ?? MARKETPLACE_PAGE_SIZE;
-  const radiusKm = options.radiusKm ?? 3;
-
-  const { data, error } = await supabase.rpc('get_nearby_marketplace_items', {
-    p_latitude: options.latitude,
-    p_longitude: options.longitude,
-    p_radius_km: radiusKm,
-    p_limit: limit + 1,
-    p_offset: offset,
+  const page = await teswaBackendRuntime.marketplace.listNearbyFeed({
+    latitude: options.latitude,
+    longitude: options.longitude,
+    radiusKm: options.radiusKm,
+    offset: options.offset ?? 0,
+    limit: options.limit ?? MARKETPLACE_PAGE_SIZE,
   });
 
-  if (error) throw error;
-
-  const rows = (data ?? []) as MarketplaceItemRow[];
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
   const [videoPresenceByItemId, likesByItemId] = await Promise.all([
-    fetchItemVideoPresenceMap(pageRows.map((row) => row.id)),
-    fetchItemLikesSummaryForViewer({ itemIds: pageRows.map((row) => row.id), viewerId: options?.viewerId ?? null }),
+    fetchItemVideoPresenceMap(page.items.map((row) => row.id)),
+    fetchItemLikesSummaryForViewer({
+      itemIds: page.items.map((row) => row.id),
+      viewerId: options.viewerId ?? null,
+    }),
   ]);
 
   return {
-    items: pageRows.map((row) => { const likes = likesByItemId.get(row.id); return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true, likes?.likeCount ?? 0, likes?.likedByMe ?? false); }),
-    hasMore,
+    items: page.items.map((row) => {
+      const likes = likesByItemId.get(row.id);
+      return mapRecordToMarketplaceItem(
+        row,
+        videoPresenceByItemId.get(row.id) === true,
+        likes?.likeCount ?? 0,
+        likes?.likedByMe ?? false,
+      );
+    }),
+    hasMore: page.hasMore,
   };
 }
 
 export async function fetchMarketplaceItemById(id: string, viewerId?: string | null): Promise<MarketplaceItem | null> {
-  const { data, error } = await supabase
-    .from('marketplace_items')
-    .select(itemSelect)
-    .eq('id', id)
-    .maybeSingle();
+  const row = await teswaBackendRuntime.marketplace.getFeedItem(id);
+  if (!row) return null;
 
-  if (error) {
-    throw error;
-  }
-
-  if (!data) {
-    return null;
-  }
-
-  const row = data as MarketplaceItemRow;
   const [videoPresenceByItemId, likesByItemId] = await Promise.all([
     fetchItemVideoPresenceMap([row.id]),
     fetchItemLikesSummaryForViewer({ itemIds: [row.id], viewerId: viewerId ?? null }),
   ]);
 
   const likes = likesByItemId.get(row.id);
-  return mapRowToMarketplaceItem(row, videoPresenceByItemId.get(row.id) === true, likes?.likeCount ?? 0, likes?.likedByMe ?? false);
+  return mapRecordToMarketplaceItem(
+    row,
+    videoPresenceByItemId.get(row.id) === true,
+    likes?.likeCount ?? 0,
+    likes?.likedByMe ?? false,
+  );
 }
-
-type ItemDetailRow = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  category_id: string | null;
-  condition: string | null;
-  condition_notes: string | null;
-  city: string | null;
-  area: string | null;
-  owner_id: string | null;
-  item_story: string | null;
-  swap_reason: string | null;
-  good_for: string | null;
-  desire_mode: 'specific' | 'flexible' | 'surprise' | null;
-  desire_text: string | null;
-};
-
-type ItemImageRow = {
-  image_url: string | null;
-  is_primary: boolean | null;
-  sort_order: number | null;
-};
 
 function normalizeNullableText(value: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
 
-export async function fetchMarketplaceItemDetailById(id: string, viewerId?: string | null): Promise<MarketplaceItemDetail | null> {
-  const { data: itemData, error: itemError } = await supabase
-    .from('items')
-    .select(
-      `
-      id,
-      title,
-      description,
-      category_id,
-      condition,
-      condition_notes,
-      city,
-      area,
-      owner_id,
-      item_story,
-      swap_reason,
-      good_for,
-      desire_mode,
-      desire_text,
-      status
-    `,
-    )
-    .eq('id', id)
-    .eq('status', 'active')
-    .maybeSingle();
+export async function fetchMarketplaceItemDetailById(
+  id: string,
+  viewerId?: string | null,
+): Promise<MarketplaceItemDetail | null> {
+  const detail = await teswaBackendRuntime.marketplace.getDetail(id);
+  if (!detail) return null;
 
-  if (itemError) throw itemError;
-  if (!itemData) return null;
-
-  const item = itemData as ItemDetailRow;
-
-  const [imagesResult, categoryResult, ownerResult, wantedTagsResult, videoTeaser, likesByItemId] = await Promise.all([
-    supabase.from('item_images').select('image_url, is_primary, sort_order').eq('item_id', id),
-    item.category_id ? supabase.from('categories').select('name_ar').eq('id', item.category_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    item.owner_id ? supabase.from('profiles').select('id, display_name, username, avatar_url, profile_tagline, city, area, successful_swaps_count, response_rate, is_banned').eq('id', item.owner_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    supabase.from('item_wanted_tags').select('tag').eq('item_id', id),
+  const [videoTeaser, likesByItemId] = await Promise.all([
     fetchItemVideoTeaserByItemId(id),
     fetchItemLikesSummaryForViewer({ itemIds: [id], viewerId: viewerId ?? null }),
   ]);
 
-  if (imagesResult.error) throw imagesResult.error;
-  if (categoryResult.error) throw categoryResult.error;
-  if (ownerResult.error) throw ownerResult.error;
-  if (wantedTagsResult.error) throw wantedTagsResult.error;
-
-  const images = ((imagesResult.data ?? []) as ItemImageRow[])
-    .filter((row): row is Required<Pick<ItemImageRow, 'image_url'>> & ItemImageRow => Boolean(row.image_url))
+  const images = detail.images
+    .filter((row): row is typeof row & { imageUrl: string } => Boolean(row.imageUrl))
     .sort((a, b) => {
-      if (Boolean(a.is_primary) !== Boolean(b.is_primary)) {
-        return a.is_primary ? -1 : 1;
+      if (Boolean(a.isPrimary) !== Boolean(b.isPrimary)) {
+        return a.isPrimary ? -1 : 1;
       }
-      const aOrder = a.sort_order ?? Number.MAX_SAFE_INTEGER;
-      const bOrder = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+      const aOrder = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
       if (aOrder !== bOrder) return aOrder - bOrder;
-      return a.image_url!.localeCompare(b.image_url!);
+      return a.imageUrl.localeCompare(b.imageUrl);
     })
     .map((row) => ({
-      imageUrl: row.image_url!,
-      isPrimary: Boolean(row.is_primary),
-      sortOrder: row.sort_order,
+      imageUrl: row.imageUrl,
+      isPrimary: Boolean(row.isPrimary),
+      sortOrder: row.sortOrder,
     }));
 
-
-  const ownerProfile = ownerResult.data as {
-    id: string;
-    display_name: string | null;
-    username: string | null;
-    avatar_url: string | null;
-    profile_tagline: string | null;
-    city: string | null;
-    area: string | null;
-    successful_swaps_count: number | null;
-    response_rate: number | null;
-    is_banned: boolean | null;
-  } | null;
-  if (ownerProfile?.is_banned === true) return null;
-
-  const wantedTags = ((wantedTagsResult.data ?? []) as { tag: string | null }[])
-    .map((row: { tag: string | null }) => normalizeNullableText(row.tag))
-    .filter((tag: string | null): tag is string => Boolean(tag));
+  const wantedTags = detail.wantedTags
+    .map((tag) => normalizeNullableText(tag))
+    .filter((tag): tag is string => Boolean(tag));
 
   const likes = likesByItemId.get(id);
+  const owner = detail.ownerPresence;
 
   return {
-    id: item.id,
-    title: item.title?.trim() || 'عنصر بدون عنوان',
-    description: normalizeNullableText(item.description),
+    id: detail.id,
+    title: detail.title?.trim() || 'عنصر بدون عنوان',
+    description: normalizeNullableText(detail.description),
     imageUrl: images[0]?.imageUrl ?? null,
-    category: normalizeNullableText((categoryResult.data as { name_ar: string | null } | null)?.name_ar ?? null),
-    condition: normalizeNullableText(item.condition),
-    location: normalizeNullableText(item.city),
-    ownerDisplayName: normalizeNullableText(ownerProfile?.display_name ?? null),
+    category: normalizeNullableText(detail.category),
+    condition: normalizeNullableText(detail.condition),
+    location: normalizeNullableText(detail.city),
+    ownerDisplayName: normalizeNullableText(owner?.displayName ?? null),
     likeCount: likes?.likeCount ?? 0,
     likedByMe: likes?.likedByMe ?? false,
     hasVideoTeaser: Boolean(videoTeaser),
-    area: normalizeNullableText(item.area),
-    conditionNotes: normalizeNullableText(item.condition_notes),
-    itemStory: normalizeNullableText(item.item_story),
-    swapReason: normalizeNullableText(item.swap_reason),
-    goodFor: normalizeNullableText(item.good_for),
-    desireMode: item.desire_mode,
-    desireText: normalizeNullableText(item.desire_text),
+    area: normalizeNullableText(detail.area),
+    conditionNotes: normalizeNullableText(detail.conditionNotes),
+    itemStory: normalizeNullableText(detail.itemStory),
+    swapReason: normalizeNullableText(detail.swapReason),
+    goodFor: normalizeNullableText(detail.goodFor),
+    desireMode: detail.desireMode,
+    desireText: normalizeNullableText(detail.desireText),
     wantedTags,
     images,
     videoTeaser,
-    ownerPresence: ownerProfile
+    ownerPresence: owner
       ? {
-          id: ownerProfile.id,
-          displayName: normalizeNullableText(ownerProfile.display_name),
-          username: normalizeNullableText(ownerProfile.username),
-          avatarUrl: normalizeNullableText(ownerProfile.avatar_url),
-          profileTagline: normalizeNullableText(ownerProfile.profile_tagline),
-          city: normalizeNullableText(ownerProfile.city),
-          area: normalizeNullableText(ownerProfile.area),
-          successfulSwapsCount: ownerProfile.successful_swaps_count,
-          responseRate: ownerProfile.response_rate,
+          id: owner.id,
+          displayName: normalizeNullableText(owner.displayName),
+          username: normalizeNullableText(owner.username),
+          avatarUrl: normalizeNullableText(owner.avatarUrl),
+          profileTagline: normalizeNullableText(owner.profileTagline),
+          city: normalizeNullableText(owner.city),
+          area: normalizeNullableText(owner.area),
+          successfulSwapsCount: owner.successfulSwapsCount,
+          responseRate: owner.responseRate,
         }
       : null,
   };
