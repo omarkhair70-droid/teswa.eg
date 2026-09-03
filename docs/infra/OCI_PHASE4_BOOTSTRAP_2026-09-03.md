@@ -699,3 +699,14 @@ The preflight now:
 - remains fully read-only.
 
 No Core, volume, E2 helper, network, Nova, Supabase, DNS, or data resource changed during the failed preflight.
+
+
+## E2 rescue limit scope correction
+
+The first E2 rescue preflight resolved the existing Core boot-volume attachment correctly, then failed at the E2 service-limit query with OCI `InvalidParameter: availabilityDomain`.
+
+Oracle documents `vm-standard-e2-1-micro-count` as an Availability-Domain-scoped Compute limit. For AD-scoped limits, `GetResourceAvailability` requires the matching `--availability-domain` parameter; omitting it returns HTTP 400 `InvalidParameter`.
+
+The preflight now passes the Core's current availability domain to the E2 Micro resource-availability query. The regional free block-storage query remains unchanged and intentionally omits an availability domain.
+
+No Core, boot volume, helper VM, network, Nova, Supabase, DNS, or data resource changed during the failed query.
