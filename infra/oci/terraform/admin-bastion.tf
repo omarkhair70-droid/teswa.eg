@@ -1,12 +1,12 @@
 resource "oci_bastion_bastion" "admin" {
-  count          = var.enable_admin_bastion ? 1 : 0
-  bastion_type   = "standard"
-  compartment_id = oci_identity_compartment.teswa.id
-  target_subnet_id = oci_core_subnet.public_edge.id
-  name           = "teswa-admin-bastion"
+  count                        = var.enable_admin_bastion ? 1 : 0
+  bastion_type                 = "standard"
+  compartment_id               = oci_identity_compartment.teswa.id
+  target_subnet_id             = oci_core_subnet.public_edge.id
+  name                         = "teswa-admin-bastion"
   client_cidr_block_allow_list = var.admin_bastion_client_cidrs
   max_session_ttl_in_seconds   = 1800
-  freeform_tags = var.freeform_tags
+  freeform_tags                = var.freeform_tags
 
   lifecycle {
     precondition {
