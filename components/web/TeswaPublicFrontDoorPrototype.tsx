@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -22,6 +22,12 @@ const PLAY_URL = 'https://play.google.com/store/apps/details?id=com.teswa.mobile
 const MOVEMENT_SCREEN = 'https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/10-movement.webp';
 
 type SectionKey = 'value' | 'product' | 'swap';
+
+const NAV_LINKS: { label: string; target: SectionKey }[] = [
+  { label: 'الفكرة', target: 'value' },
+  { label: 'المنتج', target: 'product' },
+  { label: 'التبديل', target: 'swap' },
+];
 
 const productScreens = [
   {
@@ -333,6 +339,7 @@ function ProductEvidence({ wide }: { wide: boolean }) {
             <View style={styles.evidencePhone}>
               <ExpoImage
                 source={{ uri: screen.image }}
+                accessibilityLabel={`لقطة فعلية من تِسوى: ${screen.title}`}
                 style={styles.evidenceImage}
                 contentFit="cover"
                 cachePolicy="memory-disk"
@@ -487,6 +494,7 @@ function LivingWorldPulse({ wide, reducedMotion }: { wide: boolean; reducedMotio
           <View style={styles.livingPhone}>
             <ExpoImage
               source={{ uri: MOVEMENT_SCREEN }}
+              accessibilityLabel="لقطة فعلية من تجربة الحركة والاكتشاف في تِسوى"
               style={styles.livingImage}
               contentFit="cover"
               cachePolicy="memory-disk"
@@ -533,12 +541,6 @@ export function TeswaPublicFrontDoorPrototype() {
     void Linking.openURL(PLAY_URL);
   };
 
-  const navLinks = useMemo<{ label: string; target: SectionKey }[]>(() => [
-    { label: 'الفكرة', target: 'value' },
-    { label: 'المنتج', target: 'product' },
-    { label: 'التبديل', target: 'swap' },
-  ], []);
-
   const registerSection = (key: SectionKey) => (event: LayoutChangeEvent) => {
     sectionOffsets.current[key] = event.nativeEvent.layout.y;
   };
@@ -567,7 +569,7 @@ export function TeswaPublicFrontDoorPrototype() {
 
           {wide ? (
             <View style={styles.navLinks}>
-              {navLinks.map((link) => (
+              {NAV_LINKS.map((link) => (
                 <Pressable
                   key={link.target}
                   accessibilityRole="link"
