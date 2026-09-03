@@ -1533,6 +1533,6 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
             hasVideoTeaser: videoItemIds.has(itemId),
           };
         });
-,
+    },
   };
 }
