@@ -11,12 +11,19 @@ export type MediaPurpose =
   | 'contextual_voice'
   | 'dolab_media';
 
+export type MediaUploadProgress = {
+  loadedBytes: number;
+  totalBytes: number | null;
+  percent: number | null;
+};
+
 export type MediaUploadSource = {
   uri: string;
   fileName?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
   maxSizeBytes?: number | null;
+  buffer?: ArrayBuffer | null;
 };
 
 export type MediaObjectRef = {
@@ -32,6 +39,7 @@ export interface MediaStorageContract {
     ownerId: string;
     source: MediaUploadSource;
     objectKeyHint?: string | null;
+    onProgress?: (progress: MediaUploadProgress) => void;
   }): Promise<TeswaResult<MediaObjectRef, 'invalid_source' | 'file_too_large' | 'upload_failed' | 'unknown'>>;
 
   remove(objects: MediaObjectRef[]): Promise<TeswaResult<void, 'delete_failed' | 'unknown'>>;
