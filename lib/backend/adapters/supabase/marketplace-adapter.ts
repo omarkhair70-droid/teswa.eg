@@ -902,5 +902,175 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
         },
       };
 },
+
+    async listActiveCategories() {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id,name_ar')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id as string,
+        nameAr: row.name_ar as string,
+      }));
+    },
+
+    async createPublishedListingBase(input) {
+      const { error: itemError } = await supabase
+        .from('items')
+        .insert({
+          id: input.itemId,
+          owner_id: input.ownerId,
+          title: input.title,
+          category_id: input.categoryId,
+          description: input.description,
+          condition: input.condition,
+          condition_notes: input.conditionNotes,
+          city: input.city,
+          area: input.area,
+          location_latitude: input.locationLatitude,
+          location_longitude: input.locationLongitude,
+          desire_mode: input.desireMode,
+          desire_text: input.desireText,
+          item_story: input.itemStory,
+          swap_reason: input.swapReason,
+          good_for: input.goodFor,
+          status: 'active',
+          source: 'direct_listing',
+        });
+
+      if (itemError) {
+        return {
+          ok: false,
+          reason: 'item_insert_failed',
+          message: itemError.message,
+          cause: itemError,
+        };
+      }
+
+      const { error: imagesError } = await supabase
+        .from('item_images')
+        .insert(
+          input.images.map((image) => ({
+            item_id: input.itemId,
+            image_url: image.imageUrl,
+            is_primary: image.isPrimary,
+            sort_order: image.sortOrder,
+          })),
+        );
+
+      if (imagesError) {
+        await supabase
+          .from('items')
+          .update({ status: 'archived' })
+          .eq('id', input.itemId)
+          .eq('owner_id', input.ownerId);
+
+        return {
+          ok: false,
+          reason: 'images_insert_failed',
+          message: imagesError.message,
+          cause: imagesError,
+        };
+      }
+
+      return { ok: true, data: undefined };
+    },
+
+    async markPublishFailed(itemId, ownerId) {
+      const { error } = await supabase
+        .from('items')
+        .update({ status: 'archived' })
+        .eq('id', itemId)
+        .eq('owner_id', ownerId);
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
+    async attachPublishedVideo(input) {
+      const { error } = await supabase
+        .from('item_videos')
+        .insert({
+          item_id: input.itemId,
+          video_storage_path: input.videoStoragePath,
+          duration_ms: input.durationMs,
+          width: input.width,
+          height: input.height,
+        });
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'video_insert_failed',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
+    async addPublishedWantedTags(itemId, tags) {
+      if (!tags.length) return { ok: true, data: undefined };
+      const { error } = await supabase
+        .from('item_wanted_tags')
+        .insert(tags.map((tag) => ({ item_id: itemId, tag })));
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
+    async deletePublishedImageMetadata(itemId) {
+      const { error } = await supabase
+        .from('item_images')
+        .delete()
+        .eq('item_id', itemId);
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
+    async getItemVideoMetadata(itemId) {
+      const { data, error } = await supabase
+        .from('item_videos')
+        .select('id,item_id,video_storage_path,duration_ms,width,height,created_at')
+        .eq('item_id', itemId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data?.video_storage_path) return null;
+
+      return {
+        id: data.id as string,
+        itemId: data.item_id as string,
+        videoStoragePath: data.video_storage_path as string,
+        durationMs: (data.duration_ms as number | null) ?? null,
+        width: (data.width as number | null) ?? null,
+        height: (data.height as number | null) ?? null,
+        createdAt: data.created_at as string,
+      };
+,
   };
 }
