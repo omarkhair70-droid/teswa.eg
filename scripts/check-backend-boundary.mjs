@@ -31,16 +31,12 @@ const legacyDirectClientImports = new Set([
   'lib/motion-interest.ts',
   'lib/motion-video-drops.ts',
   'lib/my-listings.ts',
-  'lib/notification-preferences.ts',
-  'lib/notifications.ts',
-  'lib/offers.ts',
   'lib/people.ts',
   'lib/personal-living-world.ts',
   'lib/policy-acceptance.ts',
   'lib/profile-images.ts',
   'lib/publish-item.ts',
   'lib/pulse-video-viewer.ts',
-  'lib/push-notifications.ts',
   'lib/reports.ts',
   'lib/reviews.ts',
   'lib/stories.ts',
@@ -48,17 +44,13 @@ const legacyDirectClientImports = new Set([
   'lib/story-likes.ts',
   'lib/story-views.ts',
   'lib/trust-metrics.ts',
-  'lib/unread-badges.tsx',
   'lib/user-blocks.ts',
   'lib/user-follows.ts',
   'lib/chat/supabase-direct-chat.ts',
   'lib/contextual-conversations.ts',
-  'lib/deals.ts',
 ]);
 
 const legacyProviderTypeImports = new Set([
-  'lib/notification-preferences.ts',
-  'lib/notifications.ts',
   'lib/supabase/client.ts',
 ]);
 
@@ -158,6 +150,31 @@ for (const sourceRoot of sourceRoots) {
     ) {
       if (!isAdapter && !relativePath.startsWith('lib/supabase/')) {
         violations.push(`${relativePath}: provider Realtime access must go through MessagingRealtimeContract`);
+      }
+    }
+
+    if ([
+      'lib/notifications.ts',
+      'lib/notification-preferences.ts',
+      'lib/push-notifications.ts',
+      'lib/unread-badges.tsx',
+      'lib/offers.ts',
+      'lib/deals.ts',
+    ].includes(relativePath)) {
+      const forbiddenNotificationTokens = [
+        ".from('notifications')",
+        "rpc('get_my_notification_preferences'",
+        "rpc('update_my_notification_preferences'",
+        "rpc('set_my_notification_timezone'",
+        "rpc('register_push_device'",
+        "rpc('disable_my_push_device'",
+        "rpc('create_notification'",
+        "rpc('get_unread_deal_messages_count'",
+      ];
+      for (const token of forbiddenNotificationTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: notification provider access must stay behind Teswa backend contracts (${token})`);
+        }
       }
     }
 
