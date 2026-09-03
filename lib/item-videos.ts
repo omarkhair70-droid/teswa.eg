@@ -1,8 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
-
-export const ITEM_VIDEOS_BUCKET = 'item-videos';
 
 export type ItemVideoTeaser = {
   id: string;
@@ -87,11 +86,6 @@ function toItemVideoTeaser(row: ItemVideoRow, signedVideoUrl: string | null): It
   };
 }
 
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
-}
-
 export async function uploadItemVideoTeaser(params: {
   asset: ImagePickerAsset;
   itemId: string;
@@ -109,13 +103,19 @@ export async function uploadItemVideoTeaser(params: {
   const storagePath = createItemVideoUploadPath(userId, itemId, extensionFromVideoAsset(asset));
 
   try {
-    const body = await fileUriToArrayBuffer(asset.uri);
-    const { error } = await supabase.storage
-      .from(ITEM_VIDEOS_BUCKET)
-      .upload(storagePath, body, { contentType: contentTypeFromVideoAsset(asset), upsert: false });
+    const uploadResult = await teswaBackendRuntime.media.upload({
+      purpose: 'item_video',
+      ownerId: userId,
+      source: {
+        uri: asset.uri,
+        fileName: asset.fileName,
+        mimeType: contentTypeFromVideoAsset(asset),
+      },
+      objectKeyHint: storagePath,
+    });
 
-    if (error) {
-      if (__DEV__) console.warn('[item-videos] upload failed', error.message);
+    if (!uploadResult.ok) {
+      if (__DEV__) console.warn('[item-videos] upload failed', uploadResult.message);
       return { ok: false, message: 'تعذر رفع فيديو العنصر. حاول مرة أخرى.' };
     }
 
@@ -141,21 +141,27 @@ export async function createItemVideoSignedUrlCached(storagePath: string, expire
     return cached.signedUrl;
   }
 
-  const { data, error } = await supabase.storage
-    .from(ITEM_VIDEOS_BUCKET)
-    .createSignedUrl(normalizedPath, expiresInSeconds);
+  const signedUrlResult = await teswaBackendRuntime.media.getSignedUrl(
+    {
+      purpose: 'item_video',
+      objectKey: normalizedPath,
+      contentType: null,
+      sizeBytes: null,
+    },
+    expiresInSeconds,
+  );
 
-  if (error || !data?.signedUrl) {
-    if (__DEV__) console.warn('[item-videos] signed url failed', error?.message ?? 'unknown');
+  if (!signedUrlResult.ok) {
+    if (__DEV__) console.warn('[item-videos] signed url failed', signedUrlResult.message);
     return null;
   }
 
   itemVideoSignedUrlCache.set(normalizedPath, {
-    signedUrl: data.signedUrl,
+    signedUrl: signedUrlResult.data,
     expiresAtMs: Date.now() + expiresInSeconds * 1000,
   });
 
-  return data.signedUrl;
+  return signedUrlResult.data;
 }
 
 export async function fetchItemVideoTeaserByItemId(itemId: string): Promise<ItemVideoTeaser | null> {

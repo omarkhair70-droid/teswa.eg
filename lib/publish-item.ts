@@ -1,8 +1,9 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 import { compressItemImage } from '@/lib/media/compress-item-image';
-import { ITEM_VIDEOS_BUCKET, uploadItemVideoTeaser } from '@/lib/item-videos';
+import { uploadItemVideoTeaser } from '@/lib/item-videos';
 
 const ITEM_IMAGES_BUCKET = 'item-images';
 const MAX_VIDEO_TEASER_DURATION_MS = 15_000;
@@ -194,7 +195,14 @@ async function cleanupStorage(paths: string[]) {
 
 async function cleanupItemVideoStorage(path: string | null) {
   if (!path) return;
-  await supabase.storage.from(ITEM_VIDEOS_BUCKET).remove([path]);
+  await teswaBackendRuntime.media.remove([
+    {
+      purpose: 'item_video',
+      objectKey: path,
+      contentType: null,
+      sizeBytes: null,
+    },
+  ]);
 }
 
 async function cleanupInsertedImageRowsThenStorage(itemId: string, storagePaths: string[]): Promise<{ ok: true } | { ok: false }> {
