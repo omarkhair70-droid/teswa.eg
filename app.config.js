@@ -16,6 +16,7 @@ module.exports = {
     orientation: 'portrait',
     icon: './assets/branding/icon.png',
     userInterfaceStyle: 'automatic',
+    backgroundColor: '#F9F3EA',
     ios: {
       supportsTablet: true,
     },
@@ -32,11 +33,6 @@ module.exports = {
         monochromeImage: './assets/branding/monochrome-icon.png',
       },
       permissions: ['android.permission.RECORD_AUDIO'],
-    },
-    androidStatusBar: {
-      barStyle: 'dark-content',
-      backgroundColor: '#F9F3EA',
-      translucent: false,
     },
     web: {
       bundler: 'metro',
@@ -121,15 +117,6 @@ module.exports = {
         },
       ],
       [
-        'expo-media-library',
-        {
-          photosPermission: 'نحتاج الوصول إلى صورك وفيديوهاتك عند استخدام ميزات الحفظ أو إدارة الوسائط داخل تِسوى.',
-          savePhotosPermission: 'نحتاج الإذن لحفظ الصور أو الفيديوهات التي تطلب حفظها من تِسوى.',
-          isAccessMediaLocationEnabled: false,
-          granularPermissions: ['photo', 'video'],
-        },
-      ],
-      [
         'expo-splash-screen',
         {
           backgroundColor: '#F9F3EA',
@@ -143,7 +130,14 @@ module.exports = {
       'expo-localization',
       'expo-web-browser',
       'expo-sharing',
-      'expo-status-bar',
+      [
+        'expo-status-bar',
+        {
+          hidden: false,
+          style: 'dark',
+        },
+      ],
+      'expo-system-ui',
       './plugins/with-android-release-optimization',
       // Expo mods run as an interceptor chain. Register the guard first so it
       // executes after expo-updates writes expo_runtime_version to strings.xml.
