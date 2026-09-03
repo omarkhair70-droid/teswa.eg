@@ -116,3 +116,21 @@ The policy statement matches Oracle's documented Run Command instance-principal 
 No compute, network, storage, DNS, database, Nova, or Supabase resource changes are part of this plan.
 
 **Status:** IAM SAVED PLAN REVIEWED — APPROVED FOR APPLY.
+
+
+## IAM verifier correction
+
+The first post-apply verifier printed `dynamic_group_rule_present=false` but still returned PASS.
+
+That was a verifier defect, not an approved state: the list response was not a reliable source for validating the matching rule, and the check was informational only.
+
+The verifier now:
+
+- resolves the dynamic group ID from the list;
+- fetches the full dynamic group with `oci iam dynamic-group get`;
+- requires the matching rule to contain `instance.compartment.id`;
+- requires the rule to contain the actual Teswa compartment OCID;
+- fails if either rule check is false;
+- checks Terraform drift after persisting the IAM feature gate as enabled.
+
+Do not proceed to guest bootstrap until the corrected verifier is green.
