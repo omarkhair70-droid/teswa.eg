@@ -123,6 +123,22 @@ for (const sourceRoot of sourceRoots) {
       }
     }
 
+    if (relativePath === 'lib/offers.ts') {
+      const forbiddenOfferLifecycleTokens = [
+        ".from('offers')",
+        ".from('offer_events')",
+        ".from('swap_deals')",
+        "rpc('mark_offer_thinking'",
+        "rpc('soft_reject_offer'",
+        "rpc('accept_offer'",
+      ];
+      for (const token of forbiddenOfferLifecycleTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: offer lifecycle provider access must stay behind OfferLifecycleContract (${token})`);
+        }
+      }
+    }
+
     if (content.includes('EXPO_PUBLIC_SUPABASE_URL') || content.includes('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY')) {
       if (!isAdapter && !legacyDirectSupabaseEnvReads.has(relativePath)) {
         violations.push(`${relativePath}: new direct Supabase environment dependency`);
