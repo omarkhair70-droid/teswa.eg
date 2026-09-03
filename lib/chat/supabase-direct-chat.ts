@@ -1,6 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import { File } from 'expo-file-system';
-
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 
 const DIRECT_CHAT_MEDIA_BUCKET = 'direct-chat-media';
@@ -90,19 +89,6 @@ function extensionFor(input: NativeDirectUploadInput) {
   return 'bin';
 }
 
-async function localUriToArrayBuffer(uri: string) {
-  try {
-    return await new File(uri).arrayBuffer();
-  } catch (fileError) {
-    try {
-      const response = await fetch(uri);
-      if (!response.ok && response.status !== 0) throw new Error('file_read_failed');
-      return await response.arrayBuffer();
-    } catch {
-      throw fileError instanceof Error ? fileError : new Error('file_read_failed');
-    }
-  }
-}
 
 function normalizeStorageBucket(value: unknown): NativeDirectStorageBucket {
   return value === LEGACY_DIRECT_VOICE_BUCKET ? LEGACY_DIRECT_VOICE_BUCKET : DIRECT_CHAT_MEDIA_BUCKET;
@@ -165,29 +151,35 @@ export async function uploadNativeDirectAttachment(input: NativeDirectUploadInpu
     const ext = extensionFor(input);
     const fileName = sanitizeFileName(input.fileName, `${input.kind}.${ext}`);
     const storagePath = `direct/${input.conversationId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${fileName}`;
-    const body = await localUriToArrayBuffer(input.localUri);
-    if (body.byteLength > DIRECT_CHAT_MEDIA_MAX_BYTES) {
-      return { ok: false as const, message: 'حجم المرفق أكبر من الحد المسموح.' };
-    }
-
-    const { error } = await supabase.storage.from(DIRECT_CHAT_MEDIA_BUCKET).upload(storagePath, body, {
-      contentType: input.mimeType || undefined,
-      upsert: false,
+    const uploadResult = await teswaBackendRuntime.media.upload({
+      purpose: 'direct_chat_media',
+      ownerId: input.currentUserId,
+      objectKeyHint: storagePath,
+      source: {
+        uri: input.localUri,
+        fileName,
+        mimeType: input.mimeType ?? null,
+        sizeBytes: input.sizeBytes ?? null,
+        maxSizeBytes: DIRECT_CHAT_MEDIA_MAX_BYTES,
+      },
     });
-    if (error) {
-      if (__DEV__) console.warn('[direct-native] media upload failed', { message: error.message });
-      return { ok: false as const, message: 'تعذر رفع المرفق حالياً.' };
+    if (!uploadResult.ok) {
+      if (__DEV__) console.warn('[direct-native] media upload failed', { reason: uploadResult.reason });
+      const message = uploadResult.reason === 'file_too_large'
+        ? 'حجم المرفق أكبر من الحد المسموح.'
+        : 'تعذر رفع المرفق حالياً.';
+      return { ok: false as const, message };
     }
 
     return {
       ok: true as const,
       attachment: {
         kind: input.kind,
-        storagePath,
+        storagePath: uploadResult.data.objectKey,
         storageBucket: DIRECT_CHAT_MEDIA_BUCKET,
         fileName,
         mimeType: input.mimeType ?? null,
-        sizeBytes: input.sizeBytes ?? body.byteLength,
+        sizeBytes: uploadResult.data.sizeBytes,
         durationMs: input.durationMs ?? null,
         width: input.width ?? null,
         height: input.height ?? null,
@@ -202,8 +194,15 @@ export async function uploadNativeDirectAttachment(input: NativeDirectUploadInpu
 export async function removeNativeDirectUploads(storagePaths: string[]) {
   const uniquePaths = Array.from(new Set(storagePaths.filter(Boolean)));
   if (!uniquePaths.length) return { ok: true as const };
-  const { error } = await supabase.storage.from(DIRECT_CHAT_MEDIA_BUCKET).remove(uniquePaths);
-  return error ? { ok: false as const, message: error.message } : { ok: true as const };
+  const result = await teswaBackendRuntime.media.remove(
+    uniquePaths.map((objectKey) => ({
+      purpose: 'direct_chat_media' as const,
+      objectKey,
+      contentType: null,
+      sizeBytes: null,
+    })),
+  );
+  return result.ok ? { ok: true as const } : { ok: false as const, message: result.message };
 }
 
 export async function createNativeDirectAttachmentSignedUrl(
@@ -213,9 +212,16 @@ export async function createNativeDirectAttachmentSignedUrl(
 ) {
   if (!storagePath) return null;
   const bucket = normalizeStorageBucket(storageBucket);
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresInSeconds);
-  if (error) return null;
-  return data?.signedUrl ?? null;
+  const result = await teswaBackendRuntime.media.getSignedUrl(
+    {
+      purpose: bucket === LEGACY_DIRECT_VOICE_BUCKET ? 'direct_voice' : 'direct_chat_media',
+      objectKey: storagePath,
+      contentType: null,
+      sizeBytes: null,
+    },
+    expiresInSeconds,
+  );
+  return result.ok ? result.data : null;
 }
 
 export async function fetchNativeDirectMessages(conversationId: string, input?: { limit?: number; before?: string | null }) {
