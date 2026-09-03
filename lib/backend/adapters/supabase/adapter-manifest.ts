@@ -8,11 +8,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   profiles: {
     target: 'lib/backend/adapters/supabase/profile-adapter.ts',
     legacyFiles: [
-      'lib/people.ts',
-      'lib/user-follows.ts',
-      'lib/trust-metrics.ts',
-      'lib/badges.ts',
-      'lib/profile-images.ts',
     ],
   },
   marketplace: {
