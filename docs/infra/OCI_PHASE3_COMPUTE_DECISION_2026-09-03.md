@@ -1,7 +1,7 @@
 # Teswa OCI Phase 3 Compute Decision — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** SAVED PLAN REVIEWED — APPROVED FOR APPLY.
+**Status:** CLOSED / GREEN.
 
 ## Released capacity
 
@@ -127,3 +127,21 @@ Approved update:
 No Nova resource, no existing boot volume, no database, no DNS, and no Supabase resource is changed or destroyed.
 
 Phase 3 must be applied from the reviewed saved plan with the same Terraform 1.16.0 binary that created it.
+
+
+## Post-apply verification
+
+Phase 3 verification passed against the live OCI resources:
+
+- `teswa-core-01`: RUNNING, `VM.Standard.A1.Flex`, 1 OCPU / 6 GB RAM
+- `teswa-edge-01`: RUNNING, `VM.Standard.E2.1.Micro`, 1 OCPU / 1 GB RAM
+- edge public IP assigned
+- core private IP assigned
+- NAT gateway: AVAILABLE
+- total A1 usage: 2 OCPU
+- E2 Micro usage: 1
+- Always Free Block Storage: 147 GB used / 53 GB available
+- `terraform_drift=none`
+- `phase3_verify=PASS`
+
+Phase 3 is closed. No additional compute creation or Nova reallocation is part of this phase.
