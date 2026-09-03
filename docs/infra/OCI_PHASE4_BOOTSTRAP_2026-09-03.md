@@ -316,3 +316,18 @@ The second verifier run again stopped immediately after the Bastion state checks
 For `oci network nsg rules list`, Oracle's CLI requires `--nsg-id`, not `--network-security-group-id`.
 
 The verifier has been corrected to use the documented flag. No OCI mutation is required; re-run the verifier only.
+
+
+## Temporary Bastion enum normalization drift
+
+The post-apply drift verifier found a forced Bastion replacement even though the live Bastion was healthy.
+
+Root cause:
+
+- Terraform configuration used `bastion_type = "standard"`
+- OCI normalized the live API value to `"STANDARD"`
+- the provider treated the case-only difference as a ForceNew change
+
+This was configuration drift, not infrastructure drift.
+
+The Terraform enum has been normalized to `"STANDARD"`, matching the live OCI state. Do not apply the replacement plan shown by the verifier. Re-run the verifier after pulling this correction; the expected result is zero drift.
