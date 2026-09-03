@@ -32,7 +32,6 @@ const legacyDirectClientImports = new Set([
   'lib/item-likes.ts',
   'lib/item-video-discovery.ts',
   'lib/item-video-presence.ts',
-  'lib/item-videos.ts',
   'lib/listing-lifecycle.ts',
   'lib/marketplace-items.ts',
   'lib/messages.ts',
