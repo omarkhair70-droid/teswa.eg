@@ -35,15 +35,35 @@ PGDATA=/var/lib/pgsql/17/data
 MARK=/etc/teswa/phase4-postgres17-owned
 PSQL=/usr/pgsql-17/bin/psql
 CREATEDB=/usr/pgsql-17/bin/createdb
+REQ=(postgresql17 postgresql17-server postgresql17-contrib)
 if [ -f "$PGDATA/PG_VERSION" ] && [ ! -f "$MARK" ]; then
   echo "postgres17_bootstrap=FAIL reason=unowned_existing_cluster"; exit 20
 fi
 if [ -f "$PGDATA/PG_VERSION" ] && [ "$(cat "$PGDATA/PG_VERSION")" != "17" ]; then
   echo "postgres17_bootstrap=FAIL reason=unexpected_cluster_major"; exit 21
 fi
-sudo dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-aarch64/pgdg-redhat-repo-latest.noarch.rpm
-sudo dnf -qy module disable postgresql
-sudo dnf -qy install postgresql17-server postgresql17-contrib
+if ! rpm -q pgdg-redhat-repo >/dev/null 2>&1; then
+  sudo dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-aarch64/pgdg-redhat-repo-latest.noarch.rpm
+fi
+sudo dnf -qy module disable postgresql || true
+missing=0
+for p in "${REQ[@]}"; do rpm -q "$p" >/dev/null 2>&1 || missing=1; done
+if [ "$missing" -eq 1 ]; then
+  set +e
+  sudo dnf -qy install "${REQ[@]}"
+  dnf_rc=$?
+  set -e
+  missing=0
+  for p in "${REQ[@]}"; do rpm -q "$p" >/dev/null 2>&1 || missing=1; done
+  if [ "$missing" -ne 0 ]; then
+    echo "postgres17_bootstrap=FAIL reason=packages_missing_after_dnf rc=$dnf_rc"; exit 29
+  fi
+  if [ "$dnf_rc" -ne 0 ]; then
+    echo "dnf_nonzero_but_required_packages_present=true rc=$dnf_rc"
+  fi
+else
+  echo "required_packages_already_present=true"
+fi
 sudo install -d -m 0755 /etc/teswa
 if [ ! -f "$PGDATA/PG_VERSION" ]; then
   sudo touch "$MARK"
