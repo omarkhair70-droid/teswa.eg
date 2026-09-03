@@ -109,12 +109,18 @@ Latest observed Lane 3 work has:
 - closed isolated Teswa OCI network foundation;
 - closed durable native OCI Terraform remote state;
 - preserved Nova as a hard no-touch boundary;
-- continued read-only/free-tier-specific capacity evaluation.
+- completed free-tier-specific capacity evaluation;
+- selected a Phase 2 plan for a private `teswa-media` bucket, private/versioned
+  `teswa-backups`, DEFAULT `teswa-vault`, and `teswa-ops` topic;
+- not yet applied that Phase 2 plan.
+
+Lane 4 has already mapped all nine logical source media buckets into the planned
+private `teswa-media` bucket using prefix isolation.
 
 Still not handed to Lane 4:
 
 - isolated PostgreSQL 17 application target;
-- final application Object Storage bucket mapping;
+- an actually-applied `teswa-media` bucket;
 - OCI API runtime;
 - OCI Realtime runtime;
 - worker/scheduler runtime;
@@ -286,7 +292,7 @@ not handed off a PostgreSQL/Object Storage application target yet.
 ## Remaining risks / blockers
 
 1. OCI PostgreSQL target does not yet exist for Lane 4 execution.
-2. OCI application Storage bucket layout is not yet handed off.
+2. OCI media bucket layout is selected but the Phase 2 `teswa-media` bucket is not yet applied/handed off.
 3. External Auth-equivalent identity FKs are deliberately unapplied.
 4. RLS/RPC authorization semantics still require OCI/Lane-2 runtime implementation.
 5. Realtime runtime parity is unexecuted.
