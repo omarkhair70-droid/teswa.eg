@@ -1072,5 +1072,306 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
         createdAt: data.created_at as string,
       };
     },
+
+    async getExchangeItemSummaries(itemIds) {
+      const uniqueIds = [...new Set(itemIds.filter(Boolean))];
+      if (!uniqueIds.length) return [];
+
+      const { data: items, error: itemsError } = await supabase
+        .from('items')
+        .select('id,title,category_id,owner_id,condition,city,status')
+        .in('id', uniqueIds)
+        .in('status', ['active', 'reserved', 'swapped']);
+      if (itemsError) throw itemsError;
+
+      const rows = items ?? [];
+      if (!rows.length) return [];
+
+      const categoryIds = [...new Set(
+        rows
+          .map((row) => row.category_id as string | null)
+          .filter((value): value is string => Boolean(value)),
+      )];
+      const ownerIds = [...new Set(
+        rows
+          .map((row) => row.owner_id as string | null)
+          .filter((value): value is string => Boolean(value)),
+      )];
+
+      const [imagesResult, categoriesResult, profilesResult] = await Promise.all([
+        supabase
+          .from('item_images')
+          .select('item_id,image_url,is_primary,sort_order')
+          .in('item_id', uniqueIds),
+        categoryIds.length
+          ? supabase.from('categories').select('id,name_ar').in('id', categoryIds)
+          : Promise.resolve({ data: [], error: null }),
+        ownerIds.length
+          ? supabase.from('profiles').select('id,display_name').in('id', ownerIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (imagesResult.error) throw imagesResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
+      if (profilesResult.error) throw profilesResult.error;
+
+      const groupedImages = new Map<string, any[]>();
+      for (const image of imagesResult.data ?? []) {
+        const itemId = image.item_id as string;
+        const current = groupedImages.get(itemId) ?? [];
+        current.push(image);
+        groupedImages.set(itemId, current);
+      }
+
+      const imageByItemId = new Map<string, string | null>();
+      for (const [itemId, list] of groupedImages.entries()) {
+        const chosen = [...list].sort((a, b) => {
+          const primaryA = a.is_primary ? 0 : 1;
+          const primaryB = b.is_primary ? 0 : 1;
+          if (primaryA !== primaryB) return primaryA - primaryB;
+          return (a.sort_order ?? Number.MAX_SAFE_INTEGER)
+            - (b.sort_order ?? Number.MAX_SAFE_INTEGER);
+        })[0];
+        imageByItemId.set(
+          itemId,
+          (chosen?.image_url as string | null) ?? null,
+        );
+      }
+
+      const categoryById = new Map(
+        (categoriesResult.data ?? []).map((row) => [
+          row.id as string,
+          (row.name_ar as string | null) ?? null,
+        ]),
+      );
+      const profileById = new Map(
+        (profilesResult.data ?? []).map((row) => [
+          row.id as string,
+          (row.display_name as string | null) ?? null,
+        ]),
+      );
+
+      const mapped = new Map(
+        rows.map((row) => [
+          row.id as string,
+          {
+            id: row.id as string,
+            title:
+              typeof row.title === 'string' && row.title.trim()
+                ? row.title.trim()
+                : 'عنصر بدون عنوان',
+            imageUrl: imageByItemId.get(row.id as string) ?? null,
+            category: row.category_id
+              ? categoryById.get(row.category_id as string) ?? null
+              : null,
+            condition: (row.condition as string | null) ?? null,
+            location: (row.city as string | null) ?? null,
+            ownerDisplayName:
+              profileById.get(row.owner_id as string) ?? null,
+            status: row.status as string,
+          },
+        ]),
+      );
+
+      return uniqueIds
+        .map((id) => mapped.get(id))
+        .filter((row): row is NonNullable<typeof row> => Boolean(row));
+    },
+
+    async getItemVideoPresence(itemIds) {
+      const normalizedIds = Array.from(
+        new Set(itemIds.map((id) => id.trim()).filter(Boolean)),
+      );
+      if (!normalizedIds.length) return new Map();
+
+      const { data, error } = await supabase
+        .from('item_videos')
+        .select('item_id')
+        .in('item_id', normalizedIds);
+      if (error) throw error;
+
+      return new Map(
+        (data ?? [])
+          .map((row) => (row.item_id as string | null)?.trim())
+          .filter((id): id is string => Boolean(id))
+          .map((id): [string, boolean] => [id, true]),
+      );
+    },
+
+    async listRecentItemVideoDiscovery(limit) {
+      const { data: videoRowsData, error: videosError } = await supabase
+        .from('item_videos')
+        .select('item_id,duration_ms,created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (videosError) throw videosError;
+
+      const videoRows = (videoRowsData ?? []).filter(
+        (row) => Boolean((row.item_id as string | null)?.trim()),
+      );
+      if (!videoRows.length) return [];
+
+      const orderedUniqueItemIds = Array.from(
+        new Set(videoRows.map((row) => (row.item_id as string).trim())),
+      );
+
+      const { data: itemRowsData, error: itemsError } = await supabase
+        .from('marketplace_items')
+        .select('id,title,description,cover_image_url,category,item_condition,city,owner_display_name')
+        .in('id', orderedUniqueItemIds);
+      if (itemsError) throw itemsError;
+
+      const itemsById = new Map(
+        (itemRowsData ?? []).map((row) => [row.id as string, row]),
+      );
+
+      return videoRows.flatMap((row) => {
+        const item = itemsById.get((row.item_id as string).trim());
+        if (!item) return [];
+        return [{
+          id: item.id as string,
+          title:
+            typeof item.title === 'string' && item.title.trim()
+              ? item.title.trim()
+              : 'عنصر بدون عنوان',
+          description: (item.description as string | null) ?? null,
+          imageUrl: (item.cover_image_url as string | null) ?? null,
+          category: (item.category as string | null) ?? null,
+          condition: (item.item_condition as string | null) ?? null,
+          location: (item.city as string | null) ?? null,
+          ownerDisplayName:
+            (item.owner_display_name as string | null) ?? null,
+          videoDurationMs: (row.duration_ms as number | null) ?? null,
+          videoCreatedAt: (row.created_at as string | null) ?? null,
+        }];
+      });
+    },
+
+    async listMovingItems(limit) {
+      const { data: rankedRows, error: rankedError } = await supabase.rpc(
+        'get_public_moving_items',
+        { p_limit: limit },
+      );
+      if (rankedError) throw rankedError;
+
+      const rows = rankedRows ?? [];
+      if (!rows.length) return [];
+
+      const itemIds = rows.map((row: any) => row.item_id as string);
+      const [marketplaceResult, videoPresence] = await Promise.all([
+        supabase
+          .from('marketplace_items')
+          .select('id,title,cover_image_url,category,item_condition,city,owner_display_name')
+          .in('id', itemIds),
+        (async () => {
+          const { data, error } = await supabase
+            .from('item_videos')
+            .select('item_id')
+            .in('item_id', itemIds);
+          if (error) throw error;
+          return new Set(
+            (data ?? [])
+              .map((row) => row.item_id as string | null)
+              .filter((id): id is string => Boolean(id)),
+          );
+        })(),
+      ]);
+      if (marketplaceResult.error) throw marketplaceResult.error;
+
+      const itemMap = new Map(
+        (marketplaceResult.data ?? []).map((item) => [
+          item.id as string,
+          item,
+        ]),
+      );
+
+      return rows.flatMap((row: any) => {
+        const item = itemMap.get(row.item_id as string);
+        if (!item) return [];
+        return [{
+          id: item.id as string,
+          title:
+            typeof item.title === 'string' && item.title.trim()
+              ? item.title.trim()
+              : 'عنصر بدون عنوان',
+          imageUrl: (item.cover_image_url as string | null) ?? null,
+          category: (item.category as string | null) ?? null,
+          condition: (item.item_condition as string | null) ?? null,
+          location: (item.city as string | null) ?? null,
+          ownerDisplayName:
+            (item.owner_display_name as string | null) ?? null,
+          openInterestCount: Number(row.open_interest_count ?? 0),
+          latestInterestAt:
+            (row.latest_interest_at as string | null) ?? null,
+          hasVideoTeaser: videoPresence.has(item.id as string),
+        }];
+      });
+    },
+
+    async listPulseItemTeasers(limit) {
+      const { data: rowsData, error } = await supabase
+        .from('item_videos')
+        .select('id,item_id,video_storage_path,duration_ms,created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+
+      const rows = rowsData ?? [];
+      if (!rows.length) return [];
+
+      const itemIds = Array.from(
+        new Set(
+          rows
+            .map((row) => row.item_id as string | null)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+
+      const { data: items, error: itemsError } = await supabase
+        .from('marketplace_items')
+        .select('id,title,description,cover_image_url,category,item_condition,city,owner_display_name')
+        .in('id', itemIds);
+      if (itemsError) throw itemsError;
+
+      const itemsById = new Map(
+        (items ?? []).map((item) => [item.id as string, item]),
+      );
+
+      return rows.flatMap((row) => {
+        const storagePath =
+          (row.video_storage_path as string | null)?.trim() || '';
+        if (!storagePath) return [];
+        const item = itemsById.get(row.item_id as string);
+        if (!item) return [];
+
+        return [{
+          id: row.id as string,
+          createdAt: row.created_at as string,
+          videoStoragePath: storagePath,
+          durationMs: (row.duration_ms as number | null) ?? null,
+          itemId: item.id as string,
+          title:
+            typeof item.title === 'string' && item.title.trim()
+              ? item.title.trim()
+              : 'عنصر بدون عنوان',
+          description: (item.description as string | null) ?? null,
+          imageUrl: (item.cover_image_url as string | null) ?? null,
+          category: (item.category as string | null) ?? null,
+          condition: (item.item_condition as string | null) ?? null,
+          location: (item.city as string | null) ?? null,
+          ownerDisplayName:
+            (item.owner_display_name as string | null) ?? null,
+        }];
+      });
+    },
+
+    async countMarketplaceItemsSince(sinceIso) {
+      const { count, error } = await supabase
+        .from('marketplace_items')
+        .select('id', { head: true, count: 'exact' })
+        .gt('created_at', sinceIso);
+      if (error) throw error;
+      return count ?? 0;
+},
   };
 }
