@@ -126,3 +126,104 @@ export interface MessagingRealtimeContract {
     },
   ): TeswaUnsubscribe;
 }
+
+
+export type DirectConversationTransportStatus =
+  | 'requested'
+  | 'accepted'
+  | 'ignored'
+  | 'blocked';
+
+export type DirectConversationTransportRecord = {
+  conversationId: string;
+  status: DirectConversationTransportStatus;
+  requestedBy: string;
+  otherUserId: string;
+  otherDisplayName: string | null;
+  otherUsername: string | null;
+  otherAvatarUrl: string | null;
+  lastMessageBody: string | null;
+  lastMessageSenderId: string | null;
+  lastMessageAt: IsoDateTime | null;
+  unreadCount: number;
+  requiresAction: boolean;
+};
+
+export type DirectMessageTransportRecord = {
+  id: string;
+  senderId: string;
+  body: string;
+  messageType: 'text' | 'voice';
+  audioStoragePath: string | null;
+  audioDurationMs: number | null;
+  audioMimeType: string | null;
+  audioSizeBytes: number | null;
+  createdAt: IsoDateTime;
+  readAt: IsoDateTime | null;
+};
+
+export type DirectConversationStartRecord = {
+  ok: boolean;
+  conversationId: string | null;
+  status: DirectConversationTransportStatus | null;
+  requiresRequest: boolean;
+  message: string | null;
+};
+
+export type DirectConversationStartMessageRecord = {
+  ok: boolean;
+  conversationId: string | null;
+  messageId: string | null;
+  status: DirectConversationTransportStatus | null;
+  createdAt: IsoDateTime | null;
+  message: string | null;
+};
+
+export type DirectSendMessageRecord = {
+  ok: boolean;
+  message: string | null;
+  messageId: string | null;
+  conversationId: string | null;
+  createdAt: IsoDateTime | null;
+};
+
+export interface DirectMessagingTransportContract {
+  startOrGet(targetUserId: string): Promise<TeswaResult<DirectConversationStartRecord, 'unknown'>>;
+  startWithMessage(
+    targetUserId: string,
+    body: string,
+  ): Promise<TeswaResult<DirectConversationStartMessageRecord, 'unknown'>>;
+
+  listConversations(): Promise<TeswaResult<DirectConversationTransportRecord[], 'unknown'>>;
+  getConversation(
+    conversationId: string,
+  ): Promise<TeswaResult<DirectConversationTransportRecord | null, 'unknown'>>;
+  listMessages(
+    conversationId: string,
+  ): Promise<TeswaResult<DirectMessageTransportRecord[], 'unknown'>>;
+
+  sendText(
+    conversationId: string,
+    body: string,
+  ): Promise<TeswaResult<DirectSendMessageRecord, 'forbidden' | 'unknown'>>;
+
+  sendVoice(input: {
+    conversationId: string;
+    audioStoragePath: string;
+    audioMimeType: string;
+    audioDurationMs: number;
+    audioSizeBytes: number | null;
+  }): Promise<TeswaResult<{
+    ok: boolean;
+    message: string | null;
+    messageId: string | null;
+    createdAt: IsoDateTime | null;
+  }, 'unknown'>>;
+
+  actOnRequest(
+    action: 'accept' | 'ignore',
+    conversationId: string,
+  ): Promise<TeswaResult<{ ok: boolean; message: string | null }, 'unknown'>>;
+
+  markRead(conversationId: string): Promise<TeswaResult<void, 'unknown'>>;
+}
