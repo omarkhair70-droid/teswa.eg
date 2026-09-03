@@ -10,6 +10,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 APP_SUBNET="$("$TF" output -raw private_app_subnet_id)"
 CORE_IP="$("$TF" output -raw teswa_core_private_ip)"
+BASTION_IP="$("$TF" output -raw admin_bastion_private_endpoint_ip)"
 EGRESS_SL="$("$TF" output -raw admin_bastion_egress_security_list_id)"
 
 echo "TESWA PHASE 4 BASTION CONNECTIVITY VERIFY"
@@ -31,13 +32,11 @@ if not ok:
     raise SystemExit(3)
 PY
 
-SL_FILE="$(mktemp)"
-trap 'rm -f "$SL_FILE"' EXIT
 oci network security-list get   --security-list-id "$EGRESS_SL"   --output json >"$SL_FILE"
 
-python3 - "$CORE_IP" "$SL_FILE" <<'PY'
+python3 - "$CORE_IP" "$BASTION_IP" "$SL_FILE" <<'PY'
 import json,sys
-core,path=sys.argv[1:]
+core,bastion,path=sys.argv[1:]
 with open(path,encoding="utf-8") as f:
     data=json.load(f).get("data",{})
 state=data.get("lifecycle-state") or data.get("state")
@@ -66,7 +65,7 @@ for r in ingress:
     src=r.get("source") or ""
     tcp=r.get("tcp-options") or {}
     dst=tcp.get("destination-port-range") or {}
-    if src.endswith("/32") and dst.get("min")==22 and dst.get("max")==22 and not r.get("is-stateless",False):
+    if src == bastion+"/32" and dst.get("min")==22 and dst.get("max")==22 and not r.get("is-stateless",False):
         endpoint=src
         break
 print("bastion_tcp22_ingress_rule=%s" % str(bool(endpoint)).lower())
