@@ -1,0 +1,95 @@
+name: Safe Native Alignment
+
+on:
+  push:
+    branches:
+      - modernize/expo57-platform-20260903
+    paths:
+      - '.github/workflows/safe-native-alignment.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: teswa-safe-native-alignment
+  cancel-in-progress: true
+
+jobs:
+  align:
+    name: Align safe native dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      SENTRY_ALLOW_FAILURE: 'true'
+
+    steps:
+      - name: Checkout modernization branch
+        uses: actions/checkout@v4
+        with:
+          ref: modernize/expo57-platform-20260903
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install current dependencies
+        run: npm ci
+
+      - name: Install Expo SystemUI
+        run: npx expo install expo-system-ui
+
+      - name: Remove unused native packages
+        run: npm uninstall react-native-maps expo-media-library
+
+      - name: Apply safe native patch updates
+        run: |
+          npm install \
+            @react-native-google-signin/google-signin@16.1.5 \
+            @shopify/flash-list@2.3.2 \
+            react-native-view-shot@5.1.1 \
+            react-native-mmkv@^4.3.2
+
+      - name: Expo Doctor
+        run: npx expo-doctor
+
+      - name: TypeScript
+        run: npm run typecheck:app
+
+      - name: Android clean prebuild
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Verify native cleanup
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          const deps = pkg.dependencies || {};
+          for (const name of ['react-native-maps', 'expo-media-library']) {
+            if (deps[name]) {
+              console.error(`${name} is still present after cleanup`);
+              process.exit(1);
+            }
+          }
+          if (!deps['expo-system-ui']) {
+            console.error('expo-system-ui is missing');
+            process.exit(1);
+          }
+          console.log('Native cleanup verified.');
+          NODE
+
+      - name: Commit safe native alignment
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(platform): align safe native dependencies for SDK 57"
+          git push origin HEAD:modernize/expo57-platform-20260903
