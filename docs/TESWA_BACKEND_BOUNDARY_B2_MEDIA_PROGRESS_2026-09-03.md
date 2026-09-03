@@ -68,3 +68,23 @@ Removed feature knowledge of the physical `item-videos` bucket.
 `lib/item-videos.ts` still reads the `item_videos` DB row through Supabase and therefore remains a Marketplace-domain migration candidate, but it no longer owns Storage transport.
 
 Direct SDK Storage legacy files ratchet **11 -> 10**.
+
+
+## Slice B2.4 — Dolab upload / delete Storage boundary
+
+Completed Dolab Storage decoupling:
+
+- `uploadDolabPendingMedia` uses `MediaStorageContract.upload`;
+- failed DB-row save rollback uses `MediaStorageContract.remove`;
+- `deleteDolabMedia` Storage cleanup uses `MediaStorageContract.remove`;
+- empty-file detection is enforced inside the media adapter before upload.
+
+Removed from Dolab feature code:
+
+- `supabase.storage`;
+- the physical `dolab-media` bucket name;
+- local file-to-buffer transport logic that belonged to the provider adapter.
+
+Dolab modules still use Supabase for their database rows and remain a later remaining-domain migration concern.
+
+Direct SDK Storage legacy files ratchet **10 -> 8**.
