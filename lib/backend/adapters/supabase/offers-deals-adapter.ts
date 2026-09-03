@@ -239,6 +239,124 @@ export function createSupabaseDealLifecycleAdapter(): DealLifecycleContract {
       return typeof data === 'number' ? Math.max(0, data) : 0;
     },
 
+    async listConversationInbox(userId) {
+      const { data: deals, error } = await supabase
+        .from('swap_deals')
+        .select('id,status,created_at,requested_item_id,offered_item_id,requester_id,offerer_id')
+        .or(`requester_id.eq.${userId},offerer_id.eq.${userId}`);
+      if (error) throw error;
+
+      const dealRows = deals ?? [];
+      if (!dealRows.length) return [];
+
+      const dealIds = dealRows.map((deal) => deal.id as string);
+      const participantIds = [
+        ...new Set(
+          dealRows.flatMap((deal) => [
+            deal.requester_id as string,
+            deal.offerer_id as string,
+          ]),
+        ),
+      ];
+
+      const [profilesRes, messagesRes, readsRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id,display_name,avatar_url')
+          .in('id', participantIds),
+        supabase
+          .from('deal_messages')
+          .select('id,deal_id,sender_id,body,created_at,message_type')
+          .in('deal_id', dealIds)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('deal_message_reads')
+          .select('deal_id,last_read_at')
+          .eq('user_id', userId)
+          .in('deal_id', dealIds),
+      ]);
+
+      if (profilesRes.error) throw profilesRes.error;
+      if (messagesRes.error) throw messagesRes.error;
+      if (readsRes.error) throw readsRes.error;
+
+      const profilesById = new Map(
+        (profilesRes.data ?? []).map((profile) => [
+          profile.id as string,
+          {
+            id: profile.id as string,
+            displayName: (profile.display_name as string | null) ?? null,
+            avatarUrl: (profile.avatar_url as string | null) ?? null,
+          },
+        ]),
+      );
+
+      const messagesByDeal = new Map<string, any[]>();
+      for (const message of messagesRes.data ?? []) {
+        const dealId = message.deal_id as string;
+        const list = messagesByDeal.get(dealId) ?? [];
+        list.push(message);
+        messagesByDeal.set(dealId, list);
+      }
+
+      const lastReadByDeal = new Map(
+        (readsRes.data ?? []).map((row) => [
+          row.deal_id as string,
+          (row.last_read_at as string | null) ?? null,
+        ]),
+      );
+
+      return dealRows
+        .map((deal) => {
+          const dealId = deal.id as string;
+          const requesterId = deal.requester_id as string;
+          const offererId = deal.offerer_id as string;
+          const otherId = userId === requesterId ? offererId : requesterId;
+          const messages = messagesByDeal.get(dealId) ?? [];
+          const latest = messages[0] ?? null;
+          const lastReadAt = lastReadByDeal.get(dealId) ?? null;
+
+          const unreadCount = messages.filter(
+            (message) =>
+              (message.sender_id as string) !== userId
+              && (
+                !lastReadAt
+                || Date.parse(message.created_at as string)
+                  > Date.parse(lastReadAt)
+              ),
+          ).length;
+
+          return {
+            dealId,
+            status: deal.status as string,
+            createdAt: (deal.created_at as string | null) ?? null,
+            requestedItemId: deal.requested_item_id as string,
+            offeredItemId: deal.offered_item_id as string,
+            otherParticipant:
+              profilesById.get(otherId)
+              ?? { id: otherId, displayName: null, avatarUrl: null },
+            latestMessage: latest
+              ? {
+                  body: latest.body as string,
+                  createdAt: latest.created_at as string,
+                  senderId: latest.sender_id as string,
+                  messageType:
+                    latest.message_type === 'voice' ? 'voice' as const : 'text' as const,
+                }
+              : null,
+            unreadCount,
+            lastActivityAt:
+              (latest?.created_at as string | undefined)
+              ?? (deal.created_at as string | null)
+              ?? new Date(0).toISOString(),
+          };
+        })
+        .sort(
+          (a, b) =>
+            Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt),
+        );
+    },
+
     async listConfirmationUserIds(dealId) {
       const { data, error } = await supabase
         .from('deal_confirmations')
