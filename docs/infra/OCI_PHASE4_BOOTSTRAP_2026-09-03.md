@@ -682,3 +682,20 @@ Lane 3 will use a temporary `VM.Standard.E2.1.Micro` rescue helper only if all o
 The helper will be launched with root cloud-init enabling `ocarun` sudo, used only to mount the detached Core boot volume and install the missing `opc` authorized key plus `ocarun` sudoers file, then removed after the Core is restored.
 
 No production cutover, Supabase change, Nova change, DNS change, or data migration is part of this rescue.
+
+
+## Boot-volume rescue preflight attachment lookup correction
+
+The first rescue preflight failed before any OCI mutation with `core_identity_incomplete`.
+
+Root cause was in the helper: it attempted to read `boot-volume-id` directly from `oci compute instance get`. OCI exposes the boot volume relationship through the Boot Volume Attachment API, not as a direct instance field.
+
+The preflight now:
+
+- reads the Core availability domain from the instance;
+- lists the Core's boot-volume attachments in that availability domain;
+- requires exactly one non-detached attachment with a boot-volume ID;
+- prints only boolean resolution status, not the volume OCID;
+- remains fully read-only.
+
+No Core, volume, E2 helper, network, Nova, Supabase, DNS, or data resource changed during the failed preflight.
