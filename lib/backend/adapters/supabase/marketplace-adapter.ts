@@ -1373,5 +1373,166 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
       if (error) throw error;
       return count ?? 0;
 },
+
+    async listItemStoryDiscovery(limit) {
+      const resolvedLimit = Math.min(24, Math.max(1, Math.floor(limit)));
+      const rawLimit = Math.max(resolvedLimit, resolvedLimit * 2);
+
+      const { data, error } = await supabase
+        .from('items')
+        .select('id,title,category_id,city,area,owner_id,item_story,swap_reason,good_for,created_at')
+        .eq('status', 'active')
+        .or('item_story.not.is.null,swap_reason.not.is.null,good_for.not.is.null')
+        .order('created_at', { ascending: false })
+        .limit(rawLimit);
+      if (error) throw error;
+
+      const clean = (value: unknown) => {
+        const text = typeof value === 'string' ? value.trim() : '';
+        return text || null;
+      };
+
+      const normalizedRows = (data ?? [])
+        .map((row) => {
+          const itemStory = clean(row.item_story);
+          const swapReason = clean(row.swap_reason);
+          const goodFor = clean(row.good_for);
+          if (!itemStory && !swapReason && !goodFor) return null;
+          if (itemStory) {
+            return {
+              row,
+              storyLabel: 'حكاية العنصر' as const,
+              storySnippet: itemStory,
+            };
+          }
+          if (swapReason) {
+            return {
+              row,
+              storyLabel: 'ليه صاحبه بيبدله' as const,
+              storySnippet: swapReason,
+            };
+          }
+          return {
+            row,
+            storyLabel: 'مفيد لمين' as const,
+            storySnippet: goodFor as string,
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+      if (!normalizedRows.length) return [];
+
+      const itemIds = normalizedRows.map(({ row }) => row.id as string);
+      const categoryIds = Array.from(
+        new Set(
+          normalizedRows
+            .map(({ row }) => row.category_id as string | null)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+      const ownerIds = Array.from(
+        new Set(
+          normalizedRows
+            .map(({ row }) => row.owner_id as string | null)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+
+      const [imagesResult, categoriesResult, profilesResult, videosResult] =
+        await Promise.all([
+          supabase
+            .from('item_images')
+            .select('item_id,image_url,is_primary,sort_order')
+            .in('item_id', itemIds),
+          categoryIds.length
+            ? supabase.from('categories').select('id,name_ar').in('id', categoryIds)
+            : Promise.resolve({ data: [], error: null }),
+          ownerIds.length
+            ? supabase.from('profiles').select('id,display_name').in('id', ownerIds)
+            : Promise.resolve({ data: [], error: null }),
+          supabase
+            .from('item_videos')
+            .select('item_id')
+            .in('item_id', itemIds),
+        ]);
+
+      if (imagesResult.error) throw imagesResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
+      if (profilesResult.error) throw profilesResult.error;
+      if (videosResult.error) throw videosResult.error;
+
+      const imagesByItemId = new Map<string, any[]>();
+      for (const image of imagesResult.data ?? []) {
+        const itemId = image.item_id as string;
+        const current = imagesByItemId.get(itemId) ?? [];
+        current.push(image);
+        imagesByItemId.set(itemId, current);
+      }
+
+      const categoryById = new Map(
+        (categoriesResult.data ?? []).map((category) => [
+          category.id as string,
+          clean(category.name_ar),
+        ]),
+      );
+      const visibleOwnerIds = new Set(
+        (profilesResult.data ?? []).map((profile) => profile.id as string),
+      );
+      const ownerById = new Map(
+        (profilesResult.data ?? []).map((profile) => [
+          profile.id as string,
+          clean(profile.display_name),
+        ]),
+      );
+      const videoItemIds = new Set(
+        (videosResult.data ?? [])
+          .map((row) => row.item_id as string | null)
+          .filter((id): id is string => Boolean(id)),
+      );
+
+      return normalizedRows
+        .filter(({ row }) => {
+          const ownerId = row.owner_id as string | null;
+          return !ownerId || visibleOwnerIds.has(ownerId);
+        })
+        .slice(0, resolvedLimit)
+        .map(({ row, storyLabel, storySnippet }) => {
+          const itemId = row.id as string;
+          const itemImages = [...(imagesByItemId.get(itemId) ?? [])].sort(
+            (a, b) => {
+              if (Boolean(b.is_primary) !== Boolean(a.is_primary)) {
+                return Number(Boolean(b.is_primary))
+                  - Number(Boolean(a.is_primary));
+              }
+              const sortA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+              const sortB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+              if (sortA !== sortB) return sortA - sortB;
+              return String(a.image_url ?? '').localeCompare(
+                String(b.image_url ?? ''),
+              );
+            },
+          );
+          const ownerId = (row.owner_id as string | null) ?? null;
+
+          return {
+            id: itemId,
+            title: clean(row.title) ?? 'عنصر بدون عنوان',
+            imageUrl: clean(itemImages[0]?.image_url),
+            category: row.category_id
+              ? categoryById.get(row.category_id as string) ?? null
+              : null,
+            city: clean(row.city),
+            area: clean(row.area),
+            ownerId,
+            ownerDisplayName: ownerId
+              ? ownerById.get(ownerId) ?? null
+              : null,
+            storyLabel,
+            storySnippet,
+            createdAt: (row.created_at as string | null) ?? null,
+            hasVideoTeaser: videoItemIds.has(itemId),
+          };
+        });
+,
   };
 }
