@@ -9,6 +9,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { StoryDiscoveryItem } from '@/lib/story-discovery';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 type Props = { items: StoryDiscoveryItem[]; loading?: boolean; errorMessage?: string | null; onRetry?: () => void };
 
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
   },
   cardPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   imageWrap: { height: 96, backgroundColor: colors.background },
-  image: { ...StyleSheet.absoluteFillObject },
+  image: { ...ABSOLUTE_FILL },
   storyBadge: {
     position: 'absolute',
     right: spacing.sm,
