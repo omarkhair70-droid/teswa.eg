@@ -65,23 +65,22 @@ PY
 )"
 
 echo "session_state=ACTIVE"
+echo "admin_action=configure_ocarun_passwordless_sudo"
+echo "public_ssh_exposure=none"
 echo
-echo "Run the following SSH command in this same Cloud Shell."
+
+ROOT_SCRIPT='set -Eeuo pipefail
+printf "%s\\n" "ocarun ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/101-oracle-cloud-agent-run-command
+chmod 440 /etc/sudoers.d/101-oracle-cloud-agent-run-command
+visudo -cf /etc/sudoers.d/101-oracle-cloud-agent-run-command
+'
+
+echo "Opening the short-lived Bastion SSH session..."
 echo "If SSH asks to trust an OCI bastion host key, answer yes."
+
+printf '%s' "$ROOT_SCRIPT" | eval "$CMD 'sudo bash -s'"
+
 echo
-printf '%s
-' "$CMD"
-echo
-echo "Then, inside teswa-core-01, run exactly:"
-cat <<'EOF'
-printf '%s
-' 'ocarun ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/101-oracle-cloud-agent-run-command >/dev/null
-sudo chmod 440 /etc/sudoers.d/101-oracle-cloud-agent-run-command
-sudo visudo -cf /etc/sudoers.d/101-oracle-cloud-agent-run-command
-exit
-EOF
-echo
-echo "The ephemeral session private key exists only until this helper exits."
-echo "Keep this helper terminal open while you use the printed SSH command."
-read -r -p "Press Enter only after you have exited the Bastion SSH session..." _
-echo "session_helper_complete=true"
+echo "sudoers_install=PASS"
+echo "ephemeral_session_key_removed_on_exit=true"
+echo "Next step: verify ocarun sudo through a fresh Run Command."
