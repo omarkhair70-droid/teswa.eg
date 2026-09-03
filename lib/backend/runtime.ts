@@ -8,13 +8,15 @@ import { createSupabaseMessagingRealtimeAdapter } from '@/lib/backend/adapters/s
 import { createSupabaseNotificationsAdapter } from '@/lib/backend/adapters/supabase/notifications-adapter';
 import { createSupabaseDealLifecycleAdapter, createSupabaseOfferLifecycleAdapter } from '@/lib/backend/adapters/supabase/offers-deals-adapter';
 import { createSupabaseProfileAdapter } from '@/lib/backend/adapters/supabase/profile-adapter';
+import { createSupabaseStoriesAdapter } from '@/lib/backend/adapters/supabase/stories-adapter';
 import type { ProfileSocialContract } from '@/lib/backend/contracts/profile';
 import type { MarketplaceCoreContract } from '@/lib/backend/contracts/marketplace';
 import type { DealLifecycleContract, OfferLifecycleContract } from '@/lib/backend/contracts/offers-deals';
 import type { ContextualMessagingTransportContract, DirectMessagingTransportContract, MessagingRealtimeContract } from '@/lib/backend/contracts/messaging';
 import type { NotificationsContract } from '@/lib/backend/contracts/notifications';
+import type { StoriesContract } from '@/lib/backend/contracts/stories';
 
-export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract };
+export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract };
 
 export const teswaBackendRuntime: TeswaBackendRuntime = {
   auth: createSupabaseAuthAdapter(),
@@ -27,4 +29,5 @@ export const teswaBackendRuntime: TeswaBackendRuntime = {
   contextualMessaging: createSupabaseContextualMessagingAdapter(),
   notifications: createSupabaseNotificationsAdapter(),
   profiles: createSupabaseProfileAdapter(),
+  stories: createSupabaseStoriesAdapter(),
 };
