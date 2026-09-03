@@ -24,6 +24,8 @@ INSTANCE_ID="$(oci compute instance list   --compartment-id "$COMPARTMENT"   --d
 
 SCRIPT_TEXT='set -Eeuo pipefail
 
+echo "run_as_user=$(id -un)"
+
 if [ "$(id -u)" -eq 0 ]; then
   SUDO=""
 elif command -v sudo >/dev/null 2>&1 && sudo -n true; then
