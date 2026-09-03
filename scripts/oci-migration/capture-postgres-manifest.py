@@ -405,16 +405,37 @@ def capture_supabase_compat(psql: Psql) -> dict[str, Any]:
     }
 
     if psql.relation_exists("auth.users"):
+        auth_user_ids = [
+            row["id"]
+            for row in psql.rows("SELECT id::text AS id FROM auth.users ORDER BY id")
+        ]
         auth: dict[str, Any] = {
             "available": True,
-            "users": int(psql.scalar("SELECT count(*)::text FROM auth.users;") or "0"),
+            "users": len(auth_user_ids),
+            "user_uuid_set_sha256": canonical_digest(auth_user_ids),
             "identities": None,
+            "identity_user_uuid_set_sha256": None,
+            "profile_uuid_set_sha256": None,
             "providers": [],
         }
+        if psql.relation_exists("public.profiles"):
+            profile_ids = [
+                row["id"]
+                for row in psql.rows("SELECT id::text AS id FROM public.profiles ORDER BY id")
+            ]
+            auth["profile_uuid_set_sha256"] = canonical_digest(profile_ids)
         if psql.relation_exists("auth.identities"):
+            identity_user_ids = [
+                row["user_id"]
+                for row in psql.rows(
+                    "SELECT DISTINCT user_id::text AS user_id "
+                    "FROM auth.identities ORDER BY user_id"
+                )
+            ]
             auth["identities"] = int(
                 psql.scalar("SELECT count(*)::text FROM auth.identities;") or "0"
             )
+            auth["identity_user_uuid_set_sha256"] = canonical_digest(identity_user_ids)
             auth["providers"] = psql.rows(
                 """
                 SELECT provider, count(*)::bigint AS identity_count
