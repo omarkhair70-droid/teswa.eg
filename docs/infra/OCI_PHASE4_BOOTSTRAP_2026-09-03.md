@@ -567,3 +567,16 @@ The temporary canonical target-subnet SSH path is now fully verified:
 - `phase4_bastion_connectivity_verify=PASS`.
 
 The network path now matches the documented OCI Bastion pattern at both subnet directions. The next action is a fresh Managed SSH session for the one-time `ocarun` sudo bootstrap.
+
+
+## Managed SSH key-readiness diagnosis
+
+After canonical Bastion ingress/egress, client allowlisting, Bastion plugin, and Core sshd were all verified green, a fresh Managed SSH connection still closed during SSH negotiation.
+
+Oracle's Managed SSH troubleshooting documentation states that the target user's `AuthorizedKeysFile` must contain the same SSH public key configured for the Managed SSH session.
+
+Lane 3's current Terraform Core resource does not declare launch metadata for either `ssh_authorized_keys` or `user_data`. The Bastion bootstrap helper, meanwhile, generates a brand-new ephemeral RSA key for every session. If Core was launched without an SSH key, that ephemeral session key cannot authenticate as `opc`.
+
+Before any further network changes, Lane 3 now checks the live instance launch metadata read-only and reports only presence/count booleans, never key contents.
+
+Oracle also documents that the reserved `ssh_authorized_keys` and `user_data` metadata fields cannot be added or changed after launch. If the live key is absent, the remediation must be an explicit instance-bootstrap/recovery decision rather than another metadata update attempt.
