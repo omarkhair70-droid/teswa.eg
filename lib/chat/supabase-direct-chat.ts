@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { BackendConnectionState } from '@/lib/backend/contracts/core';
+import type { NativeDirectMessageTransportRecord } from '@/lib/backend/contracts/messaging';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 
 const DIRECT_CHAT_MEDIA_BUCKET = 'direct-chat-media';
 const LEGACY_DIRECT_VOICE_BUCKET = 'direct-voice-messages';
@@ -95,48 +95,38 @@ function normalizeStorageBucket(value: unknown): NativeDirectStorageBucket {
   return value === LEGACY_DIRECT_VOICE_BUCKET ? LEGACY_DIRECT_VOICE_BUCKET : DIRECT_CHAT_MEDIA_BUCKET;
 }
 
-function parseAttachment(value: any): NativeDirectAttachment | null {
-  if (!value || typeof value !== 'object') return null;
-  const kind = value.kind;
-  const storagePath = value.storagePath ?? value.storage_path;
-  if (!['image', 'video', 'file', 'audio'].includes(kind) || typeof storagePath !== 'string' || !storagePath) return null;
-  return {
-    id: typeof value.id === 'string' ? value.id : undefined,
-    kind,
-    storagePath,
-    storageBucket: normalizeStorageBucket(value.storageBucket ?? value.storage_bucket),
-    fileName: value.fileName ?? value.file_name ?? null,
-    mimeType: value.mimeType ?? value.mime_type ?? null,
-    sizeBytes: value.sizeBytes ?? value.size_bytes ?? null,
-    durationMs: value.durationMs ?? value.duration_ms ?? null,
-    width: value.width ?? null,
-    height: value.height ?? null,
-  };
-}
-
-function parseReaction(value: any): NativeDirectReaction | null {
-  if (!value || typeof value !== 'object') return null;
-  const reaction = value.reaction;
-  const userId = value.userId ?? value.user_id;
-  if (!['love', 'thumbs_up'].includes(reaction) || typeof userId !== 'string' || !userId) return null;
-  return { reaction, userId, createdAt: value.createdAt ?? value.created_at ?? null };
-}
-
-function normalizeMessage(row: any): NativeDirectMessage {
+function mapTransportMessage(
+  row: NativeDirectMessageTransportRecord,
+): NativeDirectMessage {
   return {
     id: row.id,
-    senderId: row.sender_id,
-    body: row.body ?? '',
-    messageType: row.message_type === 'voice' ? 'voice' : 'text',
-    createdAt: row.created_at,
-    readAt: row.read_at ?? null,
-    replyToMessageId: row.reply_to_message_id ?? null,
-    replySenderId: row.reply_sender_id ?? null,
-    replyBody: row.reply_body ?? null,
-    metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
-    deletedAt: row.deleted_at ?? null,
-    attachments: Array.isArray(row.attachments) ? row.attachments.map(parseAttachment).filter(Boolean) as NativeDirectAttachment[] : [],
-    reactions: Array.isArray(row.reactions) ? row.reactions.map(parseReaction).filter(Boolean) as NativeDirectReaction[] : [],
+    senderId: row.senderId,
+    body: row.body,
+    messageType: row.messageType,
+    createdAt: row.createdAt,
+    readAt: row.readAt,
+    replyToMessageId: row.replyToMessageId,
+    replySenderId: row.replySenderId,
+    replyBody: row.replyBody,
+    metadata: row.metadata,
+    deletedAt: row.deletedAt,
+    attachments: row.attachments.map((attachment) => ({
+      id: attachment.id,
+      kind: attachment.kind,
+      storagePath: attachment.storagePath,
+      storageBucket: normalizeStorageBucket(attachment.storageBucket),
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      durationMs: attachment.durationMs,
+      width: attachment.width,
+      height: attachment.height,
+    })),
+    reactions: row.reactions.map((reaction) => ({
+      reaction: reaction.reaction,
+      userId: reaction.userId,
+      createdAt: reaction.createdAt,
+    })),
   };
 }
 
@@ -225,18 +215,31 @@ export async function createNativeDirectAttachmentSignedUrl(
   return result.ok ? result.data : null;
 }
 
-export async function fetchNativeDirectMessages(conversationId: string, input?: { limit?: number; before?: string | null }) {
-  const { data, error } = await supabase.rpc('get_direct_native_messages', {
-    p_conversation_id: conversationId,
-    p_limit: Math.max(1, Math.min(input?.limit ?? 100, 200)),
-    p_before: input?.before ?? null,
+export async function fetchNativeDirectMessages(
+  conversationId: string,
+  input?: { limit?: number; before?: string | null },
+) {
+  const result = await teswaBackendRuntime.directMessaging.listNativeMessages({
+    conversationId,
+    limit: Math.max(1, Math.min(input?.limit ?? 100, 200)),
+    before: input?.before ?? null,
   });
-  if (error) {
-    if (__DEV__) console.warn('[direct-native] fetch failed', { code: error.code, message: error.message });
-    return { ok: false as const, message: 'تعذر تحميل الرسائل حالياً.', messages: [] as NativeDirectMessage[] };
+
+  if (!result.ok) {
+    if (__DEV__) {
+      console.warn('[direct-native] fetch failed', { message: result.message });
+    }
+    return {
+      ok: false as const,
+      message: 'تعذر تحميل الرسائل حالياً.',
+      messages: [] as NativeDirectMessage[],
+    };
   }
-  const messages = (data ?? []).map(normalizeMessage).reverse();
-  return { ok: true as const, messages };
+
+  return {
+    ok: true as const,
+    messages: result.data.map(mapTransportMessage),
+  };
 }
 
 export async function sendNativeDirectMessage(input: {
@@ -246,72 +249,89 @@ export async function sendNativeDirectMessage(input: {
   attachments?: NativeDirectAttachment[];
   metadata?: Record<string, unknown>;
 }) {
-  const { data, error } = await supabase.rpc('send_direct_native_message', {
-    p_conversation_id: input.conversationId,
-    p_body: input.body?.trim() || null,
-    p_reply_to_message_id: input.replyToMessageId ?? null,
-    p_attachments: input.attachments ?? [],
-    p_metadata: input.metadata ?? {},
+  const result = await teswaBackendRuntime.directMessaging.sendNativeMessage({
+    conversationId: input.conversationId,
+    body: input.body,
+    replyToMessageId: input.replyToMessageId,
+    attachments: (input.attachments ?? []).map((attachment) => ({
+      id: attachment.id,
+      kind: attachment.kind,
+      storagePath: attachment.storagePath,
+      storageBucket: attachment.storageBucket ?? null,
+      fileName: attachment.fileName ?? null,
+      mimeType: attachment.mimeType ?? null,
+      sizeBytes: attachment.sizeBytes ?? null,
+      durationMs: attachment.durationMs ?? null,
+      width: attachment.width ?? null,
+      height: attachment.height ?? null,
+    })),
+    metadata: input.metadata ?? {},
   });
-  if (error) {
-    if (__DEV__) console.warn('[direct-native] send failed', { code: error.code, message: error.message });
-    return { ok: false as const, message: 'تعذر إرسال الرسالة حالياً.', messageId: null as string | null, createdAt: null as string | null };
+
+  if (!result.ok) {
+    if (__DEV__) {
+      console.warn('[direct-native] send failed', { message: result.message });
+    }
+    return {
+      ok: false as const,
+      message: 'تعذر إرسال الرسالة حالياً.',
+      messageId: null as string | null,
+      createdAt: null as string | null,
+    };
   }
-  const row = Array.isArray(data) ? data[0] : null;
-  return {
-    ok: !!row?.ok,
-    message: row?.message ?? 'تعذر إرسال الرسالة حالياً.',
-    messageId: row?.message_id ?? null,
-    createdAt: row?.created_at ?? null,
-  };
+
+  return result.data;
 }
 
 export async function markNativeDirectConversationRead(conversationId: string) {
-  const { data, error } = await supabase.rpc('mark_direct_conversation_read_v2', { p_conversation_id: conversationId });
-  if (error) return { ok: false as const, readAt: null as string | null };
-  const row = Array.isArray(data) ? data[0] : null;
-  return { ok: !!row?.ok, readAt: row?.read_at ?? null };
+  const result = await teswaBackendRuntime.directMessaging.markNativeRead(conversationId);
+  if (!result.ok) {
+    return { ok: false as const, readAt: null as string | null };
+  }
+  return result.data;
 }
 
-export async function toggleNativeDirectReaction(messageId: string, reaction: 'love' | 'thumbs_up') {
-  const { data, error } = await supabase.rpc('toggle_direct_message_reaction_v2', {
-    p_message_id: messageId,
-    p_reaction: reaction,
-  });
-  if (error) return { ok: false as const, enabled: false, count: 0 };
-  const row = Array.isArray(data) ? data[0] : null;
-  return { ok: !!row?.ok, enabled: !!row?.enabled, count: Number(row?.reaction_count ?? 0) };
+export async function toggleNativeDirectReaction(
+  messageId: string,
+  reaction: 'love' | 'thumbs_up',
+) {
+  const result = await teswaBackendRuntime.directMessaging.toggleNativeReaction(
+    messageId,
+    reaction,
+  );
+  if (!result.ok) {
+    return { ok: false as const, enabled: false, count: 0 };
+  }
+  return result.data;
 }
 
-export async function setNativeDirectTypingState(conversationId: string, isTyping: boolean) {
-  const { data, error } = await supabase.rpc('set_direct_typing_state_v2', {
-    p_conversation_id: conversationId,
-    p_is_typing: isTyping,
-  });
-  return { ok: !error && data === true };
+export async function setNativeDirectTypingState(
+  conversationId: string,
+  isTyping: boolean,
+) {
+  const result = await teswaBackendRuntime.directMessaging.setNativeTyping(
+    conversationId,
+    isTyping,
+  );
+  return { ok: result.ok && result.data === true };
 }
 
 export async function fetchNativeDirectTypingUsers(conversationId: string) {
-  const { data, error } = await supabase
-    .from('direct_typing_state')
-    .select('user_id,expires_at')
-    .eq('conversation_id', conversationId)
-    .eq('is_typing', true)
-    .gt('expires_at', new Date().toISOString());
-  if (error) return [] as string[];
-  return (data ?? []).map((row: any) => row.user_id).filter((value: unknown): value is string => typeof value === 'string');
+  const result = await teswaBackendRuntime.directMessaging.listNativeTypingUsers(
+    conversationId,
+  );
+  return result.ok ? result.data : [];
 }
 
 export async function deleteNativeDirectMessage(messageId: string) {
-  const { data, error } = await supabase.rpc('delete_direct_message_v2', { p_message_id: messageId });
-  if (error) return { ok: false as const, message: 'تعذر حذف الرسالة حالياً.' };
-  const row = Array.isArray(data) ? data[0] : null;
-  if (!row?.ok) return { ok: false as const, message: 'تعذر حذف الرسالة حالياً.' };
+  const result = await teswaBackendRuntime.directMessaging.deleteNativeMessage(messageId);
+  if (!result.ok) {
+    return { ok: false as const, message: 'تعذر حذف الرسالة حالياً.' };
+  }
 
-  const paths = Array.isArray(row.storage_paths)
-    ? row.storage_paths.filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
-    : [];
-  if (paths.length) await removeNativeDirectUploads(paths);
+  if (result.data.storagePaths.length) {
+    await removeNativeDirectUploads(result.data.storagePaths);
+  }
   return { ok: true as const };
 }
 
