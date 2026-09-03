@@ -1,10 +1,9 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { compressItemImage } from '@/lib/media/compress-item-image';
 import { supabase } from '@/lib/supabase/client';
 
-const ITEM_IMAGES_BUCKET = 'item-images';
 const MAX_ITEM_IMAGES = 4;
-const ITEM_IMAGES_PUBLIC_MARKER = '/storage/v1/object/public/item-images/';
 
 export type EditableListingImage = {
   id: string;
@@ -51,23 +50,18 @@ function sanitizeFileName(name: string | null | undefined, fallback: string): st
   return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
 }
 
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
+function itemImageRef(objectKey: string, contentType: string | null = null) {
+  return {
+    purpose: 'item_image' as const,
+    objectKey,
+    contentType,
+    sizeBytes: null,
+  };
 }
 
-function deriveStoragePathFromPublicUrl(url: string): string | null {
-  const trimmed = url?.trim();
-  if (!trimmed) return null;
-  const markerIndex = trimmed.indexOf(ITEM_IMAGES_PUBLIC_MARKER);
-  if (markerIndex < 0) return null;
-  const afterMarker = trimmed.slice(markerIndex + ITEM_IMAGES_PUBLIC_MARKER.length).split('?')[0];
-  if (!afterMarker) return null;
-  try {
-    return decodeURIComponent(afterMarker);
-  } catch {
-    return afterMarker;
-  }
+async function cleanupItemImageStorage(paths: string[]) {
+  if (!paths.length) return { ok: true as const, data: undefined };
+  return teswaBackendRuntime.media.remove(paths.map((path) => itemImageRef(path)));
 }
 
 export async function fetchEditableListingImagesContext(itemId: string, ownerId: string): Promise<EditableListingImagesContext | null> {
@@ -184,16 +178,27 @@ export async function updateListingImagesFromMobile(input: {
       const contentType = optimized.usedCompressedOutput ? optimized.contentType : draft.asset.mimeType || 'image/jpeg';
 
       onProgress?.({ phase: 'uploading', current: i + 1, total: orderedImages.length });
-      const body = await fileUriToArrayBuffer(optimized.uri);
-      const { error: uploadError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).upload(path, body, { contentType, upsert: false });
-      if (uploadError) {
-        await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(uploadedPaths);
+      const uploadResult = await teswaBackendRuntime.media.upload({
+        purpose: 'item_image',
+        ownerId,
+        source: {
+          uri: optimized.uri,
+          fileName: safeName,
+          mimeType: contentType,
+        },
+        objectKeyHint: path,
+      });
+      if (!uploadResult.ok) {
+        await cleanupItemImageStorage(uploadedPaths);
         return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور الجديدة. تأكد من الاتصال وحاول مرة أخرى.' };
       }
 
-      uploadedPaths.push(path);
-      const { data: publicUrlData } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(path);
-      const imageUrl = publicUrlData.publicUrl;
+      uploadedPaths.push(uploadResult.data.objectKey);
+      const imageUrl = teswaBackendRuntime.media.getPublicUrl(uploadResult.data);
+      if (!imageUrl) {
+        await cleanupItemImageStorage(uploadedPaths);
+        return { ok: false, reason: 'upload_failed', message: 'تعذر تجهيز رابط إحدى الصور الجديدة.' };
+      }
       finalRows.push({ kind: 'new', imageUrl });
       newUploadedRows.push({ image_url: imageUrl, is_primary: i === 0, sort_order: i });
     }
@@ -205,7 +210,7 @@ export async function updateListingImagesFromMobile(input: {
         .from('item_images')
         .insert(newUploadedRows.map((row) => ({ item_id: itemId, image_url: row.image_url, is_primary: row.is_primary, sort_order: row.sort_order })));
       if (insertError) {
-        await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(uploadedPaths);
+        await cleanupItemImageStorage(uploadedPaths);
         return { ok: false, reason: 'images_insert_failed', message: 'تعذر حفظ الصور الجديدة. حاول مرة أخرى.' };
       }
     }
@@ -221,7 +226,7 @@ export async function updateListingImagesFromMobile(input: {
         if (newUploadedRows.length) {
           await supabase.from('item_images').delete().eq('item_id', itemId).in('image_url', newUploadedRows.map((row) => row.image_url));
         }
-        await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(uploadedPaths);
+        await cleanupItemImageStorage(uploadedPaths);
         return { ok: false, reason: 'images_metadata_update_failed', message: 'تعذر حفظ ترتيب الصور بالكامل. أعد فتح الشاشة وحاول مرة أخرى.' };
       }
     }
@@ -240,16 +245,16 @@ export async function updateListingImagesFromMobile(input: {
         };
       }
 
-      const removablePaths = removedExistingRows.map((row) => row.image_url?.trim() || '').filter(Boolean).map(deriveStoragePathFromPublicUrl).filter((v): v is string => Boolean(v));
+      const removablePaths = removedExistingRows.map((row) => row.image_url?.trim() || '').filter(Boolean).map((url) => teswaBackendRuntime.media.getObjectKeyFromPublicUrl('item_image', url)).filter((v): v is string => Boolean(v));
       if (removablePaths.length) {
-        const { error: cleanupError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(removablePaths);
-        if (cleanupError) return { ok: true, imageCount: finalRows.length, storageCleanupFailed: true };
+        const cleanupResult = await cleanupItemImageStorage(removablePaths);
+        if (!cleanupResult.ok) return { ok: true, imageCount: finalRows.length, storageCleanupFailed: true };
       }
     }
 
     return { ok: true, imageCount: finalRows.length };
   } catch {
-    await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(uploadedPaths);
+    await cleanupItemImageStorage(uploadedPaths);
     return { ok: false, reason: 'unknown', message: 'حدث خطأ غير متوقع أثناء حفظ الصور.' };
   }
 }

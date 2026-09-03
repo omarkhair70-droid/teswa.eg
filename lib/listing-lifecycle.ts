@@ -1,7 +1,5 @@
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
-
-const ITEM_IMAGES_BUCKET = 'item-images';
-const ITEM_IMAGES_PUBLIC_MARKER = '/storage/v1/object/public/item-images/';
 
 type ArchiveRpcResult = 'archived' | 'not_found_or_unauthorized' | 'not_active' | 'has_open_offers';
 type ReactivateRpcResult = 'reactivated' | 'not_found_or_unauthorized' | 'not_archived';
@@ -24,20 +22,6 @@ export type ListingLifecycleResult =
         | 'unknown';
       message: string;
     };
-
-function deriveStoragePathFromPublicUrl(url: string): string | null {
-  const trimmed = url?.trim();
-  if (!trimmed) return null;
-  const markerIndex = trimmed.indexOf(ITEM_IMAGES_PUBLIC_MARKER);
-  if (markerIndex < 0) return null;
-  const afterMarker = trimmed.slice(markerIndex + ITEM_IMAGES_PUBLIC_MARKER.length).split('?')[0];
-  if (!afterMarker) return null;
-  try {
-    return decodeURIComponent(afterMarker);
-  } catch {
-    return afterMarker;
-  }
-}
 
 export async function archiveListingFromMobile(input: { itemId: string }): Promise<ListingLifecycleResult> {
   const itemId = input.itemId?.trim();
@@ -109,7 +93,7 @@ export async function deleteArchivedListingFromMobile(input: { itemId: string })
     case 'has_deal_history':
       return { ok: false, reason: 'has_deal_history', message: 'لا يمكن حذف عنصر مرتبط بتاريخ صفقات. يمكنك إبقاؤه مؤرشفًا.' };
     case 'deleted': {
-      const paths = imageUrls.map(deriveStoragePathFromPublicUrl).filter((value): value is string => Boolean(value));
+      const paths = imageUrls.map((url) => teswaBackendRuntime.media.getObjectKeyFromPublicUrl('item_image', url)).filter((value): value is string => Boolean(value));
       if (imagePrefetchFailed) {
         return {
           ok: true,
@@ -120,8 +104,15 @@ export async function deleteArchivedListingFromMobile(input: { itemId: string })
 
       if (!paths.length) return { ok: true, message: 'تم حذف العنصر نهائيًا.' };
 
-      const cleanupResult = await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(paths);
-      if (cleanupResult.error) {
+      const cleanupResult = await teswaBackendRuntime.media.remove(
+        paths.map((objectKey) => ({
+          purpose: 'item_image' as const,
+          objectKey,
+          contentType: null,
+          sizeBytes: null,
+        })),
+      );
+      if (!cleanupResult.ok) {
         return {
           ok: true,
           storageCleanupFailed: true,

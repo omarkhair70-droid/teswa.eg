@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase/client';
 import { compressItemImage } from '@/lib/media/compress-item-image';
 import { uploadItemVideoTeaser } from '@/lib/item-videos';
 
-const ITEM_IMAGES_BUCKET = 'item-images';
 const MAX_VIDEO_TEASER_DURATION_MS = 15_000;
 
 export type ActiveCategory = { id: string; name_ar: string };
@@ -45,11 +44,6 @@ function sanitizeFileName(name: string | null | undefined, fallback: string): st
   return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
 }
 
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
-}
-
 export type PublishProgress =
   | { phase: 'optimizing'; current: number; total: number }
   | { phase: 'uploading'; current: number; total: number }
@@ -87,19 +81,29 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
       const contentType = optimized.usedCompressedOutput ? optimized.contentType : asset.mimeType || 'image/jpeg';
 
       onProgress?.({ phase: 'uploading', current: i + 1, total: assets.length });
-      const body = await fileUriToArrayBuffer(optimized.uri);
-
-      const { error: uploadError } = await supabase.storage.from(ITEM_IMAGES_BUCKET).upload(path, body, { contentType, upsert: false });
-      if (uploadError) {
-        if (__DEV__) console.log('[publishItem] image upload failed', { userId, itemId, path, code: (uploadError as { code?: string }).code, message: uploadError.message });
+      const uploadResult = await teswaBackendRuntime.media.upload({
+        purpose: 'item_image',
+        ownerId: userId,
+        source: {
+          uri: optimized.uri,
+          fileName: safeName,
+          mimeType: contentType,
+        },
+        objectKeyHint: path,
+      });
+      if (!uploadResult.ok) {
+        if (__DEV__) console.log('[publishItem] image upload failed', { userId, itemId, path, message: uploadResult.message });
         await cleanupStorage(uploadedPaths);
         return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور. تأكد من الاتصال وحاول مرة أخرى.' };
       }
-      uploadedPaths.push(path);
+      uploadedPaths.push(uploadResult.data.objectKey);
 
-
-      const { data: publicUrlData } = supabase.storage.from(ITEM_IMAGES_BUCKET).getPublicUrl(path);
-      uploadedImages.push({ image_url: publicUrlData.publicUrl, is_primary: i === 0, sort_order: i });
+      const publicUrl = teswaBackendRuntime.media.getPublicUrl(uploadResult.data);
+      if (!publicUrl) {
+        await cleanupStorage(uploadedPaths);
+        return { ok: false, reason: 'upload_failed', message: 'تعذر تجهيز رابط إحدى الصور.' };
+      }
+      uploadedImages.push({ image_url: publicUrl, is_primary: i === 0, sort_order: i });
     }
 
     const { error: itemError } = await supabase.from('items').insert({
@@ -190,7 +194,14 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
 
 async function cleanupStorage(paths: string[]) {
   if (!paths.length) return;
-  await supabase.storage.from(ITEM_IMAGES_BUCKET).remove(paths);
+  await teswaBackendRuntime.media.remove(
+    paths.map((objectKey) => ({
+      purpose: 'item_image' as const,
+      objectKey,
+      contentType: null,
+      sizeBytes: null,
+    })),
+  );
 }
 
 async function cleanupItemVideoStorage(path: string | null) {
