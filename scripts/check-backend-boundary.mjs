@@ -41,7 +41,6 @@ const legacyDirectClientImports = new Set([
   'lib/personal-living-world.ts',
   'lib/policy-acceptance.ts',
   'lib/profile-images.ts',
-  'lib/profiles.ts',
   'lib/publish-item.ts',
   'lib/pulse-video-viewer.ts',
   'lib/push-notifications.ts',
