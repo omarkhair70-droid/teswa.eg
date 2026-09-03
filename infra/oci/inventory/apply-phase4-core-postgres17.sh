@@ -36,11 +36,12 @@ MARK=/etc/teswa/phase4-postgres17-owned
 PSQL=/usr/pgsql-17/bin/psql
 CREATEDB=/usr/pgsql-17/bin/createdb
 REQ=(postgresql17 postgresql17-server postgresql17-contrib)
-if [ -f "$PGDATA/PG_VERSION" ] && [ ! -f "$MARK" ]; then
+if sudo test -f "$PGDATA/PG_VERSION" && ! sudo test -f "$MARK"; then
   echo "postgres17_bootstrap=FAIL reason=unowned_existing_cluster"; exit 20
 fi
-if [ -f "$PGDATA/PG_VERSION" ] && [ "$(cat "$PGDATA/PG_VERSION")" != "17" ]; then
-  echo "postgres17_bootstrap=FAIL reason=unexpected_cluster_major"; exit 21
+if sudo test -f "$PGDATA/PG_VERSION"; then
+  pgdata_major="$(sudo cat "$PGDATA/PG_VERSION")"
+  [ "$pgdata_major" = "17" ] || { echo "postgres17_bootstrap=FAIL reason=unexpected_cluster_major_$pgdata_major"; exit 21; }
 fi
 if ! rpm -q pgdg-redhat-repo >/dev/null 2>&1; then
   sudo dnf -qy install https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-aarch64/pgdg-redhat-repo-latest.noarch.rpm
@@ -65,9 +66,11 @@ else
   echo "required_packages_already_present=true"
 fi
 sudo install -d -m 0755 /etc/teswa
-if [ ! -f "$PGDATA/PG_VERSION" ]; then
+if ! sudo test -f "$PGDATA/PG_VERSION"; then
   sudo touch "$MARK"
   sudo /usr/pgsql-17/bin/postgresql-17-setup initdb >/dev/null
+else
+  echo "cluster_already_initialized=true"
 fi
 tmp="$(mktemp)"
 sudo sed "/^# BEGIN TESWA PHASE4$/,/^# END TESWA PHASE4$/d" "$PGDATA/postgresql.conf" >"$tmp"
