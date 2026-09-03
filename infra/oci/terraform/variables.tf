@@ -86,3 +86,16 @@ variable "enable_run_command_iam" {
   type        = bool
   default     = true
 }
+
+
+variable "enable_admin_bastion" {
+  description = "Create a temporary OCI Bastion admin path for private-core bootstrap. Keep false outside reviewed bootstrap windows."
+  type        = bool
+  default     = false
+}
+
+variable "admin_bastion_client_cidrs" {
+  description = "Client CIDRs allowed to connect to the temporary Teswa admin bastion. Generated locally and never committed."
+  type        = list(string)
+  default     = []
+}
