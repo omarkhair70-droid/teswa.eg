@@ -7,7 +7,7 @@ Implementation HEAD before this handoff document: `1efdcbb7b5b0804698c5697c6a2eb
 
 ## Status
 
-**PRE-TARGET IMPLEMENTATION CLOSED / TARGET EXECUTION BLOCKED BY LANE 3 HANDOFF**
+**PRE-TARGET IMPLEMENTATION CLOSED / STORAGE TARGET READY / DATABASE TARGET STILL BLOCKED**
 
 Lane 4 has completed the source audit, migration design, portable baseline
 compiler, data/storage/identity verification tooling, cutover evidence tooling,
@@ -93,14 +93,21 @@ those counts stay zero.
 Latest observed Lane 2 work has:
 
 - closed B1 Auth/session provider isolation;
-- closed B2 client Storage provider isolation;
-- reduced feature/client direct `supabase.storage` usage to 0;
-- preserved Story upload progress through a provider-neutral media callback;
-- started B3 Profile/Marketplace;
-- introduced `ProfileReadContract` and migrated core profile reads.
+- closed B2 client Storage provider isolation with feature/client direct
+  `supabase.storage` usage at 0;
+- progressed B3 Profile/Marketplace, including provider-neutral core profile reads;
+- closed B4 Offers/Deals lifecycle provider boundaries;
+- progressed B5 Messaging/Realtime, including Realtime transport and direct
+  messaging transport boundaries;
+- closed B6 Notifications boundary, including notification reads/preferences,
+  push-device registration, Offers/Deals notification dispatch, and unread-deal
+  badge transport.
 
-Lane 4's semantic scenario catalog follows the current Teswa-owned contracts
-rather than Supabase wire/internal contracts.
+Supabase remains the active production provider, but the Teswa-owned semantic
+surfaces needed by Lane 4 are substantially farther along.
+
+Lane 4's semantic scenario catalog follows those Teswa-owned contracts rather
+than Supabase wire/internal contracts.
 
 ## Lane 3 integration state observed
 
@@ -108,25 +115,32 @@ Latest observed Lane 3 work has:
 
 - closed isolated Teswa OCI network foundation;
 - closed durable native OCI Terraform remote state;
-- preserved Nova as a hard no-touch boundary;
-- completed free-tier-specific capacity evaluation;
-- selected a Phase 2 plan for a private `teswa-media` bucket, private/versioned
-  `teswa-backups`, DEFAULT `teswa-vault`, and `teswa-ops` topic;
-- not yet applied that Phase 2 plan.
+- applied and verified Phase 2:
+  - private `teswa-media`;
+  - private/versioned `teswa-backups`;
+  - DEFAULT `teswa-vault`;
+  - active `teswa-ops` Notifications topic;
+- maintained Terraform zero drift after the Phase 2 apply;
+- measured Nova and approved a guarded resize target from 2 OCPU / 12 GB to
+  1 OCPU / 6 GB to release 1 OCPU / 6 GB for Teswa;
+- passed the Nova resize preflight;
+- added guarded resize and post-resize verification helpers;
+- has not yet recorded the actual Nova resize as executed.
 
-Lane 4 has already mapped all nine logical source media buckets into the planned
+Lane 4 has already mapped all nine logical source media buckets into the now-live
 private `teswa-media` bucket using prefix isolation.
 
 Still not handed to Lane 4:
 
 - isolated PostgreSQL 17 application target;
-- an actually-applied `teswa-media` bucket;
 - OCI API runtime;
 - OCI Realtime runtime;
 - worker/scheduler runtime;
 - final secrets/runtime handoff required for semantic shadow.
 
-Therefore no real source -> OCI database/storage copy has been executed yet.
+Therefore no real source -> OCI database copy has been executed yet. The OCI
+Storage target is now available for the first real media-copy rehearsal, while
+PostgreSQL migration remains blocked on the Lane 3 data-plane handoff.
 
 ## Files owned/touched by Lane 4
 
@@ -286,13 +300,14 @@ Not:
 - Lane 3 platform dependency rechecks;
 - branch stayed isolated from Lane 2/3 implementation ownership.
 
-Target-execution validation is intentionally **not claimed** because Lane 3 has
-not handed off a PostgreSQL/Object Storage application target yet.
+Database target-execution validation is intentionally **not claimed** because
+Lane 3 has not handed off PostgreSQL yet. Object Storage target execution is now
+possible because Phase 2 is applied and green.
 
 ## Remaining risks / blockers
 
 1. OCI PostgreSQL target does not yet exist for Lane 4 execution.
-2. OCI media bucket layout is selected but the Phase 2 `teswa-media` bucket is not yet applied/handed off.
+2. OCI media buckets are applied; real Storage-copy rehearsal is now executable but has not yet been run.
 3. External Auth-equivalent identity FKs are deliberately unapplied.
 4. RLS/RPC authorization semantics still require OCI/Lane-2 runtime implementation.
 5. Realtime runtime parity is unexecuted.
@@ -306,7 +321,9 @@ These are blockers, not waived TODOs.
 
 ## Exact next Lane 4 execution
 
-When Lane 3 provides an isolated PostgreSQL 17 target:
+Storage can now execute independently against the applied `teswa-media` target.
+
+When Lane 3 additionally provides an isolated PostgreSQL 17 target:
 
 1. capture rehearsal cutover bundle from source;
 2. verify bundle integrity;
