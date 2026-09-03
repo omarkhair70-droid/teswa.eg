@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
   AccessibilityInfo,
   Animated,
   LayoutChangeEvent,
@@ -739,7 +740,7 @@ const styles = StyleSheet.create({
 
   heroWorld: { flex: 1, minHeight: 570, borderRadius: 42, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#141B39', shadowOpacity: 0.18, shadowRadius: 38, shadowOffset: { width: 0, height: 18 } },
   heroWorldMobile: { minHeight: 500, borderRadius: 30 },
-  heroGrid: { ...StyleSheet.absoluteFillObject, opacity: 0.08, borderWidth: 1, borderColor: '#FFFFFF' },
+  heroGrid: { ...ABSOLUTE_FILL, opacity: 0.08, borderWidth: 1, borderColor: '#FFFFFF' },
   heroGlow: { position: 'absolute', top: 48, right: 58, width: 210, height: 210, borderRadius: 105, backgroundColor: '#F6A15B' },
   floatingChip: { position: 'absolute', zIndex: 5, flexDirection: 'row-reverse', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 },
   floatingChipOne: { top: 64, left: 32 },
