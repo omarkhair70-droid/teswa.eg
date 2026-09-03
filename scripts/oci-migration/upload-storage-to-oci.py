@@ -149,17 +149,21 @@ def main() -> int:
             )
 
         print(f"[{number}/{len(objects)}] {logical_bucket}/{key} -> {target_bucket}/{target_name}")
-        run(
-            [
-                "oci", "--profile", args.oci_profile,
-                "os", "object", "put",
-                "--namespace-name", namespace,
-                "--bucket-name", target_bucket,
-                "--name", target_name,
-                "--file", str(local_file),
-                "--force",
-            ]
-        )
+        command = [
+            "oci", "--profile", args.oci_profile,
+            "os", "object", "put",
+            "--namespace-name", namespace,
+            "--bucket-name", target_bucket,
+            "--name", target_name,
+            "--file", str(local_file),
+            "--force",
+            "--verify-checksum",
+        ]
+        if obj.get("mime_type"):
+            command.extend(["--content-type", str(obj["mime_type"])])
+        if obj.get("cache_control"):
+            command.extend(["--cache-control", str(obj["cache_control"])])
+        run(command)
 
         uploaded.append(
             {
