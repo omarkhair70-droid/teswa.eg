@@ -854,3 +854,24 @@ Observed:
 - the SSH process remained attached instead of returning to the Cloud Shell prompt.
 
 This is the expected state for an attached serial console before console output is activated. The next action is non-mutating: send one or two newline characters to the attached console and inspect the current guest console output before any reboot or GRUB interaction.
+
+
+## Serial-console login prompt confirmed
+
+The serial console is fully interactive and currently shows:
+
+`core01 login:`
+
+This confirms that both SSH layers and the guest serial console are functioning. No username/password login is required for the recovery because the instance was launched without an administrator SSH key.
+
+The next action is a controlled maintenance reboot of the existing Core while keeping the serial console attached. Oracle's supported Oracle Linux recovery flow is:
+
+1. reboot the existing instance;
+2. immediately press Esc or F5 repeatedly in the serial console to intercept UEFI/boot;
+3. if the UEFI menu appears, select **Boot Manager**, then **UEFI Oracle BlockVolume**, press Enter, then press Esc repeatedly until GRUB appears;
+4. highlight the first Oracle Linux kernel and press `e`;
+5. append `init=/bin/bash` to the kernel command line;
+6. boot the edited entry with Ctrl+X;
+7. load SELinux policy and remount root read/write before changing keys/configuration.
+
+Lane 3 adds a guarded helper that triggers only a `SOFTRESET` of `teswa-core-01` and refuses to run unless an ACTIVE serial-console connection exists. It does not wait for the reboot to finish, specifically so the operator can immediately catch UEFI/GRUB in the already attached console.
