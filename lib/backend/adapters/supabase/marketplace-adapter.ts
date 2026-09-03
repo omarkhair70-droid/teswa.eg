@@ -244,7 +244,7 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceReadContract 
           : null,
       };
     },
-,
+
     async listActiveByOwner(profileId, limit = 6) {
       const normalizedId = profileId.trim();
       if (!normalizedId) return [];
@@ -323,5 +323,6 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceReadContract 
         area: item.area ?? null,
         createdAt: item.created_at ?? null,
       }));
-    }  };
+    },
+  };
 }
