@@ -84,5 +84,5 @@ variable "edge_image_ocid" {
 variable "enable_run_command_iam" {
   description = "Create the least-privilege dynamic group and IAM policy required for Teswa instances to poll Run Command executions."
   type        = bool
-  default     = false
+  default     = true
 }
