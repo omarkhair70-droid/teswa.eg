@@ -143,6 +143,7 @@ module.exports = {
       'expo-localization',
       'expo-web-browser',
       'expo-sharing',
+      'expo-status-bar',
       './plugins/with-android-release-optimization',
       // Expo mods run as an interceptor chain. Register the guard first so it
       // executes after expo-updates writes expo_runtime_version to strings.xml.
