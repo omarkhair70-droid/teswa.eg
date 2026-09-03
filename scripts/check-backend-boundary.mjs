@@ -56,6 +56,10 @@ const legacyDirectClientImports = new Set([
   'lib/unread-badges.tsx',
   'lib/user-blocks.ts',
   'lib/user-follows.ts',
+  'lib/chat/supabase-direct-chat.ts',
+  'lib/contextual-conversations.ts',
+  'lib/deals.ts',
+  'lib/direct-messages.ts',
 ]);
 
 const legacyProviderTypeImports = new Set([
@@ -70,10 +74,6 @@ const legacyDirectSupabaseEnvReads = new Set([
 ]);
 
 const legacyDirectStorageAccess = new Set([
-  'lib/chat/supabase-direct-chat.ts',
-  'lib/contextual-conversations.ts',
-  'lib/deals.ts',
-  'lib/direct-messages.ts',
   'lib/stories.ts',
 ]);
 
