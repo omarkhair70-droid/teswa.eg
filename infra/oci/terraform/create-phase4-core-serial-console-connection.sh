@@ -55,17 +55,11 @@ if state!="ACTIVE" or not conn or not cid:
     print("serial_console_create=FAIL reason=incomplete_connection")
     raise SystemExit(6)
 
-# Oracle returns an SSH connection string. Substitute common private-key placeholders
-# when present, but preserve the raw connection string as a comment for inspection.
-candidates=[
-    "private_SSH_key_path",
-    "private_key_file",
-    "<private_key_file>",
-    "<private_SSH_key_path>",
-]
-adapted=conn
-for token in candidates:
-    adapted=adapted.replace(token,key)
+# Oracle requires the same private identity on both the outer SSH command and
+# the nested ProxyCommand. Some returned Linux/Mac connection strings omit -i.
+import shlex
+keyq=shlex.quote(key)
+adapted=conn.replace("ssh ", f"ssh -i {keyq} -o IdentitiesOnly=yes ")
 
 with open(out,"w",encoding="utf-8") as f:
     f.write("# Teswa Core serial console connection. Generated locally; do not commit.\n")
