@@ -1,7 +1,7 @@
 import type {
   MarketplaceDetailRecord,
   MarketplaceFeedRecord,
-  MarketplaceReadContract,
+  MarketplaceCoreContract,
   MarketplaceReadFilters,
   MarketplaceReadPage,
 } from '@/lib/backend/contracts/marketplace';
@@ -75,7 +75,7 @@ function pageFromRows(rows: FeedRow[], limit: number): MarketplaceReadPage {
   return { items: pageRows.map(mapFeedRow), hasMore };
 }
 
-export function createSupabaseMarketplaceReadAdapter(): MarketplaceReadContract {
+export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract {
   return {
     async listFeed(input) {
       const offset = input?.offset ?? 0;
@@ -324,5 +324,208 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceReadContract 
         createdAt: item.created_at ?? null,
       }));
     },
+
+    async getLikeSummaries(itemIds, viewerId) {
+      const normalizedIds = Array.from(
+        new Set(itemIds.map((id) => id.trim()).filter(Boolean)),
+      );
+      const result = new Map<string, { likeCount: number; likedByMe: boolean }>();
+      if (!normalizedIds.length) return result;
+
+      const { data, error } = await supabase
+        .from('item_likes')
+        .select('item_id,user_id')
+        .in('item_id', normalizedIds);
+      if (error) throw error;
+
+      const normalizedViewerId = viewerId?.trim() || null;
+      for (const row of data ?? []) {
+        const itemId = (row.item_id as string | null)?.trim();
+        if (!itemId) continue;
+        const current = result.get(itemId) ?? { likeCount: 0, likedByMe: false };
+        current.likeCount += 1;
+        if (
+          normalizedViewerId
+          && (row.user_id as string | null)?.trim() === normalizedViewerId
+        ) {
+          current.likedByMe = true;
+        }
+        result.set(itemId, current);
+      }
+      return result;
+    },
+
+    async setLiked(itemId, userId, liked) {
+      if (liked) {
+        const { error } = await supabase
+          .from('item_likes')
+          .insert({ item_id: itemId, user_id: userId });
+        if (!error || error.code === '23505') {
+          return { ok: true, data: { liked: true } };
+        }
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+
+      const { error } = await supabase
+        .from('item_likes')
+        .delete()
+        .eq('item_id', itemId)
+        .eq('user_id', userId);
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: { liked: false } };
+    },
+
+    async listMine(userId) {
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('items')
+        .select('id,title,category_id,condition,city,area,status,created_at')
+        .eq('owner_id', userId)
+        .in('status', ['active', 'reserved', 'swapped', 'archived'])
+        .order('created_at', { ascending: false });
+      if (itemsError) throw itemsError;
+
+      const items = itemsData ?? [];
+      if (!items.length) return [];
+
+      const itemIds = items.map((item) => item.id as string);
+      const categoryIds = Array.from(
+        new Set(
+          items
+            .map((item) => item.category_id as string | null)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+
+      const [imagesResult, categoriesResult, offersResult] = await Promise.all([
+        supabase
+          .from('item_images')
+          .select('item_id,image_url,is_primary,sort_order')
+          .in('item_id', itemIds),
+        categoryIds.length
+          ? supabase.from('categories').select('id,name_ar').in('id', categoryIds)
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from('offers')
+          .select('requested_item_id')
+          .eq('receiver_id', userId)
+          .in('requested_item_id', itemIds)
+          .in('status', ['pending', 'thinking']),
+      ]);
+
+      if (imagesResult.error) throw imagesResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
+      if (offersResult.error) throw offersResult.error;
+
+      const imagesByItemId = new Map<string, any[]>();
+      for (const row of imagesResult.data ?? []) {
+        const itemId = row.item_id as string;
+        const current = imagesByItemId.get(itemId) ?? [];
+        current.push(row);
+        imagesByItemId.set(itemId, current);
+      }
+
+      const categoryById = new Map<string, string | null>();
+      for (const row of categoriesResult.data ?? []) {
+        categoryById.set(
+          row.id as string,
+          typeof row.name_ar === 'string' && row.name_ar.trim()
+            ? row.name_ar.trim()
+            : null,
+        );
+      }
+
+      const offersCountByItemId = new Map<string, number>();
+      for (const row of offersResult.data ?? []) {
+        const requestedItemId = row.requested_item_id as string | null;
+        if (!requestedItemId) continue;
+        offersCountByItemId.set(
+          requestedItemId,
+          (offersCountByItemId.get(requestedItemId) ?? 0) + 1,
+        );
+      }
+
+      const normalize = (value: unknown) => {
+        const text = typeof value === 'string' ? value.trim() : '';
+        return text || null;
+      };
+
+      const pickImage = (rows: any[]) => {
+        const sorted = rows
+          .filter((row) => Boolean(normalize(row.image_url)))
+          .sort((a, b) => {
+            if (Boolean(a.is_primary) !== Boolean(b.is_primary)) {
+              return a.is_primary ? -1 : 1;
+            }
+            const aOrder = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+            const bOrder = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a.image_url ?? '').localeCompare(String(b.image_url ?? ''));
+          });
+        return normalize(sorted[0]?.image_url);
+      };
+
+      return items.map((item) => ({
+        id: item.id as string,
+        title: normalize(item.title) ?? 'عنصر بدون عنوان',
+        imageUrl: pickImage(imagesByItemId.get(item.id as string) ?? []),
+        category: item.category_id
+          ? categoryById.get(item.category_id as string) ?? null
+          : null,
+        condition: normalize(item.condition),
+        city: normalize(item.city),
+        area: normalize(item.area),
+        status: item.status as 'active' | 'reserved' | 'swapped' | 'archived',
+        createdAt: (item.created_at as string | null) ?? null,
+        openIncomingOffersCount: offersCountByItemId.get(item.id as string) ?? 0,
+      }));
+    },
+
+    async archiveOwned(itemId) {
+      const { data, error } = await supabase.rpc('archive_owned_listing_if_safe', {
+        p_item_id: itemId,
+      });
+      if (error) throw error;
+      return data as import('@/lib/backend/contracts/marketplace').ListingLifecycleCode;
+    },
+
+    async reactivateOwned(itemId) {
+      const { data, error } = await supabase.rpc('reactivate_owned_archived_listing', {
+        p_item_id: itemId,
+      });
+      if (error) throw error;
+      return data as import('@/lib/backend/contracts/marketplace').ListingLifecycleCode;
+    },
+
+    async getImageUrls(itemId) {
+      const { data, error } = await supabase
+        .from('item_images')
+        .select('image_url')
+        .eq('item_id', itemId);
+      if (error) throw error;
+      return (data ?? [])
+        .map((row) => (row.image_url as string | null)?.trim() || '')
+        .filter(Boolean);
+    },
+
+    async deleteOwnedArchived(itemId) {
+      const { data, error } = await supabase.rpc(
+        'delete_owned_archived_listing_if_safe',
+        { p_item_id: itemId },
+      );
+      if (error) throw error;
+      return data as import('@/lib/backend/contracts/marketplace').ListingLifecycleCode;
+},
   };
 }
