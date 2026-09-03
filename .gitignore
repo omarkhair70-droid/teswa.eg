@@ -9,5 +9,13 @@ npm-debug.*
 # OCI tenancy inventory output can contain OCIDs, IPs and resource metadata.
 infra/oci/inventory/out/
 
+# Terraform local/authenticated artifacts. Never commit state, variables, or plans.
+infra/oci/terraform/.terraform/
+infra/oci/terraform/.terraform.lock.hcl
+infra/oci/terraform/terraform.tfvars
+infra/oci/terraform/*.tfstate
+infra/oci/terraform/*.tfstate.*
+infra/oci/terraform/*.plan
+
 # @generated expo-cli sync-6f4f90f9c7239a4f
 expo-env.d.ts
