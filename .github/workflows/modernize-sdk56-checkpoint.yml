@@ -6,6 +6,9 @@ on:
       - modernize/expo57-platform-20260903
     paths:
       - '.github/workflows/modernize-sdk56-checkpoint.yml'
+      - 'app.config.js'
+      - 'package.json'
+      - 'package-lock.json'
 
 permissions:
   contents: write
