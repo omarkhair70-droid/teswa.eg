@@ -54,7 +54,6 @@ const legacyDirectClientImports = new Set([
   'lib/chat/supabase-direct-chat.ts',
   'lib/contextual-conversations.ts',
   'lib/deals.ts',
-  'lib/direct-messages.ts',
 ]);
 
 const legacyProviderTypeImports = new Set([
