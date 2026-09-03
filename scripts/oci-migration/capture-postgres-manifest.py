@@ -326,6 +326,7 @@ def capture_catalog(psql: Psql) -> dict[str, Any]:
           array_agg(dst_att.attname ORDER BY key_ord.ordinality) AS target_columns,
           con.confupdtype AS update_action_code,
           con.confdeltype AS delete_action_code,
+          con.confmatchtype AS match_type_code,
           con.condeferrable AS is_deferrable,
           con.condeferred AS initially_deferred
         FROM pg_constraint con
@@ -351,6 +352,7 @@ def capture_catalog(psql: Psql) -> dict[str, Any]:
           dst.relname,
           con.confupdtype,
           con.confdeltype,
+          con.confmatchtype,
           con.condeferrable,
           con.condeferred
         ORDER BY src.relname, con.conname
@@ -517,7 +519,7 @@ def main() -> int:
     supabase_compat = capture_supabase_compat(psql)
 
     manifest: dict[str, Any] = {
-        "format_version": 3,
+        "format_version": 4,
         "label": args.label,
         "captured_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "safety": {
