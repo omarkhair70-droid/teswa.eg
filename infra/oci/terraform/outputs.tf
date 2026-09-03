@@ -54,3 +54,19 @@ output "teswa_core_private_ip" {
   value       = var.enable_compute_phase3 ? oci_core_instance.core[0].private_ip : null
   description = "Private IP for the Teswa core node when Phase 3 compute is enabled."
 }
+
+
+output "admin_bastion_id" {
+  value       = var.enable_admin_bastion ? oci_bastion_bastion.admin[0].id : null
+  description = "Temporary Teswa admin bastion OCID when enabled."
+}
+
+output "admin_bastion_private_endpoint_ip" {
+  value       = var.enable_admin_bastion ? oci_bastion_bastion.admin[0].private_endpoint_ip_address : null
+  description = "Temporary Teswa admin bastion private endpoint IP when enabled."
+}
+
+output "app_nsg_id" {
+  value       = oci_core_network_security_group.app.id
+  description = "Teswa application NSG OCID."
+}
