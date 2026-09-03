@@ -15,15 +15,9 @@ const legacyDirectClientImports = new Set([
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
   'lib/dolab/upload.ts',
-  'lib/exchange-item-summaries.ts',
-  'lib/item-video-discovery.ts',
-  'lib/item-video-presence.ts',
   'lib/messages.ts',
-  'lib/motion-interest.ts',
   'lib/motion-video-drops.ts',
-  'lib/personal-living-world.ts',
   'lib/policy-acceptance.ts',
-  'lib/pulse-video-viewer.ts',
   'lib/reports.ts',
   'lib/reviews.ts',
   'lib/stories.ts',
@@ -218,6 +212,30 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenMarketplaceTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: marketplace provider access must stay behind MarketplaceCoreContract (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'lib/exchange-item-summaries.ts',
+      'lib/item-video-discovery.ts',
+      'lib/item-video-presence.ts',
+      'lib/motion-interest.ts',
+      'lib/pulse-video-viewer.ts',
+      'lib/personal-living-world.ts',
+    ].includes(relativePath)) {
+      const forbiddenDiscoveryTokens = [
+        ".from('items')",
+        ".from('item_images')",
+        ".from('categories')",
+        ".from('profiles')",
+        ".from('item_videos')",
+        ".from('marketplace_items')",
+        "rpc('get_public_moving_items'",
+      ];
+      for (const token of forbiddenDiscoveryTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: marketplace discovery provider access must stay behind MarketplaceCoreContract (${token})`);
         }
       }
     }
