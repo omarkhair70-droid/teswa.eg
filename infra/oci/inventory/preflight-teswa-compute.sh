@@ -66,14 +66,28 @@ if available < 100:
     raise SystemExit("Phase 3 requires 100 GB for two 50 GB boot volumes.")
 '
 
-NAT_JSON="$(oci network nat-gateway list   --compartment-id "$COMPARTMENT"   --vcn-id "$VCN"   --all   --output json)"
-printf '%s' "$NAT_JSON" | python3 -c '
+set +e
+NAT_JSON="$(oci network nat-gateway list   --compartment-id "$COMPARTMENT"   --vcn-id "$VCN"   --all   --output json 2>/tmp/teswa-phase3-nat.err)"
+NAT_RC=$?
+set -e
+
+if [ "$NAT_RC" -ne 0 ]; then
+  echo "nat_gateway_check=ERROR" >&2
+  cat /tmp/teswa-phase3-nat.err >&2
+  exit 3
+fi
+
+if [ -z "$(printf '%s' "$NAT_JSON" | tr -d '[:space:]')" ]; then
+  echo "existing_teswa_nat_gateways=0"
+else
+  printf '%s' "$NAT_JSON" | python3 -c '
 import json,sys
 rows=[x for x in json.load(sys.stdin).get("data",[]) if x.get("lifecycle-state") not in ("TERMINATED","TERMINATING")]
 print("existing_teswa_nat_gateways=%d" % len(rows))
 if rows:
     raise SystemExit("Teswa VCN already has a NAT gateway; stop before planning a duplicate.")
 '
+fi
 
 CORE_IMAGE_JSON="$(oci compute image list   --compartment-id "$TENANCY_OCID"   --operating-system "Oracle Linux"   --operating-system-version "9"   --shape "VM.Standard.A1.Flex"   --sort-by TIMECREATED   --sort-order DESC   --limit 1   --output json)"
 
