@@ -500,7 +500,8 @@ const styles = StyleSheet.create({
   filterScroller: {
     flexGrow: 0,
     marginTop: spacing.sm,
-    paddingVertical: 2,
+    paddingTop: 2,
+    paddingBottom: spacing.xs,
   },
   filters: {
     paddingHorizontal: spacing.lg,
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
 
   listContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
   },
   emptyList: {
