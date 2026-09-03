@@ -30,7 +30,7 @@ import {
   fetchMyDirectConversations,
   type DirectConversationSummary,
 } from '@/lib/direct-messages';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { useUnreadBadges } from '@/lib/unread-badges';
 
 type InboxMode = 'messages' | 'offers';
@@ -211,16 +211,10 @@ export default function MessagesScreen() {
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       reloadTimerRef.current = setTimeout(() => { void load(true); }, 280);
     };
-    const channel = supabase
-      .channel(`messages-inbox:${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_conversations' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deal_messages' }, scheduleReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contextual_messages' }, scheduleReload)
-      .subscribe();
+    const unsubscribe = teswaBackendRuntime.realtime.subscribeInbox(user.id, scheduleReload);
     return () => {
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-      void supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [load, user?.id]);
 
