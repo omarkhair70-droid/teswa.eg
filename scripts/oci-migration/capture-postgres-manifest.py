@@ -123,22 +123,40 @@ def capture_catalog(psql: Psql) -> dict[str, Any]:
     columns = psql.rows(
         """
         SELECT
-          table_schema AS schema_name,
-          table_name,
-          ordinal_position,
-          column_name,
-          data_type,
-          udt_schema,
-          udt_name,
-          is_nullable,
-          column_default,
-          is_identity,
-          identity_generation,
-          is_generated,
-          generation_expression
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-        ORDER BY table_name, ordinal_position
+          cols.table_schema AS schema_name,
+          cols.table_name,
+          cols.ordinal_position,
+          cols.column_name,
+          cols.data_type,
+          cols.udt_schema,
+          cols.udt_name,
+          pg_catalog.format_type(att.atttypid, att.atttypmod) AS formatted_type,
+          cols.is_nullable,
+          pg_get_expr(def.adbin, def.adrelid) AS column_default,
+          cols.is_identity,
+          cols.identity_generation,
+          cols.is_generated,
+          cols.generation_expression,
+          coll.collname AS collation_name
+        FROM information_schema.columns cols
+        JOIN pg_class rel
+          ON rel.relname = cols.table_name
+        JOIN pg_namespace ns
+          ON ns.oid = rel.relnamespace
+         AND ns.nspname = cols.table_schema
+        JOIN pg_attribute att
+          ON att.attrelid = rel.oid
+         AND att.attname = cols.column_name
+         AND att.attnum > 0
+         AND NOT att.attisdropped
+        LEFT JOIN pg_attrdef def
+          ON def.adrelid = rel.oid
+         AND def.adnum = att.attnum
+        LEFT JOIN pg_collation coll
+          ON coll.oid = att.attcollation
+         AND att.attcollation <> 0
+        WHERE cols.table_schema = 'public'
+        ORDER BY cols.table_name, cols.ordinal_position
         """
     )
 
@@ -497,7 +515,7 @@ def main() -> int:
     supabase_compat = capture_supabase_compat(psql)
 
     manifest: dict[str, Any] = {
-        "format_version": 2,
+        "format_version": 3,
         "label": args.label,
         "captured_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "safety": {
