@@ -710,3 +710,44 @@ Oracle documents `vm-standard-e2-1-micro-count` as an Availability-Domain-scoped
 The preflight now passes the Core's current availability domain to the E2 Micro resource-availability query. The regional free block-storage query remains unchanged and intentionally omits an availability domain.
 
 No Core, boot volume, helper VM, network, Nova, Supabase, DNS, or data resource changed during the failed query.
+
+
+## Both spare-compute rescue paths blocked
+
+The read-only rescue preflight now shows:
+
+- E2 Micro service-limit availability: 1
+- E2 Micro used: 1
+- Always Free block storage available: 53 GB
+- Always Free block storage used: 147 GB
+- E2 host-capacity status in the Core availability domain: `OUT_OF_HOST_CAPACITY`
+
+The A1 replacement path was already blocked by `OUT_OF_HOST_CAPACITY`.
+
+**Decision:** stop pursuing any recovery that depends on launching replacement or helper compute. Service limits and free storage are sufficient, but physical host capacity is not currently available.
+
+### Capacity-independent recovery
+
+Oracle's supported Instance Console Connection is specifically intended for remote troubleshooting of existing VM instances. Oracle Linux 9.x is supported, and Oracle documents using the serial console to boot into a maintenance bash shell, edit system files, and add/reset the `opc` SSH key.
+
+This path does not require:
+
+- a replacement A1 host;
+- a temporary E2 helper;
+- a new boot volume;
+- public SSH;
+- detaching the existing Core boot volume.
+
+Lane 3 will therefore repair the existing Core in place through the serial console:
+
+1. create a temporary instance serial-console connection authenticated by the local RSA bootstrap key;
+2. reboot the existing Core and interrupt the UEFI/GRUB boot sequence;
+3. boot the selected Oracle Linux entry with `init=/bin/bash`;
+4. load SELinux policy and remount root read/write;
+5. install the existing bootstrap public key for `opc`;
+6. create and validate the `ocarun` sudoers entry;
+7. reboot normally;
+8. verify Managed SSH/Run Command privilege;
+9. delete the temporary serial-console connection.
+
+This keeps the current scarce A1 allocation intact and removes all host-capacity dependency from the recovery.
