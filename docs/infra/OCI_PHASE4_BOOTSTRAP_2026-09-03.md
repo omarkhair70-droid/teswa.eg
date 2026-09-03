@@ -875,3 +875,19 @@ The next action is a controlled maintenance reboot of the existing Core while ke
 7. load SELinux policy and remount root read/write before changing keys/configuration.
 
 Lane 3 adds a guarded helper that triggers only a `SOFTRESET` of `teswa-core-01` and refuses to run unless an ACTIVE serial-console connection exists. It does not wait for the reboot to finish, specifically so the operator can immediately catch UEFI/GRUB in the already attached console.
+
+
+## Browser-safe boot interception correction
+
+In OCI Cloud Shell, the browser may intercept physical function keys such as F5 and reload the page instead of forwarding the key to the attached serial console.
+
+Oracle's recovery guidance still requires sending Esc/F5 to intercept UEFI/GRUB, but for a browser-hosted terminal the reliable browser-safe equivalent for the Esc control character is `Ctrl+[`.
+
+Lane 3 therefore uses this operator sequence:
+
+- keep the serial-console SSH session focused;
+- do **not** press F5 in the browser;
+- after the guarded Core SOFTRESET, press `Ctrl+[` repeatedly to send terminal ESC characters;
+- if the boot window is missed and the normal `core01 login:` prompt returns, issue another single guarded SOFTRESET and repeat the same `Ctrl+[` sequence.
+
+No extra network or compute resources are involved.
