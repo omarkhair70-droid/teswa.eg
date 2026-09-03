@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
   AccessibilityInfo,
   Animated,
   LayoutChangeEvent,
@@ -12,6 +11,7 @@ import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
   useWindowDimensions,
   View,
 } from 'react-native';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
