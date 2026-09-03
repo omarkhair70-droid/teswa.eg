@@ -1,7 +1,7 @@
 import type { ActiveStorySummary } from '@/lib/stories';
 import type { ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
 import { readOfflineJsonCache, writeOfflineJsonCache } from '@/lib/offline-cache';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 type PersonalLivingWorldLastSeenCache = { seenAtMs: number };
 
@@ -54,17 +54,17 @@ export async function writePersonalLivingWorldLastSeen(userId: string, seenAtMs 
   });
 }
 
-export async function fetchNewMarketplaceItemsCountSince(lastSeenAtMs: number | null): Promise<number | null> {
+export async function fetchNewMarketplaceItemsCountSince(
+  lastSeenAtMs: number | null,
+): Promise<number | null> {
   if (!isValidMs(lastSeenAtMs)) return 0;
 
   const sinceIso = new Date(lastSeenAtMs).toISOString();
-  const { count, error } = await supabase
-    .from('marketplace_items')
-    .select('id', { head: true, count: 'exact' })
-    .gt('created_at', sinceIso);
-
-  if (error) return null;
-  return count ?? 0;
+  try {
+    return await teswaBackendRuntime.marketplace.countMarketplaceItemsSince(sinceIso);
+  } catch {
+    return null;
+  }
 }
 
 export function countActiveStoriesSince(stories: ActiveStorySummary[], lastSeenAtMs: number | null): number {
