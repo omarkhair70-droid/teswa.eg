@@ -244,5 +244,84 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceReadContract 
           : null,
       };
     },
-  };
+,
+    async listActiveByOwner(profileId, limit = 6) {
+      const normalizedId = profileId.trim();
+      if (!normalizedId) return [];
+
+      const { data: items, error: itemsError } = await supabase
+        .from('items')
+        .select('id, title, category_id, city, area, created_at')
+        .eq('owner_id', normalizedId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (itemsError) throw itemsError;
+      if (!items?.length) return [];
+
+      const itemIds = items.map((item) => item.id);
+      const categoryIds = Array.from(
+        new Set(items.map((item) => item.category_id).filter((value): value is string => typeof value === 'string' && value.length > 0)),
+      );
+
+      const [imagesResult, categoriesResult] = await Promise.all([
+        supabase
+          .from('item_images')
+          .select('item_id, image_url, is_primary, sort_order')
+          .in('item_id', itemIds),
+        categoryIds.length > 0
+          ? supabase.from('categories').select('id, name_ar').in('id', categoryIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (imagesResult.error) throw imagesResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
+
+      const imagesByItem = new Map<string, Array<{
+        imageUrl: string | null;
+        isPrimary: boolean | null;
+        sortOrder: number | null;
+      }>>();
+
+      for (const image of imagesResult.data ?? []) {
+        const list = imagesByItem.get(image.item_id) ?? [];
+        list.push({
+          imageUrl: image.image_url ?? null,
+          isPrimary: image.is_primary ?? null,
+          sortOrder: image.sort_order ?? null,
+        });
+        imagesByItem.set(image.item_id, list);
+      }
+
+      const categoriesById = new Map(
+        (categoriesResult.data ?? []).map((category) => [category.id, category.name_ar ?? null]),
+      );
+
+      const pickCover = (itemId: string): string | null => {
+        const images = imagesByItem.get(itemId);
+        if (!images?.length) return null;
+
+        const sorted = [...images].sort((a, b) => {
+          const aPrimary = a.isPrimary ? 0 : 1;
+          const bPrimary = b.isPrimary ? 0 : 1;
+          if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+          const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+          const bSort = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+          if (aSort !== bSort) return aSort - bSort;
+          return (a.imageUrl ?? '').localeCompare(b.imageUrl ?? '');
+        });
+        return sorted[0]?.imageUrl ?? null;
+      };
+
+      return items.map((item) => ({
+        id: item.id,
+        title: item.title ?? null,
+        imageUrl: pickCover(item.id),
+        category: item.category_id ? categoriesById.get(item.category_id) ?? null : null,
+        city: item.city ?? null,
+        area: item.area ?? null,
+        createdAt: item.created_at ?? null,
+      }));
+    }  };
 }
