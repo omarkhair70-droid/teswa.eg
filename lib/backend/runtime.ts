@@ -8,12 +8,12 @@ import { createSupabaseNotificationsAdapter } from '@/lib/backend/adapters/supab
 import { createSupabaseDealLifecycleAdapter, createSupabaseOfferLifecycleAdapter } from '@/lib/backend/adapters/supabase/offers-deals-adapter';
 import { createSupabaseProfileAdapter } from '@/lib/backend/adapters/supabase/profile-adapter';
 import type { ProfileSocialContract } from '@/lib/backend/contracts/profile';
-import type { MarketplaceReadContract } from '@/lib/backend/contracts/marketplace';
+import type { MarketplaceCoreContract } from '@/lib/backend/contracts/marketplace';
 import type { DealLifecycleContract, OfferLifecycleContract } from '@/lib/backend/contracts/offers-deals';
 import type { DirectMessagingTransportContract, MessagingRealtimeContract } from '@/lib/backend/contracts/messaging';
 import type { NotificationsContract } from '@/lib/backend/contracts/notifications';
 
-export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceReadContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; notifications: NotificationsContract };
+export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; notifications: NotificationsContract };
 
 export const teswaBackendRuntime: TeswaBackendRuntime = {
   auth: createSupabaseAuthAdapter(),
