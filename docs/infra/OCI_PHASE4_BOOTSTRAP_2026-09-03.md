@@ -1,7 +1,7 @@
 # Teswa OCI Phase 4 Bootstrap — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** PREFLIGHT ONLY
+**Status:** PREFLIGHT GREEN — READ-ONLY OS INVENTORY NEXT
 
 ## Goal
 
@@ -54,3 +54,19 @@ These remain separate service/restart boundaries even though they initially shar
 - no secrets printed in Run Command output
 
 The first Phase 4 action is read-only readiness verification only.
+
+
+## Preflight result
+
+Both Teswa instances passed the Oracle Cloud Agent readiness gate:
+
+- `teswa-core-01`: RUNNING
+- `teswa-edge-01`: RUNNING
+- management enabled
+- monitoring enabled
+- plugins enabled
+- Compute Instance Run Command: RUNNING
+- Compute Instance Monitoring: RUNNING
+- `phase4_preflight=PASS`
+
+The next step is a read-only guest OS inventory through Run Command. No package installation or guest OS mutation is included yet.
