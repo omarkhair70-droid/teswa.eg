@@ -1,7 +1,6 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { compressItemImage } from '@/lib/media/compress-item-image';
-import { supabase } from '@/lib/supabase/client';
 
 export type ProfileImageKind = 'avatar' | 'cover';
 
@@ -101,20 +100,25 @@ export async function replaceProfileImageFromMobile(input: {
       };
     }
 
-    const updatePayload = kind === 'avatar'
-      ? { avatar_url: imageUrl, updated_at: new Date().toISOString() }
-      : { cover_url: imageUrl, updated_at: new Date().toISOString() };
+    const saveResult = await teswaBackendRuntime.profiles.setProfileImageUrl(
+      userId,
+      kind,
+      imageUrl,
+    );
 
-    const { data, error } = await supabase.from('profiles').update(updatePayload).eq('id', userId).select('id').maybeSingle();
-
-    if (error) {
+    if (!saveResult.ok) {
       await teswaBackendRuntime.media.remove([uploadedObject]);
-      return { ok: false, reason: 'save_failed', message: 'تعذر حفظ الصورة الجديدة في ملفك. حاول مرة أخرى.' };
-    }
-
-    if (!data) {
-      await teswaBackendRuntime.media.remove([uploadedObject]);
-      return { ok: false, reason: 'not_found_or_unauthorized', message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.' };
+      return saveResult.reason === 'not_found'
+        ? {
+            ok: false,
+            reason: 'not_found_or_unauthorized',
+            message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.',
+          }
+        : {
+            ok: false,
+            reason: 'save_failed',
+            message: 'تعذر حفظ الصورة الجديدة في ملفك. حاول مرة أخرى.',
+          };
     }
 
     const oldPath = teswaBackendRuntime.media.getObjectKeyFromPublicUrl('profile_image', previousImageUrl);
@@ -153,22 +157,27 @@ export async function removeProfileImageFromMobile(input: {
     return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً لتحديث صور الملف.' };
   }
 
-  const updatePayload = kind === 'avatar'
-    ? { avatar_url: null, updated_at: new Date().toISOString() }
-    : { cover_url: null, updated_at: new Date().toISOString() };
+  const saveResult = await teswaBackendRuntime.profiles.setProfileImageUrl(
+    userId,
+    kind,
+    null,
+  );
 
-  const { data, error } = await supabase.from('profiles').update(updatePayload).eq('id', userId).select('id').maybeSingle();
-
-  if (error) {
+  if (!saveResult.ok) {
+    if (saveResult.reason === 'not_found') {
+      return {
+        ok: false,
+        reason: 'not_found_or_unauthorized',
+        message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.',
+      };
+    }
     return {
       ok: false,
       reason: 'save_failed',
-      message: kind === 'avatar' ? 'تعذر حذف صورة الملف حالياً.' : 'تعذر حذف غلاف الملف حالياً.',
+      message: kind === 'avatar'
+        ? 'تعذر حذف صورة الملف حالياً.'
+        : 'تعذر حذف غلاف الملف حالياً.',
     };
-  }
-
-  if (!data) {
-    return { ok: false, reason: 'not_found_or_unauthorized', message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.' };
   }
 
   const oldPath = teswaBackendRuntime.media.getObjectKeyFromPublicUrl('profile_image', currentImageUrl);
