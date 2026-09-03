@@ -55,15 +55,30 @@ These are inventory observations, not billing promises:
 
 Whether a new use of these services is free must be checked against current billing/free-tier rules before provisioning.
 
+## E2 Micro availability result
+
+A read-only `limits resource-availability get` check returned:
+
+- available: 2
+- used: 0
+- fractional availability: 2.0
+- fractional usage: 0.0
+
+Therefore both Always Free `VM.Standard.E2.1.Micro` slots are currently unused in the active availability domain.
+
+This does **not** change the data-plane decision: 1 GB RAM per E2 Micro is too constrained to treat either instance as the sole company-grade PostgreSQL + API + Realtime + Workers host. They remain auxiliary capacity.
+
 ## Next gate
 
-Read-only check the exact resource availability for:
+Lock the Teswa-specific network/storage/secrets/monitoring topology as code, isolated from the existing Nova VCN/resources.
 
-- `compute / standard-e2-micro-core-count` in the active availability domain;
-- block-storage capacity relevant to Always Free;
-- load-balancer `lb-10mbps-count` if we consider managed ingress.
+Remaining read-only checks before any apply:
 
-No provisioning is allowed during this check.
+- block-storage capacity relevant to the Always Free pool;
+- load-balancer `lb-10mbps-count` resource availability if managed ingress is selected;
+- exact Nova VCN/subnet ownership only to ensure Teswa creates new, non-overlapping resources.
+
+No provisioning or production cutover is allowed during this gate.
 
 ## Topology status
 
