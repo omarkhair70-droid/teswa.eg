@@ -19,6 +19,7 @@ resource "oci_objectstorage_bucket" "backups" {
   name           = "teswa-backups"
   access_type    = "NoPublicAccess"
   storage_tier   = "Standard"
+  versioning     = "Enabled"
   freeform_tags  = var.freeform_tags
 }
 
