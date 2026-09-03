@@ -226,4 +226,94 @@ export interface DirectMessagingTransportContract {
   ): Promise<TeswaResult<{ ok: boolean; message: string | null }, 'unknown'>>;
 
   markRead(conversationId: string): Promise<TeswaResult<void, 'unknown'>>;
+
+  listNativeMessages(input: {
+    conversationId: string;
+    limit: number;
+    before?: IsoDateTime | null;
+  }): Promise<TeswaResult<NativeDirectMessageTransportRecord[], 'unknown'>>;
+
+  sendNativeMessage(input: {
+    conversationId: string;
+    body?: string | null;
+    replyToMessageId?: string | null;
+    attachments?: NativeDirectAttachmentTransportRecord[];
+    metadata?: Record<string, unknown>;
+  }): Promise<TeswaResult<NativeDirectSendTransportResult, 'unknown'>>;
+
+  markNativeRead(
+    conversationId: string,
+  ): Promise<TeswaResult<NativeDirectReadTransportResult, 'unknown'>>;
+
+  toggleNativeReaction(
+    messageId: string,
+    reaction: 'love' | 'thumbs_up',
+  ): Promise<TeswaResult<NativeDirectReactionToggleResult, 'unknown'>>;
+
+  setNativeTyping(
+    conversationId: string,
+    isTyping: boolean,
+  ): Promise<TeswaResult<boolean, 'unknown'>>;
+
+  listNativeTypingUsers(
+    conversationId: string,
+  ): Promise<TeswaResult<string[], 'unknown'>>;
+
+  deleteNativeMessage(
+    messageId: string,
+  ): Promise<TeswaResult<{ storagePaths: string[] }, 'unknown'>>;
 }
+
+
+export type NativeDirectAttachmentTransportRecord = {
+  id?: string;
+  kind: 'image' | 'video' | 'file' | 'audio';
+  storagePath: string;
+  storageBucket: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+};
+
+export type NativeDirectReactionTransportRecord = {
+  reaction: 'love' | 'thumbs_up';
+  userId: string;
+  createdAt: IsoDateTime | null;
+};
+
+export type NativeDirectMessageTransportRecord = {
+  id: string;
+  senderId: string;
+  body: string;
+  messageType: 'text' | 'voice';
+  createdAt: IsoDateTime;
+  readAt: IsoDateTime | null;
+  replyToMessageId: string | null;
+  replySenderId: string | null;
+  replyBody: string | null;
+  metadata: Record<string, unknown>;
+  deletedAt: IsoDateTime | null;
+  attachments: NativeDirectAttachmentTransportRecord[];
+  reactions: NativeDirectReactionTransportRecord[];
+};
+
+export type NativeDirectSendTransportResult = {
+  ok: boolean;
+  message: string | null;
+  messageId: string | null;
+  createdAt: IsoDateTime | null;
+};
+
+export type NativeDirectReadTransportResult = {
+  ok: boolean;
+  readAt: IsoDateTime | null;
+};
+
+export type NativeDirectReactionToggleResult = {
+  ok: boolean;
+  enabled: boolean;
+  count: number;
+};
