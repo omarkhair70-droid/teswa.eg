@@ -1071,6 +1071,6 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
         height: (data.height as number | null) ?? null,
         createdAt: data.created_at as string,
       };
-,
+    },
   };
 }
