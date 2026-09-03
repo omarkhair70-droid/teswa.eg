@@ -511,3 +511,23 @@ The existing temporary Bastion connectivity Security List will therefore also in
 - source: exact live Bastion private endpoint /32
 
 No public ingress is added. The rule remains temporary and will be removed with the Bastion bootstrap controls.
+
+
+## Canonical ingress Terraform cycle correction
+
+The first canonical target-subnet ingress plan failed before planning with a Terraform dependency cycle:
+
+`oci_bastion_bastion.admin -> oci_core_subnet.private_app -> oci_core_security_list.admin_bastion_egress -> oci_bastion_bastion.admin`
+
+The cycle was introduced because the subnet referenced the temporary Security List, while that Security List directly referenced the Bastion resource's computed private endpoint IP, and the Bastion itself targets the same subnet.
+
+No OCI resource changed.
+
+The cycle is removed by snapshotting the already-created live Bastion private endpoint IP into the ignored local connectivity tfvars file. Terraform now consumes that exact /32 as an input value instead of a resource dependency.
+
+The connectivity preflight now captures and validates both:
+
+- Core private IP /32
+- live Bastion private endpoint IP /32
+
+The canonical ingress plan must be regenerated only after re-running the connectivity preflight.
