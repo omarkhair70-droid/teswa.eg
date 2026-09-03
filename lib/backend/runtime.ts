@@ -9,6 +9,7 @@ import { createSupabaseDiscoveryAdapter } from '@/lib/backend/adapters/supabase/
 import { createSupabaseDolabAdapter } from '@/lib/backend/adapters/supabase/dolab-adapter';
 import { createSupabaseMessagingRealtimeAdapter } from '@/lib/backend/adapters/supabase/messaging-realtime-adapter';
 import { createSupabaseNotificationsAdapter } from '@/lib/backend/adapters/supabase/notifications-adapter';
+import { createSupabasePolicyAcceptanceAdapter } from '@/lib/backend/adapters/supabase/policies-adapter';
 import { createSupabaseDealLifecycleAdapter, createSupabaseOfferLifecycleAdapter } from '@/lib/backend/adapters/supabase/offers-deals-adapter';
 import { createSupabaseProfileAdapter } from '@/lib/backend/adapters/supabase/profile-adapter';
 import { createSupabaseStoriesAdapter } from '@/lib/backend/adapters/supabase/stories-adapter';
@@ -21,12 +22,14 @@ import type { StoriesContract } from '@/lib/backend/contracts/stories';
 import type { DiscoveryContract } from '@/lib/backend/contracts/discovery';
 import type { AnalyticsContract } from '@/lib/backend/contracts/analytics';
 import type { DolabContract } from '@/lib/backend/contracts/dolab';
+import type { PolicyAcceptanceContract } from '@/lib/backend/contracts/policies';
 
-export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract; discovery: DiscoveryContract; dolab: DolabContract; analytics: AnalyticsContract };
+export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract; discovery: DiscoveryContract; dolab: DolabContract; analytics: AnalyticsContract; policies: PolicyAcceptanceContract };
 
 export const teswaBackendRuntime: TeswaBackendRuntime = {
   auth: createSupabaseAuthAdapter(),
   analytics: createSupabaseAnalyticsAdapter(),
+  policies: createSupabasePolicyAcceptanceAdapter(),
   media: createSupabaseMediaStorageAdapter(),
   marketplace: createSupabaseMarketplaceReadAdapter(),
   offers: createSupabaseOfferLifecycleAdapter(),
