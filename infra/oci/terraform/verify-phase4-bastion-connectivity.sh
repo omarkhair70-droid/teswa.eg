@@ -14,11 +14,17 @@ EGRESS_SL="$("$TF" output -raw admin_bastion_egress_security_list_id)"
 
 echo "TESWA PHASE 4 BASTION CONNECTIVITY VERIFY"
 
-SUBNET_JSON="$(oci network subnet get --subnet-id "$APP_SUBNET" --output json)"
-printf '%s' "$SUBNET_JSON" | python3 - "$EGRESS_SL" <<'PY'
+SUBNET_FILE="$(mktemp)"
+SL_FILE="$(mktemp)"
+trap 'rm -f "$SUBNET_FILE" "$SL_FILE"' EXIT
+
+oci network subnet get   --subnet-id "$APP_SUBNET"   --output json >"$SUBNET_FILE"
+
+python3 - "$EGRESS_SL" "$SUBNET_FILE" <<'PY'
 import json,sys
-sl=sys.argv[1]
-ids=json.load(sys.stdin).get("data",{}).get("security-list-ids",[])
+sl,path=sys.argv[1:]
+with open(path,encoding="utf-8") as f:
+    ids=json.load(f).get("data",{}).get("security-list-ids",[])
 ok=sl in ids
 print("egress_security_list_attached=%s" % str(ok).lower())
 if not ok:
