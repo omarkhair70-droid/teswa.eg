@@ -48,7 +48,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
     target: 'lib/backend/adapters/supabase/media-adapter.ts',
     legacyFiles: [
       'lib/stories.ts',
-      'lib/dolab/upload.ts',
       'lib/chat/supabase-direct-chat.ts',
     ],
   },
