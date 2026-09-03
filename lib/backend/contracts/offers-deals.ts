@@ -115,3 +115,61 @@ export interface OfferLifecycleContract {
     actorId: string;
   }): Promise<TeswaResult<void, 'unknown'>>;
 }
+
+
+export type DealLifecycleRecord = {
+  id: string;
+  status: DealStatus;
+  acceptedAt: IsoDateTime | null;
+  createdAt: IsoDateTime | null;
+  requestedItemId: string;
+  offeredItemId: string;
+  requesterId: string;
+  offererId: string;
+};
+
+export type DealLifecycleMessageRecord = {
+  id: string;
+  dealId: string;
+  senderId: string;
+  body: string;
+  messageType: 'text' | 'voice';
+  audioStoragePath: string | null;
+  audioDurationMs: number | null;
+  audioMimeType: string | null;
+  audioSizeBytes: number | null;
+  createdAt: IsoDateTime;
+};
+
+export interface DealLifecycleContract {
+  getDeal(dealId: string): Promise<DealLifecycleRecord | null>;
+  listConfirmationUserIds(dealId: string): Promise<string[]>;
+  listMessages(dealId: string, limit?: number): Promise<DealLifecycleMessageRecord[]>;
+  hasReview(dealId: string, reviewerId: string): Promise<TeswaResult<boolean, 'unknown'>>;
+  markRead(dealId: string): Promise<TeswaResult<void, 'unknown'>>;
+  countMessagesSince(dealId: string, senderId: string, since: IsoDateTime): Promise<number>;
+
+  insertTextMessage(input: {
+    dealId: string;
+    senderId: string;
+    body: string;
+  }): Promise<TeswaResult<DealLifecycleMessageRecord, 'unknown'>>;
+
+  insertVoiceMessage(input: {
+    dealId: string;
+    senderId: string;
+    body: string;
+    audioStoragePath: string;
+    audioDurationMs: number;
+    audioMimeType: string;
+    audioSizeBytes: number | null;
+  }): Promise<TeswaResult<DealLifecycleMessageRecord, 'unknown'>>;
+
+  confirm(input: {
+    dealId: string;
+    userId: string;
+    note?: string | null;
+  }): Promise<TeswaResult<void, 'unknown'>>;
+
+  completeIfReady(dealId: string): Promise<TeswaResult<boolean, 'unknown'>>;
+}
