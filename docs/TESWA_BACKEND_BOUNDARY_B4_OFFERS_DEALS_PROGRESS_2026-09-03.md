@@ -39,3 +39,39 @@ Preserved in the feature layer:
 The backend boundary checker now prevents offer lifecycle table/RPC calls from returning to `lib/offers.ts`.
 
 No production provider switch was made.
+
+
+## Slice B4.2 — Deals lifecycle
+
+Added `DealLifecycleContract` and `createSupabaseDealLifecycleAdapter()`.
+
+Migrated out of `lib/deals.ts`:
+
+- deal room base read;
+- deal confirmation reads;
+- deal message reads;
+- existing-review check;
+- deal thread read marker;
+- per-minute message count;
+- text-message insert;
+- voice-message metadata insert;
+- completion confirmation insert;
+- `complete_deal_if_ready`.
+
+Participant profile reads now reuse the Profile boundary instead of querying `profiles` directly.
+
+Preserved in the feature layer:
+
+- deal state-machine validation;
+- user block checks;
+- rate-limit UX;
+- exchange-item enrichment;
+- voice upload and cleanup through the already-migrated Media boundary;
+- Arabic product-facing messages;
+- notification payload semantics.
+
+### B4 residual dependency
+
+Like Offers, `lib/deals.ts` retains only `create_notification` as a direct Supabase call. This is explicitly deferred to B6 Notifications.
+
+The boundary checker now rejects reintroduction of Deal lifecycle table/RPC calls into `lib/deals.ts`.
