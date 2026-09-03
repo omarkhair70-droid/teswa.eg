@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 
 import { useAuth } from '@/lib/auth';
 import { fetchUnreadNotificationCount } from '@/lib/notifications';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { fetchUnreadContextualMessagesCount } from '@/lib/contextual-conversations';
 import { fetchMyDirectConversations } from '@/lib/direct-messages';
 
@@ -25,7 +25,7 @@ export function UnreadBadgesProvider({ children }: PropsWithChildren) {
 
     const [notif, messages, contextualUnread, directConversations] = await Promise.all([
       fetchUnreadNotificationCount(user.id),
-      supabase.rpc('get_unread_deal_messages_count'),
+      teswaBackendRuntime.deals.getUnreadCount(),
       fetchUnreadContextualMessagesCount(),
       fetchMyDirectConversations(),
     ]);
@@ -35,7 +35,7 @@ export function UnreadBadgesProvider({ children }: PropsWithChildren) {
       0,
     );
 
-    const dealUnread = typeof messages.data === 'number' ? Math.max(0, messages.data) : 0;
+    const dealUnread = typeof messages === 'number' ? Math.max(0, messages) : 0;
 
     setNotificationsUnreadCount(notif.ok ? notif.count : 0);
     setMessagesUnreadCount(dealUnread + contextualUnread + directUnread);
