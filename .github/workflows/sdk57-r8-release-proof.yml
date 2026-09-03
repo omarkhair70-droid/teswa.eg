@@ -69,6 +69,14 @@ jobs:
       - name: Generate clean SDK 57 Android project
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Inspect generated release shrinker baseline
+        shell: bash
+        run: |
+          echo "=== android/app/build.gradle release/proguard references ==="
+          grep -n -E -C 5 'release|proguard|minify|shrinkResources' android/app/build.gradle || true
+          echo "=== android/gradle.properties optimization flags ==="
+          grep -n -E 'android.enable(Minify|ShrinkResources)InReleaseBuilds' android/gradle.properties || true
+
       - name: Verify optimized SDK 57 release configuration
         run: node scripts/verify-android-release-readiness.mjs
 
