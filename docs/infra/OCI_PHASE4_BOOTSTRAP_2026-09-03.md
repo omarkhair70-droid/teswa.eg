@@ -347,3 +347,14 @@ The temporary administrative Bastion is now fully verified:
 This closes the temporary access-path verification gate. The next action is the one-time Oracle-documented `ocarun` sudo bootstrap through a short-lived Managed SSH session, followed immediately by a fresh Run Command prerequisite bootstrap.
 
 The Bastion remains temporary and must be removed after the Run Command privilege path is proven.
+
+
+## Cloud Shell FIPS SSH key correction
+
+The first one-time Bastion sudo bootstrap stopped before creating a session because Cloud Shell is operating in FIPS mode and rejected an ED25519 ephemeral key:
+
+`ED25519 keys are not allowed in FIPS mode`
+
+No Bastion session or guest mutation occurred.
+
+The helper now generates an ephemeral 3072-bit RSA SSH key instead. The key remains local to the temporary helper directory and is removed on exit.
