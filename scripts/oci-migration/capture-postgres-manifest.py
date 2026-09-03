@@ -294,6 +294,49 @@ def capture_catalog(psql: Psql) -> dict[str, Any]:
         """
     )
 
+    foreign_keys = psql.rows(
+        """
+        SELECT
+          src_ns.nspname AS source_schema,
+          src.relname AS source_table,
+          con.conname AS constraint_name,
+          array_agg(src_att.attname ORDER BY key_ord.ordinality) AS source_columns,
+          dst_ns.nspname AS target_schema,
+          dst.relname AS target_table,
+          array_agg(dst_att.attname ORDER BY key_ord.ordinality) AS target_columns,
+          con.confupdtype AS update_action_code,
+          con.confdeltype AS delete_action_code,
+          con.condeferrable AS is_deferrable,
+          con.condeferred AS initially_deferred
+        FROM pg_constraint con
+        JOIN pg_class src ON src.oid = con.conrelid
+        JOIN pg_namespace src_ns ON src_ns.oid = src.relnamespace
+        JOIN pg_class dst ON dst.oid = con.confrelid
+        JOIN pg_namespace dst_ns ON dst_ns.oid = dst.relnamespace
+        JOIN unnest(con.conkey, con.confkey) WITH ORDINALITY
+          AS key_ord(src_attnum, dst_attnum, ordinality) ON true
+        JOIN pg_attribute src_att
+          ON src_att.attrelid = src.oid
+         AND src_att.attnum = key_ord.src_attnum
+        JOIN pg_attribute dst_att
+          ON dst_att.attrelid = dst.oid
+         AND dst_att.attnum = key_ord.dst_attnum
+        WHERE con.contype = 'f'
+          AND src_ns.nspname = 'public'
+        GROUP BY
+          src_ns.nspname,
+          src.relname,
+          con.conname,
+          dst_ns.nspname,
+          dst.relname,
+          con.confupdtype,
+          con.confdeltype,
+          con.condeferrable,
+          con.condeferred
+        ORDER BY src.relname, con.conname
+        """
+    )
+
     return {
         "tables": tables,
         "columns": columns,
@@ -307,6 +350,7 @@ def capture_catalog(psql: Psql) -> dict[str, Any]:
         "publication_tables": publication_tables,
         "extensions": extensions,
         "primary_keys": primary_keys,
+        "foreign_keys": foreign_keys,
     }
 
 
@@ -432,7 +476,7 @@ def main() -> int:
     supabase_compat = capture_supabase_compat(psql)
 
     manifest: dict[str, Any] = {
-        "format_version": 1,
+        "format_version": 2,
         "label": args.label,
         "captured_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "safety": {
