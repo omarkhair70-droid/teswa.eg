@@ -159,8 +159,22 @@ echo "TESWA OCI PHASE 4 READ-ONLY OS INVENTORY"
 echo "guest_mutation=none"
 echo
 
-run_inventory "teswa-core-01"
-run_inventory "teswa-edge-01"
+if [ "$#" -eq 0 ]; then
+  TARGETS=("teswa-core-01" "teswa-edge-01")
+else
+  TARGETS=("$@")
+fi
+
+for target in "${TARGETS[@]}"; do
+  case "$target" in
+    teswa-core-01|teswa-edge-01) ;;
+    *)
+      echo "inventory=FAIL reason=invalid_target target=$target" >&2
+      exit 8
+      ;;
+  esac
+  run_inventory "$target"
+done
 
 echo "phase4_os_inventory=PASS"
 echo "No packages, files, users, firewall rules, or services were changed."
