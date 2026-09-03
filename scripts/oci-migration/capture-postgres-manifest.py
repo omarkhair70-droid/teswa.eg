@@ -213,10 +213,12 @@ def capture_catalog(psql: Psql) -> dict[str, Any]:
           rel.relname AS table_name,
           con.conname AS constraint_name,
           con.contype AS constraint_type,
+          CASE WHEN con.conindid <> 0 THEN idx.relname ELSE NULL END AS backing_index_name,
           pg_get_constraintdef(con.oid, true) AS definition
         FROM pg_constraint con
         JOIN pg_class rel ON rel.oid = con.conrelid
         JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+        LEFT JOIN pg_class idx ON idx.oid = con.conindid
         WHERE ns.nspname = 'public'
         ORDER BY rel.relname, con.conname
         """
