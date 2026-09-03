@@ -490,3 +490,24 @@ The visible portion did still prove that the Oracle Linux public firewalld zone 
 Before another guest-side diagnostic, Lane 3 now checks the client-side Bastion allowlist path because Oracle documents the same remote-close symptom when the connecting machine's public IP is outside the Bastion CIDR allowlist. Cloud Shell public IPs are dynamic between Cloud Shell sessions.
 
 The client-path diagnostic is read-only and compares the current Cloud Shell public IPv4 address against the live Bastion allowlist. No OCI resource is changed.
+
+
+## Canonical Bastion target-subnet ingress
+
+The Cloud Shell client-path diagnostic is green:
+
+- Bastion ACTIVE
+- private endpoint assigned
+- current Cloud Shell public IP is inside the Bastion allowlist
+- diagnostic PASS
+
+That removes client allowlisting as the cause of the Managed SSH remote close.
+
+Oracle's Bastion troubleshooting guidance specifically instructs allowing the Bastion private endpoint IP into the target subnet on the Managed SSH port. Although the Core app NSG already has an equivalent ingress rule, Lane 3 will now add the canonical subnet Security List ingress as a temporary bootstrap-only control to remove NSG interpretation from the remaining path.
+
+The existing temporary Bastion connectivity Security List will therefore also include:
+
+- stateful TCP/22 ingress
+- source: exact live Bastion private endpoint /32
+
+No public ingress is added. The rule remains temporary and will be removed with the Bastion bootstrap controls.
