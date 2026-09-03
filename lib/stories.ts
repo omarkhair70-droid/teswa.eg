@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 
 export type StoryMediaType = 'image' | 'video';
@@ -131,8 +132,8 @@ async function uploadStoryMediaWithProgress(params: {
   onProgress?: (progress: StoryPublishProgress) => void;
 }): Promise<{ error: Error | null }> {
   const { storagePath, fileBuffer, contentType, onProgress } = params;
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
+  const session = await teswaBackendRuntime.auth.getSession();
+  const accessToken = session?.accessToken;
 
   if (!accessToken) return { error: new Error('Missing auth session') };
 
