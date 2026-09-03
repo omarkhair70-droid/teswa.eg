@@ -16,7 +16,6 @@ const legacyDirectClientImports = new Set([
   'lib/admin.ts',
   'lib/analytics.ts',
   'lib/badges.ts',
-  'lib/chat/supabase-direct-chat.ts',
   'lib/city-pulse.ts',
   'lib/direct-privacy.ts',
   'lib/dolab/index.ts',
