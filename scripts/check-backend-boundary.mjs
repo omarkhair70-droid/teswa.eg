@@ -15,21 +15,14 @@ const legacyDirectClientImports = new Set([
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
   'lib/dolab/upload.ts',
-  'lib/edit-listing-images.ts',
-  'lib/edit-listing.ts',
   'lib/exchange-item-summaries.ts',
-  'lib/item-likes.ts',
   'lib/item-video-discovery.ts',
   'lib/item-video-presence.ts',
-  'lib/item-videos.ts',
-  'lib/listing-lifecycle.ts',
   'lib/messages.ts',
   'lib/motion-interest.ts',
   'lib/motion-video-drops.ts',
-  'lib/my-listings.ts',
   'lib/personal-living-world.ts',
   'lib/policy-acceptance.ts',
-  'lib/publish-item.ts',
   'lib/pulse-video-viewer.ts',
   'lib/reports.ts',
   'lib/reviews.ts',
@@ -198,6 +191,33 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenProfileTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: profile/social provider access must stay behind ProfileSocialContract (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'lib/item-likes.ts',
+      'lib/my-listings.ts',
+      'lib/listing-lifecycle.ts',
+      'lib/edit-listing.ts',
+      'lib/edit-listing-images.ts',
+      'lib/publish-item.ts',
+      'lib/item-videos.ts',
+    ].includes(relativePath)) {
+      const forbiddenMarketplaceTokens = [
+        ".from('items')",
+        ".from('item_images')",
+        ".from('item_wanted_tags')",
+        ".from('item_videos')",
+        ".from('item_likes')",
+        ".from('categories')",
+        "rpc('archive_owned_listing_if_safe'",
+        "rpc('reactivate_owned_archived_listing'",
+        "rpc('delete_owned_archived_listing_if_safe'",
+      ];
+      for (const token of forbiddenMarketplaceTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: marketplace provider access must stay behind MarketplaceCoreContract (${token})`);
         }
       }
     }
