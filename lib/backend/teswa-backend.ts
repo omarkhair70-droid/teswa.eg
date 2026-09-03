@@ -6,6 +6,7 @@ import type {
   MarketplaceContract,
   MediaStorageContract,
   MessagingContract,
+  ModerationContract,
   NotificationsContract,
   OffersDealsContract,
   PolicyAcceptanceContract,
@@ -27,5 +28,6 @@ export interface TeswaBackend {
   discovery: DiscoveryContract;
   policies: PolicyAcceptanceContract;
   reviews: ReviewsContract;
+  moderation: ModerationContract;
   dolab: DolabContract;
 }
