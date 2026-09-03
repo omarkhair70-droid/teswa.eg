@@ -5,6 +5,7 @@ export type TeswaAuthUser = {
   email: string | null;
   phone: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
 };
 
 export type TeswaAuthSession = {
