@@ -6,7 +6,6 @@ const sourceRoots = ['app', 'components', 'lib'];
 const providerAdapterPrefix = 'lib/backend/adapters/supabase/';
 
 const legacyDirectClientImports = new Set([
-  'app/(auth)/profile-setup.tsx',
   'components/profile/ProfileConnectionsScreen.tsx',
   'lib/account-deletion.ts',
   'lib/admin-reports.ts',
@@ -14,7 +13,6 @@ const legacyDirectClientImports = new Set([
   'lib/analytics.ts',
   'lib/badges.ts',
   'lib/city-pulse.ts',
-  'lib/direct-privacy.ts',
   'lib/dolab/index.ts',
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
