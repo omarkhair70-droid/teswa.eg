@@ -63,7 +63,8 @@ enable_notifications   = false
 EOF
 
 terraform init
-terraform fmt -check
+terraform fmt terraform.tfvars
+terraform fmt -check *.tf
 terraform validate
 terraform plan -out=teswa-foundation.plan
 ```
@@ -98,3 +99,12 @@ It must **not** contain:
 - load balancers
 
 Do **not** run `terraform apply` until the plan is explicitly reviewed and approved.
+
+
+## OCI Cloud Shell compatibility note
+
+The measured Cloud Shell currently provides Terraform `1.5.7` on `linux_arm64`.
+
+This stack intentionally supports Terraform `>= 1.5.7, < 2.0.0`. The OCI provider's current registry metadata supports Terraform 0.13+, so Terraform 1.5.7 is within the provider-supported range.
+
+The provider is constrained to the 8.27 patch line (`~> 8.27.0`) to avoid silently drifting across minor provider releases during this foundation review.
