@@ -40,7 +40,21 @@ export interface ProfileReadContract {
   getPublic(profileId: string): Promise<TeswaProfile | null>;
 }
 
+export type DirectMessagePrivacy = 'everyone' | 'followers_only' | 'no_one';
+
 export interface ProfileCoreContract extends ProfileReadContract {
+  setupMine(input: {
+    userId: string;
+    displayName: string;
+    username: string;
+  }): Promise<TeswaResult<void, 'username_taken' | 'unknown'>>;
+
+  getDirectMessagePrivacy(userId: string): Promise<DirectMessagePrivacy>;
+  updateDirectMessagePrivacy(
+    userId: string,
+    value: DirectMessagePrivacy,
+  ): Promise<TeswaResult<void, 'unknown'>>;
+
   updateMine(input: {
     userId: string;
     displayName: string;
