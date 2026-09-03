@@ -1,6 +1,6 @@
 resource "oci_bastion_bastion" "admin" {
   count                        = var.enable_admin_bastion ? 1 : 0
-  bastion_type                 = "standard"
+  bastion_type                 = "STANDARD"
   compartment_id               = oci_identity_compartment.teswa.id
   target_subnet_id             = oci_core_subnet.private_app.id
   name                         = "teswa-admin-bastion"
