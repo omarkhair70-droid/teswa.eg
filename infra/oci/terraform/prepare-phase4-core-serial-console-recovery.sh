@@ -38,16 +38,14 @@ SHAPE="$(oci compute instance get   --instance-id "$CORE_ID"   --query 'data.sha
   exit 5
 }
 
-ACTIVE_COUNT="$(oci compute instance-console-connection list   --compartment-id "$COMPARTMENT"   --instance-id "$CORE_ID"   --all   --query 'length(data[?("lifecycle-state"==`ACTIVE` || "lifecycle-state"==`CREATING`)])'   --raw-output)"
+ACTIVE_ID="$(oci compute instance-console-connection list   --compartment-id "$COMPARTMENT"   --instance-id "$CORE_ID"   --all   --query 'data[?("lifecycle-state"==`ACTIVE` || "lifecycle-state"==`CREATING`)].id | [0]'   --raw-output)"
 
-case "$ACTIVE_COUNT" in
+case "$ACTIVE_ID" in
   ''|null|None)
-    echo "serial_recovery_preflight=FAIL reason=console_connection_count_unresolved" >&2
-    exit 6
+    ACTIVE_COUNT=0
     ;;
-  *[!0-9]*)
-    echo "serial_recovery_preflight=FAIL reason=unexpected_console_connection_count value=$ACTIVE_COUNT" >&2
-    exit 6
+  *)
+    ACTIVE_COUNT=1
     ;;
 esac
 
