@@ -64,3 +64,65 @@ export interface MessagingContract {
     listener: (event: ConversationRealtimeEvent) => void,
   ): TeswaUnsubscribe;
 }
+
+
+export type DealRealtimeMessage = {
+  id: string;
+  dealId: string;
+  senderId: string;
+  body: string;
+  messageType: 'text' | 'voice';
+  audioStoragePath: string | null;
+  audioDurationMs: number | null;
+  audioMimeType: string | null;
+  audioSizeBytes: number | null;
+  createdAt: IsoDateTime;
+};
+
+export type ContextualRealtimeMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  messageKind: 'text' | 'voice';
+  mediaStoragePath: string | null;
+  mediaDurationMs: number | null;
+  createdAt: IsoDateTime;
+};
+
+export interface MessagingRealtimeContract {
+  subscribeInbox(
+    userId: string,
+    onChanged: () => void,
+  ): TeswaUnsubscribe;
+
+  subscribeDeal(
+    dealId: string,
+    handlers: {
+      onMessage: (message: DealRealtimeMessage) => void;
+      onDealChanged: () => void;
+      onConfirmationChanged: () => void;
+      onStatus?: (status: BackendConnectionState) => void;
+    },
+  ): TeswaUnsubscribe;
+
+  subscribeContextual(
+    conversationId: string,
+    handlers: {
+      onMessage: (message: ContextualRealtimeMessage) => void;
+      onStatus?: (status: BackendConnectionState) => void;
+    },
+  ): TeswaUnsubscribe;
+
+  subscribeDirect(
+    conversationId: string,
+    handlers: {
+      onConversationChanged?: () => void;
+      onMessagesChanged?: () => void;
+      onAttachmentsChanged?: () => void;
+      onReactionsChanged?: () => void;
+      onTypingChanged?: () => void;
+      onStatus?: (status: BackendConnectionState) => void;
+    },
+  ): TeswaUnsubscribe;
+}
