@@ -13,6 +13,10 @@ VERSION="$("$TF" version | head -n1)"
   exit 3
 }
 
+echo "OUT_OF_HOST_CAPACITY BLOCK: this replacement path is disabled while fresh A1 capacity is unavailable." >&2
+echo "Use the boot-volume rescue path instead; do not destroy teswa-core-01." >&2
+exit 9
+
 if [ "${TESWA_ALLOW_CORE_REPLACEMENT:-}" != "YES" ]; then
   echo "Refusing Core replacement: set TESWA_ALLOW_CORE_REPLACEMENT=YES after reviewing the saved plan." >&2
   exit 4
