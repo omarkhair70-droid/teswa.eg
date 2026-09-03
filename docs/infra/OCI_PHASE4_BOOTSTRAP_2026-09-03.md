@@ -936,3 +936,18 @@ Operator transfer remains manual and explicit because private keys must not be p
 5. perform the maintenance reboot and interact with UEFI/GRUB visually.
 
 After recovery, delete the downloaded console key copy and temporary VNC/serial console connection.
+
+
+## Console UI authentication failure workaround
+
+The OCI browser Instances page currently fails to load instance data with:
+
+`The required information to complete authentication was not provided or was incorrect.`
+
+Cloud Shell OCI CLI access remains functional, so this is treated as a browser-console session/authentication problem rather than evidence that the Teswa instances are unavailable.
+
+Lane 3 therefore avoids the browser UI for console-connection rekeying.
+
+A guarded helper now accepts only a Windows-generated **public** RSA key file in Cloud Shell, deletes the current temporary instance-console connection if present, creates a replacement connection using that public key, waits for ACTIVE, and stores the returned VNC/serial connection strings in an ignored local file.
+
+This operation changes only the temporary Instance Console Connection object. It does not reboot or alter `teswa-core-01`, its boot volume, VNIC, private IP, NSGs, Bastion, Supabase, Nova, DNS, or application data.
