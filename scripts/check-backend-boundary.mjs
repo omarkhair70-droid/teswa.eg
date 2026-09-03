@@ -15,7 +15,6 @@ const legacyDirectClientImports = new Set([
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
   'lib/dolab/upload.ts',
-  'lib/messages.ts',
   'lib/motion-video-drops.ts',
   'lib/policy-acceptance.ts',
   'lib/reports.ts',
@@ -24,8 +23,6 @@ const legacyDirectClientImports = new Set([
   'lib/story-discovery.ts',
   'lib/story-likes.ts',
   'lib/story-views.ts',
-  'lib/chat/supabase-direct-chat.ts',
-  'lib/contextual-conversations.ts',
 ]);
 
 const legacyProviderTypeImports = new Set([
@@ -236,6 +233,38 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenDiscoveryTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: marketplace discovery provider access must stay behind MarketplaceCoreContract (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'lib/messages.ts',
+      'lib/chat/supabase-direct-chat.ts',
+      'lib/contextual-conversations.ts',
+    ].includes(relativePath)) {
+      const forbiddenMessagingTokens = [
+        ".from('swap_deals')",
+        ".from('deal_messages')",
+        ".from('deal_message_reads')",
+        ".from('contextual_conversations')",
+        ".from('contextual_messages')",
+        ".from('contextual_message_reads')",
+        ".from('direct_typing_state')",
+        "rpc('create_contextual_message_notification'",
+        "rpc('mark_contextual_thread_read'",
+        "rpc('get_unread_contextual_messages_count'",
+        "rpc('create_story_reply_thread'",
+        "rpc('ensure_story_reply_conversation'",
+        "rpc('get_direct_native_messages'",
+        "rpc('send_direct_native_message'",
+        "rpc('mark_direct_conversation_read_v2'",
+        "rpc('toggle_direct_message_reaction_v2'",
+        "rpc('set_direct_typing_state_v2'",
+        "rpc('delete_direct_message_v2'",
+      ];
+      for (const token of forbiddenMessagingTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: messaging provider access must stay behind Teswa messaging contracts (${token})`);
         }
       }
     }
