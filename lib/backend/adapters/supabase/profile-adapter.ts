@@ -1,4 +1,4 @@
-import type { ProfileReadContract, TeswaProfile } from '@/lib/backend/contracts/profile';
+import type { ProfileCoreContract, TeswaProfile } from '@/lib/backend/contracts/profile';
 import { supabase } from '@/lib/supabase/client';
 
 type ProfileRow = {
@@ -50,9 +50,54 @@ async function getProfile(profileId: string): Promise<TeswaProfile | null> {
   return data ? mapProfile(data as ProfileRow) : null;
 }
 
-export function createSupabaseProfileReadAdapter(): ProfileReadContract {
+export function createSupabaseProfileAdapter(): ProfileCoreContract {
   return {
     getMine: getProfile,
     getPublic: getProfile,
+
+    async updateMine(input) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          display_name: input.displayName,
+          username: input.username,
+          profile_tagline: input.profileTagline ?? null,
+          city: input.city ?? null,
+          area: input.area ?? null,
+          bio: input.bio ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', input.userId)
+        .select(PROFILE_SELECT)
+        .maybeSingle();
+
+      if (error?.code === '23505') {
+        return {
+          ok: false,
+          reason: 'username_taken',
+          message: 'Username is already in use.',
+          cause: error,
+        };
+      }
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+
+      if (!data) {
+        return {
+          ok: false,
+          reason: 'not_found',
+          message: 'Profile was not found or is not writable.',
+        };
+      }
+
+      return { ok: true, data: mapProfile(data as ProfileRow) };
+    },
   };
 }
