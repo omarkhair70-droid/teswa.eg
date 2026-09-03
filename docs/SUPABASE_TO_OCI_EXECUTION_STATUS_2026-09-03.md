@@ -16,6 +16,8 @@ Latest observed branch state:
 - B5 Messaging/Realtime: substantially progressed
 - B6 Notifications: closed
 - B7 Profile/Social: progressed, including profile setup/privacy/social graph/people/profile-image metadata
+- Marketplace boundary has continued progressing, including listing/publish adapter closure
+- Stories boundary work has started progressing as well
 
 Supabase remains the active production provider.
 
@@ -40,10 +42,23 @@ Phase 4 bootstrap preflight is green:
 
 - both instances RUNNING
 - Oracle Cloud Agent management/monitoring enabled
-- Compute Instance Run Command RUNNING
-- read-only guest OS inventory is the next Lane 3 step
+- Compute Instance Run Command plugin RUNNING
 
-PostgreSQL is **not installed/handed off yet**.
+The first read-only guest OS inventory did **not** execute inside the guest: it
+remained in OCI `ACCEPTED` until the client polling window expired.
+
+Lane 3 diagnosed the missing instance-principal IAM path and has now:
+
+- defined a Teswa-only dynamic group;
+- defined least-privilege `instance-agent-command-execution-family` policy;
+- produced a guarded saved Terraform plan;
+- reviewed it as exactly 2 creates / 0 changes / 0 destroys;
+- approved it for apply;
+- added guarded apply + post-apply verifier helpers.
+
+The IAM apply itself is not yet recorded as completed.
+
+PostgreSQL is therefore **not installed/handed off yet**.
 
 ## Lane 4 execution state
 
@@ -91,7 +106,7 @@ That gate will require:
 
 ## Exact next sequence
 
-### While Lane 3 performs Phase 4 OS/bootstrap
+### While Lane 3 closes Run Command IAM and continues Phase 4 OS/bootstrap
 
 Lane 4:
 
