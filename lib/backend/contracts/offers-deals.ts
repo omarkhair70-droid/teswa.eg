@@ -144,6 +144,9 @@ export type DealLifecycleMessageRecord = {
 export interface DealLifecycleContract {
   getDeal(dealId: string): Promise<DealLifecycleRecord | null>;
   getUnreadCount(): Promise<number>;
+  listConversationInbox(
+    userId: string,
+  ): Promise<DealConversationTransportRecord[]>;
   listConfirmationUserIds(dealId: string): Promise<string[]>;
   listMessages(dealId: string, limit?: number): Promise<DealLifecycleMessageRecord[]>;
   hasReview(dealId: string, reviewerId: string): Promise<TeswaResult<boolean, 'unknown'>>;
@@ -174,3 +177,25 @@ export interface DealLifecycleContract {
 
   completeIfReady(dealId: string): Promise<TeswaResult<boolean, 'unknown'>>;
 }
+
+
+export type DealConversationTransportRecord = {
+  dealId: string;
+  status: string;
+  createdAt: IsoDateTime | null;
+  requestedItemId: string;
+  offeredItemId: string;
+  otherParticipant: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  latestMessage: {
+    body: string;
+    createdAt: IsoDateTime;
+    senderId: string;
+    messageType: 'text' | 'voice';
+  } | null;
+  unreadCount: number;
+  lastActivityAt: IsoDateTime;
+};
