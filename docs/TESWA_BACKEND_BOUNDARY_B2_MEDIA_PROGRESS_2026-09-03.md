@@ -88,3 +88,32 @@ Removed from Dolab feature code:
 Dolab modules still use Supabase for their database rows and remain a later remaining-domain migration concern.
 
 Direct SDK Storage legacy files ratchet **10 -> 8**.
+
+
+## Slice B2.5 — Item image Storage boundary
+
+Removed direct item-image Storage coupling from:
+
+- `lib/publish-item.ts`;
+- `lib/edit-listing-images.ts`;
+- `lib/listing-lifecycle.ts`.
+
+Migrated through `MediaStorageContract`:
+
+- new item image uploads;
+- public URL creation;
+- publish rollback cleanup;
+- edit-image upload rollback;
+- removed-image cleanup;
+- archived-listing final image cleanup;
+- provider public URL -> object-key parsing.
+
+The three feature modules no longer contain:
+
+- `supabase.storage`;
+- the physical `item-images` bucket name;
+- Supabase public Storage URL markers.
+
+Their existing DB/RPC responsibilities remain unchanged for later Marketplace-domain migration.
+
+Direct SDK Storage legacy files ratchet **8 -> 5**.
