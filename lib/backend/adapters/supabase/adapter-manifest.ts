@@ -29,7 +29,7 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   },
   offersDeals: {
     target: 'lib/backend/adapters/supabase/offers-deals-adapter.ts',
-    legacyFiles: ['lib/offers.ts', 'lib/deals.ts', 'lib/messages.ts', 'lib/reviews.ts'],
+    legacyFiles: ['lib/messages.ts', 'lib/reviews.ts'],
   },
   messaging: {
     target: 'lib/backend/adapters/supabase/messaging-adapter.ts',
@@ -45,10 +45,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   notifications: {
     target: 'lib/backend/adapters/supabase/notifications-adapter.ts',
     legacyFiles: [
-      'lib/notifications.ts',
-      'lib/notification-preferences.ts',
-      'lib/push-notifications.ts',
-      'lib/unread-badges.tsx',
     ],
   },
   analytics: {
