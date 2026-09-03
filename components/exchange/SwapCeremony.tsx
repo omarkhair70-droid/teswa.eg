@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, type ElementRef } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { MotiView } from 'moti';
@@ -14,7 +14,7 @@ import { spacing } from '@/constants/spacing';
 type CeremonyStatus = 'sent' | 'accepted' | 'completed';
 
 export function SwapCeremony({ requestedItemTitle, offeredItemTitle, requestedItemImageUrl, offeredItemImageUrl, status = 'sent', onClose, onShare }: { requestedItemTitle?: string; offeredItemTitle?: string; requestedItemImageUrl?: string; offeredItemImageUrl?: string; status?: CeremonyStatus; onClose?: () => void; onShare?: () => void; }) {
-  const cardRef = useRef<ViewShot | null>(null);
+  const cardRef = useRef<ElementRef<typeof ViewShot> | null>(null);
   const revealedRef = useRef(false);
   const stampText = useMemo(() => status === 'accepted' ? 'تم الاتفاق' : status === 'completed' ? 'تم التبادل' : 'العرض اتبعت', [status]);
 
