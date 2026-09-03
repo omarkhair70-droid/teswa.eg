@@ -1,6 +1,6 @@
 import { fetchMotionVideoDrops } from '@/lib/motion-video-drops';
 import { createItemVideoSignedUrlCached } from '@/lib/item-videos';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export type PulseViewerStoryVideoEntry = {
   id: string;
@@ -47,49 +47,30 @@ const clamp = (value: number | undefined, fallback: number, max: number) => {
   return Math.min(max, Math.max(1, Math.floor(value as number)));
 };
 
-async function fetchItemTeaserEntries(limit: number): Promise<PulseViewerItemTeaserEntry[]> {
-  const { data, error } = await supabase
-    .from('item_videos')
-    .select('id,item_id,video_storage_path,duration_ms,created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-
-  const rows = (data ?? []) as Array<{ id: string; item_id: string; video_storage_path: string | null; duration_ms: number | null; created_at: string }>;
-  if (!rows.length) return [];
-
-  const itemIds = Array.from(new Set(rows.map((row) => row.item_id).filter(Boolean)));
-  const { data: items, error: itemsError } = await supabase
-    .from('marketplace_items')
-    .select('id,title,description,cover_image_url,category,item_condition,city,owner_display_name')
-    .in('id', itemIds);
-
-  if (itemsError) throw itemsError;
-
-  const itemsById = new Map((items ?? []).map((item: any) => [item.id, item]));
+async function fetchItemTeaserEntries(
+  limit: number,
+): Promise<PulseViewerItemTeaserEntry[]> {
+  const rows = await teswaBackendRuntime.marketplace.listPulseItemTeasers(limit);
   const result: PulseViewerItemTeaserEntry[] = [];
 
   for (const row of rows) {
-    if (!row.video_storage_path) continue;
-    const item = itemsById.get(row.item_id);
-    if (!item) continue;
-    const signedVideoUrl = await createItemVideoSignedUrlCached(row.video_storage_path);
+    const signedVideoUrl = await createItemVideoSignedUrlCached(row.videoStoragePath);
     if (!signedVideoUrl) continue;
+
     result.push({
       id: `item-teaser-${row.id}`,
       kind: 'item_teaser',
-      createdAt: row.created_at,
+      createdAt: row.createdAt,
       signedVideoUrl,
-      durationMs: row.duration_ms ?? null,
-      itemId: item.id,
-      title: item.title,
-      description: item.description ?? null,
-      imageUrl: item.cover_image_url ?? null,
-      category: item.category ?? null,
-      condition: item.item_condition ?? null,
-      location: item.city ?? null,
-      ownerDisplayName: item.owner_display_name ?? null,
+      durationMs: row.durationMs,
+      itemId: row.itemId,
+      title: row.title,
+      description: row.description,
+      imageUrl: row.imageUrl,
+      category: row.category,
+      condition: row.condition,
+      location: row.location,
+      ownerDisplayName: row.ownerDisplayName,
     });
   }
 
