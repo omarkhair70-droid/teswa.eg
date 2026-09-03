@@ -25,5 +25,8 @@ echo "supabase_change=none"
 echo "nova_change=none"
 echo "terraform=$VERSION"
 echo "plan=$PLAN"
-
+echo
+echo "Running immediate host-capacity safety preflight before destructive replacement..."
+bash "$(dirname "${BASH_SOURCE[0]}")/preflight-phase4-core-replacement-capacity.sh"
+echo
 "$TF" apply "$PLAN"
