@@ -27,7 +27,7 @@ CORE_ID="$(oci compute instance list   --compartment-id "$COMPARTMENT"   --displ
 
 EXISTING="$(oci compute instance-console-connection list   --compartment-id "$COMPARTMENT"   --instance-id "$CORE_ID"   --all   --query 'data[?("lifecycle-state"==`ACTIVE` || "lifecycle-state"==`CREATING`)].id | [0]'   --raw-output)"
 
-if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ] && [ "$EXISTING" != "None" ]; then
   echo "serial_console_create=FAIL reason=active_connection_already_exists" >&2
   echo "Delete or finish the existing console connection before creating another." >&2
   exit 5
