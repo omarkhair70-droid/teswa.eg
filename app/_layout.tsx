@@ -386,10 +386,12 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
       || leaf === 'community-guidelines'
     );
     const inPublicAccountDeletionRoute = rootGroup === 'account-deletion';
+    const inPublicLandingPreviewRoute = rootGroup === 'landing-preview';
+    const inPublicWebFrontDoor = Platform.OS === 'web' && (atRoot || rootGroup === 'index');
     const inPublicComplianceRoute = inPublicLegalRoute || inPublicAccountDeletionRoute;
 
     if (inOAuthCallback && !user) return;
-    if (inPublicComplianceRoute) return;
+    if (inPublicComplianceRoute || inPublicLandingPreviewRoute || inPublicWebFrontDoor) return;
     if (inNativeGoogleDiagnostics) {
       if (nativeGoogleTestModeEnabled) return;
       router.replace('/(auth)/login');
@@ -430,6 +432,25 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
       router.replace('/(tabs)/home');
     }
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router, usingCachedAccountGate]);
+
+  const renderRootGroup = segments[0];
+  const renderLeaf = segments.at(1);
+  const renderPublicLegalRoute = renderRootGroup === 'legal' && (
+    renderLeaf === 'privacy'
+    || renderLeaf === 'terms'
+    || renderLeaf === 'community-guidelines'
+  );
+  const renderPublicSurface = (
+    renderPublicLegalRoute
+    || renderRootGroup === 'account-deletion'
+    || renderRootGroup === 'landing-preview'
+    || (Platform.OS === 'web' && (!renderRootGroup || renderRootGroup === 'index'))
+  );
+
+  // Public web/legal surfaces must never wait for account bootstrap or profile gates.
+  if (renderPublicSurface) {
+    return <Stack screenOptions={{ headerShown: false }} />;
+  }
 
   if (!bootstrapReady) {
     return (

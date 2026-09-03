@@ -53,7 +53,15 @@ module.exports = {
           project: sentryProject,
         },
       ],
-      'expo-router',
+      [
+        'expo-router',
+        {
+          asyncRoutes: {
+            web: true,
+            default: false,
+          },
+        },
+      ],
       [
         'expo-image-picker',
         {
