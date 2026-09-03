@@ -25,3 +25,31 @@ Direct Supabase client imports ratchet **55 -> 54**.
 - Direct Chat media combines Storage, RPCs and Realtime.
 
 No production provider switch was made.
+
+
+## Slice B2.2 — Profile image Storage boundary
+
+Migrated all Storage concerns in `lib/profile-images.ts` behind `MediaStorageContract`:
+
+- upload;
+- public URL creation;
+- rollback cleanup after profile-row save failure;
+- previous-object cleanup;
+- current-object cleanup on image removal;
+- provider-specific public URL -> object key parsing.
+
+The feature no longer contains:
+
+- `supabase.storage`;
+- the `profile-images` bucket name;
+- Supabase public Storage URL markers.
+
+The remaining direct Supabase dependency in this file is the `profiles` DB mutation and is reassigned to the future Profile adapter lane.
+
+### Storage ratchet
+
+The boundary checker now freezes direct Supabase Storage access to the current legacy set only.
+
+Current SDK Storage legacy files: **11**
+
+Any new `supabase.storage` access outside the Supabase adapter is rejected, and stale Storage allowlist entries fail validation after migration.
