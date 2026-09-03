@@ -404,3 +404,25 @@ Remediation is temporary and least-privilege:
 - remove the temporary egress list and association after the `ocarun` bootstrap is complete.
 
 No public SSH, Internet ingress, Nova, Supabase, DNS, or application routing is changed.
+
+
+## Bastion connectivity saved-plan approval
+
+The temporary Bastion connectivity saved plan was reviewed and approved.
+
+Observed plan:
+
+- 1 create
+- 1 in-place update
+- 0 destroys
+- create `oci_core_security_list.admin_bastion_egress[0]`
+- update `oci_core_subnet.private_app` only to associate the temporary security list
+- egress rule is stateful TCP/22 to the exact Core private IP /32
+- no ingress added to the subnet
+- no public SSH
+- no instance replacement/reboot
+- no Nova, Supabase, DNS, database, storage, or application-routing changes
+
+`phase4_bastion_connectivity_plan_guard=PASS`
+
+**Decision:** APPROVED FOR APPLY using the reviewed saved plan only.
