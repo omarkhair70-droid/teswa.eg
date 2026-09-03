@@ -152,4 +152,16 @@ export interface MarketplaceReadContract {
 
   getFeedItem(itemId: string): Promise<MarketplaceFeedRecord | null>;
   getDetail(itemId: string): Promise<MarketplaceDetailRecord | null>;
+  listActiveByOwner(profileId: string, limit?: number): Promise<MarketplaceOwnerListingRecord[]>;
 }
+
+
+export type MarketplaceOwnerListingRecord = {
+  id: string;
+  title: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  city: string | null;
+  area: string | null;
+  createdAt: IsoDateTime | null;
+};
