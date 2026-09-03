@@ -134,3 +134,19 @@ The verifier now:
 - checks Terraform drift after persisting the IAM feature gate as enabled.
 
 Do not proceed to guest bootstrap until the corrected verifier is green.
+
+
+## Run Command IAM verification result
+
+The corrected post-apply IAM verifier is green:
+
+- dynamic group state: ACTIVE
+- dynamic group matching-rule field present
+- dynamic group rule matches the Teswa compartment
+- policy state: ACTIVE
+- `instance-agent-command-execution-family` statement present
+- same-instance condition present
+- `terraform_drift=none`
+- `phase4_iam_verify=PASS`
+
+The Run Command authorization path is now closed on the OCI control plane. Guest execution may still wait for normal dynamic-group propagation.
