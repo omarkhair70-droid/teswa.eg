@@ -166,6 +166,7 @@ resource "oci_core_subnet" "private_app" {
   display_name               = "teswa-private-app"
   dns_label                  = "app"
   prohibit_public_ip_on_vnic = true
+  route_table_id             = var.enable_compute_phase3 ? oci_core_route_table.private_app[0].id : oci_core_vcn.teswa.default_route_table_id
   security_list_ids          = [oci_core_security_list.empty.id]
   freeform_tags              = var.freeform_tags
 }
