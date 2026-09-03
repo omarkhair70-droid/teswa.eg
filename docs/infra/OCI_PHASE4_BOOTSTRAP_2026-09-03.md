@@ -441,3 +441,16 @@ Review found the verifier was checking `tcp-options.min/max` directly. OCI's Sec
 The Terraform rule itself is correct; only the verifier's JSON path was wrong. The verifier now checks the documented nested destination-port-range structure.
 
 No OCI mutation is required. Re-run the verifier only.
+
+
+## Bastion connectivity verification green
+
+The temporary Bastion connectivity path is now fully verified:
+
+- temporary egress security list attached to `teswa-private-app`;
+- security list state: AVAILABLE;
+- stateful TCP/22 egress to the exact Core private IP /32: present;
+- Terraform drift: none;
+- `phase4_bastion_connectivity_verify=PASS`.
+
+The one-time `ocarun` sudo bootstrap may now be retried through a fresh Managed SSH session.
