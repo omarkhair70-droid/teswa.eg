@@ -840,3 +840,17 @@ Lane 3 now:
 - performs no reboot, guest mutation, network mutation, or OCI resource mutation.
 
 The console connection does not need to be recreated for this correction.
+
+
+## Serial-console SSH authentication succeeded
+
+After repairing the local connection command to force the persistent RSA identity through both SSH layers, the next console connection attempt progressed past the previous `Permission denied (publickey)` failure.
+
+Observed:
+
+- Oracle instance-console gateway accepted the outer SSH identity;
+- the proxied target instance host key prompt was reached and accepted;
+- no public-key denial was returned after the target host key was added;
+- the SSH process remained attached instead of returning to the Cloud Shell prompt.
+
+This is the expected state for an attached serial console before console output is activated. The next action is non-mutating: send one or two newline characters to the attached console and inspect the current guest console output before any reboot or GRUB interaction.
