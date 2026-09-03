@@ -891,3 +891,22 @@ Lane 3 therefore uses this operator sequence:
 - if the boot window is missed and the normal `core01 login:` prompt returns, issue another single guarded SOFTRESET and repeat the same `Ctrl+[` sequence.
 
 No extra network or compute resources are involved.
+
+
+## Maintenance reboot serial transport behavior
+
+The first maintenance SOFTRESET caused the already-attached SSH transport to the serial console to close and return to Cloud Shell.
+
+This does **not** indicate that the Core was destroyed or that the serial-console recovery failed. A reboot can interrupt the live serial-console SSH transport; the console connection resource and RSA authentication path can still be reused.
+
+Because the GRUB/UEFI interception window is short, Lane 3 now provides a local reconnect helper that repeatedly executes the already-repaired serial-console connection command until the SSH transport attaches again. It makes no OCI or guest mutation.
+
+Operator flow for the next attempt:
+
+1. keep one Cloud Shell terminal ready with `reconnect-phase4-core-serial-console.sh`;
+2. trigger the guarded Core SOFTRESET from a second terminal;
+3. immediately run the reconnect helper;
+4. once attached, press `Ctrl+[` repeatedly to send terminal ESC during boot;
+5. stop as soon as UEFI/Boot Manager/GRUB appears.
+
+The existing A1 instance, boot volume, VNIC, private IP, Supabase production, Nova, and network topology remain unchanged.
