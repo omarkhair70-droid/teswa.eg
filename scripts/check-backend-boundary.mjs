@@ -69,12 +69,10 @@ const legacyProviderTypeImports = new Set([
 ]);
 
 const legacyDirectSupabaseEnvReads = new Set([
-  'lib/stories.ts',
   'lib/supabase/client.ts',
 ]);
 
 const legacyDirectStorageAccess = new Set([
-  'lib/stories.ts',
 ]);
 
 
