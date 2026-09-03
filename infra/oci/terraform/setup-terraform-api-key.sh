@@ -161,10 +161,19 @@ print(":".join(digest[i:i+2] for i in range(0, len(digest), 2)))
 PY
 )"
 
-readarray -t KEY_INFO < <(printf '%s' "$KEYS_JSON" | python3 -c 'import json,sys; fp=sys.argv[1]; d=json.load(sys.stdin).get("data",[]); print(len(d)); print("yes" if any(x.get("fingerprint")==fp for x in d) else "no")' "$FINGERPRINT")
+if [ -z "$(printf '%s' "$KEYS_JSON" | tr -d '[:space:]')" ]; then
+  KEY_COUNT=0
+  REGISTERED=no
+else
+  readarray -t KEY_INFO < <(printf '%s' "$KEYS_JSON" | python3 -c 'import json,sys; fp=sys.argv[1]; d=json.load(sys.stdin).get("data",[]); print(len(d)); print("yes" if any(x.get("fingerprint")==fp for x in d) else "no")' "$FINGERPRINT")
+  KEY_COUNT="${KEY_INFO[0]:-}"
+  REGISTERED="${KEY_INFO[1]:-}"
 
-KEY_COUNT="${KEY_INFO[0]}"
-REGISTERED="${KEY_INFO[1]}"
+  if [ -z "$KEY_COUNT" ] || [ -z "$REGISTERED" ]; then
+    echo "Could not parse OCI API-key list response. No API key was uploaded." >&2
+    exit 5
+  fi
+fi
 
 echo "identity_discovery=ok"
 echo "existing_api_key_count=$KEY_COUNT"
