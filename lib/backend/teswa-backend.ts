@@ -2,6 +2,7 @@ import type {
   AnalyticsContract,
   AuthContract,
   DiscoveryContract,
+  DolabContract,
   MarketplaceContract,
   MediaStorageContract,
   MessagingContract,
@@ -22,4 +23,5 @@ export interface TeswaBackend {
   analytics: AnalyticsContract;
   stories: StoriesContract;
   discovery: DiscoveryContract;
+  dolab: DolabContract;
 }
