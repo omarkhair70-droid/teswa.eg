@@ -38,6 +38,36 @@ At the Lane 4 audit snapshot:
 These counts are a watermark, not a cutover constant. Re-capture immediately
 before rehearsal and production cutover.
 
+## Lane 3 physical target alignment
+
+Lane 3 Phase 2 has now selected a single private application media bucket:
+
+`teswa-media`
+
+Lane 4 maps the nine logical Supabase buckets into that physical bucket using
+prefix isolation:
+
+- `profile-images/<source-key>`
+- `item-images/<source-key>`
+- `item-videos/<source-key>`
+- `story-media/<source-key>`
+- `direct-chat-media/<source-key>`
+- `direct-voice-messages/<source-key>`
+- `deal-voice-messages/<source-key>`
+- `contextual-voice-messages/<source-key>`
+- `dolab-media/<source-key>`
+
+Machine map:
+
+`scripts/oci-migration/oci-storage-bucket-map.phase2.json`
+
+The physical bucket remains `NoPublicAccess`. Public product behavior for
+`profile_image` and `item_image` is supplied through the Teswa media provider
+contract/API rather than by weakening the physical bucket ACL.
+
+This map is ready for execution only after Lane 3 actually applies and hands off
+the `teswa-media` bucket.
+
 ## Ownership boundary
 
 Lane 2 owns:
