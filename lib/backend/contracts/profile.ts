@@ -8,6 +8,10 @@ export type TeswaProfile = {
   avatarUrl: string | null;
   coverUrl: string | null;
   city: string | null;
+  area: string | null;
+  profileTagline: string | null;
+  successfulSwapsCount: number | null;
+  responseRate: number | null;
   createdAt: IsoDateTime | null;
 };
 
@@ -31,10 +35,12 @@ export type ProfileFollowState = {
   isBlockedEitherDirection: boolean;
 };
 
-export interface ProfileContract {
+export interface ProfileReadContract {
   getMine(userId: string): Promise<TeswaProfile | null>;
   getPublic(profileId: string): Promise<TeswaProfile | null>;
+}
 
+export interface ProfileContract extends ProfileReadContract {
   updateMine(input: {
     userId: string;
     displayName?: string;
