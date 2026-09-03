@@ -26,7 +26,11 @@ if [ "$HEAD_RC" -ne 0 ]; then
 fi
 
 echo "remote_state_object=present"
-echo "remote_state_size_bytes=$OBJ_NAME"
+if [ -n "$(printf '%s' "$OBJ_NAME" | tr -d '[:space:]')" ]; then
+  echo "remote_state_size_bytes=$OBJ_NAME"
+else
+  echo "remote_state_size_bytes=unknown"
+fi
 
 echo
 echo "Terraform drift check:"
