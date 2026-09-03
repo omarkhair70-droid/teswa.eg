@@ -3,7 +3,7 @@
 Date: 2026-09-03  
 Branch: `migration/supabase-to-oci-20260903`  
 Parallel-plan base SHA: `14e7198ec42f33bf0fca781c0c5c0502c628b786`  
-Implementation HEAD before this handoff document: `f876790bfbe6669139a8f521f0c003a48fca8388`
+Implementation HEAD before this handoff document: `1efdcbb7b5b0804698c5697c6a2eb95a3996dbac`
 
 ## Status
 
