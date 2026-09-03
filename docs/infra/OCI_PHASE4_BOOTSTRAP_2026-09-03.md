@@ -580,3 +580,35 @@ Lane 3's current Terraform Core resource does not declare launch metadata for ei
 Before any further network changes, Lane 3 now checks the live instance launch metadata read-only and reports only presence/count booleans, never key contents.
 
 Oracle also documents that the reserved `ssh_authorized_keys` and `user_data` metadata fields cannot be added or changed after launch. If the live key is absent, the remediation must be an explicit instance-bootstrap/recovery decision rather than another metadata update attempt.
+
+
+## Core launch metadata root cause confirmed
+
+The live Core metadata diagnostic is definitive:
+
+- `ssh_authorized_keys_present=false`
+- `ssh_authorized_keys_nonempty_lines=0`
+- `user_data_present=false`
+
+This explains why every Managed SSH session reached the Bastion control plane but failed during SSH authentication/negotiation: the ephemeral/session public key had never been installed for `opc` on the target instance.
+
+Oracle requires the Managed SSH session key to exist in the target user's AuthorizedKeysFile, and OCI reserves `ssh_authorized_keys` and `user_data` as launch-time-only metadata.
+
+### Recovery decision
+
+`teswa-core-01` is still pre-production and contains no Teswa database, migrated user data, API runtime, Realtime runtime, Worker runtime, or application secrets. The only guest activity so far has been read-only inventory/diagnostics and failed package bootstrap attempts that exited before package mutation.
+
+Therefore the clean recovery is a controlled Core-only replacement before any stateful workload is introduced.
+
+The replacement design:
+
+1. generate a persistent FIPS-compatible RSA-3072 bootstrap key locally in Cloud Shell;
+2. keep the private key only under `~/.ssh`;
+3. pass only the public key through ignored local Terraform variables;
+4. preserve the existing Core private IPv4 during replacement;
+5. launch Core with `ssh_authorized_keys`;
+6. launch Core with minimal root cloud-init that creates and validates the Oracle `ocarun` passwordless-sudo entry;
+7. keep the same image, shape, subnet, NSG, hostname, boot size, and agent settings;
+8. make no Edge, Nova, Supabase, DNS, storage, database, or application-routing change.
+
+The replacement must be reviewed as a saved Terraform plan before apply. Apply requires the explicit `TESWA_ALLOW_CORE_REPLACEMENT=YES` guard.
