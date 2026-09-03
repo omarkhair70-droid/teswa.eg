@@ -5,21 +5,106 @@ set -Eeuo pipefail
 #
 # This script performs no database/schema/data mutation. It validates the
 # Lane-3 handoff in place on teswa-core-01 while PostgreSQL remains localhost-only.
+#
+# Compartment resolution intentionally does not require Terraform to be
+# initialized on the Lane-4 branch. It prefers an explicit reviewed OCID,
+# then an already-usable Terraform output, then read-only OCI IAM discovery of
+# the dedicated teswa-platform compartment.
 
 TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-600}"
 
-[ -x "$TF" ] || { echo "Terraform binary not found at $TF" >&2; exit 1; }
 command -v oci >/dev/null 2>&1 || { echo "OCI CLI not found." >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 not found." >&2; exit 1; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$ROOT/infra/oci/terraform"
-[ -d "$TF_DIR" ] || { echo "Terraform directory missing: $TF_DIR" >&2; exit 1; }
 
-cd "$TF_DIR"
-COMPARTMENT="$("$TF" output -raw teswa_compartment_id)"
+resolve_tenancy_from_oci_config() {
+  local config_file="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
+  local profile="${OCI_CLI_PROFILE:-DEFAULT}"
+
+  python3 - "$config_file" "$profile" <<'PY'
+import configparser
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1]).expanduser()
+profile = sys.argv[2]
+if not path.is_file():
+    raise SystemExit(0)
+
+cfg = configparser.ConfigParser(interpolation=None)
+cfg.read(path)
+section = profile
+if section not in cfg:
+    raise SystemExit(0)
+value = (cfg[section].get("tenancy") or "").strip()
+if value:
+    print(value)
+PY
+}
+
+resolve_compartment() {
+  local value=""
+
+  if [[ -n "${TESWA_OCI_COMPARTMENT_OCID:-}" ]]; then
+    echo "compartment_resolution=explicit_env" >&2
+    printf '%s\n' "$TESWA_OCI_COMPARTMENT_OCID"
+    return 0
+  fi
+
+  # Opportunistic only: a branch switch can leave .terraform initialized for a
+  # different backend configuration. Never run terraform init/reconfigure here.
+  if [[ -x "$TF" && -d "$TF_DIR" ]]; then
+    value="$(cd "$TF_DIR" && "$TF" output -raw teswa_compartment_id 2>/dev/null || true)"
+    if [[ "$value" == ocid1.compartment.* ]]; then
+      echo "compartment_resolution=terraform_output" >&2
+      printf '%s\n' "$value"
+      return 0
+    fi
+  fi
+
+  local tenancy="${OCI_CLI_TENANCY:-}"
+  if [[ -z "$tenancy" ]]; then
+    tenancy="$(resolve_tenancy_from_oci_config)"
+  fi
+  if [[ "$tenancy" != ocid1.tenancy.* ]]; then
+    echo "Unable to resolve OCI tenancy for read-only compartment discovery." >&2
+    echo "Set TESWA_OCI_COMPARTMENT_OCID to the reviewed teswa-platform compartment OCID." >&2
+    return 1
+  fi
+
+  local compartments_json
+  compartments_json="$(oci iam compartment list \
+    --compartment-id "$tenancy" \
+    --compartment-id-in-subtree true \
+    --access-level ACCESSIBLE \
+    --all \
+    --output json)"
+
+  value="$(printf '%s' "$compartments_json" | python3 -c '
+import json,sys
+rows=json.load(sys.stdin).get("data",[])
+matches=[r.get("id","") for r in rows if r.get("name")=="teswa-platform" and r.get("lifecycle-state")=="ACTIVE"]
+if len(matches)!=1:
+    print("", end="")
+    raise SystemExit(2)
+print(matches[0])
+' 2>/dev/null || true)"
+
+  if [[ "$value" != ocid1.compartment.* ]]; then
+    echo "Unable to uniquely discover ACTIVE teswa-platform compartment." >&2
+    echo "Set TESWA_OCI_COMPARTMENT_OCID explicitly if needed." >&2
+    return 1
+  fi
+
+  echo "compartment_resolution=oci_iam_readonly" >&2
+  printf '%s\n' "$value"
+}
+
+COMPARTMENT="$(resolve_compartment)"
 INSTANCE_ID="$(oci compute instance list \
   --compartment-id "$COMPARTMENT" \
   --display-name teswa-core-01 \
