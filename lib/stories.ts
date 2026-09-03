@@ -1,7 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 
 export type StoryMediaType = 'image' | 'video';
 
@@ -79,22 +78,6 @@ export type PublishStoryResult =
     message: string;
   };
 
-function toStoryRecord(row: Record<string, unknown>): StoryRecord {
-  return {
-    id: row.id as string,
-    userId: row.user_id as string,
-    mediaType: row.media_type as StoryMediaType,
-    mediaStoragePath: row.media_storage_path as string,
-    mediaThumbnailStoragePath: (row.media_thumbnail_storage_path as string | null) ?? null,
-    caption: (row.caption as string | null) ?? null,
-    durationMs: (row.duration_ms as number | null) ?? null,
-    width: (row.width as number | null) ?? null,
-    height: (row.height as number | null) ?? null,
-    createdAt: row.created_at as string,
-    expiresAt: row.expires_at as string,
-  };
-}
-
 function detectMediaType(asset: ImagePickerAsset): StoryMediaType | null {
   if (asset.type === 'image' || asset.type === 'video') return asset.type;
   if (asset.mimeType?.startsWith('image/')) return 'image';
@@ -126,25 +109,27 @@ function contentTypeFromAsset(asset: ImagePickerAsset, mediaType: StoryMediaType
 
 
 
-async function fetchStoryAuthorsByUserIds(userIds: string[]): Promise<Map<string, StoryAuthorSummary>> {
+async function fetchStoryAuthorsByUserIds(
+  userIds: string[],
+): Promise<Map<string, StoryAuthorSummary>> {
   if (!userIds.length) return new Map();
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id,display_name,username,avatar_url')
-    .in('id', userIds);
+  const authors = await Promise.all(
+    userIds.map(async (userId) => {
+      const author = await teswaBackendRuntime.stories.getAuthor(userId);
+      return [
+        userId,
+        author ?? {
+          id: userId,
+          displayName: null,
+          username: null,
+          avatarUrl: null,
+        },
+      ] as const;
+    }),
+  );
 
-  if (error) throw error;
-
-  return new Map((data ?? []).map((profile: Record<string, unknown>) => [
-    profile.id as string,
-    {
-      id: profile.id as string,
-      displayName: (profile.display_name as string | null) ?? null,
-      username: (profile.username as string | null) ?? null,
-      avatarUrl: (profile.avatar_url as string | null) ?? null,
-    },
-  ]));
+  return new Map(authors);
 }
 
 export async function publishStoryFromMobile(input: PublishStoryInput): Promise<PublishStoryResult> {
@@ -206,33 +191,37 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
 
   const durationMs = mediaType === 'video' ? Math.max(0, Math.round(asset.duration ?? 0)) || null : null;
 
-  const { data, error: insertError } = await supabase
-    .from('stories')
-    .insert({
-      user_id: userId,
-      media_type: mediaType,
-      media_storage_path: storagePath,
-      media_thumbnail_storage_path: null,
-      caption: normalizedCaption ? normalizedCaption : null,
-      duration_ms: durationMs,
-      width: asset.width ?? null,
-      height: asset.height ?? null,
-    })
-    .select('id')
-    .single();
+  const insertResult = await teswaBackendRuntime.stories.create({
+    userId,
+    mediaType,
+    mediaStoragePath: storagePath,
+    mediaThumbnailStoragePath: null,
+    caption: normalizedCaption ? normalizedCaption : null,
+    durationMs,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+  });
 
-  if (insertError || !data?.id) {
-    emitProgress?.({ stage: 'cleanup', uploadPercent: 100, message: 'نعالج فشل النشر...' });
+  if (!insertResult.ok) {
+    emitProgress?.({
+      stage: 'cleanup',
+      uploadPercent: 100,
+      message: 'نعالج فشل النشر...',
+    });
     await teswaBackendRuntime.media.remove([{
       purpose: 'story_media',
       objectKey: storagePath,
       contentType,
       sizeBytes: fileBuffer.byteLength,
     }]);
-    return { ok: false, reason: 'insert_failed', message: 'تم رفع الوسائط لكن تعذر نشر القصة. حاول مرة أخرى.' };
+    return {
+      ok: false,
+      reason: 'insert_failed',
+      message: 'تم رفع الوسائط لكن تعذر نشر القصة. حاول مرة أخرى.',
+    };
   }
 
-  return { ok: true, storyId: data.id as string };
+  return { ok: true, storyId: insertResult.data.storyId };
 }
 
 
@@ -241,114 +230,80 @@ export async function deleteStoryFromMobile(input: {
   storyId: string;
 }): Promise<DeleteStoryResult> {
   const userId = input.userId?.trim();
-  if (!userId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً.' };
+  if (!userId) {
+    return {
+      ok: false,
+      reason: 'invalid_user',
+      message: 'يجب تسجيل الدخول أولاً.',
+    };
+  }
 
   const storyId = input.storyId?.trim();
-  if (!storyId) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد القصة المطلوبة.' };
-
-  const { data: storyRow, error: fetchError } = await supabase
-    .from('stories')
-    .select('id,user_id,media_storage_path,media_thumbnail_storage_path')
-    .eq('id', storyId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (fetchError) {
-    if (__DEV__) console.warn('[stories] deleteStoryFromMobile fetch failed', fetchError.message);
-    return { ok: false, reason: 'delete_failed', message: 'تعذر حذف القصة حالياً. حاول مرة أخرى.' };
+  if (!storyId) {
+    return {
+      ok: false,
+      reason: 'invalid_story',
+      message: 'تعذر تحديد القصة المطلوبة.',
+    };
   }
 
-  if (!storyRow) {
-    return { ok: false, reason: 'not_found', message: 'لم يتم العثور على القصة أو لم تعد متاحة.' };
+  const deleteResult = await teswaBackendRuntime.stories.deleteOwned({
+    userId,
+    storyId,
+  });
+
+  if (!deleteResult.ok) {
+    if (deleteResult.reason === 'not_found') {
+      return {
+        ok: false,
+        reason: 'not_found',
+        message: 'لم يتم العثور على القصة أو لم تعد متاحة.',
+      };
+    }
+    if (__DEV__) {
+      console.warn('[stories] deleteStoryFromMobile failed', deleteResult.message);
+    }
+    return {
+      ok: false,
+      reason: 'delete_failed',
+      message: 'تعذر حذف القصة حالياً. حاول مرة أخرى.',
+    };
   }
 
-  const { error: deleteError } = await supabase
-    .from('stories')
-    .delete()
-    .eq('id', storyId)
-    .eq('user_id', userId);
-
-  if (deleteError) {
-    if (__DEV__) console.warn('[stories] deleteStoryFromMobile delete failed', deleteError.message);
-    return { ok: false, reason: 'delete_failed', message: 'تعذر حذف القصة حالياً. حاول مرة أخرى.' };
-  }
-
-  const storagePaths = [storyRow.media_storage_path, storyRow.media_thumbnail_storage_path]
-    .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
-    .map((path) => path.trim());
-
-  if (!storagePaths.length) return { ok: true };
+  if (!deleteResult.data.storagePaths.length) return { ok: true };
 
   const storageResult = await teswaBackendRuntime.media.remove(
-    storagePaths.map((objectKey) => ({
+    deleteResult.data.storagePaths.map((objectKey) => ({
       purpose: 'story_media' as const,
       objectKey,
       contentType: null,
       sizeBytes: null,
     })),
   );
+
   if (!storageResult.ok) {
-    if (__DEV__) console.warn('[stories] deleteStoryFromMobile storage cleanup failed', storageResult.message);
+    if (__DEV__) {
+      console.warn(
+        '[stories] deleteStoryFromMobile storage cleanup failed',
+        storageResult.message,
+      );
+    }
     return { ok: true, storageCleanupFailed: true };
   }
 
   return { ok: true };
 }
 
-export async function fetchActiveStoriesByUserId(userId: string): Promise<StoryRecord[]> {
-  // Ordered oldest -> newest to simplify sequential viewer playback.
-  const { data, error } = await supabase
-    .from('stories')
-    .select('id,user_id,media_type,media_storage_path,media_thumbnail_storage_path,caption,duration_ms,width,height,created_at,expires_at')
-    .eq('user_id', userId)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []).map(toStoryRecord);
+export async function fetchActiveStoriesByUserId(
+  userId: string,
+): Promise<StoryRecord[]> {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return [];
+  return teswaBackendRuntime.stories.listActiveByUser(normalizedUserId);
 }
 
 export async function fetchActiveStoriesForHome(): Promise<ActiveStorySummary[]> {
-  const { data, error } = await supabase
-    .from('stories')
-    .select('id,user_id,media_type,media_storage_path,media_thumbnail_storage_path,caption,duration_ms,width,height,created_at,expires_at')
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  const rows: Record<string, unknown>[] = (data ?? []) as Record<string, unknown>[];
-  if (!rows.length) return [];
-
-  const stories = rows.map(toStoryRecord);
-  const userIds: string[] = Array.from(new Set(stories.map((story) => story.userId)));
-  const authorsById = await fetchStoryAuthorsByUserIds(userIds);
-
-  const grouped = new Map<string, StoryRecord[]>();
-  for (const story of stories) {
-    const existing = grouped.get(story.userId) ?? [];
-    existing.push(story);
-    grouped.set(story.userId, existing);
-  }
-
-  return userIds
-    .map((userId) => {
-      const author = authorsById.get(userId) ?? {
-        id: userId,
-        displayName: null,
-        username: null,
-        avatarUrl: null,
-      };
-      const userStories = (grouped.get(userId) ?? []).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      const latestCreatedAt = userStories[userStories.length - 1]?.createdAt ?? '';
-
-      return {
-        author,
-        stories: userStories,
-        latestCreatedAt,
-      };
-    })
-    .sort((a, b) => b.latestCreatedAt.localeCompare(a.latestCreatedAt));
+  return teswaBackendRuntime.stories.listActiveForHome();
 }
 
 export function createStoryUploadPath(userId: string, mediaType: StoryMediaType, extension: string): string {
