@@ -130,6 +130,13 @@ else
   fi
 fi
 
+# Oracle recommends the OCI_API_KEY label after the PEM block. It is not part
+# of the RSA key material; it lets OCI tooling identify accidental exposure.
+if ! tail -n 1 "$PRIVATE_KEY" | grep -qx 'OCI_API_KEY'; then
+  printf '\nOCI_API_KEY\n' >> "$PRIVATE_KEY"
+  chmod 600 "$PRIVATE_KEY"
+fi
+
 # Verify that the discovered user identity is valid for this delegated session
 # before attempting any credential mutation.
 set +e
@@ -185,12 +192,56 @@ if [ "$REGISTERED" != "yes" ]; then
   fi
 
   echo "Uploading only the public half of the dedicated signing key to OCI IAM..."
-  oci iam user api-key upload     --user-id "$USER_OCID"     --key-file "$PUBLIC_KEY"     --query 'data.{fingerprint:fingerprint,state:"lifecycle-state"}'
+  set +e
+  UPLOAD_JSON="$(oci iam user api-key upload     --user-id "$USER_OCID"     --key-file "$PUBLIC_KEY"     --output json 2>/tmp/teswa-api-key-upload.err)"
+  UPLOAD_RC=$?
+  set -e
+
+  if [ "$UPLOAD_RC" -ne 0 ]; then
+    echo "API-key upload failed; no profile migration was attempted." >&2
+    cat /tmp/teswa-api-key-upload.err >&2
+    exit 6
+  fi
+
+  REMOTE_FINGERPRINT="$(printf '%s' "$UPLOAD_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("data",{}).get("fingerprint",""))')"
+  echo "api_key_action=uploaded"
 else
+  REMOTE_FINGERPRINT="$FINGERPRINT"
   echo "api_key_action=reuse_registered_key"
 fi
 
-python3 - "$USER_CONFIG" "$PROFILE" "$USER_OCID" "$TENANCY_OCID" "$FINGERPRINT" "$PRIVATE_KEY" "$REGION" <<'PY'
+# Re-read IAM after upload/reuse and require the exact local key fingerprint to
+# exist remotely before writing an API-key profile.
+sleep 2
+set +e
+VERIFY_KEYS_JSON="$(oci iam user api-key list --user-id "$USER_OCID" --all --output json 2>/tmp/teswa-api-key-verify-list.err)"
+VERIFY_LIST_RC=$?
+set -e
+
+if [ "$VERIFY_LIST_RC" -ne 0 ]; then
+  echo "Could not verify the uploaded API key in IAM." >&2
+  cat /tmp/teswa-api-key-verify-list.err >&2
+  exit 7
+fi
+
+if [ -n "$(printf '%s' "$VERIFY_KEYS_JSON" | tr -d '[:space:]')" ]; then
+  MATCHING_REMOTE="$(printf '%s' "$VERIFY_KEYS_JSON" | python3 -c 'import json,sys; fp=sys.argv[1]; d=json.load(sys.stdin).get("data",[]); print(next((x.get("fingerprint","") for x in d if x.get("fingerprint")==fp),""))' "$FINGERPRINT")"
+  if [ -n "$MATCHING_REMOTE" ]; then
+    REMOTE_FINGERPRINT="$MATCHING_REMOTE"
+  fi
+fi
+
+if [ -z "$REMOTE_FINGERPRINT" ]; then
+  echo "OCI did not return a fingerprint for the registered key. Stopping before profile use." >&2
+  exit 8
+fi
+
+if [ "$REMOTE_FINGERPRINT" != "$FINGERPRINT" ]; then
+  echo "Local key fingerprint does not match the fingerprint OCI registered. Stopping." >&2
+  exit 9
+fi
+
+python3 - "$USER_CONFIG" "$PROFILE" "$USER_OCID" "$TENANCY_OCID" "$REMOTE_FINGERPRINT" "$PRIVATE_KEY" "$REGION" <<'PY'
 import configparser, os, sys
 path, profile, user, tenancy, fingerprint, key_file, region = sys.argv[1:]
 c = configparser.ConfigParser()
@@ -209,8 +260,31 @@ with open(path, "w", encoding="utf-8") as f:
 os.chmod(path, 0o600)
 PY
 
-echo "Testing the new API-key profile against Object Storage..."
-oci os ns get   --config-file "$USER_CONFIG"   --profile "$PROFILE"   --auth api_key   --query data   --raw-output >/dev/null
+echo "profile_written=true"
+echo "fingerprint_match=true"
+echo "Testing the new API-key profile against OCI..."
+
+TEST_OK=no
+for attempt in 1 2 3 4 5 6; do
+  set +e
+  oci os ns get     --config-file "$USER_CONFIG"     --profile "$PROFILE"     --auth api_key     --query data     --raw-output >/dev/null 2>/tmp/teswa-api-key-test.err
+  TEST_RC=$?
+  set -e
+
+  if [ "$TEST_RC" -eq 0 ]; then
+    TEST_OK=yes
+    break
+  fi
+
+  sleep 5
+done
+
+if [ "$TEST_OK" != "yes" ]; then
+  echo "api_key_profile_ready=false"
+  echo "OCI still rejected API-key authentication after verification/retries:" >&2
+  cat /tmp/teswa-api-key-test.err >&2
+  exit 10
+fi
 
 echo "profile=$PROFILE"
 echo "api_key_profile_ready=true"
