@@ -12,5 +12,5 @@ export const teswaBackendRuntime: TeswaBackendRuntime = {
   auth: createSupabaseAuthAdapter(),
   media: createSupabaseMediaStorageAdapter(),
   marketplace: createSupabaseMarketplaceReadAdapter(),
-  profiles: createSupabaseProfileReadAdapter(),
+  profiles: createSupabaseProfileAdapter(),
 };
