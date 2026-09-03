@@ -1,6 +1,7 @@
 import type {
   AnalyticsContract,
   AuthContract,
+  DiscoveryContract,
   MarketplaceContract,
   MediaStorageContract,
   MessagingContract,
@@ -20,4 +21,5 @@ export interface TeswaBackend {
   notifications: NotificationsContract;
   analytics: AnalyticsContract;
   stories: StoriesContract;
+  discovery: DiscoveryContract;
 }
