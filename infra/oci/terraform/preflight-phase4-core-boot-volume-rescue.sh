@@ -68,7 +68,7 @@ json.dump([{"instanceShape":"VM.Standard.E2.1.Micro"}],
           open(sys.argv[1],"w",encoding="utf-8"))
 PY
 
-echo "TESWA PHASE 4 CORE BOOT-VOLUME RESCUE PREFLIGHT"
+echo "TESWA PHASE 4 CORE BOOT-VOLUME RESCUE PREFLIGHT (SUPERSEDED BY SERIAL-CONSOLE RECOVERY)"
 echo "mutation=none"
 echo "core_replacement=blocked"
 echo "rescue_strategy=temporary_e2_helper_plus_existing_core_boot_volume"
