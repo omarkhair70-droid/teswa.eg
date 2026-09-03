@@ -165,3 +165,52 @@ export type MarketplaceOwnerListingRecord = {
   area: string | null;
   createdAt: IsoDateTime | null;
 };
+
+
+export type ListingLifecycleCode =
+  | 'archived'
+  | 'reactivated'
+  | 'deleted'
+  | 'not_found_or_unauthorized'
+  | 'not_active'
+  | 'not_archived'
+  | 'has_open_offers'
+  | 'has_deal_history';
+
+export type ItemLikeSummary = {
+  likeCount: number;
+  likedByMe: boolean;
+};
+
+export type MyListingRecord = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  category: string | null;
+  condition: string | null;
+  city: string | null;
+  area: string | null;
+  status: 'active' | 'reserved' | 'swapped' | 'archived';
+  createdAt: IsoDateTime | null;
+  openIncomingOffersCount: number;
+};
+
+export interface MarketplaceCoreContract extends MarketplaceReadContract {
+  getLikeSummaries(
+    itemIds: string[],
+    viewerId?: string | null,
+  ): Promise<Map<string, ItemLikeSummary>>;
+
+  setLiked(
+    itemId: string,
+    userId: string,
+    liked: boolean,
+  ): Promise<TeswaResult<{ liked: boolean }, 'unknown'>>;
+
+  listMine(userId: string): Promise<MyListingRecord[]>;
+
+  archiveOwned(itemId: string): Promise<ListingLifecycleCode>;
+  reactivateOwned(itemId: string): Promise<ListingLifecycleCode>;
+  getImageUrls(itemId: string): Promise<string[]>;
+  deleteOwnedArchived(itemId: string): Promise<ListingLifecycleCode>;
+}
