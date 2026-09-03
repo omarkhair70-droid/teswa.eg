@@ -24,19 +24,9 @@ CORE_ID="$(oci compute instance list   --compartment-id "$COMPARTMENT"   --displ
 chmod 600 "$KEY"
 chmod 644 "$KEY.pub"
 
-CORE_JSON="$(mktemp)"
-CONN_JSON="$(mktemp)"
-trap 'rm -f "$CORE_JSON" "$CONN_JSON"' EXIT
+STATE="$(oci compute instance get   --instance-id "$CORE_ID"   --query 'data."lifecycle-state"'   --raw-output)"
 
-oci compute instance get --instance-id "$CORE_ID" --output json >"$CORE_JSON"
-oci compute instance-console-connection list   --compartment-id "$COMPARTMENT"   --instance-id "$CORE_ID"   --all   --output json >"$CONN_JSON"
-
-read -r STATE SHAPE <<<"$(python3 - "$CORE_JSON" <<'PY'
-import json,sys
-d=json.load(open(sys.argv[1],encoding="utf-8")).get("data",{})
-print(d.get("lifecycle-state",""), d.get("shape",""))
-PY
-)"
+SHAPE="$(oci compute instance get   --instance-id "$CORE_ID"   --query 'data.shape'   --raw-output)"
 
 [ "$STATE" = "RUNNING" ] || {
   echo "serial_recovery_preflight=FAIL reason=core_state_$STATE" >&2
@@ -48,12 +38,18 @@ PY
   exit 5
 }
 
-ACTIVE_COUNT="$(python3 - "$CONN_JSON" <<'PY'
-import json,sys
-rows=json.load(open(sys.argv[1],encoding="utf-8")).get("data",[])
-print(sum(1 for r in rows if (r.get("lifecycle-state") or "") in ("ACTIVE","CREATING")))
-PY
-)"
+ACTIVE_COUNT="$(oci compute instance-console-connection list   --compartment-id "$COMPARTMENT"   --instance-id "$CORE_ID"   --all   --query 'length(data[?("lifecycle-state"==`ACTIVE` || "lifecycle-state"==`CREATING`)])'   --raw-output)"
+
+case "$ACTIVE_COUNT" in
+  ''|null|None)
+    echo "serial_recovery_preflight=FAIL reason=console_connection_count_unresolved" >&2
+    exit 6
+    ;;
+  *[!0-9]*)
+    echo "serial_recovery_preflight=FAIL reason=unexpected_console_connection_count value=$ACTIVE_COUNT" >&2
+    exit 6
+    ;;
+esac
 
 PUB="$(cat "$KEY.pub")"
 
