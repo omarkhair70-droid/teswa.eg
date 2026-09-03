@@ -386,10 +386,11 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
       || leaf === 'community-guidelines'
     );
     const inPublicAccountDeletionRoute = rootGroup === 'account-deletion';
+    const inPublicLandingPreviewRoute = rootGroup === 'landing-preview';
     const inPublicComplianceRoute = inPublicLegalRoute || inPublicAccountDeletionRoute;
 
     if (inOAuthCallback && !user) return;
-    if (inPublicComplianceRoute) return;
+    if (inPublicComplianceRoute || inPublicLandingPreviewRoute) return;
     if (inNativeGoogleDiagnostics) {
       if (nativeGoogleTestModeEnabled) return;
       router.replace('/(auth)/login');
