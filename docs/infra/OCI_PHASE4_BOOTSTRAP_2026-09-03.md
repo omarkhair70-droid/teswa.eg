@@ -479,3 +479,14 @@ The next action remains read-only. A deeper diagnostic now inspects:
 - recent sshd journal entries where available.
 
 No additional Bastion session or package mutation should be attempted before reviewing this evidence.
+
+
+## Run Command diagnostic output truncation
+
+Oracle documents that plain-text Run Command responses are limited to the last 1 KB. The first deep Bastion diagnostic therefore cannot be relied on as a complete multi-section transcript when it prints more than that limit.
+
+The visible portion did still prove that the Oracle Linux public firewalld zone includes the SSH service and that `sshd` is installed.
+
+Before another guest-side diagnostic, Lane 3 now checks the client-side Bastion allowlist path because Oracle documents the same remote-close symptom when the connecting machine's public IP is outside the Bastion CIDR allowlist. Cloud Shell public IPs are dynamic between Cloud Shell sessions.
+
+The client-path diagnostic is read-only and compares the current Cloud Shell public IPv4 address against the live Bastion allowlist. No OCI resource is changed.
