@@ -36,6 +36,7 @@ STRUCTURAL_KEYS = (
     "enums",
     "indexes",
     "constraints",
+    "foreign_keys",
 )
 
 PROVIDER_RUNTIME_KEYS = (
@@ -110,6 +111,7 @@ def catalog_diff(key: str, source: dict[str, Any], target: dict[str, Any]) -> di
         "enums": ("schema_name", "enum_name", "enumsortorder"),
         "indexes": ("schema_name", "table_name", "index_name"),
         "constraints": ("schema_name", "table_name", "constraint_name"),
+        "foreign_keys": ("source_schema", "source_table", "constraint_name"),
         "functions": ("schema_name", "function_name", "identity_arguments"),
         "triggers": ("schema_name", "table_name", "trigger_name"),
         "policies": ("schema_name", "table_name", "policy_name"),
