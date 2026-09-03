@@ -47,9 +47,12 @@ echo
 echo "[services_listening]"
 ss -lnt 2>/dev/null | head -n 50 || true
 echo
-echo "[updates]"
+echo "[package_manager]"
 if command -v dnf >/dev/null 2>&1; then
-  dnf -q check-update 2>/dev/null | sed -n "1,80p" || true
+  echo "dnf=present"
+  rpm -q dnf 2>/dev/null || true
+else
+  echo "dnf=absent"
 fi
 echo
 echo "inventory_complete=true"'
