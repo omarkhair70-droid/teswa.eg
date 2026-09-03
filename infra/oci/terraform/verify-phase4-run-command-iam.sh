@@ -23,18 +23,37 @@ echo "TESWA PHASE 4 RUN COMMAND IAM VERIFY"
 
 DG="$(oci iam dynamic-group list   --compartment-id "$TENANCY_OCID"   --all   --output json)"
 
-printf '%s' "$DG" | python3 -c '
+DG_ID="$(printf '%s' "$DG" | python3 -c '
 import json,sys
 rows=[x for x in json.load(sys.stdin).get("data",[]) if x.get("name")=="teswa-run-command-instances" and x.get("lifecycle-state")!="DELETED"]
 if len(rows)!=1:
-    print("dynamic_group_count=%d" % len(rows))
-    raise SystemExit(3)
-x=rows[0]
-print("dynamic_group_state=%s" % x.get("lifecycle-state"))
-print("dynamic_group_rule_present=%s" % str("instance.compartment.id" in (x.get("matching-rule") or "")).lower())
-if x.get("lifecycle-state")!="ACTIVE":
+    print("")
+else:
+    print(rows[0].get("id",""))
+')"
+
+[ -n "$DG_ID" ] || { echo "dynamic_group_count_check=FAIL"; exit 3; }
+
+DG_GET="$(oci iam dynamic-group get   --dynamic-group-id "$DG_ID"   --output json)"
+
+TESWA_COMPARTMENT="$("$TF" output -raw teswa_compartment_id)"
+
+printf '%s' "$DG_GET" | python3 -c '
+import json,sys
+expected_compartment=sys.argv[1]
+x=json.load(sys.stdin).get("data",{})
+state=x.get("lifecycle-state")
+rule=x.get("matching-rule") or x.get("matching_rule") or ""
+has_field="instance.compartment.id" in rule
+has_compartment=expected_compartment in rule
+print("dynamic_group_state=%s" % state)
+print("dynamic_group_rule_field_present=%s" % str(has_field).lower())
+print("dynamic_group_rule_compartment_match=%s" % str(has_compartment).lower())
+if state!="ACTIVE":
     raise SystemExit(4)
-'
+if not has_field or not has_compartment:
+    raise SystemExit(8)
+' "$TESWA_COMPARTMENT"
 
 POL="$(oci iam policy list   --compartment-id "$TENANCY_OCID"   --all   --output json)"
 
@@ -56,6 +75,27 @@ if x.get("lifecycle-state")!="ACTIVE":
 if not any(expected in s and same_instance in s for s in statements):
     raise SystemExit(7)
 '
+
+echo
+echo "Terraform drift check:"
+set +e
+"$TF" plan   -var-file="phase3-compute.local.tfvars"   -detailed-exitcode   -no-color   >/tmp/teswa-phase4-iam-drift.txt
+DRIFT_RC=$?
+set -e
+
+case "$DRIFT_RC" in
+  0) echo "terraform_drift=none" ;;
+  2)
+    echo "terraform_drift=changes_detected"
+    tail -n 80 /tmp/teswa-phase4-iam-drift.txt
+    exit 9
+    ;;
+  *)
+    echo "terraform_plan=error"
+    tail -n 80 /tmp/teswa-phase4-iam-drift.txt
+    exit "$DRIFT_RC"
+    ;;
+esac
 
 echo
 echo "phase4_iam_verify=PASS"
