@@ -213,4 +213,57 @@ export interface MarketplaceCoreContract extends MarketplaceReadContract {
   reactivateOwned(itemId: string): Promise<ListingLifecycleCode>;
   getImageUrls(itemId: string): Promise<string[]>;
   deleteOwnedArchived(itemId: string): Promise<ListingLifecycleCode>;
+
+  getEditableListing(
+    itemId: string,
+    ownerId: string,
+  ): Promise<EditableListingRecord | null>;
+
+  updateListingCore(
+    input: ListingCoreUpdateInput,
+  ): Promise<TeswaResult<void, ListingCoreUpdateFailure>>;
 }
+
+
+export type EditableListingRecord = {
+  id: string;
+  status: 'active' | 'archived';
+  title: string;
+  categoryId: string | null;
+  city: string | null;
+  area: string | null;
+  condition: string;
+  conditionNotes: string | null;
+  description: string | null;
+  itemStory: string | null;
+  swapReason: string | null;
+  goodFor: string | null;
+  desireMode: 'specific' | 'flexible' | 'surprise';
+  desireText: string | null;
+  wantedTags: string[];
+};
+
+export type ListingCoreUpdateInput = {
+  itemId: string;
+  ownerId: string;
+  title: string;
+  categoryId: string | null;
+  city: string | null;
+  area: string | null;
+  condition: string;
+  conditionNotes: string | null;
+  description: string | null;
+  itemStory: string | null;
+  swapReason: string | null;
+  goodFor: string | null;
+  desireMode: 'specific' | 'flexible' | 'surprise';
+  desireText: string | null;
+  wantedTags: string[];
+};
+
+export type ListingCoreUpdateFailure =
+  | 'not_found_or_unauthorized'
+  | 'not_editable'
+  | 'item_update_failed'
+  | 'tags_update_failed'
+  | 'unknown';
