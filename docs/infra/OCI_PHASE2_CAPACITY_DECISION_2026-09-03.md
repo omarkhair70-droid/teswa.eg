@@ -1,7 +1,7 @@
 # Teswa OCI Phase 2 Capacity Decision — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** capacity measured; Phase 2 control-plane plan approved for planning only; no apply yet.
+**Status:** capacity measured; Phase 2 saved plan reviewed and approved for apply.
 
 ## Measured tenancy state
 
