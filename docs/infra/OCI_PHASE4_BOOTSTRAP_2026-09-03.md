@@ -150,3 +150,19 @@ The corrected post-apply IAM verifier is green:
 - `phase4_iam_verify=PASS`
 
 The Run Command authorization path is now closed on the OCI control plane. Guest execution may still wait for normal dynamic-group propagation.
+
+
+## Run Command agent recovery result
+
+After the IAM propagation window elapsed with the guest inventory still in `ACCEPTED`, a guarded soft reset was performed on `teswa-core-01` only.
+
+Observed recovery:
+
+- instance transitioned `STOPPING -> RUNNING`;
+- Compute Instance Run Command plugin returned `RUNNING`;
+- Compute Instance Monitoring plugin returned `RUNNING`;
+- recovery gate returned `recovery=PASS`.
+
+No production cutover, Supabase change, Nova change, DNS change, or data mutation occurred.
+
+The next step is a fresh read-only OS inventory Run Command.
