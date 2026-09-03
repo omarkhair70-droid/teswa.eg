@@ -8,6 +8,7 @@ import type {
   MessagingContract,
   NotificationsContract,
   OffersDealsContract,
+  PolicyAcceptanceContract,
   ProfileContract,
   StoriesContract,
 } from '@/lib/backend/contracts';
@@ -23,5 +24,6 @@ export interface TeswaBackend {
   analytics: AnalyticsContract;
   stories: StoriesContract;
   discovery: DiscoveryContract;
+  policies: PolicyAcceptanceContract;
   dolab: DolabContract;
 }
