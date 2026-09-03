@@ -70,7 +70,7 @@ if [ ! -f "$PGDATA/PG_VERSION" ]; then
   sudo /usr/pgsql-17/bin/postgresql-17-setup initdb >/dev/null
 fi
 tmp="$(mktemp)"
-sed "/^# BEGIN TESWA PHASE4$/,/^# END TESWA PHASE4$/d" "$PGDATA/postgresql.conf" >"$tmp"
+sudo sed "/^# BEGIN TESWA PHASE4$/,/^# END TESWA PHASE4$/d" "$PGDATA/postgresql.conf" >"$tmp"
 cat >>"$tmp" <<"EOF"
 # BEGIN TESWA PHASE4
 listen_addresses = '\''127.0.0.1'\''
