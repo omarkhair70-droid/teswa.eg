@@ -233,6 +233,12 @@ export function createSupabaseDealLifecycleAdapter(): DealLifecycleContract {
       return data ? mapDeal(data) : null;
     },
 
+    async getUnreadCount() {
+      const { data, error } = await supabase.rpc('get_unread_deal_messages_count');
+      if (error) throw error;
+      return typeof data === 'number' ? Math.max(0, data) : 0;
+    },
+
     async listConfirmationUserIds(dealId) {
       const { data, error } = await supabase
         .from('deal_confirmations')
