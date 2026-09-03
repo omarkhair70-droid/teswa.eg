@@ -10,19 +10,13 @@ const legacyDirectClientImports = new Set([
   'lib/admin-reports.ts',
   'lib/admin.ts',
   'lib/analytics.ts',
-  'lib/city-pulse.ts',
   'lib/dolab/index.ts',
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
   'lib/dolab/upload.ts',
-  'lib/motion-video-drops.ts',
   'lib/policy-acceptance.ts',
   'lib/reports.ts',
   'lib/reviews.ts',
-  'lib/stories.ts',
-  'lib/story-discovery.ts',
-  'lib/story-likes.ts',
-  'lib/story-views.ts',
 ]);
 
 const legacyProviderTypeImports = new Set([
@@ -265,6 +259,31 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenMessagingTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: messaging provider access must stay behind Teswa messaging contracts (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'lib/stories.ts',
+      'lib/story-likes.ts',
+      'lib/story-views.ts',
+      'lib/motion-video-drops.ts',
+      'lib/story-discovery.ts',
+      'lib/city-pulse.ts',
+    ].includes(relativePath)) {
+      const forbiddenStoryTokens = [
+        ".from('stories')",
+        ".from('story_likes')",
+        ".from('story_views')",
+        ".from('items')",
+        ".from('item_images')",
+        ".from('profiles')",
+        ".from('categories')",
+        "rpc('get_public_city_pulse_moving_items'",
+      ];
+      for (const token of forbiddenStoryTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: story/discovery provider access must stay behind Teswa contracts (${token})`);
         }
       }
     }
