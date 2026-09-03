@@ -70,3 +70,86 @@ export interface MarketplaceContract {
   reactivate(ownerId: string, itemId: string): Promise<TeswaResult<void, 'not_owned' | 'unknown'>>;
   deleteArchived(ownerId: string, itemId: string): Promise<TeswaResult<void, 'not_archived' | 'not_owned' | 'unknown'>>;
 }
+
+
+export type MarketplaceReadFilters = {
+  query?: string;
+  category?: string | null;
+  condition?: string | null;
+  city?: string | null;
+};
+
+export type MarketplaceFeedRecord = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  coverImageUrl: string | null;
+  category: string | null;
+  condition: string | null;
+  city: string | null;
+  ownerDisplayName: string | null;
+  createdAt: IsoDateTime;
+  distanceKm?: number | null;
+};
+
+export type MarketplaceReadPage = {
+  items: MarketplaceFeedRecord[];
+  hasMore: boolean;
+};
+
+export type MarketplaceDetailImageRecord = {
+  imageUrl: string | null;
+  isPrimary: boolean | null;
+  sortOrder: number | null;
+};
+
+export type MarketplaceOwnerPresenceRecord = {
+  id: string;
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  profileTagline: string | null;
+  city: string | null;
+  area: string | null;
+  successfulSwapsCount: number | null;
+  responseRate: number | null;
+};
+
+export type MarketplaceDetailRecord = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  condition: string | null;
+  conditionNotes: string | null;
+  city: string | null;
+  area: string | null;
+  ownerId: string | null;
+  itemStory: string | null;
+  swapReason: string | null;
+  goodFor: string | null;
+  desireMode: 'specific' | 'flexible' | 'surprise' | null;
+  desireText: string | null;
+  category: string | null;
+  wantedTags: Array<string | null>;
+  images: MarketplaceDetailImageRecord[];
+  ownerPresence: MarketplaceOwnerPresenceRecord | null;
+};
+
+export interface MarketplaceReadContract {
+  listFeed(input?: {
+    offset?: number;
+    limit?: number;
+    filters?: MarketplaceReadFilters;
+  }): Promise<MarketplaceReadPage>;
+
+  listNearbyFeed(input: {
+    latitude: number;
+    longitude: number;
+    radiusKm?: number;
+    offset?: number;
+    limit?: number;
+  }): Promise<MarketplaceReadPage>;
+
+  getFeedItem(itemId: string): Promise<MarketplaceFeedRecord | null>;
+  getDetail(itemId: string): Promise<MarketplaceDetailRecord | null>;
+}
