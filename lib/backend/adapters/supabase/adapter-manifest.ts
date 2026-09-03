@@ -14,6 +14,7 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
       'lib/trust-metrics.ts',
       'lib/badges.ts',
       'lib/direct-privacy.ts',
+      'lib/profile-images.ts',
     ],
   },
   marketplace: {
@@ -46,7 +47,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   media: {
     target: 'lib/backend/adapters/supabase/media-adapter.ts',
     legacyFiles: [
-      'lib/profile-images.ts',
       'lib/stories.ts',
       'lib/item-videos.ts',
       'lib/dolab/upload.ts',
