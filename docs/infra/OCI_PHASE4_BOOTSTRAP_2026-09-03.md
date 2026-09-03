@@ -270,3 +270,26 @@ The Bastion target subnet has therefore been corrected to `teswa-private-app`.
 This correction does not open any public SSH path. The only SSH ingress remains TCP/22 from the Bastion private endpoint /32 to the Core app NSG, and the Bastion client allowlist remains the detected Cloud Shell source /32.
 
 The original saved plan must not be applied; regenerate and review a fresh plan after this correction.
+
+
+## Temporary Bastion corrected plan approval
+
+The regenerated saved plan was reviewed after moving the Bastion endpoint to the private app subnet.
+
+Observed plan:
+
+- 2 creates
+- 1 in-place update
+- 0 destroys
+- create `oci_bastion_bastion.admin[0]`
+- create `oci_core_network_security_group_security_rule.bastion_to_core_ssh[0]`
+- update `oci_core_instance.core[0]` only to enable the `Bastion` Oracle Cloud Agent plugin
+- Bastion target subnet is the Teswa private app subnet
+- SSH ingress is limited to TCP/22 from the Bastion private endpoint /32
+- client allowlist is the current Cloud Shell source /32
+- no public SSH exposure
+- no Nova, Supabase, DNS, storage, database, or application-routing changes
+
+`phase4_bastion_plan_guard=PASS`
+
+**Decision:** APPROVED FOR APPLY using the reviewed saved plan only.
