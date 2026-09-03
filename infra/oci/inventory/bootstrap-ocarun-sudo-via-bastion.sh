@@ -3,8 +3,12 @@ set -Eeuo pipefail
 
 TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 SESSION_NAME="teswa-ocarun-bootstrap-$(date -u +%Y%m%dT%H%M%SZ)"
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
+KEY="${TESWA_CORE_BOOTSTRAP_SSH_PRIVATE_KEY:-$HOME/.ssh/teswa_core_bootstrap_rsa}"
+
+[ -f "$KEY" ] && [ -f "$KEY.pub" ] || {
+  echo "Missing persistent Core bootstrap SSH key. Run prepare-phase4-core-bootstrap-replacement.sh first." >&2
+  exit 2
+}
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../terraform" && pwd)"
 
@@ -12,14 +16,12 @@ BASTION_ID="$("$TF" output -raw admin_bastion_id)"
 COMPARTMENT="$("$TF" output -raw teswa_compartment_id)"
 CORE_ID="$(oci compute instance list   --compartment-id "$COMPARTMENT"   --display-name teswa-core-01   --lifecycle-state RUNNING   --all   --query 'data[0].id'   --raw-output)"
 
-ssh-keygen -q -t rsa -b 3072 -N "" -f "$TMPDIR/session_key"
-
 echo "TESWA PHASE 4 OCARUN SUDO BOOTSTRAP SESSION"
-echo "ephemeral_key=true"
+echo "persistent_launch_key=true"
 echo "session_ttl_seconds=1800"
 echo
 
-oci bastion session create-managed-ssh   --bastion-id "$BASTION_ID"   --display-name "$SESSION_NAME"   --ssh-public-key-file "$TMPDIR/session_key.pub"   --target-resource-id "$CORE_ID"   --target-os-username opc   --target-port 22   --session-ttl 1800   --wait-for-state SUCCEEDED   --wait-interval-seconds 10   >/dev/null
+oci bastion session create-managed-ssh   --bastion-id "$BASTION_ID"   --display-name "$SESSION_NAME"   --ssh-public-key-file "$KEY.pub"   --target-resource-id "$CORE_ID"   --target-os-username opc   --target-port 22   --session-ttl 1800   --wait-for-state SUCCEEDED   --wait-interval-seconds 10   >/dev/null
 
 SESSION_ID="$(oci bastion session list   --bastion-id "$BASTION_ID"   --display-name "$SESSION_NAME"   --all   --query 'data[0].id'   --raw-output)"
 
@@ -56,7 +58,7 @@ d=json.load(sys.stdin).get("data",{})
 print((d.get("ssh-metadata") or {}).get("command",""))
 ')"
 
-CMD="$(python3 - "$CMD" "$TMPDIR/session_key" <<'PY'
+CMD="$(python3 - "$CMD" "$KEY" <<'PY'
 import re,sys
 cmd,key=sys.argv[1:]
 cmd=re.sub(r"<private[Kk]ey>", key, cmd)
@@ -82,5 +84,5 @@ printf '%s' "$ROOT_SCRIPT" | eval "$CMD 'sudo bash -s'"
 
 echo
 echo "sudoers_install=PASS"
-echo "ephemeral_session_key_removed_on_exit=true"
+echo "persistent_launch_key_retained=true"
 echo "Next step: verify ocarun sudo through a fresh Run Command."
