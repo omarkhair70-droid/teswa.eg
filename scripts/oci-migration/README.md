@@ -26,11 +26,10 @@ Observed on 2026-09-03:
 
 Branch: `refactor/backend-boundary-20260903`
 
-The branch has completed B1 Auth isolation and is actively progressing through
-B2 Media/Storage. Profile images, item videos, item images, Dolab media, and
-multiple messaging voice-storage paths have moved behind MediaStorageContract.
-Marketplace, offers/deals, messaging/realtime, notifications, and the remaining
-high-risk media surfaces are still in progress.
+Lane 2 has closed B1 Auth, B2 client Storage, B4 Offers/Deals, and B6
+Notifications boundaries, while B3 Profile/Marketplace and B5
+Messaging/Realtime have progressed substantially. Feature/client direct
+Supabase Storage usage is 0. Supabase is still the active production provider.
 
 Lane 4 may prepare source/target verification now. Production provider switching
 must wait for the relevant Lane 2 boundary slices.
@@ -39,17 +38,22 @@ must wait for the relevant Lane 2 boundary slices.
 
 Branch: `infra/oracle-platform-20260903`
 
-The isolated Teswa OCI foundation has been applied: a Teswa compartment, VCN,
-public edge subnet, private app subnet, private data subnet, NSGs, route policy,
-and internet gateway. The existing Nova A1 VM remains a hard no-touch boundary.
+The isolated Teswa network foundation and durable Terraform state are green.
 
-The isolated network foundation is applied and reports no Terraform drift. The
-final zero-compute verification is still being closed. PostgreSQL, API, Realtime,
-workers, Object Storage, Vault, and production ingress are not yet provisioned
-as the Teswa data plane.
+Lane 3 Phase 2 is also applied and verified:
 
-Lane 4 therefore cannot execute a real source -> OCI shadow comparison yet, but
-can finish the capture/comparison machinery now.
+- `teswa-media`: private, correct compartment;
+- `teswa-backups`: private + versioned;
+- `teswa-vault`: DEFAULT / ACTIVE;
+- `teswa-ops`: ACTIVE;
+- Terraform drift: none.
+
+Lane 3 has additionally approved and preflighted a Nova resize to release
+1 OCPU / 6 GB for Teswa, but the branch has not yet recorded that resize as
+executed.
+
+PostgreSQL, API, Realtime, workers, and production ingress are still not handed
+to Lane 4.
 
 ## Files
 
@@ -296,8 +300,8 @@ computes SHA-256, so source hashes are never treated as target proof.
 
 ### Lane 3 Phase 2 Object Storage alignment
 
-Lane 3 has selected, but not yet applied, a private `teswa-media` application
-bucket and a private/versioned `teswa-backups` bucket.
+Lane 3 has applied and verified a private `teswa-media` application bucket and
+a private/versioned `teswa-backups` bucket.
 
 Lane 4's concrete media map is:
 
@@ -366,9 +370,8 @@ be ignored.
 
 Lane 2 B1 Auth and B2 client Storage boundaries are now usable dependencies.
 
-Lane 3 has closed the isolated OCI network foundation and durable Terraform
-remote state, but has **not yet handed Lane 4 an isolated PostgreSQL target or
-final application Object Storage buckets**.
+Lane 3 has handed Lane 4 the application Object Storage targets, but has **not
+yet handed Lane 4 an isolated PostgreSQL target**.
 
 When Lane 3 exposes an isolated PostgreSQL 17 target, Lane 4 should:
 
