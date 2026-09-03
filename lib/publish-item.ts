@@ -1,7 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 import { compressItemImage } from '@/lib/media/compress-item-image';
 import { uploadItemVideoTeaser } from '@/lib/item-videos';
 
@@ -34,9 +33,11 @@ export type PublishItemResult =
   | { ok: false; reason: 'upload_failed' | 'item_insert_failed' | 'images_insert_failed' | 'video_insert_failed' | 'invalid_input'; message: string };
 
 export async function fetchActiveCategories(): Promise<ActiveCategory[]> {
-  const { data, error } = await supabase.from('categories').select('id,name_ar').eq('is_active', true).order('sort_order', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as ActiveCategory[];
+  const categories = await teswaBackendRuntime.marketplace.listActiveCategories();
+  return categories.map((category) => ({
+    id: category.id,
+    name_ar: category.nameAr,
+  }));
 }
 
 function sanitizeFileName(name: string | null | undefined, fallback: string): string {
@@ -106,39 +107,51 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
       uploadedImages.push({ image_url: publicUrl, is_primary: i === 0, sort_order: i });
     }
 
-    const { error: itemError } = await supabase.from('items').insert({
-      id: itemId,
-      owner_id: userId,
+    const baseResult = await teswaBackendRuntime.marketplace.createPublishedListingBase({
+      itemId,
+      ownerId: userId,
       title: payload.title,
-      category_id: payload.categoryId,
+      categoryId: payload.categoryId,
       description: payload.description,
       condition: payload.condition,
-      condition_notes: payload.conditionNotes,
+      conditionNotes: payload.conditionNotes,
       city: payload.city,
       area: payload.area,
-      location_latitude: payload.locationLatitude,
-      location_longitude: payload.locationLongitude,
-      desire_mode: payload.desireMode,
-      desire_text: payload.desireText,
-      item_story: payload.itemStory,
-      swap_reason: payload.swapReason,
-      good_for: payload.goodFor,
-      status: 'active',
-      source: 'direct_listing',
+      locationLatitude: payload.locationLatitude,
+      locationLongitude: payload.locationLongitude,
+      desireMode: payload.desireMode,
+      desireText: payload.desireText,
+      itemStory: payload.itemStory,
+      swapReason: payload.swapReason,
+      goodFor: payload.goodFor,
+      images: uploadedImages.map((image) => ({
+        imageUrl: image.image_url,
+        isPrimary: image.is_primary,
+        sortOrder: image.sort_order,
+      })),
     });
 
-    if (itemError) {
-      if (__DEV__) console.log('[publishItem] item insert failed', { userId, itemId, code: itemError.code, message: itemError.message });
+    if (!baseResult.ok) {
+      if (__DEV__) {
+        console.log('[publishItem] base metadata failed', {
+          userId,
+          itemId,
+          reason: baseResult.reason,
+          message: baseResult.message,
+        });
+      }
       await cleanupStorage(uploadedPaths);
-      return { ok: false, reason: 'item_insert_failed', message: 'تعذر نشر العنصر. حاول مرة أخرى.' };
-    }
-
-    const { error: imagesError } = await supabase.from('item_images').insert(uploadedImages.map((img) => ({ ...img, item_id: itemId })));
-    if (imagesError) {
-      if (__DEV__) console.log('[publishItem] image metadata insert failed', { userId, itemId, code: imagesError.code, message: imagesError.message });
-      await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
-      await cleanupStorage(uploadedPaths);
-      return { ok: false, reason: 'images_insert_failed', message: 'تعذر تثبيت صور العنصر. حاول مرة أخرى.' };
+      return {
+        ok: false,
+        reason:
+          baseResult.reason === 'images_insert_failed'
+            ? 'images_insert_failed'
+            : 'item_insert_failed',
+        message:
+          baseResult.reason === 'images_insert_failed'
+            ? 'تعذر تثبيت صور العنصر. حاول مرة أخرى.'
+            : 'تعذر نشر العنصر. حاول مرة أخرى.',
+      };
     }
 
     if (videoTeaserAsset) {
@@ -146,40 +159,68 @@ export async function publishItem(payload: PublishItemPayload, assets: ImagePick
       const videoUpload = await uploadItemVideoTeaser({ asset: videoTeaserAsset, itemId, userId });
 
       if (!videoUpload.ok) {
-        await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
+        await teswaBackendRuntime.marketplace.markPublishFailed(itemId, userId);
         const imageCleanup = await cleanupInsertedImageRowsThenStorage(itemId, uploadedPaths);
         if (!imageCleanup.ok) {
-          return { ok: false, reason: 'upload_failed', message: 'تعذر إكمال نشر فيديو العنصر أو تنظيف الصور بأمان. حاول مرة أخرى.' };
+          return {
+            ok: false,
+            reason: 'upload_failed',
+            message: 'تعذر إكمال نشر فيديو العنصر أو تنظيف الصور بأمان. حاول مرة أخرى.',
+          };
         }
-        return { ok: false, reason: 'upload_failed', message: videoUpload.message || 'تعذر رفع فيديو العنصر. حاول مرة أخرى.' };
+        return {
+          ok: false,
+          reason: 'upload_failed',
+          message: videoUpload.message || 'تعذر رفع فيديو العنصر. حاول مرة أخرى.',
+        };
       }
 
       uploadedVideoPath = videoUpload.storagePath;
 
-      const { error: videoInsertError } = await supabase.from('item_videos').insert({
-        item_id: itemId,
-        video_storage_path: videoUpload.storagePath,
-        duration_ms: videoUpload.durationMs,
+      const videoInsertResult = await teswaBackendRuntime.marketplace.attachPublishedVideo({
+        itemId,
+        videoStoragePath: videoUpload.storagePath,
+        durationMs: videoUpload.durationMs,
         width: videoUpload.width,
         height: videoUpload.height,
       });
 
-      if (videoInsertError) {
-        if (__DEV__) console.log('[publishItem] video metadata insert failed', { userId, itemId, code: videoInsertError.code, message: videoInsertError.message });
-        await supabase.from('items').update({ status: 'archived' }).eq('id', itemId).eq('owner_id', userId);
+      if (!videoInsertResult.ok) {
+        if (__DEV__) {
+          console.log('[publishItem] video metadata insert failed', {
+            userId,
+            itemId,
+            message: videoInsertResult.message,
+          });
+        }
+        await teswaBackendRuntime.marketplace.markPublishFailed(itemId, userId);
         await cleanupItemVideoStorage(uploadedVideoPath);
         const imageCleanup = await cleanupInsertedImageRowsThenStorage(itemId, uploadedPaths);
         if (!imageCleanup.ok) {
-          return { ok: false, reason: 'video_insert_failed', message: 'تعذر تثبيت فيديو العنصر أو تنظيف الصور بأمان. حاول مرة أخرى.' };
+          return {
+            ok: false,
+            reason: 'video_insert_failed',
+            message: 'تعذر تثبيت فيديو العنصر أو تنظيف الصور بأمان. حاول مرة أخرى.',
+          };
         }
-        return { ok: false, reason: 'video_insert_failed', message: 'تعذر تثبيت فيديو العنصر. حاول مرة أخرى.' };
+        return {
+          ok: false,
+          reason: 'video_insert_failed',
+          message: 'تعذر تثبيت فيديو العنصر. حاول مرة أخرى.',
+        };
       }
     }
 
     if (payload.wantedTags.length) {
-      const { error: tagsError } = await supabase.from('item_wanted_tags').insert(payload.wantedTags.map((tag) => ({ item_id: itemId, tag })));
-      if (tagsError && __DEV__) {
-        console.log('[publishItem] wanted tags insert failed', { itemId, message: tagsError.message });
+      const tagsResult = await teswaBackendRuntime.marketplace.addPublishedWantedTags(
+        itemId,
+        payload.wantedTags,
+      );
+      if (!tagsResult.ok && __DEV__) {
+        console.log('[publishItem] wanted tags insert failed', {
+          itemId,
+          message: tagsResult.message,
+        });
       }
     }
 
@@ -216,10 +257,18 @@ async function cleanupItemVideoStorage(path: string | null) {
   ]);
 }
 
-async function cleanupInsertedImageRowsThenStorage(itemId: string, storagePaths: string[]): Promise<{ ok: true } | { ok: false }> {
-  const { error: deleteRowsError } = await supabase.from('item_images').delete().eq('item_id', itemId);
-  if (deleteRowsError) {
-    if (__DEV__) console.log('[publishItem] image metadata cleanup failed', { itemId, code: deleteRowsError.code, message: deleteRowsError.message });
+async function cleanupInsertedImageRowsThenStorage(
+  itemId: string,
+  storagePaths: string[],
+): Promise<{ ok: true } | { ok: false }> {
+  const deleteResult = await teswaBackendRuntime.marketplace.deletePublishedImageMetadata(itemId);
+  if (!deleteResult.ok) {
+    if (__DEV__) {
+      console.log('[publishItem] image metadata cleanup failed', {
+        itemId,
+        message: deleteResult.message,
+      });
+    }
     return { ok: false };
   }
 
