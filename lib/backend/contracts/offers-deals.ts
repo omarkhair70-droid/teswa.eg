@@ -143,6 +143,7 @@ export type DealLifecycleMessageRecord = {
 
 export interface DealLifecycleContract {
   getDeal(dealId: string): Promise<DealLifecycleRecord | null>;
+  getUnreadCount(): Promise<number>;
   listConfirmationUserIds(dealId: string): Promise<string[]>;
   listMessages(dealId: string, limit?: number): Promise<DealLifecycleMessageRecord[]>;
   hasReview(dealId: string, reviewerId: string): Promise<TeswaResult<boolean, 'unknown'>>;
