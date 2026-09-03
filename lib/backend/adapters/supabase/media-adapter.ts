@@ -30,12 +30,63 @@ function sanitizeFileName(value: string | null | undefined): string {
 }
 
 async function readSource(source: MediaUploadSource): Promise<ArrayBuffer> {
+  if (source.buffer) return source.buffer;
   try {
     return await new File(source.uri).arrayBuffer();
   } catch {
     const response = await fetch(source.uri);
     return response.arrayBuffer();
   }
+}
+
+async function uploadWithProgress(input: {
+  purpose: MediaPurpose;
+  objectKey: string;
+  body: ArrayBuffer;
+  contentType: string | null;
+  onProgress: NonNullable<Parameters<MediaStorageContract['upload']>[0]['onProgress']>;
+}): Promise<{ error: Error | null }> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (sessionError || !accessToken || !supabaseUrl || !supabaseAnonKey) {
+    return { error: new Error('Media upload session/config is unavailable.') };
+  }
+
+  const bucket = bucketFor(input.purpose);
+  const encodedObjectKey = encodeURIComponent(input.objectKey).replace(/%2F/g, '/');
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedObjectKey}`;
+
+  return await new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl);
+    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+    xhr.setRequestHeader('apikey', supabaseAnonKey);
+    xhr.setRequestHeader('x-upsert', 'false');
+    if (input.contentType) xhr.setRequestHeader('Content-Type', input.contentType);
+
+    xhr.upload.onprogress = (event) => {
+      const totalBytes = event.lengthComputable ? event.total : null;
+      const percent = totalBytes
+        ? Math.min(100, Math.max(0, Math.round((event.loaded / totalBytes) * 100)))
+        : null;
+      input.onProgress({
+        loadedBytes: event.loaded,
+        totalBytes,
+        percent,
+      });
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve({ error: null });
+      resolve({ error: new Error(`Upload failed with status ${xhr.status}`) });
+    };
+    xhr.onerror = () => resolve({ error: new Error('Network error during upload') });
+    xhr.onabort = () => resolve({ error: new Error('Upload aborted') });
+    xhr.send(input.body);
+  });
 }
 
 function resolveObjectKey(input: {
@@ -83,19 +134,32 @@ export function createSupabaseMediaStorageAdapter(): MediaStorageContract {
           };
         }
 
-        const { error } = await supabase.storage
-          .from(bucketFor(input.purpose))
-          .upload(objectKey, body, {
-            contentType: contentType ?? undefined,
-            upsert: false,
+        let uploadError: Error | null = null;
+        if (input.onProgress) {
+          const progressResult = await uploadWithProgress({
+            purpose: input.purpose,
+            objectKey,
+            body,
+            contentType,
+            onProgress: input.onProgress,
           });
+          uploadError = progressResult.error;
+        } else {
+          const { error } = await supabase.storage
+            .from(bucketFor(input.purpose))
+            .upload(objectKey, body, {
+              contentType: contentType ?? undefined,
+              upsert: false,
+            });
+          uploadError = error ? new Error(error.message) : null;
+        }
 
-        if (error) {
+        if (uploadError) {
           return {
             ok: false,
             reason: 'upload_failed',
-            message: error.message,
-            cause: error,
+            message: uploadError.message,
+            cause: uploadError,
           };
         }
 
