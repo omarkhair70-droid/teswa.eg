@@ -650,3 +650,35 @@ The helper now:
 - does not alter the reviewed replacement plan.
 
 No OCI compute resource changed during the failed preflight.
+
+
+## A1 replacement blocked by host capacity
+
+The fresh A1 capacity report returned:
+
+- observed Core shape: `VM.Standard.A1.Flex`
+- observed Core allocation: 1 OCPU / 6 GB
+- requested replacement allocation: 1 OCPU / 6 GB
+- capacity status: `OUT_OF_HOST_CAPACITY`
+- capacity preflight: FAIL
+
+**Decision:** the saved destroy/create Core replacement plan must not be applied. Destroying the currently allocated A1 instance while the availability domain reports no host capacity could strand Teswa without a Core host.
+
+The replacement apply helper is now hard-disabled while this recovery path is superseded.
+
+### Safe recovery direction
+
+Oracle documents the supported boot-volume repair workflow: stop the affected instance, detach its boot volume, attach that boot volume to another Linux instance as a data volume, repair it, detach it from the helper, reattach it to the original instance, and start the original instance.
+
+This avoids releasing the scarce A1 host allocation.
+
+Lane 3 will use a temporary `VM.Standard.E2.1.Micro` rescue helper only if all of these read-only gates pass first:
+
+- at least one E2 Micro service-limit slot remains;
+- at least 47 GB of Always Free boot-volume capacity remains for the temporary helper;
+- a fresh E2 host-capacity report for the Core availability domain returns AVAILABLE;
+- the existing Core boot volume is detected and remains preserved.
+
+The helper will be launched with root cloud-init enabling `ocarun` sudo, used only to mount the detached Core boot volume and install the missing `opc` authorized key plus `ocarun` sudoers file, then removed after the Core is restored.
+
+No production cutover, Supabase change, Nova change, DNS change, or data migration is part of this rescue.
