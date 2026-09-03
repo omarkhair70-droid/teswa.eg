@@ -97,26 +97,29 @@ Safe order:
 
 ## B2 handoff relevance
 
-Lane 2 has closed B1 Auth isolation and is actively through B2.4 Media/Storage
-decoupling.
+Lane 2 has now **closed B2 client Storage isolation**.
 
-Current B2 progress observed by Lane 4:
+Observed closure state:
 
 - concrete Supabase Media adapter exists;
-- Dolab signed URLs are behind the media boundary;
-- profile image Storage upload/public URL/rollback cleanup are behind the media boundary;
-- item-video Storage upload/signed URL/cleanup are behind the media boundary;
-- Dolab upload/delete Storage operations are behind the media boundary;
-- direct SDK Storage legacy files have ratcheted from 11 to 8;
-- Story progress-preserving upload and Direct Chat media remain deferred/high-risk surfaces.
+- profile images are behind `MediaStorageContract`;
+- item images are behind `MediaStorageContract`;
+- item videos are behind `MediaStorageContract`;
+- Dolab media/signed URLs are behind `MediaStorageContract`;
+- direct/contextual/deal voice media are behind `MediaStorageContract`;
+- Direct Chat attachment Storage is behind `MediaStorageContract`;
+- Stories Storage is behind `MediaStorageContract` with provider-neutral upload progress;
+- feature/client direct `supabase.storage` allowlist is **0**;
+- raw Story Supabase Storage REST/env exception is removed.
 
-The current contract also exposes:
+The current contract exposes migration-critical behavior:
 
-`getObjectKeyFromPublicUrl(purpose, url)`
+- `getObjectKeyFromPublicUrl(purpose, url)`;
+- `onProgress` with provider-neutral loaded/total/percent values;
+- max-size enforcement and `file_too_large` semantics.
 
-That method is directly useful for migration compatibility because Lane 4 needs
-to normalize existing Supabase public URLs back to stable logical object keys
-before any target-only URL rewrite.
+This is now a clean Lane 4 dependency: OCI media verification can target the
+same contract without another feature-level Storage rewrite.
 
 Lane 4 should therefore consume, not compete with, the B2 contract:
 
