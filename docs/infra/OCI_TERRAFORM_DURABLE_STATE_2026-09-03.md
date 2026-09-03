@@ -32,23 +32,31 @@ The remote backend will use:
 - region: `me-jeddah-1`
 - Object Storage namespace discovered at runtime
 - state locking provided by the native OCI backend
-- a temporary OCI SecurityToken profile for interactive Cloud Shell migration
+- a dedicated OCI API-key profile for the Terraform backend
 
 The backend bucket remains outside the Terraform state it stores; it is bootstrap-managed intentionally.
 
-## Authentication note
+## Authentication decision
 
-OCI Cloud Shell's pre-authenticated CLI uses its own delegation-token context under `/etc/oci`.
+OCI Cloud Shell's pre-authenticated CLI uses `instance_obo_user` delegation credentials under `/etc/oci`.
 
-The native Terraform OCI backend documents `SecurityToken` authentication, not Cloud Shell's `instance_obo_user` delegation mode. For the migration step, create a separate short-lived CLI session profile named `teswa-terraform`.
+Two SecurityToken attempts were rejected by the environment:
+- browser authentication redirected to `localhost:8181` on the user's desktop rather than the remote Cloud Shell;
+- `--no-browser --auth instance_obo_user` returned `NotAuthorizedOrNotFound` while trying to generate a user security token.
 
-Security tokens expire, so this is an interactive migration/authentication lane, not the final CI identity design.
+The native OCI backend does not document `instance_obo_user` as an authentication mode. It does document `APIKey`, `InstancePrincipal`, `ResourcePrincipal`, `SecurityToken`, and related modes.
+
+Cloud Shell itself runs in an Oracle-managed tenancy, so treating the Cloud Shell VM as an Instance Principal for the user's tenancy is not the right boundary.
+
+Decision: create a dedicated RSA API signing key for the current OCI user and store the private half only in the user's encrypted Cloud Shell home directory (`~/.oci`). OCI receives only the public key. The profile is named `teswa-terraform`.
+
+OCI permits at most three API signing keys per user, so the setup helper checks the current count before uploading anything.
 
 ## Migration sequence
 
 1. Install an official current Terraform binary (>= 1.12) in the user's home directory and verify its SHA256 checksum.
-2. Create/refresh the `teswa-terraform` OCI SecurityToken profile.
-3. Run `terraform init -migrate-state` against the native OCI backend.
+2. Run `bash setup-terraform-api-key.sh` to create/test the dedicated `teswa-terraform` API-key profile.
+3. Run `terraform init -migrate-state` against the native OCI backend using that API-key profile.
 4. Confirm copying the existing local state to the remote backend.
 5. Run a zero-drift plan.
 6. Verify the remote state object exists.
