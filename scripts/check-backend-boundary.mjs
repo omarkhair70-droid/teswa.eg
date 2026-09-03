@@ -16,15 +16,12 @@ const legacyDirectClientImports = new Set([
   'lib/admin.ts',
   'lib/analytics.ts',
   'lib/badges.ts',
-  'lib/chat/direct-runtime-auth.ts',
-  'lib/chat/native-direct-channel.ts',
   'lib/chat/supabase-direct-chat.ts',
   'lib/city-pulse.ts',
   'lib/contextual-conversations.ts',
   'lib/deals.ts',
   'lib/direct-messages.ts',
   'lib/direct-privacy.ts',
-  'lib/dolab/chat-bridge.ts',
   'lib/dolab/index.ts',
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
@@ -111,6 +108,12 @@ for (const sourceRoot of sourceRoots) {
     if (content.includes('@supabase/supabase-js')) {
       if (!isAdapter && !relativePath.startsWith('lib/supabase/') && !legacyProviderTypeImports.has(relativePath)) {
         violations.push(`${relativePath}: new direct @supabase/supabase-js dependency`);
+      }
+    }
+
+    if (content.includes('supabase.auth.')) {
+      if (!isAdapter && !relativePath.startsWith('lib/supabase/')) {
+        violations.push(`${relativePath}: feature-level Supabase Auth access must go through AuthContract`);
       }
     }
 
