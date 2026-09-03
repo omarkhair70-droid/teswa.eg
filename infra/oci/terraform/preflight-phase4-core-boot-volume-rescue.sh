@@ -79,7 +79,7 @@ echo "preserve_core_boot_volume=true"
 echo
 
 set +e
-oci limits resource-availability get   --compartment-id "$TENANCY"   --service-name compute   --limit-name vm-standard-e2-1-micro-count   --output json >"$E2_LIMIT_JSON" 2>/tmp/teswa-e2-limit.err
+oci limits resource-availability get   --compartment-id "$TENANCY"   --service-name compute   --limit-name vm-standard-e2-1-micro-count   --availability-domain "$AD"   --output json >"$E2_LIMIT_JSON" 2>/tmp/teswa-e2-limit.err
 LIMIT_RC=$?
 set -e
 
