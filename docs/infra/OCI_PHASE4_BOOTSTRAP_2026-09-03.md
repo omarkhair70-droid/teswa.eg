@@ -910,3 +910,29 @@ Operator flow for the next attempt:
 5. stop as soon as UEFI/Boot Manager/GRUB appears.
 
 The existing A1 instance, boot volume, VNIC, private IP, Supabase production, Nova, and network topology remain unchanged.
+
+
+## Recovery pivot to VNC console
+
+Repeated attempts to catch UEFI/GRUB through the browser-hosted serial terminal are operationally unreliable because the reboot interrupts the SSH transport and browser/terminal key handling makes the short interception window difficult to hit.
+
+Lane 3 stops using the serial keyboard-interception loop.
+
+Oracle supports a second console mode for VM instances: **VNC console connection**. It uses the same Instance Console Connection resource but forwards the VM console visually to a local VNC client through an SSH tunnel. This gives direct graphical access to UEFI/Boot Manager/GRUB and removes dependence on browser F5/Escape handling and serial reconnect timing.
+
+The existing ACTIVE console connection can be reused. A read-only helper now:
+
+- fetches the existing VNC connection string;
+- creates a local PowerShell tunnel script in the Cloud Shell home directory;
+- references the existing RSA console private key only by expected Windows download path;
+- makes no OCI or guest mutation.
+
+Operator transfer remains manual and explicit because private keys must not be printed or committed:
+
+1. use Cloud Shell **Download** to download `.ssh/teswa_core_bootstrap_rsa`;
+2. download `teswa-core-vnc-tunnel.ps1`;
+3. run the PowerShell script locally on Windows;
+4. connect a VNC viewer to `localhost:5900`;
+5. perform the maintenance reboot and interact with UEFI/GRUB visually.
+
+After recovery, delete the downloaded console key copy and temporary VNC/serial console connection.
