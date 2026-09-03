@@ -1,6 +1,5 @@
 import { type ElementRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
   Modal,
   Pressable,
   ScrollView,
@@ -8,6 +7,7 @@ import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
   useWindowDimensions,
   View,
 } from 'react-native';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 import ViewShot from 'react-native-view-shot';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
