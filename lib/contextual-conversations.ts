@@ -78,16 +78,6 @@ export type SendContextualMessageResult =
 const CONTEXTUAL_VOICE_MAX_DURATION_MS = 45_000;
 const CONTEXTUAL_VOICE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
-function mapMessage(
-  message: Awaited<
-    ReturnType<typeof teswaBackendRuntime.contextualMessaging.sendText>
-  > extends { ok: true; data: infer T }
-    ? T
-    : never,
-): ContextualConversationMessage {
-  return message as ContextualConversationMessage;
-}
-
 async function notifyContextualMessageFromMobile(input: {
   conversationId: string;
   messageId: string;
