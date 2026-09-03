@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
 import { logGoogleSignInDiagnostic, signInWithGoogleNative } from '@/lib/google-native-auth-v2';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -78,25 +78,19 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
 
     const hasTokens = Boolean(params.access_token && params.refresh_token);
     logGoogleBrowserOAuthDiagnostic('callback_has_tokens', { hasTokens });
-    if (params.access_token && params.refresh_token) {
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: String(params.access_token),
-        refresh_token: String(params.refresh_token),
-      });
-      logGoogleBrowserOAuthDiagnostic('set_session_result', { hasError: Boolean(sessionError) });
-
-      return { error: sessionError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
-    }
-
     const code = typeof params.code === 'string' ? params.code : null;
     logGoogleBrowserOAuthDiagnostic('callback_has_code', { hasCode: Boolean(code) });
-    if (!code) {
+    if (!hasTokens && !code) {
       return { error: GOOGLE_AUTH_CALLBACK_FAILED };
     }
 
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-    logGoogleBrowserOAuthDiagnostic('exchange_code_result', { hasError: Boolean(exchangeError) });
-    return { error: exchangeError ? GOOGLE_AUTH_CALLBACK_FAILED : null };
+    const completionResult = await teswaBackendRuntime.auth.completeExternalSignIn(url);
+    if (hasTokens) {
+      logGoogleBrowserOAuthDiagnostic('set_session_result', { hasError: !completionResult.ok });
+    } else {
+      logGoogleBrowserOAuthDiagnostic('exchange_code_result', { hasError: !completionResult.ok });
+    }
+    return { error: completionResult.ok ? null : GOOGLE_AUTH_CALLBACK_FAILED };
   })();
 
   inFlightCallbackCompletion.set(url, completionPromise);
@@ -123,24 +117,22 @@ export async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | 
     const redirectTo = makeRedirectUri({ scheme: 'teswa', path: 'auth/callback' });
     logGoogleBrowserOAuthDiagnostic('redirect_uri_created');
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const authStart = await teswaBackendRuntime.auth.startExternalSignIn({
       provider: 'google',
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true,
-      },
+      redirectTo,
     });
+    const authorizationUrl = authStart.ok ? authStart.data.authorizationUrl : null;
     logGoogleBrowserOAuthDiagnostic('supabase_oauth_url_created', {
-      hasUrl: Boolean(data?.url),
-      hasSupabaseError: Boolean(error),
+      hasUrl: Boolean(authorizationUrl),
+      hasSupabaseError: !authStart.ok,
     });
 
-    if (error || !data?.url) {
+    if (!authStart.ok || !authorizationUrl) {
       return { error: GOOGLE_AUTH_ERROR };
     }
 
     logGoogleBrowserOAuthDiagnostic('open_auth_session_start');
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    const result = await WebBrowser.openAuthSessionAsync(authorizationUrl, redirectTo);
     logGoogleBrowserOAuthDiagnostic('open_auth_session_result', { resultType: result.type });
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
@@ -183,8 +175,8 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
       return { error: null };
     }
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const hasActiveSession = Boolean(sessionData.session);
+    const activeSession = await teswaBackendRuntime.auth.getSession();
+    const hasActiveSession = Boolean(activeSession);
     const sessionBackedNativeSuccess =
       hasActiveSession && (nativeResult.reason === 'native_success' || nativeResult.status === 'success');
     if (sessionBackedNativeSuccess) {

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth.android.ts.v1';
 export type GoogleNativeAuthImplementation = 'android-native' | 'web-shim' | 'unknown';
@@ -222,14 +222,14 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     }
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-    const { error } = await supabase.auth.signInWithIdToken({
+    const authResult = await teswaBackendRuntime.auth.signInWithExternalIdToken({
       provider: 'google',
-      token: idToken,
+      idToken,
     });
 
-    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_result', hasError: Boolean(error), implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
+    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_result', hasError: !authResult.ok, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
 
-    if (error) {
+    if (!authResult.ok) {
       logGoogleSignInDiagnostic('native', 'supabase_session_failed');
       return {
         status: 'error',

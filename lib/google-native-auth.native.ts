@@ -7,7 +7,7 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 const GOOGLE_AUTH_ERROR = 'تعذر فتح تسجيل الدخول بجوجل. حاول مرة تانية.';
 const GOOGLE_AUTH_CANCELLED = 'تم إلغاء تسجيل الدخول بجوجل.';
@@ -51,12 +51,12 @@ export async function signInWithGoogleNative(): Promise<NativeGoogleSignInResult
       return { error: GOOGLE_AUTH_ERROR };
     }
 
-    const { error } = await supabase.auth.signInWithIdToken({
+    const authResult = await teswaBackendRuntime.auth.signInWithExternalIdToken({
       provider: 'google',
-      token: idToken,
+      idToken,
     });
 
-    if (error) {
+    if (!authResult.ok) {
       return { error: GOOGLE_AUTH_ERROR };
     }
 

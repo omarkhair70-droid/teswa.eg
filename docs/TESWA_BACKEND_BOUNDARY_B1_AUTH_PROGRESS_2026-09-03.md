@@ -60,3 +60,26 @@ Changes:
 Consumer audit before the change found no feature depending on Supabase-only auth fields. Current consumers primarily use `user.id`; account settings also uses `user.email`, both of which are Teswa-owned fields.
 
 Direct Supabase client imports ratchet **63 -> 62**.
+
+
+## Slice B1.3 — Google browser/native auth
+
+Migrated all current Google auth provider calls behind `AuthContract`:
+
+- `lib/google-auth.ts`
+- `lib/google-native-auth.native.ts`
+- `lib/google-native-auth.ts`
+- `lib/google-native-auth-v2.ts`
+
+Behavior preserved:
+
+- native Google Sign-In;
+- ID-token session completion;
+- browser OAuth fallback;
+- OAuth callback completion;
+- native-success session verification;
+- current diagnostics/fallback semantics.
+
+The existing diagnostics event labels containing `supabase_*` are temporarily preserved for compatibility with the diagnostics screen. They are now legacy observability labels only; the feature modules no longer import/call Supabase directly.
+
+Direct Supabase client imports ratchet **62 -> 58**.

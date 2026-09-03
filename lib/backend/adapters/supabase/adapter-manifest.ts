@@ -2,10 +2,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   auth: {
     target: 'lib/backend/adapters/supabase/auth-adapter.ts',
     legacyFiles: [
-      'lib/google-auth.ts',
-      'lib/google-native-auth.native.ts',
-      'lib/google-native-auth.ts',
-      'lib/google-native-auth-v2.ts',
       'lib/account-deletion.ts',
     ],
   },
