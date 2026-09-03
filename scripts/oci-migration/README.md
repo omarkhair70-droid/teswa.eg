@@ -294,6 +294,17 @@ The uploader writes only to **pre-created** OCI buckets and requires:
 It refuses to create buckets. The target exporter then downloads OCI bytes and
 computes SHA-256, so source hashes are never treated as target proof.
 
+### Lane 3 Phase 2 Object Storage alignment
+
+Lane 3 has selected, but not yet applied, a private `teswa-media` application
+bucket and a private/versioned `teswa-backups` bucket.
+
+Lane 4's concrete media map is:
+
+`oci-storage-bucket-map.phase2.json`
+
+All nine logical source buckets map into `teswa-media` under isolated prefixes.
+
 ### `capture-cutover-bundle.sh` / `verify-cutover-bundle.py`
 
 Capture and integrity-check a source evidence bundle containing:
@@ -306,6 +317,20 @@ Capture and integrity-check a source evidence bundle containing:
 - optional Storage byte hashes.
 
 Source actions are read-only.
+
+### `archive-cutover-bundle-to-oci.py` / `verify-cutover-archive-in-oci.py`
+
+After Lane 3 applies `teswa-backups`, these helpers can durably archive a
+verified migration/cutover evidence bundle and re-download every archived object
+to prove size + SHA-256 integrity.
+
+The archiver requires:
+
+- `TESWA_ALLOW_TARGET_WRITE=YES`;
+- `TESWA_OCI_BACKUP_ASSERTION=YES`;
+- expected Teswa compartment OCID;
+- `NoPublicAccess`;
+- Object Versioning `Enabled`.
 
 ### `compare-cutover-bundles.py`
 
