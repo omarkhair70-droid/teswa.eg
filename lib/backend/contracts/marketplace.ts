@@ -294,6 +294,10 @@ export interface MarketplaceCoreContract extends MarketplaceReadContract {
   countMarketplaceItemsSince(
     sinceIso: IsoDateTime,
   ): Promise<number>;
+
+  listItemStoryDiscovery(
+    limit: number,
+  ): Promise<ItemStoryDiscoveryRecord[]>;
 }
 
 
@@ -465,4 +469,20 @@ export type PulseItemTeaserMetadataRecord = {
   condition: string | null;
   location: string | null;
   ownerDisplayName: string | null;
+};
+
+
+export type ItemStoryDiscoveryRecord = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  category: string | null;
+  city: string | null;
+  area: string | null;
+  ownerId: string | null;
+  ownerDisplayName: string | null;
+  storyLabel: 'حكاية العنصر' | 'ليه صاحبه بيبدله' | 'مفيد لمين';
+  storySnippet: string;
+  createdAt: IsoDateTime | null;
+  hasVideoTeaser: boolean;
 };
