@@ -331,3 +331,19 @@ Root cause:
 This was configuration drift, not infrastructure drift.
 
 The Terraform enum has been normalized to `"STANDARD"`, matching the live OCI state. Do not apply the replacement plan shown by the verifier. Re-run the verifier after pulling this correction; the expected result is zero drift.
+
+
+## Temporary Bastion verification green
+
+The temporary administrative Bastion is now fully verified:
+
+- Bastion state: ACTIVE
+- private endpoint assigned
+- Core SSH ingress rule matches the Bastion private endpoint /32
+- Core Bastion plugin: RUNNING
+- Terraform drift: none
+- `phase4_admin_bastion_verify=PASS`
+
+This closes the temporary access-path verification gate. The next action is the one-time Oracle-documented `ocarun` sudo bootstrap through a short-lived Managed SSH session, followed immediately by a fresh Run Command prerequisite bootstrap.
+
+The Bastion remains temporary and must be removed after the Run Command privilege path is proven.
