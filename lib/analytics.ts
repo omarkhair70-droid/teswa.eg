@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 
 export type AnalyticsEventName =
@@ -83,8 +84,8 @@ export const getAnalyticsSessionId = (): string => {
 
 export async function trackEvent(eventName: AnalyticsEventName, options: TrackEventOptions = {}): Promise<void> {
   try {
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) return;
+    const currentUser = await teswaBackendRuntime.auth.getCurrentUser();
+    if (!currentUser) return;
 
     const appVersion = Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? null;
     const platform = Platform.OS;
