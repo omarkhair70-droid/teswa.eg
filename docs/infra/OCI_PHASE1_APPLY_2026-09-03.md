@@ -23,6 +23,20 @@ The applied foundation contains only the previously reviewed Teswa boundary:
 - explicit NSG rules
 - intentionally empty security list
 
+## Post-apply verification observed
+
+Confirmed:
+
+- compartment `teswa-platform` is `ACTIVE`;
+- VCN `teswa-vcn` is `AVAILABLE` at `10.20.0.0/16`;
+- public edge subnet is `AVAILABLE` at `10.20.0.0/24`;
+- private app subnet is `AVAILABLE` at `10.20.10.0/24` with public IP assignment prohibited;
+- private data subnet is `AVAILABLE` at `10.20.20.0/24` with public IP assignment prohibited;
+- NSG count is 3;
+- Terraform reports no drift.
+
+The first verifier printed a blank compute count because of its JMESPath filter expression. That verifier was corrected to use a direct `length(data)` query and to fail closed if the count is blank.
+
 ## Hard boundary still in force
 
 This apply did **not** create or change:
@@ -31,7 +45,7 @@ This apply did **not** create or change:
 - `nova-backend`
 - Nova VCN/subnets
 - Balcona resources
-- Teswa compute
+- Teswa compute in the Terraform plan
 - PostgreSQL
 - API/Realtime/Workers
 - Object Storage
@@ -44,11 +58,11 @@ This apply did **not** create or change:
 
 ## Status
 
-**APPLIED — POST-APPLY VERIFICATION PENDING**
+**APPLIED — ONE FINAL COMPUTE-COUNT RECHECK PENDING**
 
-Do not start the next platform layer until:
+Phase 1 closes when the corrected verifier returns:
 
-1. OCI resources are read back and confirmed AVAILABLE;
-2. Teswa compartment contains zero compute instances;
-3. Terraform reports no post-apply drift;
-4. state durability/remote-backend handling is closed before further infrastructure expansion.
+- `compute_instances=0`
+- `terraform_drift=none`
+
+After that, the next infrastructure gate is durable Terraform state before adding further OCI services.
