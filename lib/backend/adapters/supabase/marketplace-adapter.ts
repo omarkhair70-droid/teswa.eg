@@ -674,6 +674,6 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
       }
 
       return { ok: true, data: undefined };
-,
+    },
   };
 }
