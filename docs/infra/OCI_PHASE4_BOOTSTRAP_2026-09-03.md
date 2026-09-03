@@ -1,7 +1,7 @@
 # Teswa OCI Phase 4 Bootstrap — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** PREFLIGHT GREEN — READ-ONLY OS INVENTORY NEXT
+**Status:** OS INVENTORY GREEN — CORE RUNTIME PREREQUISITES NEXT
 
 ## Goal
 
@@ -190,3 +190,46 @@ The OS inventory helper now accepts an optional target instance name so the alre
 Example:
 
 `bash ../inventory/run-phase4-os-inventory.sh teswa-edge-01`
+
+
+## OS inventory closure
+
+The read-only guest inventory is green on both hosts.
+
+### teswa-core-01
+
+- Oracle Linux 9.8
+- aarch64
+- 1 vCPU visible
+- ~5.5 GiB RAM available to the guest
+- 4 GiB swap
+- 50 GB boot disk, ~20 GB free on root
+- SELinux Enforcing
+- firewalld active/enabled
+- no Podman/Docker/Node runtime installed yet
+- Run Command execution: SUCCEEDED / exit 0
+
+### teswa-edge-01
+
+- Oracle Linux 9.8
+- x86_64
+- 2 logical CPUs visible
+- ~498 MiB RAM available to the guest
+- ~497 MiB swap
+- 50 GB boot disk, ~25 GB free on root
+- SELinux Enforcing
+- firewalld active/enabled
+- no Podman/Docker/Node runtime installed yet
+- Run Command execution: SUCCEEDED / exit 0
+
+The Edge guest-memory result is materially lower than the shape-level 1 GB allocation previously reported by OCI. Runtime sizing will therefore follow the live guest measurement.
+
+### Runtime consequence
+
+- Edge remains intentionally minimal: native Caddy later, no Docker/Podman/Node workload.
+- Core will carry PostgreSQL 17 plus the API/Realtime/Worker runtime.
+- PostgreSQL will be native and localhost-only initially, which satisfies Lane 4's private-target preflight and avoids container/network complexity for the database.
+- App service isolation on Core will use Podman/systemd boundaries later.
+- Supabase remains production authority; no cutover is included.
+
+**OS inventory gate:** CLOSED / GREEN.
