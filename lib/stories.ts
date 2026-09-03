@@ -125,52 +125,6 @@ function contentTypeFromAsset(asset: ImagePickerAsset, mediaType: StoryMediaType
 }
 
 
-async function uploadStoryMediaWithProgress(params: {
-  storagePath: string;
-  fileBuffer: ArrayBuffer;
-  contentType: string;
-  onProgress?: (progress: StoryPublishProgress) => void;
-}): Promise<{ error: Error | null }> {
-  const { storagePath, fileBuffer, contentType, onProgress } = params;
-  const session = await teswaBackendRuntime.auth.getSession();
-  const accessToken = session?.accessToken;
-
-  if (!accessToken) return { error: new Error('Missing auth session') };
-
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return { error: new Error('Missing Supabase config') };
-
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/story-media/${encodeURIComponent(storagePath).replace(/%2F/g, '/')}`;
-
-  return await new Promise((resolve) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', uploadUrl);
-    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-    xhr.setRequestHeader('apikey', supabaseAnonKey);
-    xhr.setRequestHeader('x-upsert', 'false');
-    xhr.setRequestHeader('Content-Type', contentType);
-
-    xhr.upload.onprogress = (event) => {
-      if (!onProgress) return;
-      if (!event.lengthComputable) {
-        onProgress({ stage: 'uploading', uploadPercent: null, message: 'جارٍ رفع الوسائط...' });
-        return;
-      }
-      const percent = Math.min(100, Math.max(0, Math.round((event.loaded / event.total) * 100)));
-      onProgress({ stage: 'uploading', uploadPercent: percent, message: 'جارٍ رفع الوسائط...' });
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) return resolve({ error: null });
-      resolve({ error: new Error(`Upload failed with status ${xhr.status}`) });
-    };
-
-    xhr.onerror = () => resolve({ error: new Error('Network error during upload') });
-    xhr.onabort = () => resolve({ error: new Error('Upload aborted') });
-    xhr.send(fileBuffer);
-  });
-}
 
 async function fetchStoryAuthorsByUserIds(userIds: string[]): Promise<Map<string, StoryAuthorSummary>> {
   if (!userIds.length) return new Map();
@@ -224,14 +178,27 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
   }
 
   emitProgress?.({ stage: 'uploading', uploadPercent: 0, message: 'جارٍ رفع الوسائط...' });
-  const { error: uploadError } = await uploadStoryMediaWithProgress({
-    storagePath,
-    fileBuffer,
-    contentType,
-    onProgress: emitProgress,
+  const uploadResult = await teswaBackendRuntime.media.upload({
+    purpose: 'story_media',
+    ownerId: userId,
+    objectKeyHint: storagePath,
+    source: {
+      uri: asset.uri,
+      fileName: asset.fileName ?? null,
+      mimeType: contentType,
+      sizeBytes: asset.fileSize ?? fileBuffer.byteLength,
+      buffer: fileBuffer,
+    },
+    onProgress: (progress) => {
+      emitProgress?.({
+        stage: 'uploading',
+        uploadPercent: progress.percent,
+        message: 'جارٍ رفع الوسائط...',
+      });
+    },
   });
 
-  if (uploadError) {
+  if (!uploadResult.ok) {
     return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الوسائط حالياً. حاول مرة أخرى.' };
   }
 
@@ -256,7 +223,12 @@ export async function publishStoryFromMobile(input: PublishStoryInput): Promise<
 
   if (insertError || !data?.id) {
     emitProgress?.({ stage: 'cleanup', uploadPercent: 100, message: 'نعالج فشل النشر...' });
-    await supabase.storage.from('story-media').remove([storagePath]);
+    await teswaBackendRuntime.media.remove([{
+      purpose: 'story_media',
+      objectKey: storagePath,
+      contentType,
+      sizeBytes: fileBuffer.byteLength,
+    }]);
     return { ok: false, reason: 'insert_failed', message: 'تم رفع الوسائط لكن تعذر نشر القصة. حاول مرة أخرى.' };
   }
 
@@ -307,9 +279,16 @@ export async function deleteStoryFromMobile(input: {
 
   if (!storagePaths.length) return { ok: true };
 
-  const { error: storageError } = await supabase.storage.from('story-media').remove(storagePaths);
-  if (storageError) {
-    if (__DEV__) console.warn('[stories] deleteStoryFromMobile storage cleanup failed', storageError.message);
+  const storageResult = await teswaBackendRuntime.media.remove(
+    storagePaths.map((objectKey) => ({
+      purpose: 'story_media' as const,
+      objectKey,
+      contentType: null,
+      sizeBytes: null,
+    })),
+  );
+  if (!storageResult.ok) {
+    if (__DEV__) console.warn('[stories] deleteStoryFromMobile storage cleanup failed', storageResult.message);
     return { ok: true, storageCleanupFailed: true };
   }
 
@@ -392,16 +371,22 @@ export async function createStoryMediaSignedUrl(storagePath: string, expiresInSe
   const normalizedPath = storagePath.trim();
   if (!normalizedPath) return null;
 
-  const { data, error } = await supabase.storage
-    .from('story-media')
-    .createSignedUrl(normalizedPath, expiresInSeconds);
+  const result = await teswaBackendRuntime.media.getSignedUrl(
+    {
+      purpose: 'story_media',
+      objectKey: normalizedPath,
+      contentType: null,
+      sizeBytes: null,
+    },
+    expiresInSeconds,
+  );
 
-  if (error || !data?.signedUrl) {
-    if (__DEV__) console.warn('[stories] createStoryMediaSignedUrl failed', error?.message ?? 'unknown');
+  if (!result.ok) {
+    if (__DEV__) console.warn('[stories] createStoryMediaSignedUrl failed', result.message);
     return null;
   }
 
-  return data.signedUrl;
+  return result.data;
 }
 
 
