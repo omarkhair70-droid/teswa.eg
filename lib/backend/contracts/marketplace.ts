@@ -270,6 +270,30 @@ export interface MarketplaceCoreContract extends MarketplaceReadContract {
   getItemVideoMetadata(
     itemId: string,
   ): Promise<ItemVideoMetadataRecord | null>;
+
+  getExchangeItemSummaries(
+    itemIds: string[],
+  ): Promise<ExchangeItemSummaryRecord[]>;
+
+  getItemVideoPresence(
+    itemIds: string[],
+  ): Promise<Map<string, boolean>>;
+
+  listRecentItemVideoDiscovery(
+    limit: number,
+  ): Promise<ItemVideoDiscoveryRecord[]>;
+
+  listMovingItems(
+    limit: number,
+  ): Promise<MovingItemRecord[]>;
+
+  listPulseItemTeasers(
+    limit: number,
+  ): Promise<PulseItemTeaserMetadataRecord[]>;
+
+  countMarketplaceItemsSince(
+    sinceIso: IsoDateTime,
+  ): Promise<number>;
 }
 
 
@@ -388,4 +412,57 @@ export type ItemVideoMetadataRecord = {
   width: number | null;
   height: number | null;
   createdAt: IsoDateTime;
+};
+
+
+export type ExchangeItemSummaryRecord = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  category: string | null;
+  condition: string | null;
+  location: string | null;
+  ownerDisplayName: string | null;
+  status: string;
+};
+
+export type ItemVideoDiscoveryRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  condition: string | null;
+  location: string | null;
+  ownerDisplayName: string | null;
+  videoDurationMs: number | null;
+  videoCreatedAt: IsoDateTime | null;
+};
+
+export type MovingItemRecord = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  category: string | null;
+  condition: string | null;
+  location: string | null;
+  ownerDisplayName: string | null;
+  openInterestCount: number;
+  latestInterestAt: IsoDateTime | null;
+  hasVideoTeaser: boolean;
+};
+
+export type PulseItemTeaserMetadataRecord = {
+  id: string;
+  createdAt: IsoDateTime;
+  videoStoragePath: string;
+  durationMs: number | null;
+  itemId: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  condition: string | null;
+  location: string | null;
+  ownerDisplayName: string | null;
 };
