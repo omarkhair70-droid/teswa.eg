@@ -117,3 +117,45 @@ The three feature modules no longer contain:
 Their existing DB/RPC responsibilities remain unchanged for later Marketplace-domain migration.
 
 Direct SDK Storage legacy files ratchet **8 -> 5**.
+
+
+## Slice B2.6 — Messaging voice Storage boundary
+
+Moved direct/contextual/deal voice Storage operations behind `MediaStorageContract` while leaving their DB/RPC responsibilities unchanged.
+
+Migrated Storage concerns from:
+
+- `lib/direct-messages.ts`
+- `lib/deals.ts`
+- `lib/contextual-conversations.ts`
+
+The Storage ratchet caught stale allowlist entries after the migration; the checker was corrected so these files remain in the direct-client allowlist only for their remaining DB/RPC dependency.
+
+## Slice B2.7 — Direct Chat attachment Storage boundary
+
+Moved attachment upload, cleanup, and signed-URL generation in `lib/chat/supabase-direct-chat.ts` behind `MediaStorageContract`.
+
+The file still intentionally owns legacy Supabase RPC/Realtime behavior until B5 Messaging/Realtime, but it no longer performs direct Storage operations.
+
+## Slice B2.8 — Stories Storage boundary + progress preservation
+
+Completed client-side Storage decoupling for Stories:
+
+- story upload now uses `MediaStorageContract.upload`;
+- upload progress remains live through a provider-neutral progress callback;
+- publish rollback cleanup uses `MediaStorageContract.remove`;
+- story delete cleanup uses `MediaStorageContract.remove`;
+- story signed URLs use `MediaStorageContract.getSignedUrl`;
+- raw Supabase Storage REST URL/env access was removed from `lib/stories.ts`.
+
+The Supabase adapter owns the current XHR progress transport internally. A future OCI media adapter can implement the same progress contract without changing Story feature code.
+
+### B2 client Storage closure
+
+Current feature/client direct `supabase.storage` allowlist: **0**.
+
+Current feature/client direct Supabase Storage REST/env exception for Stories: **removed**.
+
+Physical bucket selection is centralized in the Supabase media adapter.
+
+This does not migrate Supabase Edge Function server-side cleanup logic and does not switch production Storage providers.
