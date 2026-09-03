@@ -1,4 +1,7 @@
 import type {
+  DealLifecycleContract,
+  DealLifecycleMessageRecord,
+  DealLifecycleRecord,
   OfferLifecycleContract,
   OfferLifecycleRecord,
   OfferStatus,
@@ -180,6 +183,168 @@ export function createSupabaseOfferLifecycleAdapter(): OfferLifecycleContract {
       });
       if (error) return { ok: false, reason: 'unknown', message: error.message, cause: error };
       return { ok: true, data: undefined };
+    },
+  };
+}
+
+
+function mapDeal(row: any): DealLifecycleRecord {
+  return {
+    id: row.id as string,
+    status: row.status as DealLifecycleRecord['status'],
+    acceptedAt: (row.accepted_at as string | null) ?? null,
+    createdAt: (row.created_at as string | null) ?? null,
+    requestedItemId: row.requested_item_id as string,
+    offeredItemId: row.offered_item_id as string,
+    requesterId: row.requester_id as string,
+    offererId: row.offerer_id as string,
+  };
+}
+
+function mapDealMessage(row: any): DealLifecycleMessageRecord {
+  return {
+    id: row.id as string,
+    dealId: row.deal_id as string,
+    senderId: row.sender_id as string,
+    body: row.body as string,
+    messageType: row.message_type === 'voice' ? 'voice' : 'text',
+    audioStoragePath: (row.audio_storage_path as string | null) ?? null,
+    audioDurationMs: (row.audio_duration_ms as number | null) ?? null,
+    audioMimeType: (row.audio_mime_type as string | null) ?? null,
+    audioSizeBytes: (row.audio_size_bytes as number | null) ?? null,
+    createdAt: row.created_at as string,
+  };
+}
+
+const DEAL_SELECT =
+  'id,status,accepted_at,created_at,requested_item_id,offered_item_id,requester_id,offerer_id';
+const DEAL_MESSAGE_SELECT =
+  'id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at';
+
+export function createSupabaseDealLifecycleAdapter(): DealLifecycleContract {
+  return {
+    async getDeal(dealId) {
+      const { data, error } = await supabase
+        .from('swap_deals')
+        .select(DEAL_SELECT)
+        .eq('id', dealId)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? mapDeal(data) : null;
+    },
+
+    async listConfirmationUserIds(dealId) {
+      const { data, error } = await supabase
+        .from('deal_confirmations')
+        .select('user_id')
+        .eq('deal_id', dealId);
+      if (error) throw error;
+      return (data ?? []).map((row) => row.user_id as string);
+    },
+
+    async listMessages(dealId, limit = 100) {
+      const { data, error } = await supabase
+        .from('deal_messages')
+        .select(DEAL_MESSAGE_SELECT)
+        .eq('deal_id', dealId)
+        .order('created_at', { ascending: true })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []).map(mapDealMessage);
+    },
+
+    async hasReview(dealId, reviewerId) {
+      const { count, error } = await supabase
+        .from('reviews')
+        .select('id', { count: 'exact', head: true })
+        .eq('deal_id', dealId)
+        .eq('reviewer_id', reviewerId);
+      if (error) return { ok: false, reason: 'unknown', message: error.message, cause: error };
+      return { ok: true, data: (count ?? 0) > 0 };
+    },
+
+    async markRead(dealId) {
+      const { error } = await supabase.rpc('mark_deal_thread_read', { p_deal_id: dealId });
+      if (error) return { ok: false, reason: 'unknown', message: error.message, cause: error };
+      return { ok: true, data: undefined };
+    },
+
+    async countMessagesSince(dealId, senderId, since) {
+      const { count, error } = await supabase
+        .from('deal_messages')
+        .select('id', { head: true, count: 'exact' })
+        .eq('deal_id', dealId)
+        .eq('sender_id', senderId)
+        .gte('created_at', since);
+      if (error) throw error;
+      return count ?? 0;
+    },
+
+    async insertTextMessage(input) {
+      const { data, error } = await supabase
+        .from('deal_messages')
+        .insert({
+          deal_id: input.dealId,
+          sender_id: input.senderId,
+          body: input.body,
+        })
+        .select(DEAL_MESSAGE_SELECT)
+        .single();
+      if (error || !data) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error?.message ?? 'Message insert returned no row.',
+          cause: error ?? undefined,
+        };
+      }
+      return { ok: true, data: mapDealMessage(data) };
+    },
+
+    async insertVoiceMessage(input) {
+      const { data, error } = await supabase
+        .from('deal_messages')
+        .insert({
+          deal_id: input.dealId,
+          sender_id: input.senderId,
+          body: input.body,
+          message_type: 'voice',
+          audio_storage_path: input.audioStoragePath,
+          audio_duration_ms: input.audioDurationMs,
+          audio_mime_type: input.audioMimeType,
+          audio_size_bytes: input.audioSizeBytes,
+        })
+        .select(DEAL_MESSAGE_SELECT)
+        .single();
+      if (error || !data) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error?.message ?? 'Voice message insert returned no row.',
+          cause: error ?? undefined,
+        };
+      }
+      return { ok: true, data: mapDealMessage(data) };
+    },
+
+    async confirm(input) {
+      const { error } = await supabase.from('deal_confirmations').insert({
+        deal_id: input.dealId,
+        user_id: input.userId,
+        note: input.note?.trim() || null,
+      });
+      if (error && error.code !== '23505') {
+        return { ok: false, reason: 'unknown', message: error.message, cause: error };
+      }
+      return { ok: true, data: undefined };
+    },
+
+    async completeIfReady(dealId) {
+      const { data, error } = await supabase.rpc('complete_deal_if_ready', {
+        p_deal_id: dealId,
+      });
+      if (error) return { ok: false, reason: 'unknown', message: error.message, cause: error };
+      return { ok: true, data: Boolean(data) };
     },
   };
 }
