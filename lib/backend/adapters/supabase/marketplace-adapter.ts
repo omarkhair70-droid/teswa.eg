@@ -527,5 +527,153 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
       if (error) throw error;
       return data as import('@/lib/backend/contracts/marketplace').ListingLifecycleCode;
 },
+
+    async getEditableListing(itemId, ownerId) {
+      const { data: item, error } = await supabase
+        .from('items')
+        .select('id,status,title,category_id,city,area,condition,condition_notes,description,item_story,swap_reason,good_for,desire_mode,desire_text')
+        .eq('id', itemId)
+        .eq('owner_id', ownerId)
+        .in('status', ['active', 'archived'])
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!item) return null;
+
+      const { data: tags, error: tagsError } = await supabase
+        .from('item_wanted_tags')
+        .select('tag')
+        .eq('item_id', itemId);
+      if (tagsError) throw tagsError;
+
+      const normalize = (value: unknown) => {
+        const text = typeof value === 'string' ? value.trim() : '';
+        return text || null;
+      };
+
+      return {
+        id: item.id as string,
+        status: item.status as 'active' | 'archived',
+        title: normalize(item.title) ?? 'عنصر بدون عنوان',
+        categoryId: (item.category_id as string | null) ?? null,
+        city: normalize(item.city),
+        area: normalize(item.area),
+        condition: item.condition as string,
+        conditionNotes: normalize(item.condition_notes),
+        description: normalize(item.description),
+        itemStory: normalize(item.item_story),
+        swapReason: normalize(item.swap_reason),
+        goodFor: normalize(item.good_for),
+        desireMode: item.desire_mode as 'specific' | 'flexible' | 'surprise',
+        desireText: normalize(item.desire_text),
+        wantedTags: (tags ?? [])
+          .map((entry) => normalize(entry.tag))
+          .filter((tag): tag is string => Boolean(tag)),
+      };
+    },
+
+    async updateListingCore(input) {
+      const { data: item, error: itemLookupError } = await supabase
+        .from('items')
+        .select('id,status,city,area')
+        .eq('id', input.itemId)
+        .eq('owner_id', input.ownerId)
+        .maybeSingle();
+
+      if (itemLookupError) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: itemLookupError.message,
+          cause: itemLookupError,
+        };
+      }
+      if (!item) {
+        return {
+          ok: false,
+          reason: 'not_found_or_unauthorized',
+          message: 'Listing not found.',
+        };
+      }
+      if (item.status !== 'active' && item.status !== 'archived') {
+        return {
+          ok: false,
+          reason: 'not_editable',
+          message: 'Listing status is not editable.',
+        };
+      }
+
+      const normalize = (value: string | null) => {
+        const text = value?.trim();
+        return text ? text : null;
+      };
+      const normalizedCity = normalize(input.city);
+      const normalizedArea = normalize(input.area);
+      const currentCity = normalize((item.city as string | null) ?? null);
+      const currentArea = normalize((item.area as string | null) ?? null);
+      const locationChanged =
+        normalizedCity !== currentCity || normalizedArea !== currentArea;
+
+      const { error: updateError } = await supabase
+        .from('items')
+        .update({
+          title: input.title,
+          category_id: input.categoryId,
+          city: normalizedCity,
+          area: normalizedArea,
+          condition: input.condition,
+          condition_notes: normalize(input.conditionNotes),
+          description: normalize(input.description),
+          item_story: normalize(input.itemStory),
+          swap_reason: normalize(input.swapReason),
+          good_for: normalize(input.goodFor),
+          desire_mode: input.desireMode,
+          desire_text: normalize(input.desireText),
+          ...(locationChanged
+            ? { location_latitude: null, location_longitude: null }
+            : {}),
+        })
+        .eq('id', input.itemId)
+        .eq('owner_id', input.ownerId);
+
+      if (updateError) {
+        return {
+          ok: false,
+          reason: 'item_update_failed',
+          message: updateError.message,
+          cause: updateError,
+        };
+      }
+
+      const { error: deleteTagsError } = await supabase
+        .from('item_wanted_tags')
+        .delete()
+        .eq('item_id', input.itemId);
+
+      if (deleteTagsError) {
+        return {
+          ok: false,
+          reason: 'tags_update_failed',
+          message: deleteTagsError.message,
+          cause: deleteTagsError,
+        };
+      }
+
+      if (input.wantedTags.length) {
+        const { error: insertTagsError } = await supabase
+          .from('item_wanted_tags')
+          .insert(input.wantedTags.map((tag) => ({ item_id: input.itemId, tag })));
+        if (insertTagsError) {
+          return {
+            ok: false,
+            reason: 'tags_update_failed',
+            message: insertTagsError.message,
+            cause: insertTagsError,
+          };
+        }
+      }
+
+      return { ok: true, data: undefined };
+,
   };
 }
