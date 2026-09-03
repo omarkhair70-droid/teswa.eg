@@ -14,25 +14,46 @@ CORE_ID="$(oci compute instance list   --compartment-id "$COMPARTMENT"   --displ
 }
 
 CORE_JSON="$(mktemp)"
+BOOT_ATTACH_JSON="$(mktemp)"
 E2_REPORT="$(mktemp)"
 E2_SHAPE_JSON="$(mktemp)"
 STORAGE_JSON="$(mktemp)"
 E2_LIMIT_JSON="$(mktemp)"
-trap 'rm -f "$CORE_JSON" "$E2_REPORT" "$E2_SHAPE_JSON" "$STORAGE_JSON" "$E2_LIMIT_JSON"' EXIT
+trap 'rm -f "$CORE_JSON" "$BOOT_ATTACH_JSON" "$E2_REPORT" "$E2_SHAPE_JSON" "$STORAGE_JSON" "$E2_LIMIT_JSON"' EXIT
 
 oci compute instance get --instance-id "$CORE_ID" --output json >"$CORE_JSON"
 
-read -r AD BOOT_VOLUME_ID <<<"$(python3 - "$CORE_JSON" <<'PY'
+AD="$(python3 - "$CORE_JSON" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1],encoding="utf-8")).get("data",{})
-print(d.get("availability-domain",""), d.get("boot-volume-id",""))
+print(d.get("availability-domain",""))
 PY
 )"
 
-[ -n "$AD" ] && [ -n "$BOOT_VOLUME_ID" ] && [ "$BOOT_VOLUME_ID" != "null" ] || {
-  echo "rescue_preflight=FAIL reason=core_identity_incomplete" >&2
+[ -n "$AD" ] || {
+  echo "rescue_preflight=FAIL reason=core_availability_domain_missing" >&2
   exit 3
 }
+
+oci compute boot-volume-attachment list   --availability-domain "$AD"   --compartment-id "$COMPARTMENT"   --instance-id "$CORE_ID"   --all   --output json >"$BOOT_ATTACH_JSON"
+
+BOOT_VOLUME_ID="$(python3 - "$BOOT_ATTACH_JSON" <<'PY'
+import json,sys
+rows=json.load(open(sys.argv[1],encoding="utf-8")).get("data",[])
+active=[r for r in rows if (r.get("lifecycle-state") or "") not in ("DETACHED","TERMINATED")]
+ids=[r.get("boot-volume-id") for r in active if r.get("boot-volume-id")]
+if len(ids)==1:
+    print(ids[0])
+PY
+)"
+
+[ -n "$BOOT_VOLUME_ID" ] && [ "$BOOT_VOLUME_ID" != "null" ] || {
+  echo "rescue_preflight=FAIL reason=core_boot_volume_attachment_not_resolved" >&2
+  exit 3
+}
+
+echo "core_availability_domain_detected=true"
+echo "core_boot_volume_attachment_resolved=true"
 
 TENANCY="$(oci iam compartment get   --compartment-id "$COMPARTMENT"   --query 'data."compartment-id"'   --raw-output)"
 
