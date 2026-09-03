@@ -99,7 +99,21 @@ resource "oci_core_instance" "core" {
     hostname_label   = "core01"
     nsg_ids          = [oci_core_network_security_group.app.id]
     subnet_id        = oci_core_subnet.private_app.id
+    private_ip       = var.enable_core_bootstrap_metadata ? var.core_bootstrap_private_ip : null
   }
+
+  metadata = var.enable_core_bootstrap_metadata ? {
+    ssh_authorized_keys = var.core_bootstrap_ssh_public_key
+    user_data = base64encode(<<-EOF
+      #!/bin/bash
+      set -Eeuo pipefail
+      install -d -m 0750 /etc/sudoers.d
+      printf '%s\n' 'ocarun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/101-oracle-cloud-agent-run-command
+      chmod 0440 /etc/sudoers.d/101-oracle-cloud-agent-run-command
+      /usr/sbin/visudo -cf /etc/sudoers.d/101-oracle-cloud-agent-run-command
+    EOF
+    )
+  } : {}
 
   source_details {
     source_type             = "image"
@@ -123,6 +137,16 @@ resource "oci_core_instance" "core" {
     precondition {
       condition     = var.core_image_ocid != ""
       error_message = "core_image_ocid must be pinned by the Phase 3 preflight."
+    }
+
+    precondition {
+      condition     = !var.enable_core_bootstrap_metadata || trimspace(var.core_bootstrap_ssh_public_key) != ""
+      error_message = "core_bootstrap_ssh_public_key must be set when Core bootstrap metadata is enabled."
+    }
+
+    precondition {
+      condition     = !var.enable_core_bootstrap_metadata || trimspace(var.core_bootstrap_private_ip) != ""
+      error_message = "core_bootstrap_private_ip must preserve the current Core private IP during the controlled replacement."
     }
   }
 }
