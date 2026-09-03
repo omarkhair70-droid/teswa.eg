@@ -50,7 +50,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
       'lib/stories.ts',
       'lib/item-videos.ts',
       'lib/dolab/upload.ts',
-      'lib/dolab/signed-urls.ts',
       'lib/chat/supabase-direct-chat.ts',
     ],
   },
