@@ -43,7 +43,14 @@ do
 done
 
 NSG_COUNT="$(oci network nsg list --compartment-id "$COMPARTMENT" --all --query 'length(data)' --raw-output)"
-INSTANCE_COUNT="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --query 'length(data[?"lifecycle-state" != `TERMINATED`])' --raw-output)"
+INSTANCE_COUNT="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --query 'length(data)' --raw-output)"
+
+if [ -z "$INSTANCE_COUNT" ]; then
+  echo "compute_instances=UNKNOWN"
+  echo "Compute count query returned blank; verification is not green." >&2
+  exit 3
+fi
+
 echo "nsg_count=$NSG_COUNT"
 echo "compute_instances=$INSTANCE_COUNT"
 
@@ -72,7 +79,7 @@ esac
 
 echo
 echo "Expected green result:"
-echo "- compartment teswa-platform AVAILABLE"
+echo "- compartment teswa-platform ACTIVE"
 echo "- VCN teswa-vcn AVAILABLE at 10.20.0.0/16"
 echo "- 3 subnets AVAILABLE"
 echo "- private app/data prohibit_public_ip=true"
