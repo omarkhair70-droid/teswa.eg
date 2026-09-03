@@ -43,7 +43,7 @@ do
 done
 
 NSG_COUNT="$(oci network nsg list --compartment-id "$COMPARTMENT" --all --query 'length(data)' --raw-output)"
-INSTANCE_COUNT="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --query 'length(data[?\`lifecycle-state\` != \`TERMINATED\`])' --raw-output)"
+INSTANCE_COUNT="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --query 'length(data[?"lifecycle-state" != `TERMINATED`])' --raw-output)"
 echo "nsg_count=$NSG_COUNT"
 echo "compute_instances=$INSTANCE_COUNT"
 
