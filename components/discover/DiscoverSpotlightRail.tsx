@@ -8,6 +8,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { MarketplaceItem } from '@/lib/marketplace-items';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 type Props = { items: MarketplaceItem[] };
 
@@ -101,8 +102,8 @@ const styles = StyleSheet.create({
   },
   cardPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
   imageWrap: { height: 100, backgroundColor: colors.background },
-  image: { ...StyleSheet.absoluteFillObject },
-  imageOverlay: { ...StyleSheet.absoluteFillObject },
+  image: { ...ABSOLUTE_FILL },
+  imageOverlay: { ...ABSOLUTE_FILL },
   videoBadge: {
     position: 'absolute',
     top: spacing.sm,
