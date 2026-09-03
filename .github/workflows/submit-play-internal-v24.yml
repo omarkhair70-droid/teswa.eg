@@ -1,0 +1,46 @@
+name: Submit Teswa v24 to Play Internal
+
+on:
+  push:
+    branches:
+      - release/play-internal-v24-20260903
+    paths:
+      - 'eas.json'
+      - '.github/workflows/submit-play-internal-v24.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    name: Submit EAS build 24 to Google Play Internal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Expo authentication
+        run: npx eas-cli@latest whoami
+
+      - name: Submit exact production AAB to Play Internal
+        run: |
+          npx eas-cli@latest submit \
+            --platform android \
+            --profile internal \
+            --id 2e29b067-4d84-41e8-b172-77ee83736c46 \
+            --non-interactive \
+            --wait
