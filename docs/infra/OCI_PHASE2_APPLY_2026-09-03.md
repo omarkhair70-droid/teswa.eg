@@ -1,7 +1,7 @@
 # Teswa OCI Phase 2 Apply — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** APPLIED — POST-APPLY VERIFICATION PENDING
+**Status:** CLOSED / GREEN
 
 ## Apply result
 
@@ -22,12 +22,14 @@ Created:
 
 No compute, PostgreSQL, load balancer, DNS, or production cutover was performed.
 
-## Closure gate
+## Closure evidence
 
-Run:
+Post-apply verification returned:
 
-```bash
-bash verify-phase2-foundation-services.sh
-```
+- `teswa-media`: private, correct compartment
+- `teswa-backups`: private, Object Versioning enabled, correct compartment
+- `teswa-vault`: DEFAULT, ACTIVE, correct compartment
+- `teswa-ops`: ACTIVE, correct compartment
+- `terraform_drift=none`
 
-Phase 2 closes only if the buckets/vault/topic verification succeeds and Terraform reports `terraform_drift=none`.
+Phase 2 is closed.
