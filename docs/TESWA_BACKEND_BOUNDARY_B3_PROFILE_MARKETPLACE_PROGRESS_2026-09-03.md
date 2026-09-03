@@ -51,3 +51,28 @@ Supabase snake_case row mapping is isolated in the provider adapter.
 Those remain separate B3 slices to reduce regression radius.
 
 No production provider switch was made.
+
+
+## Slice B3.2 — Marketplace feed / nearby / detail reads
+
+Added `MarketplaceReadContract` and `createSupabaseMarketplaceReadAdapter()`.
+
+Migrated `lib/marketplace-items.ts` off direct Supabase access for:
+
+- marketplace feed pagination and filters;
+- nearby marketplace RPC reads;
+- single feed-item read;
+- active item detail base row;
+- item image/category/owner/wanted-tag detail reads.
+
+The feature module still performs Teswa-level enrichment through the existing item-video and item-like services, preserving current UI behavior.
+
+### Result
+
+`lib/marketplace-items.ts` no longer imports `@/lib/supabase/client`.
+
+Supabase table/view/RPC names for these Marketplace reads now live inside the provider adapter.
+
+Profile bans, image ordering, wanted-tag normalization, video teaser enrichment, like counts, and viewer-like state retain their existing behavior.
+
+No Marketplace writes/lifecycle operations were migrated in this slice.
