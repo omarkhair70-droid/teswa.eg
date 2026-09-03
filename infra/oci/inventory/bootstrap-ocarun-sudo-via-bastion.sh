@@ -12,7 +12,7 @@ BASTION_ID="$("$TF" output -raw admin_bastion_id)"
 COMPARTMENT="$("$TF" output -raw teswa_compartment_id)"
 CORE_ID="$(oci compute instance list   --compartment-id "$COMPARTMENT"   --display-name teswa-core-01   --lifecycle-state RUNNING   --all   --query 'data[0].id'   --raw-output)"
 
-ssh-keygen -q -t ed25519 -N "" -f "$TMPDIR/session_key"
+ssh-keygen -q -t rsa -b 3072 -N "" -f "$TMPDIR/session_key"
 
 echo "TESWA PHASE 4 OCARUN SUDO BOOTSTRAP SESSION"
 echo "ephemeral_key=true"
