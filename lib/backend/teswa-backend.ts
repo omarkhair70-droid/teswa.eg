@@ -10,6 +10,7 @@ import type {
   OffersDealsContract,
   PolicyAcceptanceContract,
   ProfileContract,
+  ReviewsContract,
   StoriesContract,
 } from '@/lib/backend/contracts';
 
@@ -25,5 +26,6 @@ export interface TeswaBackend {
   stories: StoriesContract;
   discovery: DiscoveryContract;
   policies: PolicyAcceptanceContract;
+  reviews: ReviewsContract;
   dolab: DolabContract;
 }
