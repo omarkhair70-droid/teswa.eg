@@ -99,3 +99,16 @@ variable "admin_bastion_client_cidrs" {
   type        = list(string)
   default     = []
 }
+
+
+variable "enable_admin_bastion_connectivity" {
+  description = "Temporarily attach least-privilege Bastion egress to the private app subnet for Core SSH bootstrap."
+  type        = bool
+  default     = false
+}
+
+variable "admin_bastion_target_cidr" {
+  description = "Exact private target CIDR for the temporary Bastion SSH egress rule. Generated locally and never committed."
+  type        = string
+  default     = ""
+}
