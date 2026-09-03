@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 POLL_SECONDS="${POLL_SECONDS:-10}"
-MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-600}"
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-1200}"
 
 [ -x "$TF" ] || { echo "Terraform binary not found at $TF" >&2; exit 1; }
 
