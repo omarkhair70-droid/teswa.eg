@@ -6,9 +6,7 @@ const sourceRoots = ['app', 'components', 'lib'];
 const providerAdapterPrefix = 'lib/backend/adapters/supabase/';
 
 const legacyDirectClientImports = new Set([
-  'app/(auth)/login.tsx',
   'app/(auth)/profile-setup.tsx',
-  'app/(auth)/signup.tsx',
   'app/(tabs)/messages.tsx',
   'app/contextual/[id].tsx',
   'app/deal/[id].tsx',
@@ -130,10 +128,20 @@ for (const sourceRoot of sourceRoots) {
   }
 }
 
+const staleLegacyClientImports = [...legacyDirectClientImports].filter((relativePath) => {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) return true;
+  return !fs.readFileSync(absolutePath, 'utf8').includes('@/lib/supabase/client');
+});
+
+if (staleLegacyClientImports.length > 0) {
+  violations.push(...staleLegacyClientImports.map((relativePath) => `${relativePath}: stale legacy allowlist entry; remove it so coupling debt cannot grow back`));
+}
+
 if (violations.length > 0) {
-  console.error('[backend-boundary] New provider coupling detected:');
+  console.error('[backend-boundary] Provider boundary violation detected:');
   for (const violation of violations) console.error(`- ${violation}`);
   process.exit(1);
 }
 
-console.log(`[backend-boundary] OK. Legacy direct client imports remain frozen at ${directClientImportCount}; new provider coupling is blocked by the allowlist.`);
+console.log(`[backend-boundary] OK. Legacy direct client imports are ratcheted at ${directClientImportCount}; new provider coupling is blocked.`);

@@ -7,8 +7,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
       'lib/google-native-auth.native.ts',
       'lib/google-native-auth.ts',
       'lib/google-native-auth-v2.ts',
-      'app/(auth)/login.tsx',
-      'app/(auth)/signup.tsx',
       'lib/account-deletion.ts',
     ],
   },
