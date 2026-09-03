@@ -50,8 +50,9 @@ if ss -ltnH | grep -Eq "[[:space:]](127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::\\]|\\*):
 $SUDO install -d -m 0755 /etc/teswa /opt/teswa/api-shell
 printf "%s\n" "{\"status\":\"ok\",\"service\":\"teswa-api\",\"mode\":\"health-only\",\"productionTraffic\":false}" | $SUDO tee /opt/teswa/api-shell/healthz >/dev/null
 $SUDO chmod 0644 /opt/teswa/api-shell/healthz
-$SUDO podman pull docker.io/library/alpine:3.22 >/dev/null
-image_digest="$($SUDO podman image inspect docker.io/library/alpine:3.22 --format "{{.Digest}}")"
+IMAGE=docker.io/library/python:3.13-alpine
+$SUDO podman pull "$IMAGE" >/dev/null
+image_digest="$($SUDO podman image inspect "$IMAGE" --format "{{.Digest}}")"
 tmp="$(mktemp)"
 cat >"$tmp" <<EOF
 [Unit]
@@ -64,7 +65,7 @@ Type=simple
 Restart=always
 RestartSec=3
 ExecStartPre=-/usr/bin/podman rm -f teswa-api
-ExecStart=/usr/bin/podman run --pull=never --name teswa-api --network host --read-only --cap-drop=all --security-opt=no-new-privileges --pids-limit=64 --memory=64m -v /opt/teswa/api-shell:/srv:ro,Z docker.io/library/alpine:3.22 /bin/busybox httpd -f -p 127.0.0.1:3100 -h /srv
+ExecStart=/usr/bin/podman run --pull=never --name teswa-api --network host --read-only --cap-drop=all --security-opt=no-new-privileges --pids-limit=64 --memory=96m -v /opt/teswa/api-shell:/srv:ro,Z $IMAGE /usr/local/bin/python -m http.server 3100 --bind 127.0.0.1 --directory /srv
 ExecStop=/usr/bin/podman stop -t 10 teswa-api
 ExecStopPost=-/usr/bin/podman rm -f teswa-api
 
@@ -76,8 +77,17 @@ rm -f "$tmp"
 $SUDO touch "$MARK"
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable --now teswa-api
-sleep 2
-body="$(curl -fsS http://127.0.0.1:3100/healthz)"
+body=""
+for attempt in $(seq 1 20); do
+  if body="$(curl -fsS http://127.0.0.1:3100/healthz 2>/dev/null)"; then break; fi
+  sleep 1
+done
+if [ -z "$body" ]; then
+  echo "api_shell=FAIL reason=health_timeout"
+  $SUDO systemctl --no-pager -l status teswa-api || true
+  $SUDO podman logs teswa-api || true
+  exit 17
+fi
 printf "%s\n" "$body" | jq -e ".status == \"ok\" and .service == \"teswa-api\" and .mode == \"health-only\" and .productionTraffic == false" >/dev/null
 systemctl is-active --quiet teswa-api
 systemctl is-enabled --quiet teswa-api
