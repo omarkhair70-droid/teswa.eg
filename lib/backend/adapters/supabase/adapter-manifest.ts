@@ -12,7 +12,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
       'lib/user-follows.ts',
       'lib/trust-metrics.ts',
       'lib/badges.ts',
-      'lib/direct-privacy.ts',
       'lib/profile-images.ts',
     ],
   },
