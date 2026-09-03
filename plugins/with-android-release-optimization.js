@@ -1,4 +1,4 @@
-const { withGradleProperties } = require('expo/config-plugins');
+const { withAppBuildGradle, withGradleProperties } = require('expo/config-plugins');
 
 const RELEASE_OPTIMIZATION_PROPERTIES = {
   'android.enableMinifyInReleaseBuilds': 'true',
@@ -19,20 +19,47 @@ function setGradleProperty(items, key, value) {
   }
 }
 
+function enableOptimizedProguardDefaults(buildGradle) {
+  const legacy = 'getDefaultProguardFile("proguard-android.txt")';
+  const optimized = 'getDefaultProguardFile("proguard-android-optimize.txt")';
+
+  if (buildGradle.includes(optimized)) {
+    return buildGradle;
+  }
+
+  if (!buildGradle.includes(legacy)) {
+    throw new Error(
+      '[with-android-release-optimization] Could not locate the generated release ProGuard baseline.'
+    );
+  }
+
+  return buildGradle.replace(legacy, optimized);
+}
+
 /**
- * Expo SDK 57 release optimization.
+ * Teswa SDK 57 optimized release configuration.
  *
- * SDK 57 generates the modern Android release baseline with
- * proguard-android-optimize.txt. This plugin only opts the generated release
- * build into minification and resource shrinking; it does not rewrite
- * build.gradle or inject SDK-55-era ProGuard behavior.
+ * Expo 57.0.19 currently generates proguard-android.txt in the CNG Android
+ * template. For the modernization branch, opt release builds into minification
+ * and resource shrinking and switch only that generated default baseline to
+ * Android's optimized ProGuard configuration. Runtime acceptance still requires
+ * device smoke and Play-signed Internal proof before production promotion.
  */
 module.exports = function withAndroidReleaseOptimization(config) {
-  return withGradleProperties(config, (config) => {
+  config = withGradleProperties(config, (config) => {
     for (const [key, value] of Object.entries(RELEASE_OPTIMIZATION_PROPERTIES)) {
       setGradleProperty(config.modResults, key, value);
     }
 
     return config;
   });
+
+  config = withAppBuildGradle(config, (config) => {
+    config.modResults.contents = enableOptimizedProguardDefaults(
+      config.modResults.contents
+    );
+    return config;
+  });
+
+  return config;
 };
