@@ -801,3 +801,18 @@ The capacity-independent Core recovery preflight is green:
 - `serial_recovery_preflight=PASS`.
 
 The next approved action is limited to creating a temporary OCI instance serial-console connection for `teswa-core-01`. This creates the console access object only; it does not reboot or mutate the guest OS.
+
+
+## Serial-console connection active
+
+The temporary OCI instance serial-console connection for `teswa-core-01` is now ACTIVE.
+
+Verified:
+
+- connection string returned;
+- local connection file created with mode 600;
+- guest mutation: none;
+- network change: none;
+- public SSH exposure: none.
+
+The next action is connection-only: source the local connection file and open the SSH-backed serial console. Accept the OCI console host key if prompted, then press Enter to activate the serial console. Do not reboot or edit GRUB until the live console output is confirmed.
