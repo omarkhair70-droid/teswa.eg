@@ -1,0 +1,51 @@
+name: Messages Outer Inbox Validation
+
+on:
+  push:
+    branches:
+      - modernize/expo57-platform-20260903
+    paths:
+      - 'app/(tabs)/messages.tsx'
+      - '.github/workflows/messages-outer-inbox-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teswa-messages-outer-inbox
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate outer messages inbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      SENTRY_ALLOW_FAILURE: 'true'
+
+    steps:
+      - name: Checkout modernization branch
+        uses: actions/checkout@v4
+        with:
+          ref: modernize/expo57-platform-20260903
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Expo Doctor
+        run: npx expo-doctor
+
+      - name: TypeScript
+        run: npm run typecheck:app
+
+      - name: Android bundle export
+        run: npx expo export --platform android --clear
