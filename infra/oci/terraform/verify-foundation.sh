@@ -43,7 +43,13 @@ do
 done
 
 NSG_COUNT="$(oci network nsg list --compartment-id "$COMPARTMENT" --all --query 'length(data)' --raw-output)"
-INSTANCE_COUNT="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --query 'length(data)' --raw-output)"
+INSTANCE_JSON="$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json)"
+INSTANCE_COUNT="$(python3 - <<'PY' "$INSTANCE_JSON"
+import json, sys
+payload = json.loads(sys.argv[1])
+print(len(payload.get("data", [])))
+PY
+)"
 
 if [ -z "$INSTANCE_COUNT" ]; then
   echo "compute_instances=UNKNOWN"
