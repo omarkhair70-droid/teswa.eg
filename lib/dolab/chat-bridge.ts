@@ -2,7 +2,7 @@ import { createDolabMediaSignedUrls, fetchDolabLibrarySnapshot, saveDolabDraftIt
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import type { DolabSelfMessage } from '@/lib/dolab/self-chat-types';
 import { readLocalDolabPendingMedia, readLocalDolabSelfMessages, writeLocalDolabPendingMedia, writeLocalDolabSelfMessages } from '@/lib/dolab/local-persistence';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 type BridgeAttachment = {
   type?: string;
@@ -94,8 +94,11 @@ function mapAttachmentToPendingMedia(attachment: BridgeAttachment): DolabPending
 }
 
 async function getUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
+  try {
+    return (await teswaBackendRuntime.auth.getCurrentUser())?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function buildFileNoteBody(input: { title?: string; uri?: string; mimeType?: string; sizeBytes?: number; storagePath?: string; source?: string; kindLabel?: string }): string {
