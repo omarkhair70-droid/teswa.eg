@@ -454,3 +454,28 @@ The temporary Bastion connectivity path is now fully verified:
 - `phase4_bastion_connectivity_verify=PASS`.
 
 The one-time `ocarun` sudo bootstrap may now be retried through a fresh Managed SSH session.
+
+
+## Bastion second connection failure
+
+After the temporary Bastion TCP/22 egress path was applied and verified with zero Terraform drift, a fresh Managed SSH session still reached `ACTIVE` but the SSH client again failed with:
+
+`kex_exchange_identification: Connection closed by remote host`
+
+A subsequent Core prerequisite Run Command also failed exactly as expected because the `ocarun` sudoers entry still does not exist:
+
+- Run Command user: `ocarun`
+- `sudo: a password is required`
+- `baseline=FAIL reason=no_privileged_execution`
+
+This proves the privilege state is unchanged.
+
+The next action remains read-only. A deeper diagnostic now inspects:
+
+- static firewalld zone configuration for SSH allowance;
+- effective sshd policy;
+- Bastion plugin paths/logs readable by `ocarun`;
+- Oracle Cloud Agent log references to Bastion/session failures;
+- recent sshd journal entries where available.
+
+No additional Bastion session or package mutation should be attempted before reviewing this evidence.
