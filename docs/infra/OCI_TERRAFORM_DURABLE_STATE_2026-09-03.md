@@ -12,7 +12,7 @@ The dedicated Terraform state bucket bootstrap also completed successfully:
 - Object Versioning: `Enabled`
 - a point-in-time backup of the current local `terraform.tfstate` was uploaded under `bootstrap-backups/`
 
-The Terraform backend itself is **still local**. Migration has not happened yet.
+The Terraform backend migration is **complete and verified**.
 
 The dedicated API-key profile is now verified and green:
 
@@ -60,6 +60,22 @@ Cloud Shell itself runs in an Oracle-managed tenancy, so treating the Cloud Shel
 Decision: create a dedicated RSA API signing key for the current OCI user and store the private half only in the user's encrypted Cloud Shell home directory (`~/.oci`). OCI receives only the public key. The profile is named `teswa-terraform`.
 
 OCI permits at most three API signing keys per user, so the setup helper checks the current count before uploading anything.
+
+## Closure evidence
+
+The native OCI backend migration completed successfully with the existing provider state preserved.
+
+Post-migration verification returned:
+
+- `remote_state_object=present`
+- `terraform_drift=none`
+- Terraform plan completed through the remote backend without requiring infrastructure changes
+
+The state-size field printed blank because the Cloud Shell OCI CLI did not expose the requested HEAD header through that JMESPath query. This is cosmetic: the object HEAD command itself succeeded, and Terraform successfully read the migrated state and produced a zero-drift plan.
+
+**Status: CLOSED / GREEN.**
+
+Keep the bootstrap backup under `bootstrap-backups/` and any Terraform-created local migration backup until a later housekeeping gate.
 
 ## Migration sequence
 
