@@ -88,3 +88,31 @@ Remediation:
 2. grant only `use instance-agent-command-execution-family` in `teswa-platform`, restricted to the target instance;
 3. wait for IAM/dynamic-group propagation;
 4. retry a read-only Run Command before any bootstrap mutation.
+
+
+## Run Command IAM plan review
+
+Read-only diagnosis confirmed:
+
+- no existing `teswa-run-command-instances` dynamic group
+- no existing `teswa-run-command-policy`
+- the core inventory command remained `ACCEPTED`
+- edge had no pending accepted command
+
+The saved Terraform IAM plan was reviewed:
+
+- 2 creates
+- 0 changes
+- 0 destroys
+- `phase4_iam_plan_guard=PASS`
+
+Approved resources:
+
+1. root-tenancy dynamic group `teswa-run-command-instances`, matching instances in the dedicated `teswa-platform` compartment;
+2. root policy `teswa-run-command-policy`, granting only `use instance-agent-command-execution-family` in `teswa-platform` with `request.instance.id=target.instance.id`.
+
+The policy statement matches Oracle's documented Run Command instance-principal requirement.
+
+No compute, network, storage, DNS, database, Nova, or Supabase resource changes are part of this plan.
+
+**Status:** IAM SAVED PLAN REVIEWED — APPROVED FOR APPLY.
