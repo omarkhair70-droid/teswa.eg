@@ -380,3 +380,27 @@ Before changing network or firewall state, Lane 3 now performs a read-only Core 
 - localhost TCP/22 reachability.
 
 No second Bastion bootstrap attempt should be made until this read-only diagnostic is reviewed.
+
+
+## Bastion SSH root cause
+
+The read-only Core diagnostic proved:
+
+- `sshd` is active and enabled;
+- TCP/22 listens on IPv4 and IPv6;
+- localhost TCP/22 is reachable;
+- the Core NIC is up on the private app subnet.
+
+The remaining network model exposed the actual Bastion failure: `teswa-private-app` intentionally used the empty security list, while the OCI Bastion private endpoint is not attached to the Core app NSG. Therefore the Bastion endpoint had no subnet-level egress rule permitting it to initiate TCP/22 to Core.
+
+Oracle's Bastion guidance requires both target ingress and Bastion-side egress. For a Bastion sharing the target subnet, Oracle explicitly calls for TCP/22 egress from the Bastion subnet.
+
+Remediation is temporary and least-privilege:
+
+- create `teswa-admin-bastion-egress`;
+- permit stateful TCP/22 egress only to the exact Core private IP /32;
+- temporarily associate that security list with `teswa-private-app`;
+- retain the existing Core ingress restricted to the Bastion private endpoint /32;
+- remove the temporary egress list and association after the `ocarun` bootstrap is complete.
+
+No public SSH, Internet ingress, Nova, Supabase, DNS, or application routing is changed.
