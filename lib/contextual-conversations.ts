@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
+
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 import { fetchUserBlockState } from '@/lib/user-blocks';
 
 export type ContextualConversationType = 'story_reply';
@@ -14,17 +14,6 @@ export type ContextualConversationMessage = {
   mediaStoragePath: string | null;
   mediaDurationMs: number | null;
   createdAt: string;
-};
-
-type ContextualMessageRow = {
-  id: string;
-  conversation_id: string;
-  sender_id: string;
-  body: string | null;
-  message_kind: 'text' | 'voice' | null;
-  media_storage_path: string | null;
-  media_duration_ms: number | null;
-  created_at: string;
 };
 
 export type StoryReplySendResult =
@@ -80,11 +69,24 @@ export type ContextualThreadResult =
 
 export type SendContextualMessageResult =
   | { ok: true; message: ContextualConversationMessage }
-  | { ok: false; reason: 'invalid_body' | 'invalid_audio' | 'invalid_duration' | 'send_failed'; message: string };
+  | {
+      ok: false;
+      reason: 'invalid_body' | 'invalid_audio' | 'invalid_duration' | 'send_failed';
+      message: string;
+    };
 
 const CONTEXTUAL_VOICE_MAX_DURATION_MS = 45_000;
 const CONTEXTUAL_VOICE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
+function mapMessage(
+  message: Awaited<
+    ReturnType<typeof teswaBackendRuntime.contextualMessaging.sendText>
+  > extends { ok: true; data: infer T }
+    ? T
+    : never,
+): ContextualConversationMessage {
+  return message as ContextualConversationMessage;
+}
 
 async function notifyContextualMessageFromMobile(input: {
   conversationId: string;
@@ -93,42 +95,47 @@ async function notifyContextualMessageFromMobile(input: {
 }): Promise<void> {
   const conversationId = input.conversationId.trim();
   const messageId = input.messageId.trim();
-
   if (!conversationId || !messageId) return;
 
-  const { error } = await supabase.rpc('create_contextual_message_notification', {
-    p_conversation_id: conversationId,
-    p_message_id: messageId,
-    p_kind: input.kind,
+  const result = await teswaBackendRuntime.contextualMessaging.notifyMessage({
+    conversationId,
+    messageId,
+    kind: input.kind,
   });
 
-  if (error) console.warn('[contextual-conversations] create contextual notification failed', { code: error.code, message: error.message, conversationId, messageId });
+  if (!result.ok) {
+    console.warn('[contextual-conversations] create contextual notification failed', {
+      message: result.message,
+      conversationId,
+      messageId,
+    });
+  }
 }
 
-export async function markContextualThreadReadFromMobile(conversationId: string): Promise<void> {
+export async function markContextualThreadReadFromMobile(
+  conversationId: string,
+): Promise<void> {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) return;
 
-  const { error } = await supabase.rpc('mark_contextual_thread_read', {
-    p_conversation_id: normalizedConversationId,
-  });
+  const result = await teswaBackendRuntime.contextualMessaging.markRead(
+    normalizedConversationId,
+  );
 
-  if (error && __DEV__) {
-    console.warn('[contextual-conversations] mark read failed', error);
+  if (!result.ok && __DEV__) {
+    console.warn('[contextual-conversations] mark read failed', result.message);
   }
 }
 
 export async function fetchUnreadContextualMessagesCount(): Promise<number> {
-  const { data, error } = await supabase.rpc('get_unread_contextual_messages_count');
-
-  if (error) {
+  try {
+    return await teswaBackendRuntime.contextualMessaging.getUnreadCount();
+  } catch (error) {
     if (__DEV__) {
       console.warn('[contextual-conversations] unread count failed', error);
     }
     return 0;
   }
-
-  return typeof data === 'number' ? Math.max(0, data) : 0;
 }
 
 export async function sendStoryReplyFromMobile(input: {
@@ -140,132 +147,98 @@ export async function sendStoryReplyFromMobile(input: {
   const storyId = input.storyId.trim();
   const body = input.body.trim();
 
-  if (!currentUserId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً للرد على القصة.' };
-  if (!storyId) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد القصة المطلوبة.' };
-  if (!body) return { ok: false, reason: 'invalid_body', message: 'اكتب ردك أولاً.' };
-  if (body.length > 800) return { ok: false, reason: 'invalid_body', message: 'الرد طويل زيادة عن الحد (800 حرف).' };
-  const { data: storyOwnerRow, error: storyOwnerError } = await supabase.from('stories').select('user_id').eq('id', storyId).maybeSingle();
-  if (storyOwnerError || !storyOwnerRow?.user_id) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد صاحب القصة.' };
-  const blockState = await fetchUserBlockState(currentUserId, storyOwnerRow.user_id as string);
-  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
-  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رد لأن بينكما حظر.' };
+  if (!currentUserId) {
+    return {
+      ok: false,
+      reason: 'invalid_user',
+      message: 'يجب تسجيل الدخول أولاً للرد على القصة.',
+    };
+  }
+  if (!storyId) {
+    return {
+      ok: false,
+      reason: 'invalid_story',
+      message: 'تعذر تحديد القصة المطلوبة.',
+    };
+  }
+  if (!body) {
+    return { ok: false, reason: 'invalid_body', message: 'اكتب ردك أولاً.' };
+  }
+  if (body.length > 800) {
+    return {
+      ok: false,
+      reason: 'invalid_body',
+      message: 'الرد طويل زيادة عن الحد (800 حرف).',
+    };
+  }
 
-  const { data, error } = await supabase.rpc('create_story_reply_thread', {
-    p_story_id: storyId,
-    p_body: body,
+  let storyOwnerId: string | null = null;
+  try {
+    storyOwnerId = await teswaBackendRuntime.contextualMessaging.getStoryOwnerId(
+      storyId,
+    );
+  } catch {
+    storyOwnerId = null;
+  }
+  if (!storyOwnerId) {
+    return {
+      ok: false,
+      reason: 'invalid_story',
+      message: 'تعذر تحديد صاحب القصة.',
+    };
+  }
+
+  const blockState = await fetchUserBlockState(currentUserId, storyOwnerId);
+  if (!blockState.ok) {
+    return { ok: false, reason: 'send_failed', message: blockState.message };
+  }
+  if (blockState.state.isBlockedEitherDirection) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'لا يمكن إرسال رد لأن بينكما حظر.',
+    };
+  }
+
+  const result = await teswaBackendRuntime.contextualMessaging.createStoryReplyThread({
+    storyId,
+    body,
   });
 
-  const row = Array.isArray(data) ? data[0] : null;
-  if (error || !row?.conversation_id || !row?.message_id) {
+  if (!result.ok) {
     if (__DEV__) {
-      console.warn('[contextual-conversations] create story reply failed', error, data);
+      console.warn('[contextual-conversations] create story reply failed', {
+        reason: result.reason,
+        message: result.message,
+      });
     }
-    return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد حالياً. قد تكون القصة انتهت.' };
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر إرسال الرد حالياً. قد تكون القصة انتهت.',
+    };
   }
 
   void notifyContextualMessageFromMobile({
-    conversationId: row.conversation_id,
-    messageId: row.message_id,
+    conversationId: result.data.conversationId,
+    messageId: result.data.messageId,
     kind: 'story_reply_initial',
   });
 
-  return { ok: true, conversationId: row.conversation_id, messageId: row.message_id };
+  return {
+    ok: true,
+    conversationId: result.data.conversationId,
+    messageId: result.data.messageId,
+  };
 }
 
-export async function fetchContextualConversationSummariesForUser(userId: string): Promise<ContextualConversationSummary[]> {
+export async function fetchContextualConversationSummariesForUser(
+  userId: string,
+): Promise<ContextualConversationSummary[]> {
   const normalizedUserId = userId.trim();
   if (!normalizedUserId) return [];
 
-  const { data: conversations, error: conversationsError } = await supabase
-    .from('contextual_conversations')
-    .select('id, context_type, context_entity_id, starter_id, recipient_id, created_at, updated_at')
-    .eq('context_type', 'story_reply')
-    .or(`starter_id.eq.${normalizedUserId},recipient_id.eq.${normalizedUserId}`);
-
-  if (conversationsError) throw conversationsError;
-  if (!conversations?.length) return [];
-
-  const conversationIds = conversations.map((c) => c.id);
-  const participantIds = Array.from(
-    new Set(conversations.flatMap((c) => [c.starter_id, c.recipient_id])),
-  );
-
-  const [profilesRes, messagesRes, readsRes] = await Promise.all([
-    supabase.from('profiles').select('id, display_name, username, avatar_url').in('id', participantIds),
-    supabase
-      .from('contextual_messages')
-      .select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at')
-      .in('conversation_id', conversationIds)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('contextual_message_reads')
-      .select('conversation_id, last_read_at')
-      .eq('user_id', normalizedUserId)
-      .in('conversation_id', conversationIds),
-  ]);
-
-  if (profilesRes.error) throw profilesRes.error;
-  if (messagesRes.error) throw messagesRes.error;
-  if (readsRes.error) throw readsRes.error;
-
-  const messagesRows = (messagesRes.data ?? []) as ContextualMessageRow[];
-
-  const profilesById = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
-  const messagesByConversation = new Map<string, ContextualMessageRow[]>();
-  for (const message of messagesRows) {
-    const arr = messagesByConversation.get(message.conversation_id) ?? [];
-    arr.push(message);
-    messagesByConversation.set(message.conversation_id, arr);
-  }
-
-  const readMap = new Map(
-    (readsRes.data ?? []).map((r) => [r.conversation_id, r.last_read_at]),
-  );
-
-  const toParticipant = (id: string): ContextualParticipantSummary => {
-    const profile = profilesById.get(id);
-    return {
-      id,
-      displayName: profile?.display_name ?? null,
-      username: profile?.username ?? null,
-      avatarUrl: profile?.avatar_url ?? null,
-    };
-  };
-
-  return conversations
-    .map((conversation): ContextualConversationSummary => {
-      const starterId = conversation.starter_id;
-      const recipientId = conversation.recipient_id;
-      const otherId = normalizedUserId === starterId ? recipientId : starterId;
-      const conversationMessages = messagesByConversation.get(conversation.id) ?? [];
-      const latest = conversationMessages[0];
-      const lastReadAt = readMap.get(conversation.id);
-
-      const unreadCount = conversationMessages.filter(
-        (m) => m.sender_id !== normalizedUserId && (!lastReadAt || m.created_at > lastReadAt),
-      ).length;
-
-      return {
-        conversationId: conversation.id,
-        contextType: 'story_reply',
-        contextEntityId: conversation.context_entity_id,
-        otherParticipant: toParticipant(otherId),
-        latestMessage: latest
-          ? {
-              id: latest.id,
-              body: latest.body ?? (latest.message_kind === 'voice' ? 'رسالة صوتية' : ''),
-              senderId: latest.sender_id,
-              createdAt: latest.created_at,
-              kind: latest.message_kind === 'voice' ? 'voice' : 'text',
-              durationMs: latest.media_duration_ms ?? null,
-            }
-          : null,
-        unreadCount,
-        lastActivityAt:
-          latest?.created_at ?? conversation.updated_at ?? conversation.created_at ?? new Date(0).toISOString(),
-      };
-    })
-    .sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
+  return teswaBackendRuntime.contextualMessaging.listSummaries(normalizedUserId);
 }
 
 export async function fetchContextualThreadById(input: {
@@ -274,69 +247,45 @@ export async function fetchContextualThreadById(input: {
 }): Promise<ContextualThreadResult> {
   const conversationId = input.conversationId.trim();
   const currentUserId = input.currentUserId.trim();
-  if (!conversationId || !currentUserId) return { ok: false, reason: 'not_found' };
-
-  const { data: conversation, error } = await supabase
-    .from('contextual_conversations')
-    .select('id, context_type, context_entity_id, starter_id, recipient_id')
-    .eq('id', conversationId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!conversation) return { ok: false, reason: 'not_found' };
-  if (conversation.starter_id !== currentUserId && conversation.recipient_id !== currentUserId) {
-    return { ok: false, reason: 'unauthorized' };
+  if (!conversationId || !currentUserId) {
+    return { ok: false, reason: 'not_found' };
   }
 
-  const [profilesRes, messagesRes] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, display_name, username, avatar_url')
-      .in('id', [conversation.starter_id, conversation.recipient_id]),
-    supabase
-      .from('contextual_messages')
-      .select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(200),
-  ]);
+  const result = await teswaBackendRuntime.contextualMessaging.getThread({
+    conversationId,
+    currentUserId,
+  });
 
-  if (profilesRes.error) throw profilesRes.error;
-  if (messagesRes.error) throw messagesRes.error;
-
-  const profilesById = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
-  const otherId =
-    currentUserId === conversation.starter_id
-      ? conversation.recipient_id
-      : conversation.starter_id;
-  const other = profilesById.get(otherId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.reason === 'unauthorized' ? 'unauthorized' : 'not_found',
+    };
+  }
+  if (!result.data) return { ok: false, reason: 'not_found' };
 
   return {
     ok: true,
     thread: {
-      id: conversation.id,
+      id: result.data.id,
       contextType: 'story_reply',
-      contextEntityId: conversation.context_entity_id,
-      starterId: conversation.starter_id,
-      recipientId: conversation.recipient_id,
-      otherParticipant: {
-        id: otherId,
-        displayName: other?.display_name ?? null,
-        username: other?.username ?? null,
-        avatarUrl: other?.avatar_url ?? null,
-      },
-      messages: (messagesRes.data ?? []).map((m) => ({
-        id: m.id,
-        conversationId: m.conversation_id,
-        senderId: m.sender_id,
-        body: m.body,
-        messageKind: m.message_kind === 'voice' ? 'voice' : 'text',
-        mediaStoragePath: m.media_storage_path ?? null,
-        mediaDurationMs: m.media_duration_ms ?? null,
-        createdAt: m.created_at,
-      })),
+      contextEntityId: result.data.contextEntityId,
+      starterId: result.data.starterId,
+      recipientId: result.data.recipientId,
+      otherParticipant: result.data.otherParticipant,
+      messages: result.data.messages,
     },
   };
+}
+
+async function getOtherParticipantInConversation(
+  conversationId: string,
+  currentUserId: string,
+): Promise<string | null> {
+  return teswaBackendRuntime.contextualMessaging.getOtherParticipantId({
+    conversationId,
+    currentUserId,
+  });
 }
 
 export async function sendContextualMessageFromMobile(input: {
@@ -348,52 +297,74 @@ export async function sendContextualMessageFromMobile(input: {
   const currentUserId = input.currentUserId.trim();
   const body = input.body.trim();
 
-  if (!body) return { ok: false, reason: 'invalid_body', message: 'اكتب رسالة الأول.' };
+  if (!body) {
+    return { ok: false, reason: 'invalid_body', message: 'اكتب رسالة الأول.' };
+  }
   if (body.length > 800) {
-    return { ok: false, reason: 'invalid_body', message: 'الرسالة طويلة زيادة عن الحد (800 حرف).' };
+    return {
+      ok: false,
+      reason: 'invalid_body',
+      message: 'الرسالة طويلة زيادة عن الحد (800 حرف).',
+    };
   }
 
-  const otherParticipantId = await getOtherParticipantInConversation(conversationId, currentUserId);
-  if (!otherParticipantId) return { ok: false, reason: 'send_failed', message: 'تعذر تحديد طرف المحادثة.' };
+  const otherParticipantId = await getOtherParticipantInConversation(
+    conversationId,
+    currentUserId,
+  );
+  if (!otherParticipantId) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر تحديد طرف المحادثة.',
+    };
+  }
+
   const blockState = await fetchUserBlockState(currentUserId, otherParticipantId);
-  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
-  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رسائل لأن بينكما حظر.' };
+  if (!blockState.ok) {
+    return { ok: false, reason: 'send_failed', message: blockState.message };
+  }
+  if (blockState.state.isBlockedEitherDirection) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'لا يمكن إرسال رسائل لأن بينكما حظر.',
+    };
+  }
 
-  const { data, error } = await supabase
-    .from('contextual_messages')
-    .insert({ conversation_id: conversationId, sender_id: currentUserId, body, message_kind: 'text' })
-    .select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at')
-    .single();
+  const result = await teswaBackendRuntime.contextualMessaging.sendText({
+    conversationId,
+    senderId: currentUserId,
+    body,
+  });
 
-  if (error || !data) {
+  if (!result.ok) {
     if (__DEV__) {
-      console.warn('[contextual-conversations] send message failed', error);
+      console.warn('[contextual-conversations] send message failed', result.message);
     }
-    return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرسالة حالياً.' };
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر إرسال الرسالة حالياً.',
+    };
   }
 
   void notifyContextualMessageFromMobile({
     conversationId,
-    messageId: data.id,
+    messageId: result.data.id,
     kind: 'thread_message',
   });
+
   return {
     ok: true,
-    message: {
-      id: data.id,
-      conversationId: data.conversation_id,
-      senderId: data.sender_id,
-      body: data.body,
-      messageKind: data.message_kind === 'voice' ? 'voice' : 'text',
-      mediaStoragePath: data.media_storage_path ?? null,
-      mediaDurationMs: data.media_duration_ms ?? null,
-      createdAt: data.created_at,
-    },
+    message: result.data,
   };
 }
 
-
-function getAudioExtension(name: string | null | undefined, mimeType: string): string {
+function getAudioExtension(
+  name: string | null | undefined,
+  mimeType: string,
+): string {
   const fromName = name?.split('.').pop()?.toLowerCase()?.trim();
   if (fromName && /^[a-z0-9]+$/.test(fromName)) return fromName;
   const fromMime = mimeType.split('/').pop()?.toLowerCase()?.trim();
@@ -401,26 +372,74 @@ function getAudioExtension(name: string | null | undefined, mimeType: string): s
   return 'm4a';
 }
 
-function sanitizeAudioFileName(name: string | null | undefined, fallback: string): string {
+function sanitizeAudioFileName(
+  name: string | null | undefined,
+  fallback: string,
+): string {
   const raw = (name || fallback).toLowerCase();
   return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
 }
 
-async function getOtherParticipantInConversation(conversationId: string, currentUserId: string): Promise<string | null> {
-  const { data, error } = await supabase.from('contextual_conversations').select('starter_id,recipient_id').eq('id', conversationId).maybeSingle();
-  if (error || !data) return null;
-  const starterId = data.starter_id as string;
-  const recipientId = data.recipient_id as string;
-  if (currentUserId !== starterId && currentUserId !== recipientId) return null;
-  return currentUserId === starterId ? recipientId : starterId;
-}
-
-export async function createContextualVoiceMessageSignedUrl(storagePath: string, expiresInSeconds = 60 * 60): Promise<string | null> {
+export async function createContextualVoiceMessageSignedUrl(
+  storagePath: string,
+  expiresInSeconds = 60 * 60,
+): Promise<string | null> {
   const result = await teswaBackendRuntime.media.getSignedUrl(
-    { purpose: 'contextual_voice', objectKey: storagePath, contentType: null, sizeBytes: null },
+    {
+      purpose: 'contextual_voice',
+      objectKey: storagePath,
+      contentType: null,
+      sizeBytes: null,
+    },
     expiresInSeconds,
   );
   return result.ok ? result.data : null;
+}
+
+async function uploadContextualVoice(input: {
+  conversationId: string;
+  currentUserId: string;
+  localUri: string;
+  durationMs: number;
+  mimeType?: string | null;
+  fileName?: string | null;
+  sizeBytes?: number | null;
+}) {
+  const contentType = input.mimeType || 'audio/m4a';
+  const ext = getAudioExtension(input.fileName, contentType);
+  const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
+  const uploadPath =
+    `contextual/${input.conversationId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
+
+  const uploadResult = await teswaBackendRuntime.media.upload({
+    purpose: 'contextual_voice',
+    ownerId: input.currentUserId,
+    source: {
+      uri: input.localUri,
+      fileName: safeName,
+      mimeType: contentType,
+      sizeBytes: input.sizeBytes ?? null,
+      maxSizeBytes: CONTEXTUAL_VOICE_MAX_SIZE_BYTES,
+    },
+    objectKeyHint: uploadPath,
+  });
+
+  return { uploadResult, uploadPath, contentType };
+}
+
+async function cleanupContextualVoice(
+  objectKey: string,
+  contentType: string,
+  sizeBytes: number | null,
+) {
+  await teswaBackendRuntime.media.remove([
+    {
+      purpose: 'contextual_voice',
+      objectKey,
+      contentType,
+      sizeBytes,
+    },
+  ]);
 }
 
 export async function sendContextualVoiceMessageFromMobile(input: {
@@ -435,51 +454,105 @@ export async function sendContextualVoiceMessageFromMobile(input: {
   const conversationId = input.conversationId.trim();
   const currentUserId = input.currentUserId.trim();
   const localUri = input.localUri.trim();
-  if (!localUri) return { ok: false, reason: 'invalid_audio', message: 'تعذر قراءة التسجيل الصوتي.' };
-  if (input.durationMs <= 0 || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS) return { ok: false, reason: 'invalid_duration', message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.' };
-  if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) return { ok: false, reason: 'invalid_audio', message: 'حجم الرسالة الصوتية كبير جدًا.' };
 
-  const otherParticipantId = await getOtherParticipantInConversation(conversationId, currentUserId);
-  if (!otherParticipantId) return { ok: false, reason: 'send_failed', message: 'تعذر تحديد طرف المحادثة.' };
-  const blockState = await fetchUserBlockState(currentUserId, otherParticipantId);
-  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
-  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رسائل صوتية لأن بينكما حظر.' };
-
-  const contentType = input.mimeType || 'audio/m4a';
-  const ext = getAudioExtension(input.fileName, contentType);
-  const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
-  const uploadPath = `contextual/${conversationId}/${currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
-
-  const uploadResult = await teswaBackendRuntime.media.upload({
-    purpose: 'contextual_voice',
-    ownerId: currentUserId,
-    source: {
-      uri: localUri,
-      fileName: safeName,
-      mimeType: contentType,
-      sizeBytes: input.sizeBytes ?? null,
-      maxSizeBytes: CONTEXTUAL_VOICE_MAX_SIZE_BYTES,
-    },
-    objectKeyHint: uploadPath,
-  });
-  if (!uploadResult.ok) return { ok: false, reason: 'send_failed', message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
-
-  const { data, error } = await supabase
-    .from('contextual_messages')
-    .insert({ conversation_id: conversationId, sender_id: currentUserId, body: 'رسالة صوتية', message_kind: 'voice', media_storage_path: uploadPath, media_duration_ms: Math.min(input.durationMs, CONTEXTUAL_VOICE_MAX_DURATION_MS) })
-    .select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at')
-    .single();
-  if (error || !data) {
-    await teswaBackendRuntime.media.remove([
-      { purpose: 'contextual_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
-    ]);
-    return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد الصوتي.' };
+  if (!localUri) {
+    return {
+      ok: false,
+      reason: 'invalid_audio',
+      message: 'تعذر قراءة التسجيل الصوتي.',
+    };
+  }
+  if (
+    input.durationMs <= 0
+    || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS
+  ) {
+    return {
+      ok: false,
+      reason: 'invalid_duration',
+      message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.',
+    };
+  }
+  if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) {
+    return {
+      ok: false,
+      reason: 'invalid_audio',
+      message: 'حجم الرسالة الصوتية كبير جدًا.',
+    };
   }
 
-  void notifyContextualMessageFromMobile({ conversationId, messageId: data.id, kind: 'thread_message' });
-  return { ok: true, message: { id: data.id, conversationId: data.conversation_id, senderId: data.sender_id, body: data.body, messageKind: 'voice', mediaStoragePath: data.media_storage_path ?? null, mediaDurationMs: data.media_duration_ms ?? null, createdAt: data.created_at } };
-}
+  const otherParticipantId = await getOtherParticipantInConversation(
+    conversationId,
+    currentUserId,
+  );
+  if (!otherParticipantId) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر تحديد طرف المحادثة.',
+    };
+  }
 
+  const blockState = await fetchUserBlockState(currentUserId, otherParticipantId);
+  if (!blockState.ok) {
+    return { ok: false, reason: 'send_failed', message: blockState.message };
+  }
+  if (blockState.state.isBlockedEitherDirection) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'لا يمكن إرسال رسائل صوتية لأن بينكما حظر.',
+    };
+  }
+
+  const { uploadResult, uploadPath, contentType } = await uploadContextualVoice({
+    ...input,
+    conversationId,
+    currentUserId,
+    localUri,
+  });
+
+  if (!uploadResult.ok) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message:
+        uploadResult.reason === 'file_too_large'
+          ? 'حجم الرسالة الصوتية كبير جدًا.'
+          : 'تعذر رفع الرد الصوتي. حاول مرة أخرى.',
+    };
+  }
+
+  const result = await teswaBackendRuntime.contextualMessaging.sendVoiceMetadata({
+    conversationId,
+    senderId: currentUserId,
+    mediaStoragePath: uploadPath,
+    mediaDurationMs: Math.min(
+      input.durationMs,
+      CONTEXTUAL_VOICE_MAX_DURATION_MS,
+    ),
+  });
+
+  if (!result.ok) {
+    await cleanupContextualVoice(
+      uploadPath,
+      contentType,
+      input.sizeBytes ?? null,
+    );
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر إرسال الرد الصوتي.',
+    };
+  }
+
+  void notifyContextualMessageFromMobile({
+    conversationId,
+    messageId: result.data.id,
+    kind: 'thread_message',
+  });
+
+  return { ok: true, message: result.data };
+}
 
 export async function sendStoryVoiceReplyFromMobile(input: {
   storyId: string;
@@ -489,54 +562,157 @@ export async function sendStoryVoiceReplyFromMobile(input: {
   mimeType?: string | null;
   fileName?: string | null;
   sizeBytes?: number | null;
-}): Promise<{ ok: true; conversationId: string; message: ContextualConversationMessage } | { ok: false; reason: 'invalid_user' | 'invalid_story' | 'invalid_audio' | 'invalid_duration' | 'send_failed'; message: string }> {
+}): Promise<
+  | {
+      ok: true;
+      conversationId: string;
+      message: ContextualConversationMessage;
+    }
+  | {
+      ok: false;
+      reason:
+        | 'invalid_user'
+        | 'invalid_story'
+        | 'invalid_audio'
+        | 'invalid_duration'
+        | 'send_failed';
+      message: string;
+    }
+> {
   const currentUserId = input.currentUserId.trim();
   const storyId = input.storyId.trim();
   const localUri = input.localUri.trim();
-  if (!currentUserId) return { ok: false, reason: 'invalid_user', message: 'يجب تسجيل الدخول أولاً للرد على القصة.' };
-  if (!storyId) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد القصة المطلوبة.' };
-  if (!localUri) return { ok: false, reason: 'invalid_audio', message: 'تعذر قراءة التسجيل الصوتي.' };
-  if (input.durationMs <= 0 || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS) return { ok: false, reason: 'invalid_duration', message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.' };
-  if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) return { ok: false, reason: 'invalid_audio', message: 'حجم الرسالة الصوتية كبير جدًا.' };
 
-  const { data: storyOwnerRow, error: storyOwnerError } = await supabase.from('stories').select('user_id').eq('id', storyId).maybeSingle();
-  if (storyOwnerError || !storyOwnerRow?.user_id) return { ok: false, reason: 'invalid_story', message: 'تعذر تحديد صاحب القصة.' };
-  const blockState = await fetchUserBlockState(currentUserId, storyOwnerRow.user_id as string);
-  if (!blockState.ok) return { ok: false, reason: 'send_failed', message: blockState.message };
-  if (blockState.state.isBlockedEitherDirection) return { ok: false, reason: 'send_failed', message: 'لا يمكن إرسال رد لأن بينكما حظر.' };
-
-  const { data: convData, error: convErr } = await supabase.rpc('ensure_story_reply_conversation', { p_story_id: storyId });
-  const row = Array.isArray(convData) ? convData[0] : null;
-  const conversationId = (row?.conversation_id as string | undefined)?.trim() ?? '';
-  if (convErr || !conversationId) return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد حالياً. قد تكون القصة انتهت.' };
-
-  const contentType = input.mimeType || 'audio/m4a';
-  const ext = getAudioExtension(input.fileName, contentType);
-  const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
-  const uploadPath = `contextual/${conversationId}/${currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
-
-  const uploadResult = await teswaBackendRuntime.media.upload({
-    purpose: 'contextual_voice',
-    ownerId: currentUserId,
-    source: {
-      uri: localUri,
-      fileName: safeName,
-      mimeType: contentType,
-      sizeBytes: input.sizeBytes ?? null,
-      maxSizeBytes: CONTEXTUAL_VOICE_MAX_SIZE_BYTES,
-    },
-    objectKeyHint: uploadPath,
-  });
-  if (!uploadResult.ok) return { ok: false, reason: 'send_failed', message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
-
-  const { data, error } = await supabase.from('contextual_messages').insert({ conversation_id: conversationId, sender_id: currentUserId, body: 'رسالة صوتية', message_kind: 'voice', media_storage_path: uploadPath, media_duration_ms: Math.min(input.durationMs, CONTEXTUAL_VOICE_MAX_DURATION_MS) }).select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at').single();
-  if (error || !data) {
-    await teswaBackendRuntime.media.remove([
-      { purpose: 'contextual_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
-    ]);
-    return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد الصوتي.' };
+  if (!currentUserId) {
+    return {
+      ok: false,
+      reason: 'invalid_user',
+      message: 'يجب تسجيل الدخول أولاً للرد على القصة.',
+    };
+  }
+  if (!storyId) {
+    return {
+      ok: false,
+      reason: 'invalid_story',
+      message: 'تعذر تحديد القصة المطلوبة.',
+    };
+  }
+  if (!localUri) {
+    return {
+      ok: false,
+      reason: 'invalid_audio',
+      message: 'تعذر قراءة التسجيل الصوتي.',
+    };
+  }
+  if (
+    input.durationMs <= 0
+    || input.durationMs > CONTEXTUAL_VOICE_MAX_DURATION_MS
+  ) {
+    return {
+      ok: false,
+      reason: 'invalid_duration',
+      message: 'مدة الرسالة الصوتية يجب أن تكون حتى 45 ثانية.',
+    };
+  }
+  if ((input.sizeBytes ?? 0) > CONTEXTUAL_VOICE_MAX_SIZE_BYTES) {
+    return {
+      ok: false,
+      reason: 'invalid_audio',
+      message: 'حجم الرسالة الصوتية كبير جدًا.',
+    };
   }
 
-  void notifyContextualMessageFromMobile({ conversationId, messageId: data.id, kind: 'story_reply_initial' });
-  return { ok: true, conversationId, message: { id: data.id, conversationId: data.conversation_id, senderId: data.sender_id, body: data.body, messageKind: 'voice', mediaStoragePath: data.media_storage_path ?? null, mediaDurationMs: data.media_duration_ms ?? null, createdAt: data.created_at } };
+  let storyOwnerId: string | null = null;
+  try {
+    storyOwnerId = await teswaBackendRuntime.contextualMessaging.getStoryOwnerId(
+      storyId,
+    );
+  } catch {
+    storyOwnerId = null;
+  }
+  if (!storyOwnerId) {
+    return {
+      ok: false,
+      reason: 'invalid_story',
+      message: 'تعذر تحديد صاحب القصة.',
+    };
+  }
+
+  const blockState = await fetchUserBlockState(currentUserId, storyOwnerId);
+  if (!blockState.ok) {
+    return { ok: false, reason: 'send_failed', message: blockState.message };
+  }
+  if (blockState.state.isBlockedEitherDirection) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'لا يمكن إرسال رد لأن بينكما حظر.',
+    };
+  }
+
+  const conversationResult =
+    await teswaBackendRuntime.contextualMessaging.ensureStoryReplyConversation(
+      storyId,
+    );
+  if (!conversationResult.ok) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر إرسال الرد حالياً. قد تكون القصة انتهت.',
+    };
+  }
+
+  const conversationId = conversationResult.data.conversationId;
+  const { uploadResult, uploadPath, contentType } = await uploadContextualVoice({
+    ...input,
+    conversationId,
+    currentUserId,
+    localUri,
+  });
+
+  if (!uploadResult.ok) {
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message:
+        uploadResult.reason === 'file_too_large'
+          ? 'حجم الرسالة الصوتية كبير جدًا.'
+          : 'تعذر رفع الرد الصوتي. حاول مرة أخرى.',
+    };
+  }
+
+  const result = await teswaBackendRuntime.contextualMessaging.sendVoiceMetadata({
+    conversationId,
+    senderId: currentUserId,
+    mediaStoragePath: uploadPath,
+    mediaDurationMs: Math.min(
+      input.durationMs,
+      CONTEXTUAL_VOICE_MAX_DURATION_MS,
+    ),
+  });
+
+  if (!result.ok) {
+    await cleanupContextualVoice(
+      uploadPath,
+      contentType,
+      input.sizeBytes ?? null,
+    );
+    return {
+      ok: false,
+      reason: 'send_failed',
+      message: 'تعذر إرسال الرد الصوتي.',
+    };
+  }
+
+  void notifyContextualMessageFromMobile({
+    conversationId,
+    messageId: result.data.id,
+    kind: 'story_reply_initial',
+  });
+
+  return {
+    ok: true,
+    conversationId,
+    message: result.data,
+  };
 }
