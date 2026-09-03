@@ -50,3 +50,17 @@ Changing shape does not rebuild the VM; volume and VNIC/IP attachments remain as
 7. Only after the released capacity is confirmed, create Teswa compute.
 
 No Teswa production cutover or Supabase shutdown is part of this reallocation.
+
+
+## Preflight result
+
+Read-only preflight passed against the live Nova instance:
+
+- current shape: `VM.Standard.A1.Flex`
+- current allocation: 2 OCPU / 12 GB RAM
+- state: `RUNNING`
+- reviewed target: 1 OCPU / 6 GB RAM
+- expected release for Teswa: 1 OCPU / 6 GB RAM
+- `preflight=PASS`
+
+The guarded resize step is now approved.
