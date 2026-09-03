@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
-MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-300}"
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-1800}"
 
 [ -x "$TF" ] || { echo "Terraform binary not found at $TF" >&2; exit 1; }
 
@@ -74,7 +74,7 @@ print(rows[0]["id"])
 
 run_inventory() {
   local name="$1"
-  local instance_id content_file target_file command_id elapsed exec_json state
+  local instance_id content_file target_file command_id elapsed exec_json state last_state
 
   instance_id="$(get_instance_id "$name")"
   content_file="$(mktemp)"
@@ -103,6 +103,7 @@ PY
   command_id="$(oci instance-agent command create     --compartment-id "$COMPARTMENT"     --content "file://$content_file"     --target "file://$target_file"     --timeout-in-seconds 180     --display-name "teswa-phase4-os-inventory"     --query 'data.id'     --raw-output)"
 
   elapsed=0
+  last_state=""
   while true; do
     exec_json="$(oci instance-agent command-execution get       --command-id "$command_id"       --instance-id "$instance_id"       --output json)"
 
@@ -111,12 +112,16 @@ import json,sys
 print(json.load(sys.stdin).get("data",{}).get("lifecycle-state",""))
 ')"
 
+    if [ "$state" != "$last_state" ]; then
+      echo "run_command_state=$state"
+      last_state="$state"
+    fi
+
     if [ "$state" = "SUCCEEDED" ]; then
       printf '%s' "$exec_json" | python3 -c '
 import json,sys
 d=json.load(sys.stdin).get("data",{})
 c=d.get("content") or {}
-print("run_command_state=%s" % d.get("lifecycle-state"))
 print("exit_code=%s" % c.get("exit-code"))
 text=c.get("text") or ""
 print(text.rstrip())
