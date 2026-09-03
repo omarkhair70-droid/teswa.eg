@@ -173,3 +173,20 @@ The next step is a fresh read-only OS inventory Run Command.
 The initial recovery helper used a 600-second instance-state timeout. Oracle documents that `SOFTRESET` can wait up to 15 minutes for the guest OS to shut down gracefully before forcing the power cycle. Therefore a 10-minute helper timeout can report a false recovery failure while OCI is still within the documented graceful reboot window.
 
 Both guarded recovery helpers now allow 20 minutes for the instance lifecycle transition. This changes only client-side waiting; it does not trigger any additional reboot or infrastructure mutation.
+
+
+## Edge soft reset completion
+
+The guarded `SOFTRESET` on `teswa-edge-01` remained in `STOPPING` beyond the helper's original 10-minute client timeout, but OCI subsequently completed the lifecycle transition successfully:
+
+- `13:02:42Z STOPPING`
+- `13:03:14Z STOPPING`
+- `13:03:46Z RUNNING`
+
+No second reset was issued.
+
+The OS inventory helper now accepts an optional target instance name so the already-green Core inventory does not need to be rerun while validating Edge recovery.
+
+Example:
+
+`bash ../inventory/run-phase4-os-inventory.sh teswa-edge-01`
