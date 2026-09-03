@@ -68,6 +68,7 @@ def main() -> int:
             (target_bucket + "\0" + target_name).encode("utf-8")
         ).hexdigest()
         local_file = objects_dir / opaque
+        local_file.unlink(missing_ok=True)
 
         print(f"[{number}/{len(objects)}] GET {target_bucket}/{target_name}")
         run(
