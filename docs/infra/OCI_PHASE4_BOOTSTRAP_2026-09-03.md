@@ -553,3 +553,17 @@ Observed plan:
 `phase4_bastion_ingress_plan_guard=PASS`
 
 **Decision:** APPROVED FOR APPLY using the reviewed saved plan only.
+
+
+## Canonical Bastion ingress verification green
+
+The temporary canonical target-subnet SSH path is now fully verified:
+
+- Bastion-side egress Security List remains attached;
+- Security List state: AVAILABLE;
+- stateful TCP/22 egress to the exact Core private IP /32: present;
+- stateful TCP/22 ingress from the exact Bastion private endpoint /32: present;
+- Terraform drift: none;
+- `phase4_bastion_connectivity_verify=PASS`.
+
+The network path now matches the documented OCI Bastion pattern at both subnet directions. The next action is a fresh Managed SSH session for the one-time `ocarun` sudo bootstrap.
