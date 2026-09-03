@@ -26,9 +26,10 @@ Observed on 2026-09-03:
 
 Branch: `refactor/backend-boundary-20260903`
 
-The branch has introduced Teswa-owned contracts and the first concrete Supabase
-Auth adapter. Login/signup now route through that auth boundary, but the full
-auth/session, media, marketplace, offers/deals, messaging/realtime, and
+The branch has introduced Teswa-owned contracts and the concrete Supabase Auth
+adapter. Email login/signup, AuthProvider session ownership, Google browser/native
+auth, and the remaining feature-level auth SDK calls now route through the Teswa
+Auth boundary. Media, marketplace, offers/deals, messaging/realtime, and
 notification consumer migration is still in progress.
 
 Lane 4 may prepare source/target verification now. Production provider switching
@@ -42,8 +43,10 @@ The isolated Teswa OCI foundation has been applied: a Teswa compartment, VCN,
 public edge subnet, private app subnet, private data subnet, NSGs, route policy,
 and internet gateway. The existing Nova A1 VM remains a hard no-touch boundary.
 
-PostgreSQL, API, Realtime, workers, Object Storage, Vault, and production ingress
-are not yet provisioned as the Teswa data plane.
+The isolated network foundation is applied and reports no Terraform drift. The
+final zero-compute verification is still being closed. PostgreSQL, API, Realtime,
+workers, Object Storage, Vault, and production ingress are not yet provisioned
+as the Teswa data plane.
 
 Lane 4 therefore cannot execute a real source -> OCI shadow comparison yet, but
 can finish the capture/comparison machinery now.
@@ -62,6 +65,7 @@ It records:
 - enums;
 - indexes;
 - constraints;
+- structured foreign-key graph, including cross-schema auth/storage anchors;
 - functions;
 - triggers;
 - public/storage policies;
@@ -71,6 +75,7 @@ It records:
 - per-table row counts;
 - optional deep row and PK-set checksums;
 - aggregate Supabase Auth counts/provider distribution when available;
+- non-PII SHA-256 fingerprints of Auth/identity/profile UUID sets;
 - aggregate Storage bucket/object metadata when available.
 
 The PostgreSQL connection string is read from an environment variable and is
@@ -155,6 +160,64 @@ Default output is outside the repository under `/tmp`.
 The resulting `public-schema.raw.sql` must not be applied blindly to OCI. It is
 the authoritative source-side snapshot used to compile the portable target
 baseline and to prove what was preserved/rebuilt.
+
+
+### `plan-data-copy.py`
+
+Builds a dependency-safe public-table load plan from a format-v2 PostgreSQL
+manifest. It topologically orders public foreign-key dependencies, groups
+cycles/self-references, surfaces cross-schema dependencies such as
+`auth.users`, and reports tables without primary keys.
+
+It never connects to a database and never disables constraints.
+
+```bash
+python3 scripts/oci-migration/plan-data-copy.py \
+  /tmp/teswa-source.json \
+  --output /tmp/teswa-data-copy-plan.json
+```
+
+### `capture-supabase-storage-manifest.py`
+
+Captures object keys and byte sizes from `storage.buckets` /
+`storage.objects` using a read-only PostgreSQL connection.
+
+It does not download object bytes and therefore does not pretend provider ETags
+are SHA-256 content proof.
+
+```bash
+export TESWA_SOURCE_DATABASE_URL='postgresql://...'
+python3 scripts/oci-migration/capture-supabase-storage-manifest.py \
+  --output /tmp/teswa-storage-source.json
+```
+
+### `compare-storage-manifests.py`
+
+Compares normalized source/target storage manifests. Bucket/key identity and byte
+size are hard gates. Once byte-hash collection exists on both sides,
+`--require-content-sha256` makes exact SHA-256 equality a hard gate.
+
+```bash
+python3 scripts/oci-migration/compare-storage-manifests.py \
+  /tmp/teswa-storage-source.json \
+  /tmp/teswa-storage-oci.json \
+  --report /tmp/teswa-storage-report.json
+```
+
+### `check-portable-baseline.py`
+
+Scans `public-schema.raw.sql` and fails closed on provider-specific dependencies
+such as Supabase Auth, Storage, Realtime, pg_net, Vault, cron, PostgREST JWT
+request context, and Supabase database roles.
+
+It deliberately does not rewrite SQL. Authorization/runtime behavior must be
+classified and rebuilt explicitly instead of being weakened by search/replace.
+
+```bash
+python3 scripts/oci-migration/check-portable-baseline.py \
+  /tmp/teswa-oci-source-baseline-*/public-schema.raw.sql \
+  --report /tmp/teswa-portability-report.json
+```
 
 ## Next execution gate
 
