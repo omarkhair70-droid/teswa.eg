@@ -15,7 +15,6 @@ const legacyDirectClientImports = new Set([
   'lib/admin-reports.ts',
   'lib/admin.ts',
   'lib/analytics.ts',
-  'lib/auth.tsx',
   'lib/badges.ts',
   'lib/chat/direct-runtime-auth.ts',
   'lib/chat/native-direct-channel.ts',
@@ -72,7 +71,6 @@ const legacyDirectClientImports = new Set([
 ]);
 
 const legacyProviderTypeImports = new Set([
-  'lib/auth.tsx',
   'lib/notification-preferences.ts',
   'lib/notifications.ts',
   'lib/supabase/client.ts',

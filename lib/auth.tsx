@@ -1,8 +1,8 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Session, User } from '@supabase/supabase-js';
 import { createMMKV } from 'react-native-mmkv';
-import { supabase } from '@/lib/supabase/client';
+import type { TeswaAuthSession, TeswaAuthUser } from '@/lib/backend/contracts/auth';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { fetchMyProfile, isProfileComplete } from '@/lib/profiles';
 import { getOnboardingCompleted } from '@/lib/onboarding';
 import { REQUIRED_POLICIES, fetchRequiredPolicyAcceptanceState } from '@/lib/policy-acceptance';
@@ -27,8 +27,8 @@ const startupLog = (event: string, data?: Record<string, unknown>) => {
 type AuthContextValue = {
   bootstrapReady: boolean;
   loadingProfile: boolean;
-  session: Session | null;
-  user: User | null;
+  session: TeswaAuthSession | null;
+  user: TeswaAuthUser | null;
   onboardingCompleted: boolean;
   profileCompleted: boolean;
   profileCheckError: string | null;
@@ -169,8 +169,8 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutErr
 export function AuthProvider({ children }: PropsWithChildren) {
   const [bootstrapReady, setBootstrapReady] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<TeswaAuthSession | null>(null);
+  const [user, setUser] = useState<TeswaAuthUser | null>(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [profileCompleted, setProfileCompleted] = useState(false);
   const [profileCheckError, setProfileCheckError] = useState<string | null>(null);
@@ -356,9 +356,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // Keep per-user account-gate cache across sign-out so returning users can re-enter quickly;
     // safety is preserved because cache lookup is scoped by userId + policy fingerprint.
     await disableRegisteredPushDeviceIfPossible();
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      if (__DEV__) console.log('[Auth] sign out failed', error);
+    const result = await teswaBackendRuntime.auth.signOut();
+    if (!result.ok) {
+      if (__DEV__) console.log('[Auth] sign out failed', { reason: result.reason, cause: result.cause });
       return { ok: false, message: SIGN_OUT_ERROR_MESSAGE };
     }
 
@@ -377,18 +377,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
           startupTrace.mark('onboarding_read_done');
           return value;
         });
-        const sessionPromise = supabase.auth.getSession().then((value) => {
-          startupLog('get_session_finished', { hasSession: Boolean(value.data.session) });
-          startupTrace.mark('get_session_done', { hasSession: Boolean(value.data.session) });
+        const sessionPromise = teswaBackendRuntime.auth.getSession().then((value) => {
+          startupLog('get_session_finished', { hasSession: Boolean(value) });
+          startupTrace.mark('get_session_done', { hasSession: Boolean(value) });
           return value;
         });
-        const [onboardingDone, sessionResult] = await Promise.all([
+        const [onboardingDone, currentSession] = await Promise.all([
           onboardingPromise,
           sessionPromise,
         ]);
         if (!mountedRef.current) return;
         setOnboardingCompleted(onboardingDone);
-        const currentSession = sessionResult.data.session;
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         if (!startupResolvedSessionRef.current) {
@@ -438,7 +437,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     };
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+    const unsubscribeAuthState = teswaBackendRuntime.auth.subscribeToAuthState(async (event, nextSession) => {
       if (!hasLoggedFirstAuthStateEventRef.current) {
         hasLoggedFirstAuthStateEventRef.current = true;
         startupLog('on_auth_state_change_first_event', { event, hasSession: Boolean(nextSession) });
@@ -461,7 +460,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           void trackPerformanceMetric('auth_ready_time', getPerformanceSessionElapsedMs(), { route: '/_layout' });
         }
         const isDuplicateInitialSession =
-          event === 'INITIAL_SESSION' && nextUserId && nextUserId === bootstrappedUserIdRef.current;
+          event === 'initial' && nextUserId && nextUserId === bootstrappedUserIdRef.current;
         setBootstrapError(null);
         setSession(nextSession);
         setUser(nextSession?.user ?? null);
@@ -523,7 +522,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       mountedRef.current = false;
       activeProfileCheckTokenRef.current += 1;
       activePolicyCheckTokenRef.current += 1;
-      listener.subscription.unsubscribe();
+      unsubscribeAuthState();
     };
   }, []);
 
