@@ -70,7 +70,7 @@ No paid compute or paid load balancer is approved here.
 Apply exactly the reviewed saved plan:
 
 ```bash
-terraform apply "teswa-phase2-foundation-services.plan"
+$HOME/.local/bin/terraform apply "teswa-phase2-foundation-services.plan"
 ```
 
 Do not run a fresh unsaved `terraform apply`.
@@ -88,3 +88,18 @@ After apply, verify:
 - `terraform plan -detailed-exitcode` returns zero drift
 
 Phase 2 is not closed until post-apply verification passes.
+
+
+## Terraform binary requirement
+
+The reviewed saved plan was created by Terraform 1.16.0 from `$HOME/.local/bin/terraform`.
+
+OCI Cloud Shell's default `terraform` command is still 1.5.7, and Terraform plan files are not portable across versions.
+
+Therefore Phase 2 must be applied with the same installed Terraform binary used to create the saved plan:
+
+```bash
+bash apply-phase2-foundation-services.sh
+```
+
+The helper resolves to `$HOME/.local/bin/terraform` by default and applies only the reviewed saved plan.
