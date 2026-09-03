@@ -52,6 +52,17 @@ resource "oci_core_security_list" "admin_bastion_egress" {
     }
   }
 
+  ingress_security_rules {
+    protocol  = "6"
+    source    = "${oci_bastion_bastion.admin[0].private_endpoint_ip_address}/32"
+    stateless = false
+
+    tcp_options {
+      min = 22
+      max = 22
+    }
+  }
+
   lifecycle {
     precondition {
       condition     = var.admin_bastion_target_cidr != ""
