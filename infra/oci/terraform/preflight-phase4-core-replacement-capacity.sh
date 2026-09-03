@@ -28,10 +28,18 @@ print(d.get("availability-domain",""), d.get("shape",""), sc.get("ocpus",""), sc
 PY
 )"
 
-if [ "$SHAPE" != "VM.Standard.A1.Flex" ] || [ "$OCPUS" != "1" ] || [ "$MEM" != "6" ]; then
-  echo "capacity_preflight=FAIL reason=unexpected_core_shape" >&2
-  exit 3
-fi
+echo "observed_shape=$SHAPE"
+echo "observed_ocpus=$OCPUS"
+echo "observed_memory_gb=$MEM"
+
+python3 - "$SHAPE" "$OCPUS" "$MEM" <<'PY'
+import sys
+shape,ocpus,mem=sys.argv[1:]
+ok=(shape=="VM.Standard.A1.Flex" and float(ocpus)==1.0 and float(mem)==6.0)
+if not ok:
+    print("capacity_preflight=FAIL reason=unexpected_core_shape")
+    raise SystemExit(3)
+PY
 
 TENANCY="$(oci iam compartment get   --compartment-id "$COMPARTMENT"   --query 'data."compartment-id"'   --raw-output)"
 
