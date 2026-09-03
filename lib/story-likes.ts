@@ -1,12 +1,9 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export type StoryLikeStateByStoryId = Record<string, boolean>;
 
 export type SetStoryLikedResult =
-  | {
-      ok: true;
-      liked: boolean;
-    }
+  | { ok: true; liked: boolean }
   | {
       ok: false;
       reason: 'invalid_user' | 'invalid_story' | 'like_failed' | 'unlike_failed';
@@ -14,7 +11,9 @@ export type SetStoryLikedResult =
     };
 
 function normalizeStoryIds(storyIds: string[]): string[] {
-  return Array.from(new Set(storyIds.map((storyId) => storyId.trim()).filter(Boolean)));
+  return Array.from(
+    new Set(storyIds.map((storyId) => storyId.trim()).filter(Boolean)),
+  );
 }
 
 export async function fetchStoryLikeStateForViewer(input: {
@@ -23,22 +22,8 @@ export async function fetchStoryLikeStateForViewer(input: {
 }): Promise<StoryLikeStateByStoryId> {
   const viewerId = input.viewerId.trim();
   const storyIds = normalizeStoryIds(input.storyIds);
-
   if (!viewerId || !storyIds.length) return {};
-
-  const { data, error } = await supabase
-    .from('story_likes')
-    .select('story_id')
-    .eq('liker_id', viewerId)
-    .in('story_id', storyIds);
-
-  if (error) throw error;
-
-  return (data ?? []).reduce<StoryLikeStateByStoryId>((result, row: { story_id: string | null }) => {
-    const storyId = row.story_id?.trim();
-    if (storyId) result[storyId] = true;
-    return result;
-  }, {});
+  return teswaBackendRuntime.stories.getLikeState(viewerId, storyIds);
 }
 
 export async function setStoryLikedFromMobile(input: {
@@ -56,7 +41,6 @@ export async function setStoryLikedFromMobile(input: {
       message: 'يجب تسجيل الدخول أولاً للتفاعل مع القصة.',
     };
   }
-
   if (!storyId) {
     return {
       ok: false,
@@ -65,25 +49,20 @@ export async function setStoryLikedFromMobile(input: {
     };
   }
 
-  if (input.liked) {
-    const { error } = await supabase.from('story_likes').insert({ story_id: storyId, liker_id: likerId });
-    if (!error) return { ok: true, liked: true };
-    if (error.code === '23505') return { ok: true, liked: true };
+  const result = await teswaBackendRuntime.stories.setLiked({
+    storyId,
+    likerId,
+    liked: input.liked,
+  });
 
-    if (__DEV__) console.warn('[story-likes] like failed', error);
-    return { ok: false, reason: 'like_failed', message: 'تعذر إضافة الإعجاب حالياً.' };
+  if (result.ok) return { ok: true, liked: result.data.liked };
+
+  if (__DEV__) {
+    console.warn('[story-likes] update failed', result.message);
   }
-
-  const { error } = await supabase
-    .from('story_likes')
-    .delete()
-    .eq('story_id', storyId)
-    .eq('liker_id', likerId);
-
-  if (!error) return { ok: true, liked: false };
-
-  if (__DEV__) console.warn('[story-likes] unlike failed', error);
-  return { ok: false, reason: 'unlike_failed', message: 'تعذر إزالة الإعجاب حالياً.' };
+  return input.liked
+    ? { ok: false, reason: 'like_failed', message: 'تعذر إضافة الإعجاب حالياً.' }
+    : { ok: false, reason: 'unlike_failed', message: 'تعذر إزالة الإعجاب حالياً.' };
 }
 
 export async function fetchStoryLikeCountsForOwner(input: {
@@ -92,20 +71,6 @@ export async function fetchStoryLikeCountsForOwner(input: {
 }): Promise<Record<string, number>> {
   const ownerId = input.ownerId.trim();
   const storyIds = normalizeStoryIds(input.storyIds);
-
   if (!ownerId || !storyIds.length) return {};
-
-  const { data, error } = await supabase
-    .from('story_likes')
-    .select('story_id')
-    .in('story_id', storyIds);
-
-  if (error) throw error;
-
-  return (data ?? []).reduce<Record<string, number>>((result, row: { story_id: string | null }) => {
-    const storyId = row.story_id?.trim();
-    if (!storyId) return result;
-    result[storyId] = (result[storyId] ?? 0) + 1;
-    return result;
-  }, {});
+  return teswaBackendRuntime.stories.getLikeCounts(storyIds);
 }
