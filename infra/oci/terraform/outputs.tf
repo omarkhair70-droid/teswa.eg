@@ -43,3 +43,14 @@ output "ops_notification_topic_id" {
   value       = var.enable_notifications ? oci_ons_notification_topic.teswa_ops[0].topic_id : null
   description = "Teswa operations notification topic OCID when enabled."
 }
+
+
+output "teswa_edge_public_ip" {
+  value       = var.enable_compute_phase3 ? oci_core_instance.edge[0].public_ip : null
+  description = "Public IP for the Teswa edge node when Phase 3 compute is enabled."
+}
+
+output "teswa_core_private_ip" {
+  value       = var.enable_compute_phase3 ? oci_core_instance.core[0].private_ip : null
+  description = "Private IP for the Teswa core node when Phase 3 compute is enabled."
+}
