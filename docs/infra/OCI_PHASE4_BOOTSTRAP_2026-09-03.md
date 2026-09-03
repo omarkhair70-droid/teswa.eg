@@ -233,3 +233,27 @@ The Edge guest-memory result is materially lower than the shape-level 1 GB alloc
 - Supabase remains production authority; no cutover is included.
 
 **OS inventory gate:** CLOSED / GREEN.
+
+
+## Core prerequisite privilege failure
+
+The first Core package-bootstrap Run Command failed before any package mutation:
+
+- Run Command state: FAILED
+- exit code: 10
+- guest message: `sudo: a password is required`
+- guard result: `baseline=FAIL reason=no_privileged_execution`
+
+This is expected OCI behavior: Compute Instance Run Command executes as the `ocarun` user by default. Administrator commands require an explicit privilege path.
+
+Because `teswa-core-01` is intentionally private and has no public SSH exposure, the recovery design is:
+
+1. enable the Oracle Cloud Agent `Bastion` plugin on Core;
+2. create a temporary OCI Bastion with a client /32 allowlist;
+3. allow TCP/22 into the Core app NSG only from the Bastion private endpoint /32;
+4. create a short-lived Managed SSH session as `opc`;
+5. install Oracle's documented `ocarun` sudoers entry and validate it with `visudo`;
+6. rerun the guarded Core prerequisite bootstrap;
+7. delete the temporary Bastion and port-22 ingress after the privilege bootstrap is proven.
+
+No public SSH rule is introduced, and no Supabase/Nova/DNS/data change is part of this recovery.
