@@ -784,3 +784,20 @@ The preflight does not need an exact count; it only needs to know whether any AC
 The guarded connection-creation helper independently refuses to create a second connection when an ACTIVE/CREATING connection exists.
 
 No OCI resource, guest state, Core lifecycle, Nova, Supabase, DNS, or data changed during this failed preflight.
+
+
+## Serial-console recovery preflight green
+
+The capacity-independent Core recovery preflight is green:
+
+- Core is RUNNING;
+- shape remains `VM.Standard.A1.Flex`;
+- bootstrap RSA private key exists locally with mode 600;
+- no ACTIVE/CREATING serial-console connection exists;
+- maintenance payload is generated locally with mode 600;
+- no A1 replacement is required;
+- no E2 helper is required;
+- no host-capacity dependency remains;
+- `serial_recovery_preflight=PASS`.
+
+The next approved action is limited to creating a temporary OCI instance serial-console connection for `teswa-core-01`. This creates the console access object only; it does not reboot or mutate the guest OS.
