@@ -10,11 +10,11 @@ It collects only:
 - SELinux/firewalld state
 - presence/version of runtime binaries
 - listening TCP sockets
-- available package updates
+- package-manager presence/version
 
 It does not:
 
-- install/update packages
+- install, update, or refresh package metadata
 - edit files
 - create users
 - change firewall rules
