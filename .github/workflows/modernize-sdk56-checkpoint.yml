@@ -9,6 +9,9 @@ on:
       - 'app.config.js'
       - 'package.json'
       - 'package-lock.json'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
 
 permissions:
   contents: write
