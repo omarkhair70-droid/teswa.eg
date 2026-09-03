@@ -1,10 +1,8 @@
-import { File } from 'expo-file-system';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import type { DolabMedia, DolabMediaType } from '@/lib/dolab/types';
-
-const DOLAB_BUCKET = 'dolab-media';
 
 type DolabResult<T> = { data: T; error: DolabPersistenceError | null };
 
@@ -58,20 +56,6 @@ function fallbackContentType(media: DolabPendingMedia): string {
   return 'application/octet-stream';
 }
 
-async function localUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  try {
-    return await new File(uri).arrayBuffer();
-  } catch (fileError) {
-    try {
-      const response = await fetch(uri);
-      if (!response.ok && response.status !== 0) throw new Error('file_read_failed');
-      return await response.arrayBuffer();
-    } catch {
-      throw fileError instanceof Error ? fileError : new Error('file_read_failed');
-    }
-  }
-}
-
 export function buildDolabStoragePath(userId: string, dolabItemIdOrInbox: string, media: DolabPendingMedia): string {
   const stamp = media.id || `${Date.now()}`;
   const fileName = safeFileName(media.fileName ?? media.uri.split('/').pop());
@@ -85,20 +69,32 @@ export async function uploadDolabPendingMedia(
 ): Promise<DolabResult<{ storagePath: string } | null>> {
   const storagePath = buildDolabStoragePath(userId, dolabItemId ?? 'inbox', media);
   try {
-    const body = await localUriToArrayBuffer(media.uri);
-    if (body.byteLength === 0) {
+    const uploadResult = await teswaBackendRuntime.media.upload({
+      purpose: 'dolab_media',
+      ownerId: userId,
+      source: {
+        uri: media.uri,
+        fileName: media.fileName,
+        mimeType: media.mimeType ?? fallbackContentType(media),
+        sizeBytes: media.sizeBytes,
+      },
+      objectKeyHint: storagePath,
+    });
+
+    if (!uploadResult.ok) {
+      if (uploadResult.reason === 'invalid_source') {
+        return {
+          data: null,
+          error: { kind: 'unknown', message: 'الملف المحلي فاضي أو غير متاح. نسخة الدولاب ما اتغيرتش.' },
+        };
+      }
       return {
         data: null,
-        error: { kind: 'unknown', message: 'الملف المحلي فاضي أو غير متاح. نسخة الدولاب ما اتغيرتش.' },
+        error: normalizeUploadError({ message: uploadResult.message }),
       };
     }
 
-    const { error } = await supabase.storage.from(DOLAB_BUCKET).upload(storagePath, body, {
-      contentType: media.mimeType ?? fallbackContentType(media),
-      upsert: false,
-    });
-
-    return { data: error ? null : { storagePath }, error: normalizeUploadError(error) };
+    return { data: { storagePath: uploadResult.data.objectKey }, error: null };
   } catch {
     return {
       data: null,
@@ -163,7 +159,14 @@ export async function uploadAndSaveDolabMedia(
   });
 
   if (rowResult.error || !rowResult.data) {
-    void supabase.storage.from(DOLAB_BUCKET).remove([uploadResult.data.storagePath]);
+    void teswaBackendRuntime.media.remove([
+      {
+        purpose: 'dolab_media',
+        objectKey: uploadResult.data.storagePath,
+        contentType: media.mimeType ?? fallbackContentType(media),
+        sizeBytes: media.sizeBytes ?? null,
+      },
+    ]);
     return { data: null, error: rowResult.error };
   }
 

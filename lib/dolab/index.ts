@@ -1,3 +1,4 @@
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
@@ -13,7 +14,6 @@ type SaveDolabDraftInput = Pick<DolabDraftItem, 'title' | 'description' | 'categ
   status?: Extract<DolabItemStatus, 'draft' | 'ready'>;
   source?: DolabItemSource;
 };
-const DOLAB_BUCKET = 'dolab-media';
 
 type SaveDolabNoteInput = Pick<DolabSelfMessage, 'body'> & {
   messageType: DolabSelfMessageType;
@@ -165,8 +165,15 @@ export async function deleteDolabMedia(
       return { data: null, error: normalizeDolabPersistenceError(error) ?? { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب.' } };
     }
 
-    const storageResult = await supabase.storage.from(DOLAB_BUCKET).remove([storagePath]);
-    if (storageResult.error) {
+    const storageResult = await teswaBackendRuntime.media.remove([
+      {
+        purpose: 'dolab_media',
+        objectKey: storagePath,
+        contentType: null,
+        sizeBytes: null,
+      },
+    ]);
+    if (!storageResult.ok) {
       return { data: { id: mediaId }, error: { kind: 'unknown', message: 'اتحذف سجل الميديا، لكن تنظيف ملف التخزين السحابي اتعطل.' } };
     }
 

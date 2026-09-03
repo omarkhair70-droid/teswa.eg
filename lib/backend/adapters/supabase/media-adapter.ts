@@ -64,6 +64,14 @@ export function createSupabaseMediaStorageAdapter(): MediaStorageContract {
 
       try {
         const body = await readSource(input.source);
+        if (body.byteLength === 0) {
+          return {
+            ok: false,
+            reason: 'invalid_source',
+            message: 'Media source is empty.',
+          };
+        }
+
         const { error } = await supabase.storage
           .from(bucketFor(input.purpose))
           .upload(objectKey, body, {
