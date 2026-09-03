@@ -139,6 +139,22 @@ for (const sourceRoot of sourceRoots) {
       }
     }
 
+    if (relativePath === 'lib/deals.ts') {
+      const forbiddenDealLifecycleTokens = [
+        ".from('swap_deals')",
+        ".from('deal_confirmations')",
+        ".from('deal_messages')",
+        ".from('reviews')",
+        "rpc('mark_deal_thread_read'",
+        "rpc('complete_deal_if_ready'",
+      ];
+      for (const token of forbiddenDealLifecycleTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: deal lifecycle provider access must stay behind DealLifecycleContract (${token})`);
+        }
+      }
+    }
+
     if (content.includes('EXPO_PUBLIC_SUPABASE_URL') || content.includes('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY')) {
       if (!isAdapter && !legacyDirectSupabaseEnvReads.has(relativePath)) {
         violations.push(`${relativePath}: new direct Supabase environment dependency`);
