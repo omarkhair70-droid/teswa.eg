@@ -257,3 +257,16 @@ Because `teswa-core-01` is intentionally private and has no public SSH exposure,
 7. delete the temporary Bastion and port-22 ingress after the privilege bootstrap is proven.
 
 No public SSH rule is introduced, and no Supabase/Nova/DNS/data change is part of this recovery.
+
+
+## Temporary Bastion plan review correction
+
+The first saved temporary-Bastion plan was not approved for apply even though its structural guard passed.
+
+Review found the Bastion private endpoint was targeted at `teswa-public-edge`. OCI's Bastion guidance for private-host administration uses a private target subnet (either the target host subnet itself or another private subnet that can reach it). The Teswa Core already lives in `teswa-private-app`, which has the required VCN reachability and NAT egress.
+
+The Bastion target subnet has therefore been corrected to `teswa-private-app`.
+
+This correction does not open any public SSH path. The only SSH ingress remains TCP/22 from the Bastion private endpoint /32 to the Core app NSG, and the Bastion client allowlist remains the detected Cloud Shell source /32.
+
+The original saved plan must not be applied; regenerate and review a fresh plan after this correction.
