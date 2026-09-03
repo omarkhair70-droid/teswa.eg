@@ -20,9 +20,9 @@ Observed final state:
 - Supabase remains the active production adapter;
 - no OCI cutover or production data migration was performed by Lane 2.
 
-For Lane 4 this means there is **no new Lane 2 dependency required for the
-read-only PostgreSQL rehearsal entry checks**. Contract-level semantic parity
-will consume the completed Lane 2 handoff later.
+For Lane 4 there is no new Lane 2 dependency for the read-only PostgreSQL
+rehearsal entry gates. Contract-level semantic parity will consume the completed
+Lane 2 handoff later.
 
 ### Lane 3 — OCI platform
 
@@ -36,7 +36,7 @@ Phase 2 and Phase 3 remain green:
 - `teswa-edge-01`: RUNNING, E2 Micro public edge;
 - Terraform drift: none.
 
-Lane 3 has now completed and handed off the PostgreSQL 17 rehearsal target.
+Lane 3 completed and handed off the PostgreSQL 17 rehearsal target.
 
 Verified target state:
 
@@ -53,111 +53,125 @@ Verified target state:
 - production cutover: `none`;
 - verified gate: `postgres17_bootstrap=PASS`.
 
-PostgreSQL is intentionally localhost-only. Lane 4 must therefore use the
-existing controlled OCI Run Command path on `teswa-core-01` for target-local
-inspection/rehearsal work unless a separate private-network database-access
-change is reviewed later.
+PostgreSQL remains localhost-only. Lane 4 uses the existing controlled OCI Run
+Command path on `teswa-core-01` for target-local inspection until a separate
+private-network access change is explicitly reviewed.
 
 ## Dependency decision before mutation
 
-### Read-only steps now
+### Read-only entry gates
 
 No additional Lane 2 dependency is required.
 
-No additional Lane 3 infrastructure dependency is required for the target
-read-only preflight because:
+No additional Lane 3 infrastructure dependency is required because:
 
-- the target is GREEN;
+- the PostgreSQL target is GREEN;
 - Run Command is operational;
 - localhost-only PostgreSQL is the reviewed target boundary.
+
+The only execution prerequisite is a read-only Supabase PostgreSQL source URL in
+the operator environment. It must not be committed or pasted into repository
+output.
 
 ### Before any future target mutation/data load
 
 Lane 4 must stop and require an explicit reviewed execution boundary for:
 
-1. delivering the compiled baseline/data material onto `teswa-core-01` without
+1. delivering compiled baseline/data material onto `teswa-core-01` without
    exposing PostgreSQL publicly;
 2. confirming `teswa_rehearsal` is still empty immediately before the load;
 3. an explicit rehearsal-only target-write acknowledgement;
-4. credential/role creation, if later needed, through a reviewed host-local or
+4. credential/role creation, if later required, through a reviewed host-local or
    Vault-backed boundary rather than ad-hoc production credentials.
 
 No such mutation is authorized by this status document.
 
-## Lane 4 safe work started
+## Lane 4 read-only implementation
 
-### Target read-only verification
-
-Added:
+### Target verification
 
 `scripts/oci-migration/run-target-preflight-via-oci.sh`
 
-This re-verifies the Lane 3 handoff from Lane 4 using OCI Run Command and local
-`sudo -u postgres psql` only.
+Re-verifies the Lane 3 target using OCI Run Command and local PostgreSQL access.
+It hard-gates PostgreSQL 17, localhost-only listener, SCRAM, empty
+`teswa_rehearsal`, no unexpected user schema, and closed firewall 5432.
 
-It hard-gates:
-
-- PostgreSQL major 17;
-- active `postgresql-17` service;
-- `listen_addresses=127.0.0.1`;
-- `port=5432`;
-- `password_encryption=scram-sha-256`;
-- `teswa_rehearsal` exists;
-- public relations = 0;
-- no unexpected user schema;
-- firewalld 5432 remains closed.
-
-It performs:
-
-- no schema mutation;
-- no row mutation;
-- no data transfer;
-- no credential creation;
-- no production cutover.
-
-Expected terminal gate:
+Expected gate:
 
 `lane4_postgres_target_preflight=PASS`
 
-### Source/read-only rehearsal preparation
-
-Added:
+### Source rehearsal preparation
 
 `scripts/oci-migration/prepare-rehearsal-readonly.sh`
 
-This intentionally stops before any application-data archive or target load.
+Performs only source read-only schema/catalog capture and offline compilation of:
 
-It performs only:
+- provider-neutral structural baseline;
+- FK-aware copy plan;
+- runtime/provider dependency classification;
+- evidence SHA-256 manifest.
 
-1. read-only source schema/catalog capture;
-2. raw portability hazard report;
-3. offline provider-neutral baseline compilation;
-4. offline FK-aware data-copy planning;
-5. offline runtime/provider dependency classification;
-6. SHA-256 evidence manifest generation.
+It intentionally does not create a public-data archive, restore data, copy
+Storage bytes, create credentials, or mutate the OCI target.
 
-It explicitly does **not** perform:
+### Audited structural invariant gate
 
-- `pg_dump --data-only`;
-- `pg_restore`;
-- Storage object transfer;
-- OCI database writes;
-- role/password creation;
-- source mutation;
-- production write freeze/cutover.
+`scripts/oci-migration/verify-source-structural-invariants.py`
+
+New fail-closed offline gate. It requires the source structural baseline still
+matches the audited migration model before any target write is considered:
+
+- 46 public tables;
+- 1 public view (`marketplace_items`);
+- 12 public enums;
+- 188 indexes;
+- 249 constraints;
+- 104 public-origin FKs = 83 public->public + 21 external;
+- all 21 external FKs still anchor only to `auth.users`;
+- 46 primary-key-bearing public tables;
+- all public source tables still RLS-enabled;
+- 80 public functions;
+- 23 non-internal public triggers;
+- 99 public policies;
+- 29 storage policies;
+- the six audited public Realtime publication tables;
+- 9 logical Storage buckets;
+- no unexpected public identity/generated/sequence-backed columns;
+- source PostgreSQL major 17.
+
+Dynamic user/object/row counts are deliberately not hard-coded by this
+structural gate.
+
+Expected gate:
+
+`lane4_source_structural_gate=PASS`
+
+### Combined entry runner
+
+`scripts/oci-migration/run-lane4-entry-readonly-gates.sh`
+
+This is now the single safe entry command for the handoff. It:
+
+1. verifies the OCI PostgreSQL target in place;
+2. captures current Supabase source structural evidence read-only;
+3. compiles the portable baseline and dependency plans offline;
+4. runs the audited structural invariant gate;
+5. writes SHA-256 evidence under `/tmp`.
+
+It fails closed if target/data-load/cutover write opt-ins are present in the
+shell, so it cannot be mistaken for the rehearsal load command.
+
+Expected final gate:
+
+`lane4_entry_readonly_gates=PASS`
 
 ## Current execution boundary
 
-The next safe sequence is now:
+The next execution is the combined read-only entry runner only.
 
-1. run Lane 4 target preflight via OCI Run Command;
-2. run source read-only rehearsal preparation;
-3. review the resulting portable baseline, FK plan, and runtime dependency queue;
-4. compare those findings against the Lane 2 final contract handoff and Lane 3
-   localhost-only target boundary;
-5. only then design the first target-mutating rehearsal load gate.
-
-No production data transfer or provider switch is part of the current step.
+Only after its evidence is GREEN should Lane 4 design/review the first
+**target-mutating rehearsal load**. That later load remains a separate gate and
+is not production cutover.
 
 ## Still forbidden
 
@@ -169,4 +183,4 @@ No production data transfer or provider switch is part of the current step.
 - arbitrary production credentials;
 - blind replay of Supabase provider SQL;
 - source data mutation;
-- target data load before a separately reviewed rehearsal mutation gate.
+- target data load before the read-only entry evidence is reviewed.
