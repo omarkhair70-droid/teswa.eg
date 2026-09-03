@@ -1,4 +1,11 @@
-import type { DirectMessagePrivacy, ProfileCoreContract, TeswaProfile } from '@/lib/backend/contracts/profile';
+import type {
+  DetailedProfileBadge,
+  DetailedTrustMetrics,
+  DirectMessagePrivacy,
+  ProfileSocialContract,
+  TeswaProfile,
+  TrustLevelKey,
+} from '@/lib/backend/contracts/profile';
 import { supabase } from '@/lib/supabase/client';
 
 type ProfileRow = {
@@ -50,7 +57,52 @@ async function getProfile(profileId: string): Promise<TeswaProfile | null> {
   return data ? mapProfile(data as ProfileRow) : null;
 }
 
-export function createSupabaseProfileAdapter(): ProfileCoreContract {
+function normalizeTrustLevelKey(value: unknown): TrustLevelKey {
+  if (
+    value === 'rising_swapper'
+    || value === 'reliable_swapper'
+    || value === 'trusted_swapper'
+  ) {
+    return value;
+  }
+  return 'new_swapper';
+}
+
+function mapTrustMetrics(row: any): DetailedTrustMetrics {
+  return {
+    userId: row.user_id as string,
+    successfulSwapsCount: Number(row.successful_swaps_count ?? 0),
+    completedDealsCount: Number(row.completed_deals_count ?? 0),
+    cancelledDealsCount: Number(row.cancelled_deals_count ?? 0),
+    totalReviewsReceived: Number(row.total_reviews_received ?? 0),
+    averageRating: typeof row.average_rating === 'number' ? row.average_rating : null,
+    clearDescriptionCount: Number(row.clear_description_count ?? 0),
+    goodCommunicationCount: Number(row.good_communication_count ?? 0),
+    onTimeCount: Number(row.on_time_count ?? 0),
+    respectfulSwapperCount: Number(row.respectful_swapper_count ?? 0),
+    responseRate: typeof row.response_rate === 'number' ? row.response_rate : null,
+    avgResponseTimeMinutes:
+      typeof row.avg_response_time_minutes === 'number'
+        ? row.avg_response_time_minutes
+        : null,
+    trustLevelKey: normalizeTrustLevelKey(row.trust_level_key),
+    trustScore: Number(row.trust_score ?? 0),
+  };
+}
+
+function mapDetailedBadge(row: any): DetailedProfileBadge {
+  return {
+    badgeKey: row.badge_key as string,
+    labelAr: row.label_ar as string,
+    descriptionAr: row.description_ar as string,
+    category: row.category as string,
+    iconName: (row.icon_name as string | null) ?? null,
+    priority: Number(row.priority ?? 100),
+    awardedAt: row.awarded_at as string,
+  };
+}
+
+export function createSupabaseProfileAdapter(): ProfileSocialContract {
   return {
     getMine: getProfile,
     getPublic: getProfile,
@@ -160,5 +212,233 @@ export function createSupabaseProfileAdapter(): ProfileCoreContract {
 
       return { ok: true, data: mapProfile(data as ProfileRow) };
     },
+
+    async getFollowState(_viewerId, profileId) {
+      const { data, error } = await supabase.rpc('get_user_follow_state', {
+        p_target_user_id: profileId,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : null;
+      return {
+        followingByMe: Boolean(row?.following_by_me),
+        followsMe: Boolean(row?.follows_me),
+        mutual: Boolean(row?.mutual),
+        followerCount: Number(row?.follower_count ?? 0),
+        followingCount: Number(row?.following_count ?? 0),
+      };
+    },
+
+    async follow(_viewerId, profileId) {
+      const { data, error } = await supabase.rpc('follow_user', {
+        p_followed_user_id: profileId,
+      });
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      const row = Array.isArray(data) ? data[0] : null;
+      if (!row?.ok) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: row?.message ?? 'Follow failed.',
+          cause: row,
+        };
+      }
+      return {
+        ok: true,
+        data: {
+          message: row.message ?? 'Followed.',
+          code: typeof row.code === 'string' ? row.code : null,
+        },
+      };
+    },
+
+    async unfollow(_viewerId, profileId) {
+      const { data, error } = await supabase.rpc('unfollow_user', {
+        p_followed_user_id: profileId,
+      });
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      const row = Array.isArray(data) ? data[0] : null;
+      if (!row?.ok) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: row?.message ?? 'Unfollow failed.',
+          cause: row,
+        };
+      }
+      return {
+        ok: true,
+        data: {
+          message: row.message ?? 'Unfollowed.',
+          code: typeof row.code === 'string' ? row.code : null,
+        },
+      };
+    },
+
+    async listConnections(profileId, mode, limit = 50) {
+      const rpcName = mode === 'followers'
+        ? 'get_profile_followers'
+        : 'get_profile_following';
+      const { data, error } = await supabase.rpc(rpcName, {
+        p_profile_user_id: profileId,
+        p_limit: limit,
+      });
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        profileId: row.profile_id as string,
+        displayName: (row.display_name as string | null) ?? null,
+        username: (row.username as string | null) ?? null,
+        avatarUrl: (row.avatar_url as string | null) ?? null,
+        city: (row.city as string | null) ?? null,
+        area: (row.area as string | null) ?? null,
+      }));
+    },
+
+    async getBlockState(viewerId, profileId) {
+      if (viewerId === profileId) {
+        return {
+          blockedByMe: false,
+          blockedMe: false,
+          isBlockedEitherDirection: false,
+        };
+      }
+      const { data, error } = await supabase.rpc('get_user_block_state', {
+        p_target_user_id: profileId,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : null;
+      return {
+        blockedByMe: Boolean(row?.blocked_by_me),
+        blockedMe: Boolean(row?.blocked_me),
+        isBlockedEitherDirection: Boolean(row?.is_blocked_either_direction),
+      };
+    },
+
+    async listBlocked(viewerId) {
+      const { data: rows, error: blockError } = await supabase
+        .from('user_blocks')
+        .select('blocked_user_id,created_at')
+        .eq('blocker_id', viewerId)
+        .order('created_at', { ascending: false });
+      if (blockError) throw blockError;
+      if (!rows?.length) return [];
+
+      const ids = rows.map((row) => row.blocked_user_id as string).filter(Boolean);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id,display_name,username,avatar_url')
+        .in('id', ids);
+      if (profilesError) throw profilesError;
+
+      const profileMap = new Map((profiles ?? []).map((profile) => [profile.id as string, profile]));
+      return rows.map((row) => {
+        const id = row.blocked_user_id as string;
+        const profile = profileMap.get(id);
+        return {
+          id,
+          displayName: (profile?.display_name as string | null | undefined) ?? null,
+          username: (profile?.username as string | null | undefined) ?? null,
+          avatarUrl: (profile?.avatar_url as string | null | undefined) ?? null,
+          blockedAt: (row.created_at as string | null | undefined) ?? null,
+        };
+      });
+    },
+
+    async block(viewerId, profileId) {
+      const { error } = await supabase
+        .from('user_blocks')
+        .insert({ blocker_id: viewerId, blocked_user_id: profileId });
+      if (error?.code === '23505') {
+        return {
+          ok: true,
+          data: { message: 'Already blocked.', code: 'already_blocked' },
+        };
+      }
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: { message: 'Blocked.', code: null } };
+    },
+
+    async unblock(viewerId, profileId) {
+      const { error, count } = await supabase
+        .from('user_blocks')
+        .delete({ count: 'exact' })
+        .eq('blocker_id', viewerId)
+        .eq('blocked_user_id', profileId);
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return {
+        ok: true,
+        data: {
+          message: count ? 'Unblocked.' : 'Not blocked.',
+          code: count ? null : 'not_blocked',
+        },
+      };
+    },
+
+    async getTrustMetrics(profileId) {
+      const { data, error } = await supabase.rpc('get_user_trust_metrics', {
+        p_user_id: profileId,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : null;
+      return row ? mapTrustMetrics(row) : null;
+    },
+
+    async getMyTrustMetrics() {
+      const { data, error } = await supabase.rpc('get_my_trust_metrics');
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : null;
+      return row ? mapTrustMetrics(row) : null;
+    },
+
+    async getBadges(profileId) {
+      const { data, error } = await supabase.rpc('get_user_badges', {
+        p_user_id: profileId,
+      });
+      if (error) throw error;
+      return Array.isArray(data) ? data.map(mapDetailedBadge) : [];
+    },
+
+    async getMyBadges() {
+      const { data, error } = await supabase.rpc('get_my_badges');
+      if (error) throw error;
+      return Array.isArray(data) ? data.map(mapDetailedBadge) : [];
+    },
+
+    async refreshMyBadges() {
+      const { data, error } = await supabase.rpc('refresh_my_badges');
+      if (error) throw error;
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+      const awarded = (data as { awarded_badges?: unknown }).awarded_badges;
+      return Array.isArray(awarded)
+        ? awarded.filter((value): value is string => typeof value === 'string')
+        : [];
+},
   };
 }
