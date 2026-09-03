@@ -1,0 +1,13 @@
+region           = "me-jeddah-1"
+compartment_ocid = "ocid1.compartment.REPLACE_ME"
+
+# Choose these only after checking they do not overlap the existing Nova VCN.
+vcn_cidr           = "REPLACE_ME"
+public_subnet_cidr = "REPLACE_ME"
+app_subnet_cidr    = "REPLACE_ME"
+data_subnet_cidr   = "REPLACE_ME"
+
+# Remain false until a reviewed plan is approved.
+enable_object_storage = false
+enable_vault           = false
+enable_notifications   = false
