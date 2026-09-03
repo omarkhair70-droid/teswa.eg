@@ -112,3 +112,10 @@ variable "admin_bastion_target_cidr" {
   type        = string
   default     = ""
 }
+
+
+variable "admin_bastion_endpoint_cidr" {
+  description = "Exact live Bastion private endpoint CIDR used only for temporary canonical SSH ingress. Captured locally after Bastion creation."
+  type        = string
+  default     = ""
+}
