@@ -18,17 +18,9 @@ if ! "$TF" version >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f "$HOME/.oci/config" ]; then
-  echo "No ~/.oci/config found for SecurityToken profile." >&2
-  echo "Create it first with:" >&2
-  echo "  oci session authenticate --region $REGION --profile-name $PROFILE" >&2
-  exit 2
-fi
-
-if ! grep -qE "^\[$PROFILE\]$" "$HOME/.oci/config"; then
-  echo "OCI profile [$PROFILE] not found in ~/.oci/config." >&2
-  echo "Create it first with:" >&2
-  echo "  oci session authenticate --region $REGION --profile-name $PROFILE" >&2
+if [ ! -f "$HOME/.oci/config" ] || ! grep -qE "^\[$PROFILE\]$" "$HOME/.oci/config"; then
+  echo "OCI API-key profile [$PROFILE] not found in ~/.oci/config." >&2
+  echo "Run: bash setup-terraform-api-key.sh" >&2
   exit 2
 fi
 
@@ -40,13 +32,14 @@ echo "backend=oci"
 echo "bucket=$BUCKET"
 echo "key=$KEY"
 echo "region=$REGION"
+echo "auth=APIKey"
 echo "profile=$PROFILE"
 echo
-echo "Terraform will ask whether to copy the existing local state."
+echo "Terraform may ask whether to copy the existing local state."
 echo "Approve only the state copy; this command does not apply infrastructure."
 echo
 
-"$TF" init -migrate-state   -backend-config="bucket=$BUCKET"   -backend-config="namespace=$NAMESPACE"   -backend-config="key=$KEY"   -backend-config="region=$REGION"   -backend-config="auth=SecurityToken"   -backend-config="config_file_profile=$PROFILE"
+"$TF" init -migrate-state   -backend-config="bucket=$BUCKET"   -backend-config="namespace=$NAMESPACE"   -backend-config="key=$KEY"   -backend-config="region=$REGION"   -backend-config="auth=APIKey"   -backend-config="config_file_profile=$PROFILE"
 
 echo
 echo "Migration init completed."
