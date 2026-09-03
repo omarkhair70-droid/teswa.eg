@@ -675,5 +675,232 @@ export function createSupabaseMarketplaceReadAdapter(): MarketplaceCoreContract 
 
       return { ok: true, data: undefined };
     },
+
+    async getEditableListingImagesContext(itemId, ownerId) {
+      const { data: item, error } = await supabase
+        .from('items')
+        .select('id,title,status')
+        .eq('id', itemId)
+        .eq('owner_id', ownerId)
+        .in('status', ['active', 'archived'])
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!item) return null;
+
+      const { data: images, error: imagesError } = await supabase
+        .from('item_images')
+        .select('id,image_url,is_primary,sort_order,created_at')
+        .eq('item_id', itemId);
+      if (imagesError) throw imagesError;
+
+      const normalized = (images ?? [])
+        .map((entry) => ({
+          id: entry.id as string,
+          imageUrl: (entry.image_url as string | null)?.trim() || '',
+          isPrimary: Boolean(entry.is_primary),
+          sortOrder:
+            typeof entry.sort_order === 'number'
+              ? entry.sort_order
+              : null,
+          createdAt: (entry.created_at as string | null) ?? null,
+        }))
+        .filter((entry) => entry.imageUrl.length > 0)
+        .sort((a, b) => {
+          if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+          const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+          const bSort = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+          if (aSort !== bSort) return aSort - bSort;
+          const aCreated = a.createdAt ?? '';
+          const bCreated = b.createdAt ?? '';
+          if (aCreated !== bCreated) return aCreated.localeCompare(bCreated);
+          return a.imageUrl.localeCompare(b.imageUrl);
+        });
+
+      return {
+        itemId: item.id as string,
+        title:
+          typeof item.title === 'string' && item.title.trim()
+            ? item.title.trim()
+            : 'عنصر بدون عنوان',
+        status: item.status as 'active' | 'archived',
+        images: normalized,
+      };
+    },
+
+    async applyListingImagePlan(input) {
+      const { data: item, error: itemError } = await supabase
+        .from('items')
+        .select('id,status')
+        .eq('id', input.itemId)
+        .eq('owner_id', input.ownerId)
+        .maybeSingle();
+
+      if (itemError) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: itemError.message,
+          cause: itemError,
+        };
+      }
+      if (!item) {
+        return {
+          ok: false,
+          reason: 'not_found_or_unauthorized',
+          message: 'Listing not found.',
+        };
+      }
+      if (item.status !== 'active' && item.status !== 'archived') {
+        return {
+          ok: false,
+          reason: 'not_editable',
+          message: 'Listing is not editable.',
+        };
+      }
+
+      const { data: currentRows, error: currentError } = await supabase
+        .from('item_images')
+        .select('id,image_url')
+        .eq('item_id', input.itemId);
+
+      if (currentError) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: currentError.message,
+          cause: currentError,
+        };
+      }
+
+      const currentById = new Map(
+        (currentRows ?? []).map((row) => [
+          row.id as string,
+          (row.image_url as string | null)?.trim() || '',
+        ]),
+      );
+      const usedExisting = new Set<string>();
+
+      for (const row of input.orderedRows) {
+        if (row.kind !== 'existing') continue;
+        const knownUrl = currentById.get(row.imageId);
+        if (
+          !row.imageId
+          || !row.imageUrl
+          || !knownUrl
+          || knownUrl !== row.imageUrl
+          || usedExisting.has(row.imageId)
+        ) {
+          return {
+            ok: false,
+            reason: 'invalid_input',
+            message: 'Existing image plan is stale or invalid.',
+          };
+        }
+        usedExisting.add(row.imageId);
+      }
+
+      const newRows = input.orderedRows
+        .map((row, index) =>
+          row.kind === 'new'
+            ? {
+                image_url: row.imageUrl,
+                is_primary: index === 0,
+                sort_order: index,
+              }
+            : null,
+        )
+        .filter((row): row is {
+          image_url: string;
+          is_primary: boolean;
+          sort_order: number;
+        } => Boolean(row));
+
+      if (newRows.length) {
+        const { error: insertError } = await supabase
+          .from('item_images')
+          .insert(
+            newRows.map((row) => ({
+              item_id: input.itemId,
+              image_url: row.image_url,
+              is_primary: row.is_primary,
+              sort_order: row.sort_order,
+            })),
+          );
+
+        if (insertError) {
+          return {
+            ok: false,
+            reason: 'images_insert_failed',
+            message: insertError.message,
+            cause: insertError,
+          };
+        }
+      }
+
+      for (let i = 0; i < input.orderedRows.length; i += 1) {
+        const row = input.orderedRows[i];
+        const updateQuery = supabase
+          .from('item_images')
+          .update({ is_primary: i === 0, sort_order: i })
+          .eq('item_id', input.itemId);
+
+        const { error: updateError } = row.kind === 'existing'
+          ? await updateQuery.eq('id', row.imageId)
+          : await updateQuery.eq('image_url', row.imageUrl);
+
+        if (updateError) {
+          if (newRows.length) {
+            await supabase
+              .from('item_images')
+              .delete()
+              .eq('item_id', input.itemId)
+              .in(
+                'image_url',
+                newRows.map((entry) => entry.image_url),
+              );
+          }
+          return {
+            ok: false,
+            reason: 'images_metadata_update_failed',
+            message: updateError.message,
+            cause: updateError,
+          };
+        }
+      }
+
+      const removedExistingRows = (currentRows ?? []).filter(
+        (row) => !usedExisting.has(row.id as string),
+      );
+
+      if (removedExistingRows.length) {
+        const { error: deleteError } = await supabase
+          .from('item_images')
+          .delete()
+          .eq('item_id', input.itemId)
+          .in(
+            'id',
+            removedExistingRows.map((row) => row.id as string),
+          );
+
+        if (deleteError) {
+          return {
+            ok: false,
+            reason: 'images_delete_failed',
+            message: deleteError.message,
+            cause: deleteError,
+          };
+        }
+      }
+
+      return {
+        ok: true,
+        data: {
+          removedImageUrls: removedExistingRows
+            .map((row) => (row.image_url as string | null)?.trim() || '')
+            .filter(Boolean),
+        },
+      };
+},
   };
 }
