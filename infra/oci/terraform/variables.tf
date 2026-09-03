@@ -119,3 +119,22 @@ variable "admin_bastion_endpoint_cidr" {
   type        = string
   default     = ""
 }
+
+
+variable "enable_core_bootstrap_metadata" {
+  description = "Launch teswa-core-01 with the one-time SSH and cloud-init bootstrap metadata required for private administration and Run Command sudo."
+  type        = bool
+  default     = false
+}
+
+variable "core_bootstrap_private_ip" {
+  description = "Existing Core private IPv4 to preserve during the controlled pre-production Core replacement."
+  type        = string
+  default     = ""
+}
+
+variable "core_bootstrap_ssh_public_key" {
+  description = "Public SSH key installed for the default opc user at Core launch. Generated locally; the private key never enters Terraform or Git."
+  type        = string
+  default     = ""
+}
