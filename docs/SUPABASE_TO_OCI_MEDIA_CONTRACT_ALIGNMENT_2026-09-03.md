@@ -82,8 +82,16 @@ Do not weaken target access control merely to imitate a Supabase bucket flag.
 
 ## Public URL migration
 
-Current database rows can contain full Supabase public URLs, especially profile
-and item imagery.
+Current database rows contain real Supabase public URLs.
+
+Fresh read-only source check on 2026-09-03:
+
+- `item_images.image_url`: 42 Supabase Storage URLs;
+- `profiles.avatar_url`: 5 Supabase Storage URLs;
+- `profiles.cover_url`: 1 Supabase Storage URL.
+
+These source rows remain untouched.
+
 
 Safe order:
 
