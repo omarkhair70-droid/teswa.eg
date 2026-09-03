@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 import type { TeswaThemeColors } from '@/constants/themes';
 import { useThemePreferences } from '@/lib/preferences/appearance';
@@ -27,8 +28,8 @@ const rgba = (hex: string, alpha: number) => {
 };
 
 const createStyles = (colors: TeswaThemeColors) => ({
-  root: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background, overflow: 'hidden' as const },
-  baseWash: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background },
+  root: { ...ABSOLUTE_FILL, backgroundColor: colors.background, overflow: 'hidden' as const },
+  baseWash: { ...ABSOLUTE_FILL, backgroundColor: colors.background },
   orb: { position: 'absolute' as const, borderRadius: 999 },
   primaryOrb: { width: 310, height: 310, top: -158, right: -172, backgroundColor: colors.primary },
   accentOrb: { width: 290, height: 290, bottom: 96, left: -194, backgroundColor: colors.accent },
