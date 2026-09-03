@@ -76,3 +76,96 @@ export interface ProfileContract extends ProfileCoreContract {
 
   searchPeople(query: string, options?: { cursor?: string | null; limit?: number }): Promise<TeswaPage<TeswaProfile>>;
 }
+
+
+export type SocialFollowState = {
+  followingByMe: boolean;
+  followsMe: boolean;
+  mutual: boolean;
+  followerCount: number;
+  followingCount: number;
+};
+
+export type SocialActionOutcome = {
+  message: string;
+  code: string | null;
+};
+
+export type UserBlockStateSnapshot = {
+  blockedByMe: boolean;
+  blockedMe: boolean;
+  isBlockedEitherDirection: boolean;
+};
+
+export type BlockedProfileRecord = {
+  id: string;
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  blockedAt: IsoDateTime | null;
+};
+
+export type ProfileConnectionRecord = {
+  profileId: string;
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  city: string | null;
+  area: string | null;
+};
+
+export type TrustLevelKey =
+  | 'new_swapper'
+  | 'rising_swapper'
+  | 'reliable_swapper'
+  | 'trusted_swapper';
+
+export type DetailedTrustMetrics = {
+  userId: string;
+  successfulSwapsCount: number;
+  completedDealsCount: number;
+  cancelledDealsCount: number;
+  totalReviewsReceived: number;
+  averageRating: number | null;
+  clearDescriptionCount: number;
+  goodCommunicationCount: number;
+  onTimeCount: number;
+  respectfulSwapperCount: number;
+  responseRate: number | null;
+  avgResponseTimeMinutes: number | null;
+  trustLevelKey: TrustLevelKey;
+  trustScore: number;
+};
+
+export type DetailedProfileBadge = {
+  badgeKey: string;
+  labelAr: string;
+  descriptionAr: string;
+  category: string;
+  iconName: string | null;
+  priority: number;
+  awardedAt: IsoDateTime;
+};
+
+export interface ProfileSocialContract extends ProfileCoreContract {
+  getFollowState(viewerId: string, profileId: string): Promise<SocialFollowState>;
+  follow(viewerId: string, profileId: string): Promise<TeswaResult<SocialActionOutcome, 'unknown'>>;
+  unfollow(viewerId: string, profileId: string): Promise<TeswaResult<SocialActionOutcome, 'unknown'>>;
+  listConnections(
+    profileId: string,
+    mode: 'followers' | 'following',
+    limit?: number,
+  ): Promise<ProfileConnectionRecord[]>;
+
+  getBlockState(viewerId: string, profileId: string): Promise<UserBlockStateSnapshot>;
+  listBlocked(viewerId: string): Promise<BlockedProfileRecord[]>;
+  block(viewerId: string, profileId: string): Promise<TeswaResult<SocialActionOutcome, 'unknown'>>;
+  unblock(viewerId: string, profileId: string): Promise<TeswaResult<SocialActionOutcome, 'unknown'>>;
+
+  getTrustMetrics(profileId: string): Promise<DetailedTrustMetrics | null>;
+  getMyTrustMetrics(): Promise<DetailedTrustMetrics | null>;
+
+  getBadges(profileId: string): Promise<DetailedProfileBadge[]>;
+  getMyBadges(): Promise<DetailedProfileBadge[]>;
+  refreshMyBadges(): Promise<string[]>;
+}
