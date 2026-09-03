@@ -166,3 +166,10 @@ Observed recovery:
 No production cutover, Supabase change, Nova change, DNS change, or data mutation occurred.
 
 The next step is a fresh read-only OS inventory Run Command.
+
+
+## Soft reset timing correction
+
+The initial recovery helper used a 600-second instance-state timeout. Oracle documents that `SOFTRESET` can wait up to 15 minutes for the guest OS to shut down gracefully before forcing the power cycle. Therefore a 10-minute helper timeout can report a false recovery failure while OCI is still within the documented graceful reboot window.
+
+Both guarded recovery helpers now allow 20 minutes for the instance lifecycle transition. This changes only client-side waiting; it does not trigger any additional reboot or infrastructure mutation.
