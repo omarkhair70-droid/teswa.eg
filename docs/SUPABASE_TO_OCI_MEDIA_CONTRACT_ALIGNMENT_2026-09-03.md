@@ -97,8 +97,26 @@ Safe order:
 
 ## B2 handoff relevance
 
-Lane 2 has closed B1 Auth isolation and identified B2 Media/Storage as the next
-domain slice.
+Lane 2 has closed B1 Auth isolation and is actively through B2.4 Media/Storage
+decoupling.
+
+Current B2 progress observed by Lane 4:
+
+- concrete Supabase Media adapter exists;
+- Dolab signed URLs are behind the media boundary;
+- profile image Storage upload/public URL/rollback cleanup are behind the media boundary;
+- item-video Storage upload/signed URL/cleanup are behind the media boundary;
+- Dolab upload/delete Storage operations are behind the media boundary;
+- direct SDK Storage legacy files have ratcheted from 11 to 8;
+- Story progress-preserving upload and Direct Chat media remain deferred/high-risk surfaces.
+
+The current contract also exposes:
+
+`getObjectKeyFromPublicUrl(purpose, url)`
+
+That method is directly useful for migration compatibility because Lane 4 needs
+to normalize existing Supabase public URLs back to stable logical object keys
+before any target-only URL rewrite.
 
 Lane 4 should therefore consume, not compete with, the B2 contract:
 
@@ -106,5 +124,5 @@ Lane 4 should therefore consume, not compete with, the B2 contract:
 - no OCI-specific URLs in screens/features;
 - no source-bucket knowledge outside provider/migration layers.
 
-Once B2 lands, Lane 4 can attach the OCI object-copy/shadow verification to the
+As B2 continues, Lane 4 can attach the OCI object-copy/shadow verification to the
 same nine logical purposes without another application-level rewrite.
