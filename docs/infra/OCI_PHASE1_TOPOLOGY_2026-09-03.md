@@ -30,7 +30,20 @@ Create a dedicated VCN:
 - dedicated NSGs
 - separate route tables/security policy
 
-No existing Nova VCN, subnet, NSG, security list, or route table is modified.
+Measured Nova network:
+
+- VCN: `10.0.0.0/16`
+- public subnet: `10.0.0.0/24`
+- private subnet: `10.0.1.0/24`
+
+Locked Teswa network:
+
+- VCN: `10.20.0.0/16`
+- public edge subnet: `10.20.0.0/24`
+- private app subnet: `10.20.10.0/24`
+- private data subnet: `10.20.20.0/24`
+
+The ranges do not overlap. No existing Nova VCN, subnet, NSG, security list, or route table is modified.
 
 ### Compute
 
@@ -137,7 +150,7 @@ Service limits are not billing entitlements. Every Terraform resource must be re
 
 ## Phase 1 implementation order
 
-1. Represent isolated Teswa network as Terraform.
+1. Represent isolated Teswa compartment/network as Terraform using the locked 10.20.0.0/16 address space.
 2. Represent private Object Storage buckets.
 3. Represent Vault/Secrets containers without real secret values.
 4. Represent monitoring topic/alarms.
