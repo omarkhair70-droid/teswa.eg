@@ -14,6 +14,15 @@ The dedicated Terraform state bucket bootstrap also completed successfully:
 
 The Terraform backend itself is **still local**. Migration has not happened yet.
 
+The dedicated API-key profile is now verified and green:
+
+- profile: `teswa-terraform`
+- key state in OCI IAM: `ACTIVE`
+- local/remote fingerprint match confirmed
+- API-key authentication against OCI Object Storage succeeded
+- private key permissions: `600`
+
+
 ## Why the next step requires a newer Terraform binary
 
 OCI Cloud Shell currently provides Terraform 1.5.7.
