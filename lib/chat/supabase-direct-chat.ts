@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import type { BackendConnectionState } from '@/lib/backend/contracts/core';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 
@@ -63,7 +64,7 @@ export type NativeDirectSubscriptionHandlers = {
   onAttachmentsChanged?: () => void;
   onReactionsChanged?: () => void;
   onTypingChanged?: () => void;
-  onStatus?: (status: string) => void;
+  onStatus?: (status: BackendConnectionState) => void;
 };
 
 function sanitizeFileName(value: string | null | undefined, fallback: string) {
@@ -314,17 +315,9 @@ export async function deleteNativeDirectMessage(messageId: string) {
   return { ok: true as const };
 }
 
-export function subscribeToNativeDirectConversation(conversationId: string, handlers: NativeDirectSubscriptionHandlers) {
-  const channel = supabase
-    .channel(`direct-native:${conversationId}:${Crypto.randomUUID()}`)
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'direct_conversations', filter: `id=eq.${conversationId}` }, () => handlers.onConversationChanged?.())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onMessagesChanged?.())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_message_attachments', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onAttachmentsChanged?.())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_message_reactions', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onReactionsChanged?.())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_typing_state', filter: `conversation_id=eq.${conversationId}` }, () => handlers.onTypingChanged?.())
-    .subscribe((status) => handlers.onStatus?.(status));
-
-  return () => {
-    void supabase.removeChannel(channel);
-  };
+export function subscribeToNativeDirectConversation(
+  conversationId: string,
+  handlers: NativeDirectSubscriptionHandlers,
+) {
+  return teswaBackendRuntime.realtime.subscribeDirect(conversationId, handlers);
 }
