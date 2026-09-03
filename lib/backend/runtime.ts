@@ -1,5 +1,6 @@
 import type { TeswaBackend } from '@/lib/backend/teswa-backend';
 import { createSupabaseAuthAdapter } from '@/lib/backend/adapters/supabase/auth-adapter';
+import { createSupabaseAnalyticsAdapter } from '@/lib/backend/adapters/supabase/analytics-adapter';
 import { createSupabaseMediaStorageAdapter } from '@/lib/backend/adapters/supabase/media-adapter';
 import { createSupabaseMarketplaceReadAdapter } from '@/lib/backend/adapters/supabase/marketplace-adapter';
 import { createSupabaseDirectMessagingAdapter } from '@/lib/backend/adapters/supabase/messaging-adapter';
@@ -18,12 +19,14 @@ import type { ContextualMessagingTransportContract, DirectMessagingTransportCont
 import type { NotificationsContract } from '@/lib/backend/contracts/notifications';
 import type { StoriesContract } from '@/lib/backend/contracts/stories';
 import type { DiscoveryContract } from '@/lib/backend/contracts/discovery';
+import type { AnalyticsContract } from '@/lib/backend/contracts/analytics';
 import type { DolabContract } from '@/lib/backend/contracts/dolab';
 
-export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract; discovery: DiscoveryContract; dolab: DolabContract };
+export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract; discovery: DiscoveryContract; dolab: DolabContract; analytics: AnalyticsContract };
 
 export const teswaBackendRuntime: TeswaBackendRuntime = {
   auth: createSupabaseAuthAdapter(),
+  analytics: createSupabaseAnalyticsAdapter(),
   media: createSupabaseMediaStorageAdapter(),
   marketplace: createSupabaseMarketplaceReadAdapter(),
   offers: createSupabaseOfferLifecycleAdapter(),
