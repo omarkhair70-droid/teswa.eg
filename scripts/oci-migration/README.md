@@ -276,19 +276,90 @@ The resulting manifest is compatible with:
 
 `compare-storage-manifests.py --require-content-sha256`.
 
+### `validate-fk-orphans.py`
+
+Runs read-only orphan checks for every captured FK. Public -> public FKs are
+checked by default. External identity/storage anchors are included only with
+`--include-external` after those target relations are intentionally ready.
+
+### `upload-storage-to-oci.py` / `export-oci-storage-bytes.py`
+
+The uploader writes only to **pre-created** OCI buckets and requires:
+
+- `TESWA_ALLOW_TARGET_WRITE=YES`;
+- `TESWA_OCI_STORAGE_ASSERTION=YES`;
+- exact `TESWA_OCI_COMPARTMENT_OCID`;
+- an explicit logical-source -> physical-target bucket map.
+
+It refuses to create buckets. The target exporter then downloads OCI bytes and
+computes SHA-256, so source hashes are never treated as target proof.
+
+### `capture-cutover-bundle.sh` / `verify-cutover-bundle.py`
+
+Capture and integrity-check a source evidence bundle containing:
+
+- deep PostgreSQL manifest;
+- raw current schema evidence;
+- transaction-consistent public data archive;
+- Auth UUID-set fingerprint;
+- Storage metadata;
+- optional Storage byte hashes.
+
+Source actions are read-only.
+
+### `compare-cutover-bundles.py`
+
+Reports rehearsal -> final source drift across table counts/checksums, identity
+fingerprints, and Storage object metadata. It does not invent an incremental
+write path.
+
+### `evaluate-cutover-readiness.py`
+
+Aggregates structural/data/FK/identity/storage evidence with explicit semantic
+gates. Production mode also requires source write freeze, final source bundle,
+and routing-switch approval.
+
+The fail-closed template is:
+
+`cutover-semantic-gates.example.json`
+
+### `classify-runtime-dependencies.py`
+
+Classifies captured functions/policies/triggers into review queues such as
+authorization, Storage, HTTP worker, secrets, scheduler, security-definer review,
+or provider-neutral keep candidate. It never rewrites SQL.
+
+### Semantic shadow tooling
+
+`semantic-verification-scenarios.json` is the Lane-2 contract scenario catalog.
+
+`compare-shadow-contract-results.py` compares normalized source/OCI contract
+results while allowing only explicitly configured provider-volatile fields to
+be ignored.
+
 ## Next execution gate
+
+Lane 2 B1 Auth and B2 client Storage boundaries are now usable dependencies.
+
+Lane 3 has closed the isolated OCI network foundation and durable Terraform
+remote state, but has **not yet handed Lane 4 an isolated PostgreSQL target or
+final application Object Storage buckets**.
 
 When Lane 3 exposes an isolated PostgreSQL 17 target, Lane 4 should:
 
-1. capture a source manifest at a defined watermark;
-2. compile/apply the portable current-state baseline to the isolated target;
-3. capture the target manifest;
-4. run the structural comparator;
-5. copy application data in dependency-safe order;
-6. capture both sides again with `--deep`;
-7. run deep data comparison;
-8. exercise auth/RPC/storage/realtime semantic verification through Lane 2
-   contracts;
-9. block cutover on any unexplained hard-gate or behavior drift.
+1. capture/verify a rehearsal source bundle;
+2. classify runtime/provider dependencies;
+3. compile the portable baseline;
+4. apply it to a fresh empty OCI target;
+5. capture target manifest;
+6. run structural/data/FK validation;
+7. copy + byte-hash Storage into pre-created OCI buckets;
+8. verify identity UUID continuity;
+9. exercise Lane-2 contract semantic scenarios;
+10. run rollback rehearsal;
+11. aggregate rehearsal readiness.
 
-No production source mutation is needed for any of these pre-cutover gates.
+Production cutover uses the fresh-full-refresh strategy documented in
+`docs/SUPABASE_TO_OCI_FINAL_REFRESH_STRATEGY_2026-09-03.md`.
+
+No production source mutation is needed for any pre-cutover gate.
