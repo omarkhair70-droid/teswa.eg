@@ -54,7 +54,7 @@ resource "oci_core_security_list" "admin_bastion_egress" {
 
   ingress_security_rules {
     protocol  = "6"
-    source    = "${oci_bastion_bastion.admin[0].private_endpoint_ip_address}/32"
+    source    = var.admin_bastion_endpoint_cidr
     stateless = false
 
     tcp_options {
@@ -67,6 +67,11 @@ resource "oci_core_security_list" "admin_bastion_egress" {
     precondition {
       condition     = var.admin_bastion_target_cidr != ""
       error_message = "admin_bastion_target_cidr must be set when temporary Bastion connectivity is enabled."
+    }
+
+    precondition {
+      condition     = var.admin_bastion_endpoint_cidr != ""
+      error_message = "admin_bastion_endpoint_cidr must be captured from the live Bastion before canonical ingress is planned."
     }
   }
 }
