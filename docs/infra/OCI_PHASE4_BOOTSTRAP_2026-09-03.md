@@ -531,3 +531,25 @@ The connectivity preflight now captures and validates both:
 - live Bastion private endpoint IP /32
 
 The canonical ingress plan must be regenerated only after re-running the connectivity preflight.
+
+
+## Canonical Bastion ingress saved-plan approval
+
+The regenerated canonical target-subnet ingress plan was reviewed after removing the Terraform dependency cycle.
+
+Observed plan:
+
+- 0 creates
+- 1 in-place update
+- 0 destroys
+- only `oci_core_security_list.admin_bastion_egress[0]` changes
+- new ingress is stateful TCP/22
+- source is the exact live Bastion private endpoint /32
+- no subnet replacement
+- no instance change or reboot
+- no public ingress
+- no Nova, Supabase, DNS, database, storage, or application-routing change
+
+`phase4_bastion_ingress_plan_guard=PASS`
+
+**Decision:** APPROVED FOR APPLY using the reviewed saved plan only.
