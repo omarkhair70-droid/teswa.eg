@@ -25,7 +25,6 @@ const legacyDirectClientImports = new Set([
   'lib/dolab/index.ts',
   'lib/dolab/media-item-link.ts',
   'lib/dolab/note-media-link.ts',
-  'lib/dolab/signed-urls.ts',
   'lib/dolab/upload.ts',
   'lib/edit-listing-images.ts',
   'lib/edit-listing.ts',
