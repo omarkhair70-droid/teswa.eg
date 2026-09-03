@@ -358,3 +358,25 @@ The first one-time Bastion sudo bootstrap stopped before creating a session beca
 No Bastion session or guest mutation occurred.
 
 The helper now generates an ephemeral 3072-bit RSA SSH key instead. The key remains local to the temporary helper directory and is removed on exit.
+
+
+## Managed SSH connection failure diagnosis
+
+The first short-lived Managed SSH session reached `ACTIVE`, but the client connection then failed with:
+
+`kex_exchange_identification: Connection closed by remote host`
+
+The failure occurred before the sudoers bootstrap ran, so no guest mutation was performed.
+
+Oracle documents this error pattern when Bastion cannot reach the target on the requested port, and Managed SSH also requires a running OpenSSH server on the target instance.
+
+Before changing network or firewall state, Lane 3 now performs a read-only Core diagnostic covering:
+
+- `sshd` active/enabled state;
+- TCP/22 listener presence;
+- relevant `sshd_config` directives;
+- Core addresses/routes;
+- firewalld active zone/services;
+- localhost TCP/22 reachability.
+
+No second Bastion bootstrap attempt should be made until this read-only diagnostic is reviewed.
