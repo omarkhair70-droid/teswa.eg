@@ -163,6 +163,7 @@ echo
 echo "[always_free_specific_limits]"
 print_availability "block-storage" "total-free-storage-gb-regional"
 print_availability "block-storage" "free-backup-count"
+print_availability "load-balancer" "lb-10mbps-count"
 print_availability "load-balancer" "lb-10mbps-micro-count"
 
 echo
