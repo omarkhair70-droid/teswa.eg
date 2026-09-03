@@ -60,3 +60,22 @@ variable "freeform_tags" {
     lane       = "oci-foundation"
   }
 }
+
+
+variable "enable_compute_phase3" {
+  description = "Create the Teswa Phase 3 edge/core compute foundation."
+  type        = bool
+  default     = false
+}
+
+variable "core_image_ocid" {
+  description = "Pinned Oracle Linux image OCID for teswa-core-01. Generated locally by the Phase 3 preflight."
+  type        = string
+  default     = ""
+}
+
+variable "edge_image_ocid" {
+  description = "Pinned Oracle Linux image OCID for teswa-edge-01. Generated locally by the Phase 3 preflight."
+  type        = string
+  default     = ""
+}
