@@ -55,6 +55,12 @@ export interface ProfileCoreContract extends ProfileReadContract {
     value: DirectMessagePrivacy,
   ): Promise<TeswaResult<void, 'unknown'>>;
 
+  setProfileImageUrl(
+    userId: string,
+    kind: 'avatar' | 'cover',
+    imageUrl: string | null,
+  ): Promise<TeswaResult<void, 'not_found' | 'unknown'>>;
+
   updateMine(input: {
     userId: string;
     displayName: string;
@@ -147,7 +153,7 @@ export type DetailedProfileBadge = {
   awardedAt: IsoDateTime;
 };
 
-export interface ProfileSocialContract extends ProfileCoreContract {
+export interface ProfileSocialContract extends ProfileCoreContract, ProfileDirectoryContract {
   getFollowState(viewerId: string, profileId: string): Promise<SocialFollowState>;
   follow(viewerId: string, profileId: string): Promise<TeswaResult<SocialActionOutcome, 'unknown'>>;
   unfollow(viewerId: string, profileId: string): Promise<TeswaResult<SocialActionOutcome, 'unknown'>>;
@@ -168,4 +174,34 @@ export interface ProfileSocialContract extends ProfileCoreContract {
   getBadges(profileId: string): Promise<DetailedProfileBadge[]>;
   getMyBadges(): Promise<DetailedProfileBadge[]>;
   refreshMyBadges(): Promise<string[]>;
+}
+
+
+export type PeopleDirectoryRecord = {
+  id: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  profileTagline: string | null;
+  bio: string | null;
+  city: string | null;
+  area: string | null;
+  successfulSwapsCount: number;
+  responseRate: number | null;
+  activeItemsCount: number;
+  createdAt: IsoDateTime | null;
+};
+
+export type PeopleDirectoryResult = {
+  entries: PeopleDirectoryRecord[];
+  hasMore: boolean;
+};
+
+export interface ProfileDirectoryContract {
+  listPeople(input: {
+    query?: string;
+    page: number;
+    pageSize: number;
+  }): Promise<PeopleDirectoryResult>;
 }
