@@ -1,4 +1,4 @@
-import type { ProfileCoreContract, TeswaProfile } from '@/lib/backend/contracts/profile';
+import type { DirectMessagePrivacy, ProfileCoreContract, TeswaProfile } from '@/lib/backend/contracts/profile';
 import { supabase } from '@/lib/supabase/client';
 
 type ProfileRow = {
@@ -54,6 +54,67 @@ export function createSupabaseProfileAdapter(): ProfileCoreContract {
   return {
     getMine: getProfile,
     getPublic: getProfile,
+
+    async setupMine(input) {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: input.userId,
+            display_name: input.displayName,
+            username: input.username,
+          },
+          { onConflict: 'id' },
+        );
+
+      if (error?.code === '23505') {
+        return {
+          ok: false,
+          reason: 'username_taken',
+          message: 'Username is already in use.',
+          cause: error,
+        };
+      }
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
+    async getDirectMessagePrivacy(userId) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('direct_message_privacy')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      const value = data?.direct_message_privacy;
+      if (value === 'followers_only' || value === 'no_one') return value;
+      return 'everyone' satisfies DirectMessagePrivacy;
+    },
+
+    async updateDirectMessagePrivacy(userId, value) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ direct_message_privacy: value })
+        .eq('id', userId);
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      return { ok: true, data: undefined };
+    },
 
     async updateMine(input) {
       const { data, error } = await supabase
