@@ -1,7 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 
 export type ItemVideoTeaser = {
   id: string;
@@ -168,20 +167,28 @@ export async function fetchItemVideoTeaserByItemId(itemId: string): Promise<Item
   const normalizedItemId = itemId.trim();
   if (!normalizedItemId) return null;
 
-  const { data, error } = await supabase
-    .from('item_videos')
-    .select('id,item_id,video_storage_path,duration_ms,width,height,created_at')
-    .eq('item_id', normalizedItemId)
-    .maybeSingle();
-
-  if (error) {
-    if (__DEV__) console.warn('[item-videos] fetch failed', error.message);
+  let metadata;
+  try {
+    metadata = await teswaBackendRuntime.marketplace.getItemVideoMetadata(normalizedItemId);
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[item-videos] fetch failed', (error as Error)?.message);
+    }
     return null;
   }
 
-  const row = data as ItemVideoRow | null;
-  if (!row?.video_storage_path) return null;
+  if (!metadata) return null;
 
-  const signedVideoUrl = await createItemVideoSignedUrlCached(row.video_storage_path);
+  const row: ItemVideoRow = {
+    id: metadata.id,
+    item_id: metadata.itemId,
+    video_storage_path: metadata.videoStoragePath,
+    duration_ms: metadata.durationMs,
+    width: metadata.width,
+    height: metadata.height,
+    created_at: metadata.createdAt,
+  };
+
+  const signedVideoUrl = await createItemVideoSignedUrlCached(metadata.videoStoragePath);
   return toItemVideoTeaser(row, signedVideoUrl);
 }
