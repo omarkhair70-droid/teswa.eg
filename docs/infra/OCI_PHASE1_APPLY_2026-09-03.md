@@ -58,11 +58,13 @@ This apply did **not** create or change:
 
 ## Status
 
-**APPLIED — ONE FINAL COMPUTE-COUNT RECHECK PENDING**
+**CLOSED — FOUNDATION VERIFIED**
 
-Phase 1 closes when the corrected verifier returns:
+Final corrected verification returned:
 
 - `compute_instances=0`
 - `terraform_drift=none`
 
-After that, the next infrastructure gate is durable Terraform state before adding further OCI services.
+OCI Foundation Phase 1 is therefore closed.
+
+The next infrastructure gate is durable remote Terraform state before adding compute, PostgreSQL, API, Realtime, Workers, Object Storage application buckets, Vault secrets, monitoring, DNS, or production traffic.
