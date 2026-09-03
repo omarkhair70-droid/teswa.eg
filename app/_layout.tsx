@@ -387,10 +387,11 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     );
     const inPublicAccountDeletionRoute = rootGroup === 'account-deletion';
     const inPublicLandingPreviewRoute = rootGroup === 'landing-preview';
+    const inPublicWebFrontDoor = Platform.OS === 'web' && atRoot;
     const inPublicComplianceRoute = inPublicLegalRoute || inPublicAccountDeletionRoute;
 
     if (inOAuthCallback && !user) return;
-    if (inPublicComplianceRoute || inPublicLandingPreviewRoute) return;
+    if (inPublicComplianceRoute || inPublicLandingPreviewRoute || inPublicWebFrontDoor) return;
     if (inNativeGoogleDiagnostics) {
       if (nativeGoogleTestModeEnabled) return;
       router.replace('/(auth)/login');
