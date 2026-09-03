@@ -7,3 +7,4 @@ export * from '@/lib/backend/contracts/messaging';
 export * from '@/lib/backend/contracts/media';
 export * from '@/lib/backend/contracts/notifications';
 export * from '@/lib/backend/contracts/analytics';
+export * from '@/lib/backend/contracts/stories';
