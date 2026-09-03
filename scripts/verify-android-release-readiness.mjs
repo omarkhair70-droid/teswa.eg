@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 
 function fail(message) {
-  console.error(`[android-release-readiness] FAIL: ${message}`);
+  console.error(`[android-release-safety] FAIL: ${message}`);
   process.exitCode = 1;
 }
 
 function pass(message) {
-  console.log(`[android-release-readiness] PASS: ${message}`);
+  console.log(`[android-release-safety] PASS: ${message}`);
 }
 
 function read(path) {
@@ -29,12 +29,14 @@ if (/^~?55\./.test(expoVersion ?? '')) {
 }
 
 const expectedProperties = {
-  'android.enableMinifyInReleaseBuilds': 'true',
-  'android.enableShrinkResourcesInReleaseBuilds': 'true',
+  'android.enableMinifyInReleaseBuilds': 'false',
+  'android.enableShrinkResourcesInReleaseBuilds': 'false',
 };
 
 for (const [key, expected] of Object.entries(expectedProperties)) {
-  const match = gradleProperties.match(new RegExp(`^${key.replaceAll('.', '\\.') }=(.+)$`, 'm'));
+  const escapedKey = key.replaceAll('.', '\\.');
+  const match = gradleProperties.match(new RegExp(`^${escapedKey}=(.+)$`, 'm'));
+
   if (!match) {
     fail(`Missing ${key} in generated android/gradle.properties`);
   } else if (match[1].trim() !== expected) {
@@ -44,33 +46,10 @@ for (const [key, expected] of Object.entries(expectedProperties)) {
   }
 }
 
-if (/android\.enableR8\.fullMode\s*=\s*false/.test(gradleProperties)) {
-  fail('R8 full mode is explicitly disabled');
+if (/proguard-android-optimize\.txt/.test(appGradle)) {
+  fail('optimized ProGuard defaults are still injected in emergency safe mode');
 } else {
-  pass('R8 full mode is not disabled');
-}
-
-const gradleChecks = [
-  {
-    label: 'release minification consumes android.enableMinifyInReleaseBuilds',
-    pattern: /minifyEnabled\s+enableMinifyInReleaseBuilds/,
-  },
-  {
-    label: 'release resource shrinking is wired',
-    pattern: /shrinkResources\s+enableShrinkResources\.toBoolean\(\)/,
-  },
-  {
-    label: 'optimized Android ProGuard defaults are used',
-    pattern: /proguard-android-optimize\.txt/,
-  },
-];
-
-for (const check of gradleChecks) {
-  if (check.pattern.test(appGradle)) {
-    pass(check.label);
-  } else {
-    fail(check.label);
-  }
+  pass('optimized ProGuard defaults are not injected');
 }
 
 if (/applicationId\s+["']com\.teswa\.mobile["']/.test(appGradle)) {
@@ -83,4 +62,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log('[android-release-readiness] Generated native release configuration is ready for an R8 release build.');
+console.log('[android-release-safety] Emergency release is configured without R8/resource shrinking.');

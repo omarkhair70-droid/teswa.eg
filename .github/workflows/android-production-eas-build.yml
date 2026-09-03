@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - '.github/workflows/android-production-eas-build.yml'
+      - 'plugins/with-android-release-optimization.js'
+      - 'scripts/verify-android-release-readiness.mjs'
+      - 'app.config.js'
+      - 'eas.json'
   workflow_dispatch:
 
 permissions:
