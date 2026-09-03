@@ -293,3 +293,17 @@ Observed plan:
 `phase4_bastion_plan_guard=PASS`
 
 **Decision:** APPROVED FOR APPLY using the reviewed saved plan only.
+
+
+## Temporary Bastion verifier stdin bug
+
+The first post-apply verifier stopped immediately after confirming:
+
+- `bastion_state=ACTIVE`
+- `private_endpoint_assigned=true`
+
+This was a verifier bug, not evidence of a Bastion failure. The NSG rule check attempted to pipe JSON into `python3 -` while also supplying the Python program through a here-document. The here-document replaced standard input, so the JSON stream was unavailable to `json.load(sys.stdin)`.
+
+The verifier now writes the NSG JSON to a temporary file and passes that file to Python explicitly. The temporary file is removed on exit.
+
+No OCI resource mutation is required for this correction. Re-run the verifier only.
