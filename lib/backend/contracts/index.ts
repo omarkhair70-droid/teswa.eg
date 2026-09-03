@@ -10,3 +10,4 @@ export * from '@/lib/backend/contracts/analytics';
 export * from '@/lib/backend/contracts/stories';
 export * from '@/lib/backend/contracts/discovery';
 export * from '@/lib/backend/contracts/dolab';
+export * from '@/lib/backend/contracts/policies';
