@@ -70,3 +70,21 @@ Both Teswa instances passed the Oracle Cloud Agent readiness gate:
 - `phase4_preflight=PASS`
 
 The next step is a read-only guest OS inventory through Run Command. No package installation or guest OS mutation is included yet.
+
+
+## Run Command ACCEPTED timeout diagnosis
+
+The first read-only OS inventory command remained in `ACCEPTED` for the full client polling window and never reached `IN_PROGRESS`.
+
+This indicates that the guest script itself did not start.
+
+Oracle documents this behavior when the instance can run the plugin but is not authorized to poll its command execution through a dynamic group and `instance-agent-command-execution-family` policy. New dynamic-group membership can take up to 30 minutes to become effective.
+
+The repository previously enabled the Run Command plugin but did not create this instance-principal IAM path.
+
+Remediation:
+
+1. create a Teswa-only dynamic group matching instances in `teswa-platform`;
+2. grant only `use instance-agent-command-execution-family` in `teswa-platform`, restricted to the target instance;
+3. wait for IAM/dynamic-group propagation;
+4. retry a read-only Run Command before any bootstrap mutation.
