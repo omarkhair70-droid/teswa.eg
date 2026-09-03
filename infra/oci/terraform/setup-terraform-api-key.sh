@@ -144,7 +144,22 @@ if [ "$KEY_LIST_RC" -ne 0 ]; then
   exit 4
 fi
 
-FINGERPRINT="$(openssl rsa -pubout -outform DER -in "$PRIVATE_KEY" 2>/dev/null | openssl md5 -c | sed -E 's/^.*= //')"
+FINGERPRINT="$(python3 - "$PRIVATE_KEY" <<'PY'
+import hashlib, subprocess, sys
+
+key = sys.argv[1]
+der = subprocess.check_output(
+    ["openssl", "rsa", "-pubout", "-outform", "DER", "-in", key],
+    stderr=subprocess.DEVNULL,
+)
+
+# OCI API key fingerprints are MD5 identifiers. In FIPS-enabled Cloud Shell,
+# OpenSSL blocks the MD5 command; Python's non-security checksum mode is the
+# correct compatibility path because the digest is used only as an identifier.
+digest = hashlib.md5(der, usedforsecurity=False).hexdigest()
+print(":".join(digest[i:i+2] for i in range(0, len(digest), 2)))
+PY
+)"
 
 readarray -t KEY_INFO < <(printf '%s' "$KEYS_JSON" | python3 -c 'import json,sys; fp=sys.argv[1]; d=json.load(sys.stdin).get("data",[]); print(len(d)); print("yes" if any(x.get("fingerprint")==fp for x in d) else "no")' "$FINGERPRINT")
 
