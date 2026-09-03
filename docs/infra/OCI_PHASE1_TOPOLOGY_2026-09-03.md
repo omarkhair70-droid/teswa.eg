@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-03  
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** design locked; no apply; no cutover.
+**Status:** Phase 1 foundation applied and verified; no cutover.
 
 ## Measured constraints
 
