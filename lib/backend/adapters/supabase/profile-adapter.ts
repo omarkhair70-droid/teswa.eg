@@ -168,6 +168,36 @@ export function createSupabaseProfileAdapter(): ProfileSocialContract {
       return { ok: true, data: undefined };
     },
 
+    async setProfileImageUrl(userId, kind, imageUrl) {
+      const payload = kind === 'avatar'
+        ? { avatar_url: imageUrl, updated_at: new Date().toISOString() }
+        : { cover_url: imageUrl, updated_at: new Date().toISOString() };
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(payload)
+        .eq('id', userId)
+        .select('id')
+        .maybeSingle();
+
+      if (error) {
+        return {
+          ok: false,
+          reason: 'unknown',
+          message: error.message,
+          cause: error,
+        };
+      }
+      if (!data) {
+        return {
+          ok: false,
+          reason: 'not_found',
+          message: 'Profile was not found or is not writable.',
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
     async updateMine(input) {
       const { data, error } = await supabase
         .from('profiles')
@@ -211,6 +241,86 @@ export function createSupabaseProfileAdapter(): ProfileSocialContract {
       }
 
       return { ok: true, data: mapProfile(data as ProfileRow) };
+    },
+
+    async listPeople(input) {
+      const page = Math.max(1, Math.floor(input.page));
+      const pageSize = Math.max(1, Math.floor(input.pageSize));
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize;
+      const query = (input.query ?? '').trim();
+
+      let profilesQuery = supabase
+        .from('profiles')
+        .select('id, display_name, username, avatar_url, cover_url, profile_tagline, bio, city, area, successful_swaps_count, response_rate, created_at')
+        .not('username', 'is', null)
+        .order('successful_swaps_count', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to);
+
+      if (query) {
+        const pattern = `%${query}%`;
+        profilesQuery = profilesQuery.or(
+          `display_name.ilike.${pattern},username.ilike.${pattern},city.ilike.${pattern},area.ilike.${pattern}`,
+        );
+      }
+
+      const { data: profiles, error: profilesError } = await profilesQuery;
+      if (profilesError) throw profilesError;
+      if (!profiles?.length) return { entries: [], hasMore: false };
+
+      const hasMore = profiles.length > pageSize;
+      const visibleProfiles = profiles.slice(0, pageSize);
+      const profileIds = visibleProfiles.map((profile) => profile.id as string);
+
+      const { data: activeItems, error: activeItemsError } = await supabase
+        .from('items')
+        .select('owner_id,id')
+        .eq('status', 'active')
+        .in('owner_id', profileIds);
+
+      if (activeItemsError && __DEV__) {
+        console.warn('[profile-adapter] people active item count failed', activeItemsError);
+      }
+
+      const activeCountByOwner = new Map<string, number>();
+      for (const item of activeItems ?? []) {
+        const ownerId = item.owner_id as string | null;
+        if (!ownerId) continue;
+        activeCountByOwner.set(ownerId, (activeCountByOwner.get(ownerId) ?? 0) + 1);
+      }
+
+      const normalize = (value: unknown) => {
+        const clean = typeof value === 'string' ? value.trim() : '';
+        return clean || null;
+      };
+
+      return {
+        entries: visibleProfiles.map((profile) => {
+          const username = normalize(profile.username) ?? '';
+          const displayName = (normalize(profile.display_name) ?? username) || 'مستخدم';
+          return {
+            id: profile.id as string,
+            displayName,
+            username,
+            avatarUrl: normalize(profile.avatar_url),
+            coverUrl: normalize(profile.cover_url),
+            profileTagline: normalize(profile.profile_tagline),
+            bio: normalize(profile.bio),
+            city: normalize(profile.city),
+            area: normalize(profile.area),
+            successfulSwapsCount: Number(profile.successful_swaps_count ?? 0),
+            responseRate:
+              typeof profile.response_rate === 'number'
+                ? profile.response_rate
+                : null,
+            activeItemsCount: activeCountByOwner.get(profile.id as string) ?? 0,
+            createdAt: (profile.created_at as string | null) ?? null,
+          };
+        }),
+        hasMore,
+      };
     },
 
     async getFollowState(_viewerId, profileId) {
