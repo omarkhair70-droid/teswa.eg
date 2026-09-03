@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,11 +11,14 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 
 import { AppText } from '@/components/ui/AppText';
 import { AppScreen } from '@/components/ui/AppScreen';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { colors } from '@/constants/colors';
+import { radii } from '@/constants/radii';
+import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
 import { fetchOffersInbox, getOfferStatusLabel, type OfferRowSummary } from '@/lib/offers';
 import { fetchDealConversationsForUser, type DealConversation } from '@/lib/messages';
@@ -88,12 +90,13 @@ function ConversationListItem({ row }: { row: ConversationRow }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${row.title}. ${row.preview}`}
+      accessibilityLabel={`${row.title}. ${row.preview}${unread ? `. ${row.unreadCount} غير مقروء` : ''}`}
+      accessibilityHint="يفتح المحادثة"
       onPress={() => router.push(row.route)}
-      style={({ pressed }) => [styles.conversationRow, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.conversationRow, unread && styles.unreadConversationRow, pressed && styles.pressed]}
     >
       <View style={styles.avatarShell}>
-        {row.avatarUrl ? <Image source={{ uri: row.avatarUrl }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Ionicons name="person" size={21} color={colors.textMuted} /></View>}
+        {row.avatarUrl ? <ExpoImage source={{ uri: row.avatarUrl }} style={styles.avatar} contentFit="cover" transition={120} /> : <View style={styles.avatarFallback}><Ionicons name="person" size={21} color={colors.textMuted} /></View>}
         <View style={[styles.kindBadge, { backgroundColor: kind.color }]}>
           <Ionicons name={kind.icon} size={10} color={colors.background} />
         </View>
@@ -306,11 +309,11 @@ export default function MessagesScreen() {
       </View>
 
       <View style={styles.modeTabs}>
-        <Pressable onPress={() => setMode('messages')} style={[styles.modeTab, mode === 'messages' && styles.modeTabActive]}>
+        <Pressable accessibilityRole="tab" accessibilityState={{ selected: mode === 'messages' }} onPress={() => setMode('messages')} style={[styles.modeTab, mode === 'messages' && styles.modeTabActive]}>
           <AppText weight="semibold" style={[styles.modeLabel, mode === 'messages' && styles.modeLabelActive]}>المحادثات</AppText>
           {unreadTotal > 0 ? <View style={[styles.modeCount, mode === 'messages' && styles.modeCountActive]}><AppText weight="bold" style={[styles.modeCountText, mode === 'messages' && styles.modeCountTextActive]}>{Math.min(99, unreadTotal)}</AppText></View> : null}
         </Pressable>
-        <Pressable onPress={() => setMode('offers')} style={[styles.modeTab, mode === 'offers' && styles.modeTabActive]}>
+        <Pressable accessibilityRole="tab" accessibilityState={{ selected: mode === 'offers' }} onPress={() => setMode('offers')} style={[styles.modeTab, mode === 'offers' && styles.modeTabActive]}>
           <AppText weight="semibold" style={[styles.modeLabel, mode === 'offers' && styles.modeLabelActive]}>العروض</AppText>
           {incomingTotal > 0 ? <View style={[styles.modeCount, mode === 'offers' && styles.modeCountActive]}><AppText weight="bold" style={[styles.modeCountText, mode === 'offers' && styles.modeCountTextActive]}>{Math.min(99, incomingTotal)}</AppText></View> : null}
         </Pressable>
@@ -326,6 +329,7 @@ export default function MessagesScreen() {
           style={styles.searchInput}
           textAlign="right"
           returnKeyType="search"
+          accessibilityLabel={mode === 'messages' ? 'البحث في الرسائل' : 'البحث في العروض'}
         />
         {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable> : null}
       </View>
@@ -337,7 +341,7 @@ export default function MessagesScreen() {
               const active = item.key === filter;
               const badge = item.key === 'requests' ? requestsTotal : 0;
               return (
-                <Pressable key={item.key} onPress={() => setFilter(item.key)} style={[styles.filterChip, active && styles.filterChipActive]}>
+                <Pressable key={item.key} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => setFilter(item.key)} style={[styles.filterChip, active && styles.filterChipActive]}>
                   <AppText weight="semibold" style={[styles.filterLabel, active && styles.filterLabelActive]}>{item.label}</AppText>
                   {badge > 0 ? <View style={styles.filterBadge}><AppText weight="bold" style={styles.filterBadgeText}>{badge}</AppText></View> : null}
                 </Pressable>
@@ -350,6 +354,10 @@ export default function MessagesScreen() {
             keyExtractor={(row) => row.id}
             renderItem={({ item }) => <ConversationListItem row={item} />}
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={10}
+            windowSize={7}
             contentContainerStyle={[styles.listContent, filtered.length === 0 && styles.emptyList]}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void load(true); }} tintColor={colors.primary} />}
             ListEmptyComponent={loading ? <View style={styles.loadingState}><ActivityIndicator color={colors.primary} /><AppText muted>بنحمّل الرسائل...</AppText></View> : <EmptyState title={search ? 'مفيش نتيجة' : filter === 'all' ? 'لسه مفيش محادثات' : 'مفيش محادثات هنا'} description={search ? 'جرّب اسم أو كلمة مختلفة.' : 'أول محادثة جديدة هتظهر هنا فورًا.'} />}
@@ -362,6 +370,10 @@ export default function MessagesScreen() {
           keyExtractor={(row) => row.key}
           renderItem={({ item }) => <OfferListItem item={item} />}
           showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={8}
+          windowSize={7}
           contentContainerStyle={[styles.listContent, offerRows.length === 0 && styles.emptyList]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void load(true); }} tintColor={colors.primary} />}
           ListHeaderComponent={incomingTotal > 0 ? <View style={styles.offerHint}><Ionicons name="sparkles-outline" size={15} color={colors.primary} /><AppText muted style={styles.offerHintText}>ابدأ بالعروض اللي مستنية ردك.</AppText></View> : null}
@@ -376,65 +388,375 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { padding: 0, backgroundColor: colors.background },
-  header: { minHeight: 70, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 7 },
-  headerCopy: { alignItems: 'flex-end', gap: 2 },
-  title: { fontSize: 28, lineHeight: 33 },
-  subtitle: { fontSize: 12 },
-  headerAction: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  modeTabs: { marginHorizontal: 14, flexDirection: 'row-reverse', gap: 5, padding: 4, borderRadius: 16, backgroundColor: colors.surface },
-  modeTab: { flex: 1, minHeight: 39, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12 },
-  modeTabActive: { backgroundColor: colors.text },
-  modeLabel: { fontSize: 13, color: colors.textMuted },
-  modeLabelActive: { color: colors.background },
-  modeCount: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
-  modeCountActive: { backgroundColor: 'rgba(249,243,234,0.15)' },
-  modeCountText: { fontSize: 10, color: colors.primary },
-  modeCountTextActive: { color: colors.background },
-  searchShell: { marginHorizontal: 14, marginTop: 10, minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', gap: 8, paddingHorizontal: 13, borderRadius: 15, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  searchInput: { flex: 1, minHeight: 42, paddingVertical: 8, color: colors.text, fontSize: 14 },
-  filterScroller: { flexGrow: 0, marginTop: 8, paddingVertical: 2 },
-  filters: { paddingHorizontal: 14, paddingVertical: 1, gap: 7, flexDirection: 'row-reverse' },
-  filterChip: { minHeight: 34, flexDirection: 'row-reverse', alignItems: 'center', gap: 5, paddingHorizontal: 12, borderRadius: 17, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  filterChipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primarySoft },
-  filterLabel: { fontSize: 11.5, color: colors.textMuted },
-  filterLabelActive: { color: colors.primary },
-  filterBadge: { minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
-  filterBadgeText: { fontSize: 9, color: colors.background },
-  listContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 24 },
-  emptyList: { flexGrow: 1, justifyContent: 'center' },
-  conversationRow: { minHeight: 78, flexDirection: 'row-reverse', alignItems: 'center', gap: 11, paddingVertical: 9 },
-  avatarShell: { width: 56, height: 56, position: 'relative' },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.surface },
-  avatarFallback: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  kindBadge: { position: 'absolute', left: -1, bottom: -1, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.background, alignItems: 'center', justifyContent: 'center' },
-  rowMain: { flex: 1, minWidth: 0, gap: 4 },
-  rowTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  rowTitle: { flex: 1, textAlign: 'right', fontSize: 14.5 },
-  rowTime: { fontSize: 10.5, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  unreadTime: { color: colors.primary },
-  previewRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7 },
-  preview: { flex: 1, textAlign: 'right', fontSize: 12.5 },
-  unreadPreview: { color: colors.text },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
-  contextRow: { minHeight: 19, flexDirection: 'row-reverse', alignItems: 'center', gap: 7 },
-  requestPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, backgroundColor: colors.primarySoft },
-  requestPillText: { fontSize: 9.5, color: colors.primary },
-  swapContext: { flex: 1, textAlign: 'right', fontSize: 10.5 },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 67 },
-  offerRow: { minHeight: 72, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 9 },
-  offerIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  offerIncoming: { backgroundColor: colors.primarySoft },
-  offerSent: { backgroundColor: colors.accentSoft },
-  offerMain: { flex: 1, minWidth: 0, gap: 4 },
-  offerStatus: { fontSize: 10.5 },
-  offerPair: { fontSize: 12.5, textAlign: 'right' },
-  dealShortcut: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
-  offerHint: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.surface, marginBottom: 3 },
-  offerHintText: { flex: 1, textAlign: 'right', fontSize: 11.5 },
-  loadingState: { alignItems: 'center', gap: 9 },
-  errorBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.surface },
-  errorText: { flex: 1, textAlign: 'right', color: colors.danger, fontSize: 11.5 },
-  retry: { color: colors.primary, fontSize: 11.5 },
-  pressed: { opacity: 0.56 },
+  screen: {
+    padding: 0,
+    backgroundColor: colors.background,
+  },
+  header: {
+    minHeight: 68,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  headerCopy: {
+    flex: 1,
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  title: {
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.35,
+  },
+  subtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  headerAction: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  modeTabs: {
+    marginHorizontal: spacing.lg,
+    flexDirection: 'row-reverse',
+    gap: spacing.xs,
+    padding: spacing.xs,
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modeTab: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: radii.lg,
+  },
+  modeTabActive: {
+    backgroundColor: colors.text,
+  },
+  modeLabel: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  modeLabelActive: {
+    color: colors.background,
+  },
+  modeCount: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: radii.round,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  modeCountActive: {
+    backgroundColor: 'rgba(249,243,234,0.16)',
+  },
+  modeCountText: {
+    fontSize: 10,
+    color: colors.primary,
+  },
+  modeCountTextActive: {
+    color: colors.background,
+  },
+
+  searchShell: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    minHeight: 48,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 46,
+    paddingVertical: spacing.sm,
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  filterScroller: {
+    flexGrow: 0,
+    marginTop: spacing.sm,
+    paddingVertical: 2,
+  },
+  filters: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 2,
+    gap: spacing.sm,
+    flexDirection: 'row-reverse',
+  },
+  filterChip: {
+    minHeight: 36,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primarySoft,
+  },
+  filterLabel: {
+    fontSize: 11.5,
+    color: colors.textMuted,
+  },
+  filterLabelActive: {
+    color: colors.primary,
+  },
+  filterBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  filterBadgeText: {
+    fontSize: 9,
+    color: colors.white,
+  },
+
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
+  },
+  emptyList: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  conversationRow: {
+    minHeight: 78,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: -spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
+  },
+  unreadConversationRow: {
+    backgroundColor: colors.selectionSoft,
+  },
+  avatarShell: {
+    width: 54,
+    height: 54,
+    position: 'relative',
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.surface,
+  },
+  avatarFallback: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  kindBadge: {
+    position: 'absolute',
+    left: -1,
+    bottom: -1,
+    width: 20,
+    height: 20,
+    borderRadius: radii.round,
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  rowTop: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  rowTitle: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 15,
+    lineHeight: 21,
+  },
+  rowTime: {
+    fontSize: 10.5,
+    lineHeight: 16,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  unreadTime: {
+    color: colors.primary,
+  },
+  previewRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  preview: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  unreadPreview: {
+    color: colors.text,
+  },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radii.round,
+    backgroundColor: colors.primary,
+  },
+  contextRow: {
+    minHeight: 18,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  requestPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primarySoft,
+  },
+  requestPillText: {
+    fontSize: 9.5,
+    color: colors.primary,
+  },
+  swapContext: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 10.5,
+    lineHeight: 15,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: 66,
+  },
+
+  offerRow: {
+    minHeight: 76,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  offerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerIncoming: {
+    backgroundColor: colors.primarySoft,
+  },
+  offerSent: {
+    backgroundColor: colors.accentSoft,
+  },
+  offerMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  offerStatus: {
+    fontSize: 10.5,
+  },
+  offerPair: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    textAlign: 'right',
+  },
+  dealShortcut: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentSoft,
+  },
+  offerHint: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.xs,
+  },
+  offerHintText: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 11.5,
+  },
+
+  loadingState: {
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  errorBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  errorText: {
+    flex: 1,
+    textAlign: 'right',
+    color: colors.danger,
+    fontSize: 11.5,
+  },
+  retry: {
+    color: colors.primary,
+    fontSize: 11.5,
+  },
+  pressed: {
+    opacity: 0.62,
+    transform: [{ scale: 0.995 }],
+  },
 });
