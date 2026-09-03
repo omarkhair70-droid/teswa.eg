@@ -7,6 +7,7 @@ import tempfile
 import zipfile
 
 MIN_ALIGN = 0x4000  # 16 KiB
+REQUIRED_64_BIT_ABIS = {"arm64-v8a", "x86_64"}
 
 
 def fail(message: str) -> None:
@@ -25,13 +26,24 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="teswa-aab-") as tmp:
         with zipfile.ZipFile(bundle) as zf:
-            native_entries = [
+            all_native_entries = [
                 name for name in zf.namelist()
                 if name.startswith("base/lib/") and name.endswith(".so")
             ]
+            native_entries = [
+                name for name in all_native_entries
+                if len(name.split("/")) > 3 and name.split("/")[2] in REQUIRED_64_BIT_ABIS
+            ]
             if not native_entries:
-                fail("No native shared libraries found in the AAB")
+                fail("No 64-bit native shared libraries found in the AAB")
                 return 1
+
+            skipped_32_bit = len(all_native_entries) - len(native_entries)
+            print(
+                f"[android-16kb] Checking 64-bit ABIs only "
+                f"({', '.join(sorted(REQUIRED_64_BIT_ABIS))}); "
+                f"skipping {skipped_32_bit} 32-bit libraries."
+            )
 
             zf.extractall(tmp, native_entries)
 
@@ -73,7 +85,7 @@ def main() -> int:
                 fail(f"{entry}: {reason}")
             return 1
 
-        print("[android-16kb] PASS: all native ELF PT_LOAD segments are aligned for 16 KiB pages.")
+        print("[android-16kb] PASS: all 64-bit native ELF PT_LOAD segments are aligned for 16 KiB pages.")
         return 0
 
 
