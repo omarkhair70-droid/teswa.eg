@@ -71,6 +71,17 @@ export function createSupabaseMediaStorageAdapter(): MediaStorageContract {
             message: 'Media source is empty.',
           };
         }
+        if (
+          typeof input.source.maxSizeBytes === 'number'
+          && input.source.maxSizeBytes > 0
+          && body.byteLength > input.source.maxSizeBytes
+        ) {
+          return {
+            ok: false,
+            reason: 'file_too_large',
+            message: 'Media source exceeds the allowed size.',
+          };
+        }
 
         const { error } = await supabase.storage
           .from(bucketFor(input.purpose))
@@ -94,7 +105,7 @@ export function createSupabaseMediaStorageAdapter(): MediaStorageContract {
             purpose: input.purpose,
             objectKey,
             contentType,
-            sizeBytes: input.source.sizeBytes ?? null,
+            sizeBytes: input.source.sizeBytes ?? body.byteLength,
           },
         };
       } catch (error) {

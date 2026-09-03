@@ -16,6 +16,7 @@ export type MediaUploadSource = {
   fileName?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
+  maxSizeBytes?: number | null;
 };
 
 export type MediaObjectRef = {
@@ -31,7 +32,7 @@ export interface MediaStorageContract {
     ownerId: string;
     source: MediaUploadSource;
     objectKeyHint?: string | null;
-  }): Promise<TeswaResult<MediaObjectRef, 'invalid_source' | 'upload_failed' | 'unknown'>>;
+  }): Promise<TeswaResult<MediaObjectRef, 'invalid_source' | 'file_too_large' | 'upload_failed' | 'unknown'>>;
 
   remove(objects: MediaObjectRef[]): Promise<TeswaResult<void, 'delete_failed' | 'unknown'>>;
   getSignedUrl(object: MediaObjectRef, expiresInSeconds?: number): Promise<TeswaResult<string, 'not_found' | 'sign_failed' | 'unknown'>>;

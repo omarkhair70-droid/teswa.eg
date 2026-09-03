@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 import { fetchUserBlockState } from '@/lib/user-blocks';
 
@@ -81,7 +82,6 @@ export type SendContextualMessageResult =
   | { ok: true; message: ContextualConversationMessage }
   | { ok: false; reason: 'invalid_body' | 'invalid_audio' | 'invalid_duration' | 'send_failed'; message: string };
 
-const CONTEXTUAL_VOICE_BUCKET = 'contextual-voice-messages';
 const CONTEXTUAL_VOICE_MAX_DURATION_MS = 45_000;
 const CONTEXTUAL_VOICE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -415,15 +415,12 @@ async function getOtherParticipantInConversation(conversationId: string, current
   return currentUserId === starterId ? recipientId : starterId;
 }
 
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
-}
-
 export async function createContextualVoiceMessageSignedUrl(storagePath: string, expiresInSeconds = 60 * 60): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-  if (error) return null;
-  return data?.signedUrl ?? null;
+  const result = await teswaBackendRuntime.media.getSignedUrl(
+    { purpose: 'contextual_voice', objectKey: storagePath, contentType: null, sizeBytes: null },
+    expiresInSeconds,
+  );
+  return result.ok ? result.data : null;
 }
 
 export async function sendContextualVoiceMessageFromMobile(input: {
@@ -453,9 +450,19 @@ export async function sendContextualVoiceMessageFromMobile(input: {
   const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
   const uploadPath = `contextual/${conversationId}/${currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
 
-  const body = await fileUriToArrayBuffer(localUri);
-  const { error: uploadError } = await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).upload(uploadPath, body, { contentType, upsert: false });
-  if (uploadError) return { ok: false, reason: 'send_failed', message: 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
+  const uploadResult = await teswaBackendRuntime.media.upload({
+    purpose: 'contextual_voice',
+    ownerId: currentUserId,
+    source: {
+      uri: localUri,
+      fileName: safeName,
+      mimeType: contentType,
+      sizeBytes: input.sizeBytes ?? null,
+      maxSizeBytes: CONTEXTUAL_VOICE_MAX_SIZE_BYTES,
+    },
+    objectKeyHint: uploadPath,
+  });
+  if (!uploadResult.ok) return { ok: false, reason: 'send_failed', message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
 
   const { data, error } = await supabase
     .from('contextual_messages')
@@ -463,7 +470,9 @@ export async function sendContextualVoiceMessageFromMobile(input: {
     .select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at')
     .single();
   if (error || !data) {
-    await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).remove([uploadPath]);
+    await teswaBackendRuntime.media.remove([
+      { purpose: 'contextual_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
+    ]);
     return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد الصوتي.' };
   }
 
@@ -506,13 +515,25 @@ export async function sendStoryVoiceReplyFromMobile(input: {
   const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
   const uploadPath = `contextual/${conversationId}/${currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
 
-  const bodyBuf = await fileUriToArrayBuffer(localUri);
-  const { error: uploadError } = await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).upload(uploadPath, bodyBuf, { contentType, upsert: false });
-  if (uploadError) return { ok: false, reason: 'send_failed', message: 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
+  const uploadResult = await teswaBackendRuntime.media.upload({
+    purpose: 'contextual_voice',
+    ownerId: currentUserId,
+    source: {
+      uri: localUri,
+      fileName: safeName,
+      mimeType: contentType,
+      sizeBytes: input.sizeBytes ?? null,
+      maxSizeBytes: CONTEXTUAL_VOICE_MAX_SIZE_BYTES,
+    },
+    objectKeyHint: uploadPath,
+  });
+  if (!uploadResult.ok) return { ok: false, reason: 'send_failed', message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرد الصوتي. حاول مرة أخرى.' };
 
   const { data, error } = await supabase.from('contextual_messages').insert({ conversation_id: conversationId, sender_id: currentUserId, body: 'رسالة صوتية', message_kind: 'voice', media_storage_path: uploadPath, media_duration_ms: Math.min(input.durationMs, CONTEXTUAL_VOICE_MAX_DURATION_MS) }).select('id, conversation_id, sender_id, body, message_kind, media_storage_path, media_duration_ms, created_at').single();
   if (error || !data) {
-    await supabase.storage.from(CONTEXTUAL_VOICE_BUCKET).remove([uploadPath]);
+    await teswaBackendRuntime.media.remove([
+      { purpose: 'contextual_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
+    ]);
     return { ok: false, reason: 'send_failed', message: 'تعذر إرسال الرد الصوتي.' };
   }
 

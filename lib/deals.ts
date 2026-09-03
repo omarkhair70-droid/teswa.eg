@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 import { fetchUserBlockState } from '@/lib/user-blocks';
 import { canTransitionDealStatus } from '@/lib/exchange-state-machine';
@@ -288,7 +289,6 @@ export async function confirmDealCompletedFromMobile(input: { dealId: string; cu
 }
 
 
-const DEAL_VOICE_MESSAGES_BUCKET = 'deal-voice-messages';
 const DEAL_VOICE_MESSAGE_MAX_SIZE_BYTES = 15 * 1024 * 1024;
 
 function sanitizeAudioFileName(name: string | null | undefined, fallback: string): string {
@@ -306,19 +306,16 @@ function getAudioExtension(name: string | null | undefined, mimeType: string): s
   return 'm4a';
 }
 
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
-}
-
 export async function createDealVoiceMessageSignedUrl(storagePath: string, expiresInSeconds = 60 * 60): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(DEAL_VOICE_MESSAGES_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-  if (error) {
-    if (__DEV__) console.log('[deals] create signed url failed', { storagePath, message: error.message });
+  const result = await teswaBackendRuntime.media.getSignedUrl(
+    { purpose: 'deal_voice', objectKey: storagePath, contentType: null, sizeBytes: null },
+    expiresInSeconds,
+  );
+  if (!result.ok) {
+    if (__DEV__) console.log('[deals] create signed url failed', { storagePath, message: result.message });
     return null;
   }
-
-  return data?.signedUrl ?? null;
+  return result.data;
 }
 
 export async function sendDealVoiceMessageFromMobile(input: {
@@ -379,11 +376,21 @@ export async function sendDealVoiceMessageFromMobile(input: {
   const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
   const uploadPath = `deals/${input.dealId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
 
-  const body = await fileUriToArrayBuffer(localUri);
-  const { error: uploadError } = await supabase.storage.from(DEAL_VOICE_MESSAGES_BUCKET).upload(uploadPath, body, { contentType, upsert: false });
-  if (uploadError) {
-    if (__DEV__) console.log('[deals] voice upload failed', { uploadPath, message: uploadError.message });
-    return { ok: false as const, reason: 'upload_failed' as const, message: 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.' };
+  const uploadResult = await teswaBackendRuntime.media.upload({
+    purpose: 'deal_voice',
+    ownerId: input.currentUserId,
+    source: {
+      uri: localUri,
+      fileName: safeName,
+      mimeType: contentType,
+      sizeBytes: input.sizeBytes ?? null,
+      maxSizeBytes: DEAL_VOICE_MESSAGE_MAX_SIZE_BYTES,
+    },
+    objectKeyHint: uploadPath,
+  });
+  if (!uploadResult.ok) {
+    if (__DEV__) console.log('[deals] voice upload failed', { uploadPath, message: uploadResult.message });
+    return { ok: false as const, reason: uploadResult.reason === 'file_too_large' ? 'file_too_large' as const : 'upload_failed' as const, message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.' };
   }
 
   const { data: inserted, error: insertError } = await supabase
@@ -402,7 +409,9 @@ export async function sendDealVoiceMessageFromMobile(input: {
     .single();
 
   if (insertError) {
-    await supabase.storage.from(DEAL_VOICE_MESSAGES_BUCKET).remove([uploadPath]);
+    await teswaBackendRuntime.media.remove([
+      { purpose: 'deal_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
+    ]);
     if (__DEV__) console.log('[deals] voice insert failed', { uploadPath, message: insertError.message });
     return { ok: false as const, reason: 'insert_failed' as const, message: 'تعذر إرسال الرسالة الصوتية. حاول مرة أخرى.' };
   }

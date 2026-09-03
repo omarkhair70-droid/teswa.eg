@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 
-const DIRECT_VOICE_MESSAGES_BUCKET = 'direct-voice-messages';
 const DIRECT_VOICE_MESSAGE_MAX_SIZE_BYTES = 15 * 1024 * 1024;
 
 export type DirectConversationStatus = 'requested' | 'accepted' | 'ignored' | 'blocked';
@@ -30,10 +30,6 @@ function getAudioExtension(name: string | null | undefined, mimeType: string): s
 function sanitizeAudioFileName(name: string | null | undefined, fallback: string): string {
   const raw = (name || fallback).toLowerCase();
   return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
-}
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
 }
 
 function normalizeConversationSummaryRow(r: any): DirectConversationSummary {
@@ -125,9 +121,11 @@ export async function sendDirectMessage(conversationId: string, body: string): P
 }
 
 export async function createDirectVoiceMessageSignedUrl(storagePath: string, expiresInSeconds = 60 * 60): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(DIRECT_VOICE_MESSAGES_BUCKET).createSignedUrl(storagePath, expiresInSeconds);
-  if (error) return null;
-  return data?.signedUrl ?? null;
+  const result = await teswaBackendRuntime.media.getSignedUrl(
+    { purpose: 'direct_voice', objectKey: storagePath, contentType: null, sizeBytes: null },
+    expiresInSeconds,
+  );
+  return result.ok ? result.data : null;
 }
 
 export async function sendDirectVoiceMessage(input: { conversationId: string; currentUserId: string; localUri: string; durationMs: number; mimeType?: string | null; fileName?: string | null; sizeBytes?: number | null; }) {
@@ -138,12 +136,24 @@ export async function sendDirectVoiceMessage(input: { conversationId: string; cu
   const ext = getAudioExtension(input.fileName, contentType);
   const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
   const uploadPath = `direct/${input.conversationId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
-  const body = await fileUriToArrayBuffer(input.localUri);
-  const { error: uploadError } = await supabase.storage.from(DIRECT_VOICE_MESSAGES_BUCKET).upload(uploadPath, body, { contentType, upsert: false });
-  if (uploadError) return { ok: false as const, message: 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.' };
+  const uploadResult = await teswaBackendRuntime.media.upload({
+    purpose: 'direct_voice',
+    ownerId: input.currentUserId,
+    source: {
+      uri: input.localUri,
+      fileName: safeName,
+      mimeType: contentType,
+      sizeBytes: input.sizeBytes ?? null,
+      maxSizeBytes: DIRECT_VOICE_MESSAGE_MAX_SIZE_BYTES,
+    },
+    objectKeyHint: uploadPath,
+  });
+  if (!uploadResult.ok) return { ok: false as const, message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.' };
   const { data, error } = await supabase.rpc('send_direct_voice_message', { p_conversation_id: input.conversationId, p_audio_storage_path: uploadPath, p_audio_mime_type: contentType, p_audio_duration_ms: input.durationMs, p_audio_size_bytes: input.sizeBytes ?? null });
   if (error) {
-    await supabase.storage.from(DIRECT_VOICE_MESSAGES_BUCKET).remove([uploadPath]);
+    await teswaBackendRuntime.media.remove([
+      { purpose: 'direct_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
+    ]);
     return { ok: false as const, message: 'تعذر إرسال الرسالة الصوتية حالياً.' };
   }
   const row = Array.isArray(data) ? data[0] : null;
