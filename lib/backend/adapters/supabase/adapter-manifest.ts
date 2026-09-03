@@ -17,13 +17,11 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   },
   offersDeals: {
     target: 'lib/backend/adapters/supabase/offers-deals-adapter.ts',
-    legacyFiles: ['lib/messages.ts', 'lib/reviews.ts'],
+    legacyFiles: ['lib/reviews.ts'],
   },
   messaging: {
     target: 'lib/backend/adapters/supabase/messaging-adapter.ts',
     legacyFiles: [
-      'lib/chat/supabase-direct-chat.ts',
-      'lib/contextual-conversations.ts',
     ],
   },
   media: {
