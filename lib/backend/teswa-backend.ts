@@ -1,4 +1,5 @@
 import type {
+  AccountLifecycleContract,
   AnalyticsContract,
   AuthContract,
   DiscoveryContract,
@@ -17,6 +18,7 @@ import type {
 
 export interface TeswaBackend {
   auth: AuthContract;
+  account: AccountLifecycleContract;
   profiles: ProfileContract;
   marketplace: MarketplaceContract;
   offersDeals: OffersDealsContract;
