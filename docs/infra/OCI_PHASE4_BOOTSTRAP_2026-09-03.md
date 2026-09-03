@@ -612,3 +612,25 @@ The replacement design:
 8. make no Edge, Nova, Supabase, DNS, storage, database, or application-routing change.
 
 The replacement must be reviewed as a saved Terraform plan before apply. Apply requires the explicit `TESWA_ALLOW_CORE_REPLACEMENT=YES` guard.
+
+
+## Core replacement saved-plan review
+
+The guarded Core replacement plan was reviewed.
+
+Observed:
+
+- preflight generated a persistent RSA-3072 bootstrap key locally with private-key mode 600;
+- no production cutover, Supabase change, Nova change, or data migration is included;
+- exactly one Terraform resource changes: `oci_core_instance.core[0]`;
+- action is destroy/create replacement forced by adding launch metadata;
+- launch metadata contains both the SSH public key and minimal cloud-init user data;
+- the replacement VNIC configuration pins the current Core private IPv4;
+- plan guard passed;
+- no Edge, Bastion, NSG, subnet, Object Storage, Vault, Notifications, IAM, Nova, Supabase, DNS, or database resource changes are planned.
+
+Because the replacement destroys the currently allocated A1 instance before OCI launches the replacement, host capacity is the final operational risk. Oracle documents Compute Capacity Reports as the mechanism to check whether the requested shape configuration has available host capacity before launching an instance.
+
+Lane 3 therefore adds a read-only capacity preflight for `VM.Standard.A1.Flex` at exactly 1 OCPU / 6 GB in the Core's current availability domain. The guarded apply helper reruns this check immediately before Terraform apply and refuses to proceed unless capacity status is `AVAILABLE`.
+
+**Plan decision:** structurally approved, conditional on a fresh `capacity_preflight=PASS` immediately before apply.
