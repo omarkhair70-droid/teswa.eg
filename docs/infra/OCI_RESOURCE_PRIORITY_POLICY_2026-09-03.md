@@ -52,3 +52,28 @@ Until a reallocation plan is explicitly reviewed:
 - no Nova network changes
 - no Teswa production cutover
 - no Supabase shutdown
+
+
+## Nova utilization evidence
+
+Seven-day read-only monitoring of `nova-backend` returned:
+
+- shape: `VM.Standard.A1.Flex`
+- current allocation: 2 OCPU / 12 GB RAM
+- boot volume: 47 GB
+- Compute Agent CPU: average 6.25%, maximum 38.70%
+- Compute Agent memory: average 18.56%, maximum 23.92%
+
+The agentless CPU stream produced a maximum above 100%, so it is not used as the sizing authority for this decision.
+
+## Initial reallocation decision
+
+Resize Nova to **1 OCPU / 6 GB RAM** and reserve the released **1 OCPU / 6 GB RAM** for Teswa.
+
+Reasoning:
+
+- peak observed memory on 12 GB was below 24%, so 6 GB leaves substantial headroom;
+- peak Compute Agent CPU on 2 OCPU was below 39%; a rough linear projection to 1 OCPU remains below full saturation;
+- this preserves Nova as a running secondary product while making half of the Always Free A1 pool available to Teswa.
+
+OCI documents that changing a running flexible VM shape configuration reboots the instance. The resize is not executed until the dedicated preflight passes.
