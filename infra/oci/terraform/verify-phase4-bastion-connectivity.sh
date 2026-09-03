@@ -49,7 +49,8 @@ for r in rules:
     if r.get("destination") != core+"/32":
         continue
     tcp=r.get("tcp-options") or {}
-    if tcp.get("min")==22 and tcp.get("max")==22 and not r.get("is-stateless",False):
+    dst=tcp.get("destination-port-range") or {}
+    if dst.get("min")==22 and dst.get("max")==22 and not r.get("is-stateless",False):
         ok=True
         break
 print("security_list_state=%s" % state)
