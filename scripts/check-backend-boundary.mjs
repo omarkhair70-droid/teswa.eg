@@ -10,10 +10,6 @@ const legacyDirectClientImports = new Set([
   'lib/admin-reports.ts',
   'lib/admin.ts',
   'lib/analytics.ts',
-  'lib/dolab/index.ts',
-  'lib/dolab/media-item-link.ts',
-  'lib/dolab/note-media-link.ts',
-  'lib/dolab/upload.ts',
   'lib/policy-acceptance.ts',
   'lib/reports.ts',
   'lib/reviews.ts',
@@ -284,6 +280,24 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenStoryTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: story/discovery provider access must stay behind Teswa contracts (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'lib/dolab/index.ts',
+      'lib/dolab/media-item-link.ts',
+      'lib/dolab/note-media-link.ts',
+      'lib/dolab/upload.ts',
+    ].includes(relativePath)) {
+      const forbiddenDolabTokens = [
+        ".from('dolab_items')",
+        ".from('dolab_media')",
+        ".from('dolab_notes')",
+      ];
+      for (const token of forbiddenDolabTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: Dolab provider access must stay behind DolabContract (${token})`);
         }
       }
     }
