@@ -1,0 +1,78 @@
+name: Native Dependency Compatibility Audit
+
+on:
+  push:
+    branches:
+      - modernize/expo57-platform-20260903
+    paths:
+      - '.github/workflows/native-dependency-audit.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teswa-native-dependency-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit native dependency compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      SENTRY_ALLOW_FAILURE: 'true'
+
+    steps:
+      - name: Checkout modernization branch
+        uses: actions/checkout@v4
+        with:
+          ref: modernize/expo57-platform-20260903
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify current Expo 57 health
+        run: npx expo-doctor
+
+      - name: Report outdated direct dependencies
+        shell: bash
+        run: |
+          npm outdated --json || true
+
+      - name: Report native package registry metadata
+        shell: bash
+        run: |
+          packages=(
+            "@gorhom/bottom-sheet"
+            "@react-native-async-storage/async-storage"
+            "@react-native-google-signin/google-signin"
+            "@sentry/react-native"
+            "@shopify/flash-list"
+            "@shopify/react-native-skia"
+            "lottie-react-native"
+            "moti"
+            "react-native-compressor"
+            "react-native-draggable-flatlist"
+            "react-native-keyboard-controller"
+            "react-native-maps"
+            "react-native-mmkv"
+            "react-native-nitro-modules"
+            "react-native-view-shot"
+          )
+
+          for pkg in "${packages[@]}"; do
+            echo "===== $pkg ====="
+            npm view "$pkg" version peerDependencies engines --json || true
+          done
+
+      - name: Verify Android prebuild baseline
+        run: npx expo prebuild --platform android --clean --no-install
