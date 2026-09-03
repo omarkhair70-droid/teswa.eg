@@ -238,6 +238,38 @@ export interface MarketplaceCoreContract extends MarketplaceReadContract {
       ListingImagePlanFailure
     >
   >;
+
+  listActiveCategories(): Promise<ActiveMarketplaceCategory[]>;
+
+  createPublishedListingBase(
+    input: PublishListingMetadataInput,
+  ): Promise<TeswaResult<void, PublishBaseFailure>>;
+
+  markPublishFailed(
+    itemId: string,
+    ownerId: string,
+  ): Promise<TeswaResult<void, 'unknown'>>;
+
+  attachPublishedVideo(input: {
+    itemId: string;
+    videoStoragePath: string;
+    durationMs: number | null;
+    width: number | null;
+    height: number | null;
+  }): Promise<TeswaResult<void, 'video_insert_failed' | 'unknown'>>;
+
+  addPublishedWantedTags(
+    itemId: string,
+    tags: string[],
+  ): Promise<TeswaResult<void, 'unknown'>>;
+
+  deletePublishedImageMetadata(
+    itemId: string,
+  ): Promise<TeswaResult<void, 'unknown'>>;
+
+  getItemVideoMetadata(
+    itemId: string,
+  ): Promise<ItemVideoMetadataRecord | null>;
 }
 
 
@@ -312,3 +344,48 @@ export type ListingImagePlanFailure =
   | 'images_metadata_update_failed'
   | 'images_delete_failed'
   | 'unknown';
+
+
+export type ActiveMarketplaceCategory = {
+  id: string;
+  nameAr: string;
+};
+
+export type PublishListingMetadataInput = {
+  itemId: string;
+  ownerId: string;
+  title: string;
+  categoryId: string | null;
+  description: string | null;
+  condition: string;
+  conditionNotes: string | null;
+  city: string | null;
+  area: string | null;
+  locationLatitude: number | null;
+  locationLongitude: number | null;
+  desireMode: 'specific' | 'flexible' | 'surprise';
+  desireText: string | null;
+  itemStory: string | null;
+  swapReason: string | null;
+  goodFor: string | null;
+  images: Array<{
+    imageUrl: string;
+    isPrimary: boolean;
+    sortOrder: number;
+  }>;
+};
+
+export type PublishBaseFailure =
+  | 'item_insert_failed'
+  | 'images_insert_failed'
+  | 'unknown';
+
+export type ItemVideoMetadataRecord = {
+  id: string;
+  itemId: string;
+  videoStoragePath: string;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  createdAt: IsoDateTime;
+};
