@@ -1,6 +1,5 @@
 import type { OfferLifecycleRecord } from '@/lib/backend/contracts/offers-deals';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 import { fetchUserBlockState } from '@/lib/user-blocks';
 import { ExchangeItemSummary, fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
 import { canTransitionOfferStatus } from '@/lib/exchange-state-machine';
@@ -120,15 +119,23 @@ function mapOfferRows(
 
 // Notification dispatch remains a separate B6 boundary concern.
 async function notify(payload: Record<string, unknown>) {
-  const { error } = await supabase.rpc('create_notification', payload);
-  if (error) {
-    console.warn('[offers] create_notification failed', {
-      code: error.code,
-      message: error.message,
+  const result = await teswaBackendRuntime.notifications.dispatch({
+    targetUserId: String(payload.target_user_id ?? ''),
+    type: String(payload.notification_type ?? 'system'),
+    title: String(payload.notification_title ?? ''),
+    body: typeof payload.notification_body === 'string' ? payload.notification_body : null,
+    itemId: typeof payload.target_item_id === 'string' ? payload.target_item_id : null,
+    offerId: typeof payload.target_offer_id === 'string' ? payload.target_offer_id : null,
+    dealId: typeof payload.target_deal_id === 'string' ? payload.target_deal_id : null,
+    messageId: typeof payload.target_message_id === 'string' ? payload.target_message_id : null,
+  });
+
+  if (!result.ok) {
+    console.warn('[offers] notification dispatch failed', {
+      message: result.message,
     });
   }
 }
-
 async function getOfferForAction(offerId: string): Promise<OfferLifecycleRecord | null> {
   return teswaBackendRuntime.offers.getOffer(offerId);
 }
