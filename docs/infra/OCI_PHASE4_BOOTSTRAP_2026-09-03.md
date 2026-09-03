@@ -751,3 +751,20 @@ Lane 3 will therefore repair the existing Core in place through the serial conso
 9. delete the temporary serial-console connection.
 
 This keeps the current scarce A1 allocation intact and removes all host-capacity dependency from the recovery.
+
+
+## Serial-console preflight JSON parsing correction
+
+The first serial-console recovery preflight failed locally with Python `JSONDecodeError` before creating any OCI console connection or mutating the Core.
+
+The failure came from the helper's unnecessary file-based JSON parsing around OCI CLI reads. The recovery does not require full response documents: it only needs the Core lifecycle state, shape, and the count of ACTIVE/CREATING console connections.
+
+The helper now queries those scalar values directly through OCI CLI JMESPath:
+
+- Core lifecycle state via `data."lifecycle-state"`;
+- Core shape via `data.shape`;
+- active/creating console connection count via `length(...)`.
+
+It also rejects an empty/non-numeric connection count instead of attempting to parse an empty JSON file.
+
+No OCI resource, guest file, Core lifecycle state, Nova, Supabase, DNS, or data changed during the failed preflight.
