@@ -117,9 +117,15 @@ def main() -> int:
             raise SystemExit(
                 f"Target bucket {physical} belongs to unexpected compartment."
             )
+        public_access_type = bucket.get("public-access-type")
+        if public_access_type != "NoPublicAccess":
+            raise SystemExit(
+                f"Target bucket {physical} must be private (NoPublicAccess), "
+                f"got {public_access_type!r}."
+            )
         checked_physical[physical] = {
             "compartment_id": actual_compartment,
-            "public_access_type": bucket.get("public-access-type"),
+            "public_access_type": public_access_type,
             "storage_tier": bucket.get("storage-tier"),
         }
 
