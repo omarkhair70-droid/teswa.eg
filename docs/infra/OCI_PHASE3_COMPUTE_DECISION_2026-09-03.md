@@ -82,3 +82,19 @@ No existing Nova resource is referenced by Terraform.
 - no secrets in Terraform
 - no PostgreSQL public ingress
 - no additional Nova resize
+
+
+## Preflight result
+
+Read-only Phase 3 compute preflight passed:
+
+- availability domain resolved successfully
+- Nova A1 usage confirmed at 1 OCPU
+- 2 E2 Micro slots available / 0 used
+- 153 GB Always Free Block Storage available / 47 GB used
+- no existing Teswa NAT gateway
+- Oracle Linux 9 images resolved for both A1 and E2
+- local pinned image variable file created with permissions `600`
+- `preflight=PASS`
+
+The OCI CLI emitted pagination warnings while listing images because the command requested a single newest item. This did not invalidate the result; the image list was sorted newest-first and the first compatible image was pinned locally.
