@@ -1,7 +1,6 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { compressItemImage } from '@/lib/media/compress-item-image';
-import { supabase } from '@/lib/supabase/client';
 
 const MAX_ITEM_IMAGES = 4;
 
@@ -64,51 +63,11 @@ async function cleanupItemImageStorage(paths: string[]) {
   return teswaBackendRuntime.media.remove(paths.map((path) => itemImageRef(path)));
 }
 
-export async function fetchEditableListingImagesContext(itemId: string, ownerId: string): Promise<EditableListingImagesContext | null> {
-  const { data: item, error } = await supabase
-    .from('items')
-    .select('id,title,status')
-    .eq('id', itemId)
-    .eq('owner_id', ownerId)
-    .in('status', ['active', 'archived'])
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!item) return null;
-
-  const { data: images, error: imagesError } = await supabase
-    .from('item_images')
-    .select('id,image_url,is_primary,sort_order,created_at')
-    .eq('item_id', itemId);
-
-  if (imagesError) throw imagesError;
-
-  const normalized = (images ?? [])
-    .map((entry) => ({
-      id: entry.id,
-      imageUrl: entry.image_url?.trim() || '',
-      isPrimary: Boolean(entry.is_primary),
-      sortOrder: typeof entry.sort_order === 'number' ? entry.sort_order : null,
-      createdAt: entry.created_at ?? null,
-    }))
-    .filter((entry) => entry.imageUrl.length > 0)
-    .sort((a, b) => {
-      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
-      const aSort = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      const bSort = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-      if (aSort !== bSort) return aSort - bSort;
-      const aCreated = a.createdAt ?? '';
-      const bCreated = b.createdAt ?? '';
-      if (aCreated !== bCreated) return aCreated.localeCompare(bCreated);
-      return a.imageUrl.localeCompare(b.imageUrl);
-    });
-
-  return {
-    itemId: item.id,
-    title: item.title?.trim() || 'عنصر بدون عنوان',
-    status: item.status,
-    images: normalized,
-  };
+export async function fetchEditableListingImagesContext(
+  itemId: string,
+  ownerId: string,
+): Promise<EditableListingImagesContext | null> {
+  return teswaBackendRuntime.marketplace.getEditableListingImagesContext(itemId, ownerId);
 }
 
 export async function updateListingImagesFromMobile(input: {
@@ -119,20 +78,53 @@ export async function updateListingImagesFromMobile(input: {
 }): Promise<UpdateListingImagesResult> {
   const { itemId, ownerId, orderedImages, onProgress } = input;
 
-  if (!itemId || !ownerId) return { ok: false, reason: 'invalid_input', message: 'بيانات العنصر غير مكتملة.' };
-  if (!orderedImages.length) return { ok: false, reason: 'invalid_input', message: 'يجب الاحتفاظ بصورة واحدة على الأقل للعنصر.' };
-  if (orderedImages.length > MAX_ITEM_IMAGES) return { ok: false, reason: 'invalid_input', message: 'يمكنك استخدام 4 صور كحد أقصى.' };
+  if (!itemId || !ownerId) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      message: 'بيانات العنصر غير مكتملة.',
+    };
+  }
+  if (!orderedImages.length) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      message: 'يجب الاحتفاظ بصورة واحدة على الأقل للعنصر.',
+    };
+  }
+  if (orderedImages.length > MAX_ITEM_IMAGES) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      message: 'يمكنك استخدام 4 صور كحد أقصى.',
+    };
+  }
 
-  const { data: item, error: itemError } = await supabase.from('items').select('id,status').eq('id', itemId).eq('owner_id', ownerId).maybeSingle();
-  if (itemError) return { ok: false, reason: 'unknown', message: 'تعذر التحقق من صلاحية التعديل حالياً.' };
-  if (!item) return { ok: false, reason: 'not_found_or_unauthorized', message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.' };
-  if (item.status !== 'active' && item.status !== 'archived') return { ok: false, reason: 'not_editable', message: 'لا يمكن تعديل صور هذا العنصر في حالته الحالية.' };
+  let currentContext: EditableListingImagesContext | null = null;
+  try {
+    currentContext = await teswaBackendRuntime.marketplace.getEditableListingImagesContext(
+      itemId,
+      ownerId,
+    );
+  } catch {
+    return {
+      ok: false,
+      reason: 'unknown',
+      message: 'تعذر تحميل صور العنصر الحالية.',
+    };
+  }
 
-  const { data: currentRows, error: currentError } = await supabase.from('item_images').select('id,image_url').eq('item_id', itemId);
-  if (currentError) return { ok: false, reason: 'unknown', message: 'تعذر تحميل صور العنصر الحالية.' };
+  if (!currentContext) {
+    return {
+      ok: false,
+      reason: 'not_found_or_unauthorized',
+      message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.',
+    };
+  }
 
-  const currentExistingById = new Map((currentRows ?? []).map((row) => [row.id, row.image_url?.trim() || '']));
-  const currentRowsById = new Map((currentRows ?? []).map((row) => [row.id, row]));
+  const currentExistingById = new Map(
+    currentContext.images.map((row) => [row.id, row.imageUrl]),
+  );
   const usedExisting = new Set<string>();
 
   for (const draft of orderedImages) {
@@ -141,43 +133,84 @@ export async function updateListingImagesFromMobile(input: {
       const imageUrl = draft.imageUrl?.trim();
       const knownUrl = imageId ? currentExistingById.get(imageId) : null;
       if (!imageId || !imageUrl || !knownUrl || knownUrl !== imageUrl) {
-        return { ok: false, reason: 'invalid_input', message: 'تعذر التحقق من بعض الصور الحالية. أعد فتح الشاشة وحاول مرة أخرى.' };
+        return {
+          ok: false,
+          reason: 'invalid_input',
+          message: 'تعذر التحقق من بعض الصور الحالية. أعد فتح الشاشة وحاول مرة أخرى.',
+        };
       }
       if (usedExisting.has(imageId)) {
-        return { ok: false, reason: 'invalid_input', message: 'لا يمكن تكرار نفس الصورة أكثر من مرة.' };
+        return {
+          ok: false,
+          reason: 'invalid_input',
+          message: 'لا يمكن تكرار نفس الصورة أكثر من مرة.',
+        };
       }
       usedExisting.add(imageId);
-    } else {
-      if (!draft.asset?.uri) return { ok: false, reason: 'invalid_input', message: 'تعذر قراءة إحدى الصور الجديدة.' };
-      if (draft.asset.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(draft.asset.mimeType)) {
-        return { ok: false, reason: 'invalid_input', message: 'نوع الصورة غير مدعوم. استخدم JPEG أو PNG أو WEBP.' };
-      }
+      continue;
+    }
+
+    if (!draft.asset?.uri) {
+      return {
+        ok: false,
+        reason: 'invalid_input',
+        message: 'تعذر قراءة إحدى الصور الجديدة.',
+      };
+    }
+    if (
+      draft.asset.mimeType
+      && !['image/jpeg', 'image/png', 'image/webp'].includes(draft.asset.mimeType)
+    ) {
+      return {
+        ok: false,
+        reason: 'invalid_input',
+        message: 'نوع الصورة غير مدعوم. استخدم JPEG أو PNG أو WEBP.',
+      };
     }
   }
 
   const uploadedPaths: string[] = [];
-  const finalRows: Array<{ kind: 'existing'; imageId: string; imageUrl: string } | { kind: 'new'; imageUrl: string }> = [];
-  const newUploadedRows: { image_url: string; is_primary: boolean; sort_order: number }[] = [];
+  const orderedPlan: Array<
+    | { kind: 'existing'; imageId: string; imageUrl: string }
+    | { kind: 'new'; imageUrl: string }
+  > = [];
 
   try {
     for (let i = 0; i < orderedImages.length; i += 1) {
       const draft = orderedImages[i];
       if (draft.kind === 'existing') {
-        finalRows.push({ kind: 'existing', imageId: draft.imageId, imageUrl: draft.imageUrl.trim() });
+        orderedPlan.push({
+          kind: 'existing',
+          imageId: draft.imageId,
+          imageUrl: draft.imageUrl.trim(),
+        });
         continue;
       }
 
-      onProgress?.({ phase: 'optimizing', current: i + 1, total: orderedImages.length });
+      onProgress?.({
+        phase: 'optimizing',
+        current: i + 1,
+        total: orderedImages.length,
+      });
       const optimized = await compressItemImage(draft.asset.uri);
       const ext = optimized.usedCompressedOutput
         ? optimized.extension
-        : draft.asset.fileName?.split('.').pop() || (draft.asset.mimeType?.split('/').pop() ?? 'jpg');
-      const baseName = optimized.usedCompressedOutput ? `image-${i + 1}.jpg` : draft.asset.fileName;
+        : draft.asset.fileName?.split('.').pop()
+          || (draft.asset.mimeType?.split('/').pop() ?? 'jpg');
+      const baseName = optimized.usedCompressedOutput
+        ? `image-${i + 1}.jpg`
+        : draft.asset.fileName;
       const safeName = sanitizeFileName(baseName, `image-${i + 1}.${ext}`);
       const path = `items/${ownerId}/${itemId}/${Date.now()}-${safeName}`;
-      const contentType = optimized.usedCompressedOutput ? optimized.contentType : draft.asset.mimeType || 'image/jpeg';
+      const contentType = optimized.usedCompressedOutput
+        ? optimized.contentType
+        : draft.asset.mimeType || 'image/jpeg';
 
-      onProgress?.({ phase: 'uploading', current: i + 1, total: orderedImages.length });
+      onProgress?.({
+        phase: 'uploading',
+        current: i + 1,
+        total: orderedImages.length,
+      });
       const uploadResult = await teswaBackendRuntime.media.upload({
         purpose: 'item_image',
         ownerId,
@@ -188,73 +221,113 @@ export async function updateListingImagesFromMobile(input: {
         },
         objectKeyHint: path,
       });
+
       if (!uploadResult.ok) {
         await cleanupItemImageStorage(uploadedPaths);
-        return { ok: false, reason: 'upload_failed', message: 'تعذر رفع الصور الجديدة. تأكد من الاتصال وحاول مرة أخرى.' };
+        return {
+          ok: false,
+          reason: 'upload_failed',
+          message: 'تعذر رفع الصور الجديدة. تأكد من الاتصال وحاول مرة أخرى.',
+        };
       }
 
       uploadedPaths.push(uploadResult.data.objectKey);
       const imageUrl = teswaBackendRuntime.media.getPublicUrl(uploadResult.data);
       if (!imageUrl) {
         await cleanupItemImageStorage(uploadedPaths);
-        return { ok: false, reason: 'upload_failed', message: 'تعذر تجهيز رابط إحدى الصور الجديدة.' };
+        return {
+          ok: false,
+          reason: 'upload_failed',
+          message: 'تعذر تجهيز رابط إحدى الصور الجديدة.',
+        };
       }
-      finalRows.push({ kind: 'new', imageUrl });
-      newUploadedRows.push({ image_url: imageUrl, is_primary: i === 0, sort_order: i });
+
+      orderedPlan.push({ kind: 'new', imageUrl });
     }
 
     onProgress?.({ phase: 'saving' });
 
-    if (newUploadedRows.length) {
-      const { error: insertError } = await supabase
-        .from('item_images')
-        .insert(newUploadedRows.map((row) => ({ item_id: itemId, image_url: row.image_url, is_primary: row.is_primary, sort_order: row.sort_order })));
-      if (insertError) {
+    const saveResult = await teswaBackendRuntime.marketplace.applyListingImagePlan({
+      itemId,
+      ownerId,
+      orderedRows: orderedPlan,
+    });
+
+    if (!saveResult.ok) {
+      if (saveResult.reason !== 'images_delete_failed') {
         await cleanupItemImageStorage(uploadedPaths);
-        return { ok: false, reason: 'images_insert_failed', message: 'تعذر حفظ الصور الجديدة. حاول مرة أخرى.' };
+      }
+
+      switch (saveResult.reason) {
+        case 'not_found_or_unauthorized':
+          return {
+            ok: false,
+            reason: 'not_found_or_unauthorized',
+            message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.',
+          };
+        case 'not_editable':
+          return {
+            ok: false,
+            reason: 'not_editable',
+            message: 'لا يمكن تعديل صور هذا العنصر في حالته الحالية.',
+          };
+        case 'invalid_input':
+          return {
+            ok: false,
+            reason: 'invalid_input',
+            message: 'تعذر التحقق من بعض الصور الحالية. أعد فتح الشاشة وحاول مرة أخرى.',
+          };
+        case 'images_insert_failed':
+          return {
+            ok: false,
+            reason: 'images_insert_failed',
+            message: 'تعذر حفظ الصور الجديدة. حاول مرة أخرى.',
+          };
+        case 'images_metadata_update_failed':
+          return {
+            ok: false,
+            reason: 'images_metadata_update_failed',
+            message: 'تعذر حفظ ترتيب الصور بالكامل. أعد فتح الشاشة وحاول مرة أخرى.',
+          };
+        case 'images_delete_failed':
+          return {
+            ok: false,
+            reason: 'images_delete_failed',
+            message: 'تم حفظ الصور الجديدة والترتيب، لكن تعذر حذف بعض الصور القديمة. حاول مرة أخرى.',
+          };
+        default:
+          return {
+            ok: false,
+            reason: 'unknown',
+            message: 'حدث خطأ غير متوقع أثناء حفظ الصور.',
+          };
       }
     }
 
-    for (let i = 0; i < finalRows.length; i += 1) {
-      const draftRow = finalRows[i];
-      const updateQuery = supabase.from('item_images').update({ is_primary: i === 0, sort_order: i }).eq('item_id', itemId);
-      const { error: updateError } = draftRow.kind === 'existing'
-        ? await updateQuery.eq('id', draftRow.imageId)
-        : await updateQuery.eq('image_url', draftRow.imageUrl);
+    const removablePaths = saveResult.data.removedImageUrls
+      .map((url) =>
+        teswaBackendRuntime.media.getObjectKeyFromPublicUrl('item_image', url),
+      )
+      .filter((value): value is string => Boolean(value));
 
-      if (updateError) {
-        if (newUploadedRows.length) {
-          await supabase.from('item_images').delete().eq('item_id', itemId).in('image_url', newUploadedRows.map((row) => row.image_url));
-        }
-        await cleanupItemImageStorage(uploadedPaths);
-        return { ok: false, reason: 'images_metadata_update_failed', message: 'تعذر حفظ ترتيب الصور بالكامل. أعد فتح الشاشة وحاول مرة أخرى.' };
-      }
-    }
-
-    const keptExistingImageIds = new Set(finalRows.filter((row): row is { kind: 'existing'; imageId: string; imageUrl: string } => row.kind === 'existing').map((row) => row.imageId));
-    const removedExistingRows = [...currentRowsById.values()].filter((row) => !keptExistingImageIds.has(row.id));
-    const removedExistingImageIds = removedExistingRows.map((row) => row.id);
-
-    if (removedExistingImageIds.length) {
-      const { error: deleteError } = await supabase.from('item_images').delete().eq('item_id', itemId).in('id', removedExistingImageIds);
-      if (deleteError) {
+    if (removablePaths.length) {
+      const cleanupResult = await cleanupItemImageStorage(removablePaths);
+      if (!cleanupResult.ok) {
         return {
-          ok: false,
-          reason: 'images_delete_failed',
-          message: 'تم حفظ الصور الجديدة والترتيب، لكن تعذر حذف بعض الصور القديمة. حاول مرة أخرى.',
+          ok: true,
+          imageCount: orderedPlan.length,
+          storageCleanupFailed: true,
         };
       }
-
-      const removablePaths = removedExistingRows.map((row) => row.image_url?.trim() || '').filter(Boolean).map((url) => teswaBackendRuntime.media.getObjectKeyFromPublicUrl('item_image', url)).filter((v): v is string => Boolean(v));
-      if (removablePaths.length) {
-        const cleanupResult = await cleanupItemImageStorage(removablePaths);
-        if (!cleanupResult.ok) return { ok: true, imageCount: finalRows.length, storageCleanupFailed: true };
-      }
     }
 
-    return { ok: true, imageCount: finalRows.length };
+    return { ok: true, imageCount: orderedPlan.length };
   } catch {
     await cleanupItemImageStorage(uploadedPaths);
-    return { ok: false, reason: 'unknown', message: 'حدث خطأ غير متوقع أثناء حفظ الصور.' };
+    return {
+      ok: false,
+      reason: 'unknown',
+      message: 'حدث خطأ غير متوقع أثناء حفظ الصور.',
+    };
   }
 }
