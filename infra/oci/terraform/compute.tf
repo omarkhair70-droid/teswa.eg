@@ -112,6 +112,11 @@ resource "oci_core_instance" "core" {
     are_all_plugins_disabled = false
     is_management_disabled   = false
     is_monitoring_disabled   = false
+
+    plugins_config {
+      desired_state = "ENABLED"
+      name          = "Bastion"
+    }
   }
 
   lifecycle {
