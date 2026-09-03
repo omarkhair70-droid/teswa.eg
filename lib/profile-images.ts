@@ -1,9 +1,7 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { compressItemImage } from '@/lib/media/compress-item-image';
 import { supabase } from '@/lib/supabase/client';
-
-const PROFILE_IMAGES_BUCKET = 'profile-images';
-const PROFILE_IMAGES_PUBLIC_MARKER = '/storage/v1/object/public/profile-images/';
 
 export type ProfileImageKind = 'avatar' | 'cover';
 
@@ -32,23 +30,13 @@ function sanitizeFileName(name: string | null | undefined, fallback: string): st
   return raw.replace(/[^a-z0-9._-]/g, '-').replace(/-+/g, '-');
 }
 
-async function fileUriToArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
-}
-
-function deriveStoragePathFromPublicUrl(url: string | null | undefined): string | null {
-  const trimmed = url?.trim();
-  if (!trimmed) return null;
-  const markerIndex = trimmed.indexOf(PROFILE_IMAGES_PUBLIC_MARKER);
-  if (markerIndex < 0) return null;
-  const afterMarker = trimmed.slice(markerIndex + PROFILE_IMAGES_PUBLIC_MARKER.length).split('?')[0];
-  if (!afterMarker) return null;
-  try {
-    return decodeURIComponent(afterMarker);
-  } catch {
-    return afterMarker;
-  }
+function profileMediaRef(objectKey: string, contentType: string | null = null) {
+  return {
+    purpose: 'profile_image' as const,
+    objectKey,
+    contentType,
+    sizeBytes: null,
+  };
 }
 
 export async function replaceProfileImageFromMobile(input: {
@@ -84,9 +72,17 @@ export async function replaceProfileImageFromMobile(input: {
   const contentType = optimized.contentType || asset.mimeType || 'image/jpeg';
 
   try {
-    const body = await fileUriToArrayBuffer(optimized.uri);
-    const { error: uploadError } = await supabase.storage.from(PROFILE_IMAGES_BUCKET).upload(path, body, { contentType, upsert: false });
-    if (uploadError) {
+    const uploadResult = await teswaBackendRuntime.media.upload({
+      purpose: 'profile_image',
+      ownerId: userId,
+      source: {
+        uri: optimized.uri,
+        fileName: safeName,
+        mimeType: contentType,
+      },
+      objectKeyHint: path,
+    });
+    if (!uploadResult.ok) {
       return {
         ok: false,
         reason: 'upload_failed',
@@ -94,8 +90,16 @@ export async function replaceProfileImageFromMobile(input: {
       };
     }
 
-    const { data: publicUrlData } = supabase.storage.from(PROFILE_IMAGES_BUCKET).getPublicUrl(path);
-    const imageUrl = publicUrlData.publicUrl;
+    const uploadedObject = uploadResult.data;
+    const imageUrl = teswaBackendRuntime.media.getPublicUrl(uploadedObject);
+    if (!imageUrl) {
+      await teswaBackendRuntime.media.remove([uploadedObject]);
+      return {
+        ok: false,
+        reason: 'upload_failed',
+        message: kind === 'avatar' ? 'تعذر تجهيز رابط صورة الملف.' : 'تعذر تجهيز رابط صورة الغلاف.',
+      };
+    }
 
     const updatePayload = kind === 'avatar'
       ? { avatar_url: imageUrl, updated_at: new Date().toISOString() }
@@ -104,19 +108,19 @@ export async function replaceProfileImageFromMobile(input: {
     const { data, error } = await supabase.from('profiles').update(updatePayload).eq('id', userId).select('id').maybeSingle();
 
     if (error) {
-      await supabase.storage.from(PROFILE_IMAGES_BUCKET).remove([path]);
+      await teswaBackendRuntime.media.remove([uploadedObject]);
       return { ok: false, reason: 'save_failed', message: 'تعذر حفظ الصورة الجديدة في ملفك. حاول مرة أخرى.' };
     }
 
     if (!data) {
-      await supabase.storage.from(PROFILE_IMAGES_BUCKET).remove([path]);
+      await teswaBackendRuntime.media.remove([uploadedObject]);
       return { ok: false, reason: 'not_found_or_unauthorized', message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.' };
     }
 
-    const oldPath = deriveStoragePathFromPublicUrl(previousImageUrl);
+    const oldPath = teswaBackendRuntime.media.getObjectKeyFromPublicUrl('profile_image', previousImageUrl);
     if (oldPath && oldPath !== path) {
-      const { error: cleanupError } = await supabase.storage.from(PROFILE_IMAGES_BUCKET).remove([oldPath]);
-      if (cleanupError) {
+      const cleanupResult = await teswaBackendRuntime.media.remove([profileMediaRef(oldPath)]);
+      if (!cleanupResult.ok) {
         return {
           ok: true,
           imageUrl,
@@ -167,10 +171,10 @@ export async function removeProfileImageFromMobile(input: {
     return { ok: false, reason: 'not_found_or_unauthorized', message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.' };
   }
 
-  const oldPath = deriveStoragePathFromPublicUrl(currentImageUrl);
+  const oldPath = teswaBackendRuntime.media.getObjectKeyFromPublicUrl('profile_image', currentImageUrl);
   if (oldPath) {
-    const { error: cleanupError } = await supabase.storage.from(PROFILE_IMAGES_BUCKET).remove([oldPath]);
-    if (cleanupError) {
+    const cleanupResult = await teswaBackendRuntime.media.remove([profileMediaRef(oldPath)]);
+    if (!cleanupResult.ok) {
       return {
         ok: true,
         imageUrl: null,

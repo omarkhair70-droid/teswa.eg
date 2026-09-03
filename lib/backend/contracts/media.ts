@@ -36,4 +36,5 @@ export interface MediaStorageContract {
   remove(objects: MediaObjectRef[]): Promise<TeswaResult<void, 'delete_failed' | 'unknown'>>;
   getSignedUrl(object: MediaObjectRef, expiresInSeconds?: number): Promise<TeswaResult<string, 'not_found' | 'sign_failed' | 'unknown'>>;
   getPublicUrl(object: MediaObjectRef): string | null;
+  getObjectKeyFromPublicUrl(purpose: MediaPurpose, url: string | null | undefined): string | null;
 }

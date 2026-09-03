@@ -165,5 +165,23 @@ export function createSupabaseMediaStorageAdapter(): MediaStorageContract {
         .getPublicUrl(object.objectKey);
       return data.publicUrl || null;
     },
+
+    getObjectKeyFromPublicUrl(purpose, url) {
+      const trimmed = url?.trim();
+      if (!trimmed) return null;
+
+      const marker = `/storage/v1/object/public/${bucketFor(purpose)}/`;
+      const markerIndex = trimmed.indexOf(marker);
+      if (markerIndex < 0) return null;
+
+      const encodedKey = trimmed.slice(markerIndex + marker.length).split('?')[0];
+      if (!encodedKey) return null;
+
+      try {
+        return decodeURIComponent(encodedKey);
+      } catch {
+        return encodedKey;
+      }
+    },
   };
 }
