@@ -57,6 +57,21 @@ print("security_list_state=%s" % state)
 print("core_tcp22_egress_rule=%s" % str(ok).lower())
 if not ok:
     raise SystemExit(4)
+
+ingress=data.get("ingress-security-rules") or []
+endpoint=None
+for r in ingress:
+    if r.get("protocol")!="6":
+        continue
+    src=r.get("source") or ""
+    tcp=r.get("tcp-options") or {}
+    dst=tcp.get("destination-port-range") or {}
+    if src.endswith("/32") and dst.get("min")==22 and dst.get("max")==22 and not r.get("is-stateless",False):
+        endpoint=src
+        break
+print("bastion_tcp22_ingress_rule=%s" % str(bool(endpoint)).lower())
+if not endpoint:
+    raise SystemExit(6)
 PY
 
 echo
