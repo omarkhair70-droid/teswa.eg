@@ -37,9 +37,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
       'lib/direct-messages.ts',
       'lib/chat/supabase-direct-chat.ts',
       'lib/contextual-conversations.ts',
-      'app/(tabs)/messages.tsx',
-      'app/contextual/[id].tsx',
-      'app/deal/[id].tsx',
     ],
   },
   media: {
