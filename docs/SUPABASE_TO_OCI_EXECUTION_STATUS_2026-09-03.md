@@ -1,134 +1,172 @@
 # Teswa Supabase -> OCI Lane 4 Execution Status
 
-Date: 2026-09-03  
+Date: 2026-09-04  
 Branch: `migration/supabase-to-oci-20260903`
 
 ## Current cross-lane state
 
 ### Lane 2 — Backend boundary
 
-Latest observed branch state:
+Lane 2 has issued its final provider-boundary handoff.
 
-- B1 Auth: closed
-- B2 client Storage: closed
-- B3 Profile/Marketplace: substantially progressed
-- B4 Offers/Deals: closed
-- B5 Messaging/Realtime: substantially progressed
-- B6 Notifications: closed
-- B7 Profile/Social: progressed, including profile setup/privacy/social graph/people/profile-image metadata
-- Marketplace boundary has continued progressing, including listing/publish adapter closure
-- Stories boundary work has started progressing as well
+Observed final state:
 
-Supabase remains the active production provider.
+- backend decoupling implementation complete for the current Teswa feature surface;
+- feature-level direct `@/lib/supabase/client` allowlist: `0`;
+- boundary guard: PASS;
+- TypeScript validation: PASS;
+- Teswa feature code reaches backend capabilities through `teswaBackendRuntime`
+  and Teswa-owned contracts;
+- Supabase remains the active production adapter;
+- no OCI cutover or production data migration was performed by Lane 2.
+
+For Lane 4 this means there is **no new Lane 2 dependency required for the
+read-only PostgreSQL rehearsal entry checks**. Contract-level semantic parity
+will consume the completed Lane 2 handoff later.
 
 ### Lane 3 — OCI platform
 
-Phase 2 is applied and green:
+Phase 2 and Phase 3 remain green:
 
-- `teswa-media`: private
-- `teswa-backups`: private + versioning
-- `teswa-vault`: ACTIVE
-- `teswa-ops`: ACTIVE
-- Terraform drift: none
+- `teswa-media`: private;
+- `teswa-backups`: private + versioning;
+- `teswa-vault`: ACTIVE;
+- `teswa-ops`: ACTIVE;
+- `teswa-core-01`: RUNNING, private A1 Flex, 1 OCPU / 6 GB;
+- `teswa-edge-01`: RUNNING, E2 Micro public edge;
+- Terraform drift: none.
 
-Phase 3 compute is also applied and green:
+Lane 3 has now completed and handed off the PostgreSQL 17 rehearsal target.
 
-- `teswa-edge-01`: RUNNING, E2 Micro, public edge
-- `teswa-core-01`: RUNNING, A1 Flex, 1 OCPU / 6 GB, private
-- NAT gateway: AVAILABLE
-- Terraform drift: none
+Verified target state:
 
-Phase 4 bootstrap preflight is green:
+- host: `teswa-core-01`;
+- PostgreSQL: native PGDG 17;
+- service: active/enabled and runtime-verified;
+- listen address: `127.0.0.1` only;
+- port: `5432`;
+- rehearsal database: `teswa_rehearsal`;
+- public relations: `0`;
+- firewall TCP/5432 exposure: `false`;
+- application/migration credentials created: `false`;
+- production data migrated: `none`;
+- production cutover: `none`;
+- verified gate: `postgres17_bootstrap=PASS`.
 
-- both instances RUNNING
-- Oracle Cloud Agent management/monitoring enabled
-- Compute Instance Run Command plugin RUNNING
+PostgreSQL is intentionally localhost-only. Lane 4 must therefore use the
+existing controlled OCI Run Command path on `teswa-core-01` for target-local
+inspection/rehearsal work unless a separate private-network database-access
+change is reviewed later.
 
-The first read-only guest OS inventory did **not** execute inside the guest: it
-remained in OCI `ACCEPTED` until the client polling window expired.
+## Dependency decision before mutation
 
-Lane 3 diagnosed the missing instance-principal IAM path and has now:
+### Read-only steps now
 
-- defined a Teswa-only dynamic group;
-- defined least-privilege `instance-agent-command-execution-family` policy;
-- produced a guarded saved Terraform plan;
-- reviewed it as exactly 2 creates / 0 changes / 0 destroys;
-- approved it for apply;
-- added guarded apply + post-apply verifier helpers.
+No additional Lane 2 dependency is required.
 
-The IAM apply itself is not yet recorded as completed.
+No additional Lane 3 infrastructure dependency is required for the target
+read-only preflight because:
 
-PostgreSQL is therefore **not installed/handed off yet**.
+- the target is GREEN;
+- Run Command is operational;
+- localhost-only PostgreSQL is the reviewed target boundary.
 
-## Lane 4 execution state
+### Before any future target mutation/data load
 
-### Ready now
+Lane 4 must stop and require an explicit reviewed execution boundary for:
 
-The first real Storage migration rehearsal can run now because `teswa-media`
-exists and is private.
+1. delivering the compiled baseline/data material onto `teswa-core-01` without
+   exposing PostgreSQL publicly;
+2. confirming `teswa_rehearsal` is still empty immediately before the load;
+3. an explicit rehearsal-only target-write acknowledgement;
+4. credential/role creation, if later needed, through a reviewed host-local or
+   Vault-backed boundary rather than ad-hoc production credentials.
 
-Runner:
+No such mutation is authorized by this status document.
 
-`scripts/oci-migration/run-storage-rehearsal.sh`
+## Lane 4 safe work started
 
-The runner performs:
+### Target read-only verification
 
-1. read-only Storage metadata capture from Supabase;
-2. GET-only download of all source objects;
-3. source SHA-256 for every object;
-4. guarded upload into `teswa-media`;
-5. target re-download;
-6. target SHA-256;
-7. exact source/target parity gate.
+Added:
 
-It performs no Supabase writes and no OCI target deletes.
+`scripts/oci-migration/run-target-preflight-via-oci.sh`
 
-### Still blocked
+This re-verifies the Lane 3 handoff from Lane 4 using OCI Run Command and local
+`sudo -u postgres psql` only.
 
-Database rehearsal remains blocked until Lane 3:
+It hard-gates:
 
-1. installs PostgreSQL 17 privately on `teswa-core-01`;
-2. creates an isolated empty Teswa rehearsal database;
-3. provides the approved private/local execution path;
-4. hands the target to Lane 4.
+- PostgreSQL major 17;
+- active `postgresql-17` service;
+- `listen_addresses=127.0.0.1`;
+- `port=5432`;
+- `password_encryption=scram-sha-256`;
+- `teswa_rehearsal` exists;
+- public relations = 0;
+- no unexpected user schema;
+- firewalld 5432 remains closed.
 
-Lane 4 already has:
+It performs:
 
-`scripts/oci-migration/preflight-oci-postgres-target.sh`
+- no schema mutation;
+- no row mutation;
+- no data transfer;
+- no credential creation;
+- no production cutover.
 
-That gate will require:
+Expected terminal gate:
 
-- PostgreSQL major version 17;
-- no public/wildcard listen address;
-- port 5432;
-- empty public schema;
-- read-only verification before any initial load.
+`lane4_postgres_target_preflight=PASS`
 
-## Exact next sequence
+### Source/read-only rehearsal preparation
 
-### While Lane 3 closes Run Command IAM and continues Phase 4 OS/bootstrap
+Added:
 
-Lane 4:
+`scripts/oci-migration/prepare-rehearsal-readonly.sh`
 
-1. runs Storage rehearsal when the required source credentials are available in
-   the execution shell;
-2. preserves all rehearsal evidence outside Git;
-3. waits for PostgreSQL target handoff;
-4. does not create/modify Lane 3 infrastructure.
+This intentionally stops before any application-data archive or target load.
 
-### Immediately after PostgreSQL handoff
+It performs only:
 
-Lane 4 runs:
+1. read-only source schema/catalog capture;
+2. raw portability hazard report;
+3. offline provider-neutral baseline compilation;
+4. offline FK-aware data-copy planning;
+5. offline runtime/provider dependency classification;
+6. SHA-256 evidence manifest generation.
 
-1. PostgreSQL target preflight;
-2. source cutover/rehearsal bundle capture;
-3. portable baseline compilation;
-4. initial target load;
-5. deep PostgreSQL source/target manifest comparison;
-6. FK orphan validation;
-7. identity UUID continuity;
-8. Lane-2 contract semantic shadow checks;
-9. rollback rehearsal;
-10. rehearsal readiness aggregation.
+It explicitly does **not** perform:
 
-Supabase remains authoritative throughout these steps.
+- `pg_dump --data-only`;
+- `pg_restore`;
+- Storage object transfer;
+- OCI database writes;
+- role/password creation;
+- source mutation;
+- production write freeze/cutover.
+
+## Current execution boundary
+
+The next safe sequence is now:
+
+1. run Lane 4 target preflight via OCI Run Command;
+2. run source read-only rehearsal preparation;
+3. review the resulting portable baseline, FK plan, and runtime dependency queue;
+4. compare those findings against the Lane 2 final contract handoff and Lane 3
+   localhost-only target boundary;
+5. only then design the first target-mutating rehearsal load gate.
+
+No production data transfer or provider switch is part of the current step.
+
+## Still forbidden
+
+- production cutover;
+- Supabase shutdown;
+- production write freeze;
+- production DNS switch;
+- public PostgreSQL;
+- arbitrary production credentials;
+- blind replay of Supabase provider SQL;
+- source data mutation;
+- target data load before a separately reviewed rehearsal mutation gate.
