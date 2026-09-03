@@ -307,3 +307,12 @@ This was a verifier bug, not evidence of a Bastion failure. The NSG rule check a
 The verifier now writes the NSG JSON to a temporary file and passes that file to Python explicitly. The temporary file is removed on exit.
 
 No OCI resource mutation is required for this correction. Re-run the verifier only.
+
+
+## Temporary Bastion verifier CLI flag correction
+
+The second verifier run again stopped immediately after the Bastion state checks. The remaining issue was the OCI CLI flag used to list NSG rules.
+
+For `oci network nsg rules list`, Oracle's CLI requires `--nsg-id`, not `--network-security-group-id`.
+
+The verifier has been corrected to use the documented flag. No OCI mutation is required; re-run the verifier only.
