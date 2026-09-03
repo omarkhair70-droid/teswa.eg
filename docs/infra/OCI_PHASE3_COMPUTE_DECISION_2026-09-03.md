@@ -1,7 +1,7 @@
 # Teswa OCI Phase 3 Compute Decision — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** DESIGN LOCKED — PLAN ONLY; NO APPLY YET.
+**Status:** SAVED PLAN REVIEWED — APPROVED FOR APPLY.
 
 ## Released capacity
 
@@ -98,3 +98,32 @@ Read-only Phase 3 compute preflight passed:
 - `preflight=PASS`
 
 The OCI CLI emitted pagination warnings while listing images because the command requested a single newest item. This did not invalidate the result; the image list was sorted newest-first and the first compatible image was pinned locally.
+
+
+## Saved plan review result
+
+The saved Terraform plan was reviewed after a successful validation and guarded plan.
+
+Reviewed result:
+
+- 6 creates
+- 1 in-place update
+- 0 destroys
+- `phase3_plan_guard=PASS`
+
+Approved creates:
+
+- `oci_core_instance.core[0]` — A1 Flex, 1 OCPU / 6 GB, private app subnet, no public IP, 50 GB boot
+- `oci_core_instance.edge[0]` — E2.1.Micro, public edge subnet, public IP, 50 GB boot
+- `oci_core_nat_gateway.app_egress[0]`
+- `oci_core_route_table.private_app[0]`
+- edge outbound NSG rule
+- app outbound NSG rule
+
+Approved update:
+
+- `oci_core_subnet.private_app` route-table association only
+
+No Nova resource, no existing boot volume, no database, no DNS, and no Supabase resource is changed or destroyed.
+
+Phase 3 must be applied from the reviewed saved plan with the same Terraform 1.16.0 binary that created it.
