@@ -39,4 +39,4 @@ oci compute instance action   --instance-id "$CORE_ID"   --action SOFTRESET   --
 
 echo "softreset_requested=true"
 echo "maintenance_reboot_trigger=PASS"
-echo "Immediately return to the attached serial console and press Esc or F5 repeatedly to intercept UEFI/GRUB."
+echo "Immediately return to the attached serial console. In browser Cloud Shell, do NOT use F5. Focus the terminal and press Ctrl+[ repeatedly (terminal ESC) to intercept UEFI/GRUB."
