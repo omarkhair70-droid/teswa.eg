@@ -222,6 +222,22 @@ export interface MarketplaceCoreContract extends MarketplaceReadContract {
   updateListingCore(
     input: ListingCoreUpdateInput,
   ): Promise<TeswaResult<void, ListingCoreUpdateFailure>>;
+
+  getEditableListingImagesContext(
+    itemId: string,
+    ownerId: string,
+  ): Promise<EditableListingImagesContextRecord | null>;
+
+  applyListingImagePlan(input: {
+    itemId: string;
+    ownerId: string;
+    orderedRows: ListingImagePlanRow[];
+  }): Promise<
+    TeswaResult<
+      { removedImageUrls: string[] },
+      ListingImagePlanFailure
+    >
+  >;
 }
 
 
@@ -266,4 +282,33 @@ export type ListingCoreUpdateFailure =
   | 'not_editable'
   | 'item_update_failed'
   | 'tags_update_failed'
+  | 'unknown';
+
+
+export type EditableListingImageRecord = {
+  id: string;
+  imageUrl: string;
+  isPrimary: boolean;
+  sortOrder: number | null;
+  createdAt: IsoDateTime | null;
+};
+
+export type EditableListingImagesContextRecord = {
+  itemId: string;
+  title: string;
+  status: 'active' | 'archived';
+  images: EditableListingImageRecord[];
+};
+
+export type ListingImagePlanRow =
+  | { kind: 'existing'; imageId: string; imageUrl: string }
+  | { kind: 'new'; imageUrl: string };
+
+export type ListingImagePlanFailure =
+  | 'not_found_or_unauthorized'
+  | 'not_editable'
+  | 'invalid_input'
+  | 'images_insert_failed'
+  | 'images_metadata_update_failed'
+  | 'images_delete_failed'
   | 'unknown';
