@@ -12,6 +12,11 @@ for f in "$BASE_VARS" "$ADMIN_VARS" "$CONNECT_VARS"; do
   [ -f "$f" ] || { echo "Missing $f" >&2; exit 2; }
 done
 
+grep -q '^admin_bastion_endpoint_cidr[[:space:]]*=' "$CONNECT_VARS" || {
+  echo "Missing admin_bastion_endpoint_cidr in $CONNECT_VARS. Re-run prepare-phase4-bastion-connectivity.sh." >&2
+  exit 3
+}
+
 echo "TESWA PHASE 4 CANONICAL BASTION INGRESS PLAN"
 echo "mode=plan-only"
 echo
