@@ -1,99 +1,14 @@
 name: Expo SDK 57 Modernization Checkpoint
 
 on:
-  push:
-    branches:
-      - modernize/expo57-platform-20260903
-    paths:
-      - '.github/workflows/modernize-sdk57-checkpoint.yml'
-      - 'app.config.js'
-      - 'app/**'
-      - 'components/**'
-      - 'lib/**'
+  workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: teswa-sdk57-modernization
-  cancel-in-progress: true
+  contents: read
 
 jobs:
-  upgrade:
-    name: Align and verify SDK 57
+  closed:
+    name: SDK 57 checkpoint closed
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    env:
-      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
-      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
-      SENTRY_ALLOW_FAILURE: 'true'
-
     steps:
-      - name: Checkout modernization branch
-        uses: actions/checkout@v4
-        with:
-          ref: modernize/expo57-platform-20260903
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.13.0'
-          cache: npm
-
-      - name: Install SDK 56 checkpoint dependencies
-        run: npm ci
-
-      - name: Upgrade Expo to SDK 57 stable
-        run: npm install expo@^57.0.17
-
-      - name: Align share-intent with SDK 57
-        run: npm install expo-share-intent@^8.0.0
-
-      - name: Align SDK 57 dependency cohort
-        run: npx expo install --fix
-
-      - name: Verify Expo dependency health
-        run: npx expo-doctor
-
-      - name: TypeScript
-        run: npm run typecheck:app
-
-      - name: Guard Expo Router direct navigation imports
-        run: |
-          if grep -R --line-number --include='*.ts' --include='*.tsx' --exclude-dir=node_modules "@react-navigation/" app components lib hooks 2>/dev/null; then
-            echo "Direct @react-navigation imports remain in application code."
-            exit 1
-          fi
-
-      - name: Generate Android native project
-        run: npx expo prebuild --platform android --clean --no-install
-
-      - name: Record SDK 57 checkpoint
-        run: |
-          cat > docs/TESWA_EXPO57_CHECKPOINT_2026-09-03.md <<'EOF'
-          # Teswa Expo SDK 57 Checkpoint
-
-          This checkpoint is recorded only after:
-          - Expo SDK 57 stable install
-          - expo-share-intent 8.x alignment
-          - `npx expo install --fix`
-          - `npx expo-doctor`
-          - TypeScript
-          - direct React Navigation import guard
-          - clean Android prebuild
-
-          This is the target Expo platform baseline before the third-party native dependency sweep and Android/R8 release re-enablement.
-          EOF
-
-      - name: Commit verified SDK 57 checkpoint
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json docs/TESWA_EXPO57_CHECKPOINT_2026-09-03.md
-          if git diff --cached --quiet; then
-            echo "No SDK 57 checkpoint changes to commit."
-            exit 0
-          fi
-          git commit -m "chore(expo): checkpoint SDK 57 dependency alignment"
-          git push origin HEAD:modernize/expo57-platform-20260903
+      - run: echo "SDK 57 checkpoint is closed; continue with the native dependency sweep."
