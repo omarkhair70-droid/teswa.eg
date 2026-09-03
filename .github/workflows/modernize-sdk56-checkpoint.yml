@@ -43,6 +43,9 @@ jobs:
       - name: Upgrade Expo to SDK 56
         run: npm install expo@^56.0.0
 
+      - name: Align share-intent with SDK 56
+        run: npm install expo-share-intent@^7.0.0
+
       - name: Align SDK 56 dependency cohort
         run: npx expo install --fix
 
