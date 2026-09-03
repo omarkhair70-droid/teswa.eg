@@ -9,6 +9,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { ItemVideoDiscoveryMoment } from '@/lib/item-video-discovery';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 type ItemVideoDiscoveryRailProps = {
   title: string;
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   rail: { gap: spacing.sm, paddingVertical: spacing.xs },
   card: { width: 240, height: 188, borderRadius: radii.lg, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)' },
   coverWrap: { flex: 1 },
-  coverImage: { ...StyleSheet.absoluteFillObject },
+  coverImage: { ...ABSOLUTE_FILL },
   coverOverlay: { flex: 1, padding: spacing.sm, justifyContent: 'space-between' },
   fallbackWrap: { flex: 1, padding: spacing.sm, justifyContent: 'space-between' },
   topRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
