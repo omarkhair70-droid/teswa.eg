@@ -78,9 +78,6 @@ const legacyDirectStorageAccess = new Set([
   'lib/contextual-conversations.ts',
   'lib/deals.ts',
   'lib/direct-messages.ts',
-  'lib/edit-listing-images.ts',
-  'lib/listing-lifecycle.ts',
-  'lib/publish-item.ts',
   'lib/stories.ts',
 ]);
 
