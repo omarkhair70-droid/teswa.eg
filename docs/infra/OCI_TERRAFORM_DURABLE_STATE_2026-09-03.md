@@ -1,67 +1,58 @@
 # Teswa Terraform Durable State Gate — 2026-09-03
 
-## Why this gate exists
+## Current status
 
-OCI Foundation Phase 1 is now applied and verified, but its Terraform state is still local to OCI Cloud Shell.
+OCI Foundation Phase 1 is closed and verified.
 
-That is not acceptable before expanding the platform because Terraform state is the authoritative mapping between configuration and real OCI resources.
+The dedicated Terraform state bucket bootstrap also completed successfully:
 
-## Target
+- bucket: `teswa-terraform-state`
+- public access: `NoPublicAccess`
+- storage tier: `Standard`
+- Object Versioning: `Enabled`
+- a point-in-time backup of the current local `terraform.tfstate` was uploaded under `bootstrap-backups/`
 
-Use OCI Object Storage for durable remote Terraform state.
+The Terraform backend itself is **still local**. Migration has not happened yet.
 
-The dedicated bootstrap bucket is:
+## Why the next step requires a newer Terraform binary
 
-- `teswa-terraform-state`
-- private
-- Standard storage tier
-- Object Versioning enabled
-- located in the Teswa compartment
-- bootstrap-managed so the backend never depends on a bucket stored inside the same state it needs to read
+OCI Cloud Shell currently provides Terraform 1.5.7.
 
-The first step only creates/hardens the bucket and uploads a point-in-time backup of the current local state. It does **not** migrate Terraform's backend yet.
+Oracle's current guidance recommends the native OCI backend and says to use Terraform **v1.12.0 or greater** for it. The older S3-compatible Object Storage backend path is deprecated.
 
-## Why migration is split into two steps
+Therefore this lane will not introduce S3 compatibility credentials.
 
-OCI Cloud Shell currently ships Terraform 1.5.7.
+## Native OCI backend target
 
-Oracle documents an S3-compatible Object Storage backend path for Terraform versions below 1.6.4, but current Terraform has a native `oci` backend with OCI Object Storage state locking.
+The remote backend will use:
 
-For the company foundation, prefer the native OCI backend after moving Cloud Shell to a current official Terraform release. This avoids introducing long-lived S3 compatibility credentials just to preserve state.
+- backend type: `oci`
+- bucket: `teswa-terraform-state`
+- key: `foundation/terraform.tfstate`
+- region: `me-jeddah-1`
+- Object Storage namespace discovered at runtime
+- state locking provided by the native OCI backend
+- a temporary OCI SecurityToken profile for interactive Cloud Shell migration
 
-## Step 1 — durable backup bucket
+The backend bucket remains outside the Terraform state it stores; it is bootstrap-managed intentionally.
 
-From `infra/oci/terraform`:
+## Authentication note
 
-```bash
-git pull
-bash bootstrap-state-bucket.sh
-```
+OCI Cloud Shell's pre-authenticated CLI uses its own delegation-token context under `/etc/oci`.
 
-Expected result:
+The native Terraform OCI backend documents `SecurityToken` authentication, not Cloud Shell's `instance_obo_user` delegation mode. For the migration step, create a separate short-lived CLI session profile named `teswa-terraform`.
 
-```text
-bucket_name=teswa-terraform-state
-bucket_private=true
-bucket_versioning=Enabled
-local_state_backup_uploaded=true
-...
-Remote backend migration has NOT happened yet.
-```
+Security tokens expire, so this is an interactive migration/authentication lane, not the final CI identity design.
 
-## Step 2 — later backend migration
+## Migration sequence
 
-After the bucket is verified:
-
-1. install/verify a current official HashiCorp Terraform release for Linux ARM64;
-2. configure the native `oci` backend with the existing Cloud Shell OCI security-token/profile context;
-3. run `terraform init -migrate-state`;
-4. confirm migration explicitly;
-5. run `terraform plan -detailed-exitcode` and require zero drift;
-6. verify the remote state object and state lock behavior;
-7. only then remove reliance on the local state file.
-
-Do not delete the local state or its uploaded bootstrap backup during migration.
+1. Install an official current Terraform binary (>= 1.12) in the user's home directory and verify its SHA256 checksum.
+2. Create/refresh the `teswa-terraform` OCI SecurityToken profile.
+3. Run `terraform init -migrate-state` against the native OCI backend.
+4. Confirm copying the existing local state to the remote backend.
+5. Run a zero-drift plan.
+6. Verify the remote state object exists.
+7. Keep the bootstrap backup and any local migration backup until the remote backend is proven stable.
 
 ## Hard boundaries
 
