@@ -1,15 +1,24 @@
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 import type { DolabDraftItem } from '@/lib/dolab/draft-types';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 import { readLocalDolabWorkspaceSnapshot } from '@/lib/dolab/local-persistence';
 import { attachDolabMediaToItem } from '@/lib/dolab/media-item-link';
 import type { DolabSelfMessage, DolabSelfMessageType } from '@/lib/dolab/self-chat-types';
-import type { DolabItem, DolabItemSource, DolabItemStatus, DolabMedia, DolabNote, DolabNoteType } from '@/lib/dolab/types';
+import type {
+  DolabItem,
+  DolabItemSource,
+  DolabItemStatus,
+  DolabMedia,
+  DolabNote,
+  DolabNoteType,
+} from '@/lib/dolab/types';
 
 type DolabResult<T> = { data: T; error: DolabPersistenceError | null };
 
-type SaveDolabDraftInput = Pick<DolabDraftItem, 'title' | 'description' | 'category' | 'condition'> & {
+type SaveDolabDraftInput = Pick<
+  DolabDraftItem,
+  'title' | 'description' | 'category' | 'condition'
+> & {
   exchangeIntent?: string;
   status?: Extract<DolabItemStatus, 'draft' | 'ready'>;
   source?: DolabItemSource;
@@ -26,78 +35,116 @@ export type DolabRemoteSnapshot = {
   notes: DolabNote[];
 };
 
-const mapMessageTypeToNoteType = (messageType: DolabSelfMessageType): DolabNoteType => {
+const mapMessageTypeToNoteType = (
+  messageType: DolabSelfMessageType,
+): DolabNoteType => {
   if (messageType === 'voice_placeholder') return 'voice';
   return messageType;
 };
 
-export async function saveDolabDraftItem(userId: string, input: SaveDolabDraftInput): Promise<DolabResult<DolabItem | null>> {
-  const { data, error } = await supabase
-    .from('dolab_items')
-    .insert({
-      user_id: userId,
-      title: input.title || null,
-      description: input.description || null,
-      category: input.category || null,
-      condition: input.condition || null,
-      exchange_intent: input.exchangeIntent || null,
-      status: input.status ?? 'draft',
-      source: input.source ?? 'manual',
-    })
-    .select('*')
-    .single();
-
-  return { data: (data as DolabItem | null) ?? null, error: normalizeDolabPersistenceError(error) };
+function fallbackError(
+  cause: unknown,
+  message: string,
+): DolabPersistenceError {
+  return (
+    normalizeDolabPersistenceError(cause as any)
+    ?? { kind: 'unknown', message }
+  );
 }
 
-export async function updateDolabDraftItem(userId: string, id: string, input: SaveDolabDraftInput): Promise<DolabResult<DolabItem | null>> {
-  const { data, error } = await supabase
-    .from('dolab_items')
-    .update({
-      title: input.title || null,
-      description: input.description || null,
-      category: input.category || null,
-      condition: input.condition || null,
-      exchange_intent: input.exchangeIntent || null,
-      status: input.status ?? 'draft',
-      source: input.source ?? 'manual',
-    })
-    .eq('user_id', userId)
-    .eq('id', id)
-    .select('*')
-    .maybeSingle();
-
-  return { data: (data as DolabItem | null) ?? null, error: normalizeDolabPersistenceError(error) };
+function itemWriteInput(input: SaveDolabDraftInput) {
+  return {
+    title: input.title || null,
+    description: input.description || null,
+    category: input.category || null,
+    condition: input.condition || null,
+    exchangeIntent: input.exchangeIntent || null,
+    status: input.status ?? 'draft',
+    source: input.source ?? 'manual',
+  } as const;
 }
 
-export async function updateDolabSavedItem(userId: string, itemId: string, input: SaveDolabDraftInput): Promise<DolabResult<DolabItem | null>> {
+export async function saveDolabDraftItem(
+  userId: string,
+  input: SaveDolabDraftInput,
+): Promise<DolabResult<DolabItem | null>> {
+  const result = await teswaBackendRuntime.dolab.createItem(
+    userId,
+    itemWriteInput(input),
+  );
+
+  return result.ok
+    ? { data: result.data, error: null }
+    : {
+        data: null,
+        error: fallbackError(
+          result.cause,
+          'تعذرت المزامنة مع السحابة. آخر نسخة على الجهاز ما زالت محفوظة.',
+        ),
+      };
+}
+
+export async function updateDolabDraftItem(
+  userId: string,
+  id: string,
+  input: SaveDolabDraftInput,
+): Promise<DolabResult<DolabItem | null>> {
+  const result = await teswaBackendRuntime.dolab.updateItem(
+    userId,
+    id,
+    itemWriteInput(input),
+  );
+
+  return result.ok
+    ? { data: result.data, error: null }
+    : {
+        data: null,
+        error: fallbackError(
+          result.cause,
+          'تعذرت المزامنة مع السحابة. آخر نسخة على الجهاز ما زالت محفوظة.',
+        ),
+      };
+}
+
+export async function updateDolabSavedItem(
+  userId: string,
+  itemId: string,
+  input: SaveDolabDraftInput,
+): Promise<DolabResult<DolabItem | null>> {
   return updateDolabDraftItem(userId, itemId, input);
 }
 
-export async function saveDolabSelfNote(userId: string, input: SaveDolabNoteInput): Promise<DolabResult<DolabNote | null>> {
-  const { data, error } = await supabase
-    .from('dolab_notes')
-    .insert({
-      user_id: userId,
-      body: input.body,
-      note_type: mapMessageTypeToNoteType(input.messageType),
-      dolab_item_id: input.dolabItemId ?? null,
-      media_id: null,
-    })
-    .select('*')
-    .single();
+export async function saveDolabSelfNote(
+  userId: string,
+  input: SaveDolabNoteInput,
+): Promise<DolabResult<DolabNote | null>> {
+  const result = await teswaBackendRuntime.dolab.createNote({
+    userId,
+    body: input.body,
+    noteType: mapMessageTypeToNoteType(input.messageType),
+    dolabItemId: input.dolabItemId ?? null,
+    mediaId: null,
+  });
 
-  return { data: (data as DolabNote | null) ?? null, error: normalizeDolabPersistenceError(error) };
+  return result.ok
+    ? { data: result.data, error: null }
+    : {
+        data: null,
+        error: fallbackError(
+          result.cause,
+          'تعذرت المزامنة مع السحابة. آخر نسخة على الجهاز ما زالت محفوظة.',
+        ),
+      };
 }
 
-export async function fetchDolabRemoteSnapshot(userId: string): Promise<DolabResult<DolabRemoteSnapshot>> {
+export async function fetchDolabRemoteSnapshot(
+  userId: string,
+): Promise<DolabResult<DolabRemoteSnapshot>> {
   const [itemsResult, mediaResult, notesResult] = await Promise.all([
     fetchDolabItems(userId),
     fetchDolabMedia(userId),
     fetchDolabNotes(userId),
   ]);
-
-  const normalizedError = itemsResult.error ?? mediaResult.error ?? notesResult.error;
 
   return {
     data: {
@@ -105,52 +152,134 @@ export async function fetchDolabRemoteSnapshot(userId: string): Promise<DolabRes
       media: mediaResult.data,
       notes: notesResult.data,
     },
-    error: normalizedError,
+    error: itemsResult.error ?? mediaResult.error ?? notesResult.error,
   };
 }
 
-export async function fetchDolabItems(userId: string): Promise<DolabResult<DolabItem[]>> {
+export async function fetchDolabItems(
+  userId: string,
+): Promise<DolabResult<DolabItem[]>> {
   try {
-    const { data, error } = await supabase.from('dolab_items').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-    return { data: (data as DolabItem[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+    const result = await teswaBackendRuntime.dolab.listItems(userId);
+    return result.ok
+      ? { data: result.data, error: null }
+      : {
+          data: [],
+          error: fallbackError(
+            result.cause,
+            'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
+          ),
+        };
   } catch {
-    return { data: [], error: { kind: 'unknown', message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.' } };
+    return {
+      data: [],
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
+      },
+    };
   }
 }
 
-export async function fetchDolabMedia(userId: string): Promise<DolabResult<DolabMedia[]>> {
+export async function fetchDolabMedia(
+  userId: string,
+): Promise<DolabResult<DolabMedia[]>> {
   try {
-    const { data, error } = await supabase.from('dolab_media').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-    return { data: (data as DolabMedia[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+    const result = await teswaBackendRuntime.dolab.listMedia(userId);
+    return result.ok
+      ? { data: result.data, error: null }
+      : {
+          data: [],
+          error: fallbackError(
+            result.cause,
+            'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
+          ),
+        };
   } catch {
-    return { data: [], error: { kind: 'unknown', message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.' } };
+    return {
+      data: [],
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
+      },
+    };
   }
 }
 
-export async function fetchDolabNotes(userId: string): Promise<DolabResult<DolabNote[]>> {
+export async function fetchDolabNotes(
+  userId: string,
+): Promise<DolabResult<DolabNote[]>> {
   try {
-    const { data, error } = await supabase.from('dolab_notes').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-    return { data: (data as DolabNote[] | null) ?? [], error: normalizeDolabPersistenceError(error) };
+    const result = await teswaBackendRuntime.dolab.listNotes(userId);
+    return result.ok
+      ? { data: result.data, error: null }
+      : {
+          data: [],
+          error: fallbackError(
+            result.cause,
+            'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
+          ),
+        };
   } catch {
-    return { data: [], error: { kind: 'unknown', message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.' } };
+    return {
+      data: [],
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحديث الدولاب حاليًا. بيانات جهازك ما زالت محفوظة.',
+      },
+    };
   }
 }
 
-export async function deleteDolabNote(userId: string, noteId: string): Promise<DolabResult<{ id: string } | null>> {
+export async function deleteDolabNote(
+  userId: string,
+  noteId: string,
+): Promise<DolabResult<{ id: string } | null>> {
   try {
-    const { error } = await supabase.from('dolab_notes').delete().eq('id', noteId).eq('user_id', userId);
-    return { data: error ? null : { id: noteId }, error: normalizeDolabPersistenceError(error) };
+    const result = await teswaBackendRuntime.dolab.deleteNote(userId, noteId);
+    return result.ok
+      ? { data: { id: noteId }, error: null }
+      : {
+          data: null,
+          error: fallbackError(
+            result.cause,
+            'تعذر حذف الملاحظة من الدولاب حاليًا.',
+          ),
+        };
   } catch {
-    return { data: null, error: { kind: 'unknown', message: 'تعذر حذف الملاحظة من الدولاب حاليًا.' } };
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حذف الملاحظة من الدولاب حاليًا.',
+      },
+    };
   }
 }
 
-export async function deleteDolabItem(userId: string, itemId: string): Promise<DolabResult<{ id: string } | null>> {
+export async function deleteDolabItem(
+  userId: string,
+  itemId: string,
+): Promise<DolabResult<{ id: string } | null>> {
   try {
-    const { error } = await supabase.from('dolab_items').delete().eq('id', itemId).eq('user_id', userId);
-    return { data: error ? null : { id: itemId }, error: normalizeDolabPersistenceError(error) };
+    const result = await teswaBackendRuntime.dolab.deleteItem(userId, itemId);
+    return result.ok
+      ? { data: { id: itemId }, error: null }
+      : {
+          data: null,
+          error: fallbackError(
+            result.cause,
+            'تعذر حذف العنصر من الدولاب حاليًا.',
+          ),
+        };
   } catch {
-    return { data: null, error: { kind: 'unknown', message: 'تعذر حذف العنصر من الدولاب حاليًا.' } };
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حذف العنصر من الدولاب حاليًا.',
+      },
+    };
   }
 }
 
@@ -160,9 +289,19 @@ export async function deleteDolabMedia(
   storagePath: string,
 ): Promise<DolabResult<{ id: string } | null>> {
   try {
-    const { error } = await supabase.from('dolab_media').delete().eq('id', mediaId).eq('user_id', userId);
-    if (error) {
-      return { data: null, error: normalizeDolabPersistenceError(error) ?? { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب.' } };
+    const deleteResult = await teswaBackendRuntime.dolab.deleteMediaRow(
+      userId,
+      mediaId,
+    );
+
+    if (!deleteResult.ok) {
+      return {
+        data: null,
+        error: fallbackError(
+          deleteResult.cause,
+          'تعذر حذف الميديا من الدولاب.',
+        ),
+      };
     }
 
     const storageResult = await teswaBackendRuntime.media.remove([
@@ -173,30 +312,52 @@ export async function deleteDolabMedia(
         sizeBytes: null,
       },
     ]);
+
     if (!storageResult.ok) {
-      return { data: { id: mediaId }, error: { kind: 'unknown', message: 'اتحذف سجل الميديا، لكن تنظيف ملف التخزين السحابي اتعطل.' } };
+      return {
+        data: { id: mediaId },
+        error: {
+          kind: 'unknown',
+          message: 'اتحذف سجل الميديا، لكن تنظيف ملف التخزين السحابي اتعطل.',
+        },
+      };
     }
 
     return { data: { id: mediaId }, error: null };
   } catch {
-    return { data: null, error: { kind: 'unknown', message: 'تعذر حذف الميديا من الدولاب حاليًا.' } };
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر حذف الميديا من الدولاب حاليًا.',
+      },
+    };
   }
 }
 
 function getLocalPublishDraft(dolabItemId: string) {
   const workspace = readLocalDolabWorkspaceSnapshot();
-  const localDraft = workspace.localDrafts.find((draft) => draft.remoteDolabItemId === dolabItemId) ?? null;
+  const localDraft =
+    workspace.localDrafts.find(
+      (draft) => draft.remoteDolabItemId === dolabItemId,
+    ) ?? null;
   return { workspace, localDraft };
 }
 
-function localPublishMediaForItem(userId: string, dolabItemId: string, remoteRows: DolabMedia[]): DolabMedia[] {
+function localPublishMediaForItem(
+  userId: string,
+  dolabItemId: string,
+  remoteRows: DolabMedia[],
+): DolabMedia[] {
   const { workspace, localDraft } = getLocalPublishDraft(dolabItemId);
   if (!localDraft) return [];
 
   const remoteIds = new Set(remoteRows.map((row) => row.id));
   return workspace.pendingMedia
     .filter((media) => localDraft.linkedPendingMediaIds.includes(media.id))
-    .filter((media) => !media.remoteMediaId || !remoteIds.has(media.remoteMediaId))
+    .filter(
+      (media) => !media.remoteMediaId || !remoteIds.has(media.remoteMediaId),
+    )
     .map((media, index) => ({
       id: `local:${media.id}`,
       user_id: userId,
@@ -214,66 +375,125 @@ function localPublishMediaForItem(userId: string, dolabItemId: string, remoteRow
     } satisfies DolabMedia));
 }
 
-async function repairLinkedRemoteMedia(userId: string, dolabItemId: string) {
+async function repairLinkedRemoteMedia(
+  userId: string,
+  dolabItemId: string,
+) {
   const { workspace, localDraft } = getLocalPublishDraft(dolabItemId);
   if (!localDraft) return;
-  const remoteIds = Array.from(new Set(
-    workspace.pendingMedia
-      .filter((media) => localDraft.linkedPendingMediaIds.includes(media.id))
-      .map((media) => media.remoteMediaId)
-      .filter((id): id is string => Boolean(id)),
-  ));
+
+  const remoteIds = Array.from(
+    new Set(
+      workspace.pendingMedia
+        .filter((media) =>
+          localDraft.linkedPendingMediaIds.includes(media.id),
+        )
+        .map((media) => media.remoteMediaId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
   if (!remoteIds.length) return;
-  await Promise.all(remoteIds.map((mediaId) => attachDolabMediaToItem(userId, mediaId, dolabItemId)));
+
+  await Promise.all(
+    remoteIds.map((mediaId) =>
+      attachDolabMediaToItem(userId, mediaId, dolabItemId),
+    ),
+  );
 }
 
-export async function fetchDolabPublishSource(userId: string, dolabItemId: string): Promise<DolabResult<{ item: DolabItem | null; media: DolabMedia[] }>> {
+export async function fetchDolabPublishSource(
+  userId: string,
+  dolabItemId: string,
+): Promise<
+  DolabResult<{ item: DolabItem | null; media: DolabMedia[] }>
+> {
   try {
     await repairLinkedRemoteMedia(userId, dolabItemId);
 
-    const [itemResult, mediaResult] = await Promise.all([
-      supabase.from('dolab_items').select('*').eq('user_id', userId).eq('id', dolabItemId).maybeSingle(),
-      supabase.from('dolab_media').select('*').eq('user_id', userId).eq('dolab_item_id', dolabItemId).order('sort_order', { ascending: true }),
-    ]);
+    const result = await teswaBackendRuntime.dolab.getPublishSource(
+      userId,
+      dolabItemId,
+    );
 
-    const remoteMedia = (mediaResult.data as DolabMedia[] | null) ?? [];
-    const localFallbackMedia = localPublishMediaForItem(userId, dolabItemId, remoteMedia);
+    if (!result.ok) {
+      return {
+        data: { item: null, media: [] },
+        error: fallbackError(
+          result.cause,
+          'تعذر تحميل بيانات النشر من الدولاب.',
+        ),
+      };
+    }
+
+    const remoteMedia = result.data.media;
+    const localFallbackMedia = localPublishMediaForItem(
+      userId,
+      dolabItemId,
+      remoteMedia,
+    );
 
     return {
       data: {
-        item: (itemResult.data as DolabItem | null) ?? null,
+        item: result.data.item,
         media: [...remoteMedia, ...localFallbackMedia],
       },
-      error: normalizeDolabPersistenceError(itemResult.error) ?? normalizeDolabPersistenceError(mediaResult.error),
+      error: null,
     };
   } catch {
-    return { data: { item: null, media: [] }, error: { kind: 'unknown', message: 'تعذر تحميل بيانات النشر من الدولاب.' } };
+    return {
+      data: { item: null, media: [] },
+      error: {
+        kind: 'unknown',
+        message: 'تعذر تحميل بيانات النشر من الدولاب.',
+      },
+    };
   }
 }
 
-export async function markDolabItemPublished(userId: string, dolabItemId: string, publishedItemId: string): Promise<DolabResult<DolabItem | null>> {
+export async function markDolabItemPublished(
+  userId: string,
+  dolabItemId: string,
+  publishedItemId: string,
+): Promise<DolabResult<DolabItem | null>> {
   try {
-    const { data, error } = await supabase
-      .from('dolab_items')
-      .update({ status: 'published', published_item_id: publishedItemId })
-      .eq('user_id', userId)
-      .eq('id', dolabItemId)
-      .select('*')
-      .maybeSingle();
+    const result = await teswaBackendRuntime.dolab.markItemPublished(
+      userId,
+      dolabItemId,
+      publishedItemId,
+    );
 
-    return { data: (data as DolabItem | null) ?? null, error: normalizeDolabPersistenceError(error) };
+    return result.ok
+      ? { data: result.data, error: null }
+      : {
+          data: null,
+          error: fallbackError(
+            result.cause,
+            'تم نشر العنصر لكن تعذر تحديث حالة الدولاب.',
+          ),
+        };
   } catch {
-    return { data: null, error: { kind: 'unknown', message: 'تم نشر العنصر لكن تعذر تحديث حالة الدولاب.' } };
+    return {
+      data: null,
+      error: {
+        kind: 'unknown',
+        message: 'تم نشر العنصر لكن تعذر تحديث حالة الدولاب.',
+      },
+    };
   }
 }
 
-export async function markDolabNoteShared(userId: string, noteId: string, conversationId: string): Promise<void> {
+export async function markDolabNoteShared(
+  userId: string,
+  noteId: string,
+  conversationId: string,
+): Promise<void> {
   try {
-    await supabase
-      .from('dolab_notes')
-      .update({ shared_to_conversation_id: conversationId })
-      .eq('id', noteId)
-      .eq('user_id', userId);
+    await teswaBackendRuntime.dolab.markNoteShared(
+      userId,
+      noteId,
+      conversationId,
+    );
   } catch {
     // Non-blocking by design.
   }
@@ -281,5 +501,14 @@ export async function markDolabNoteShared(userId: string, noteId: string, conver
 
 export const fetchDolabLibrarySnapshot = fetchDolabRemoteSnapshot;
 
-export { buildDolabStoragePath, saveDolabMediaRow, uploadAndSaveDolabMedia, uploadDolabPendingMedia } from '@/lib/dolab/upload';
-export { createDolabMediaSignedUrl, createDolabMediaSignedUrls } from '@/lib/dolab/signed-urls';
+export {
+  buildDolabStoragePath,
+  saveDolabMediaRow,
+  uploadAndSaveDolabMedia,
+  uploadDolabPendingMedia,
+} from '@/lib/dolab/upload';
+
+export {
+  createDolabMediaSignedUrl,
+  createDolabMediaSignedUrls,
+} from '@/lib/dolab/signed-urls';
