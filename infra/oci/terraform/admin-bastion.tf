@@ -31,3 +31,31 @@ resource "oci_core_network_security_group_security_rule" "bastion_to_core_ssh" {
     }
   }
 }
+
+
+resource "oci_core_security_list" "admin_bastion_egress" {
+  count          = var.enable_admin_bastion_connectivity ? 1 : 0
+  compartment_id = oci_identity_compartment.teswa.id
+  vcn_id         = oci_core_vcn.teswa.id
+  display_name   = "teswa-admin-bastion-egress"
+  freeform_tags  = var.freeform_tags
+
+  egress_security_rules {
+    destination      = var.admin_bastion_target_cidr
+    destination_type = "CIDR_BLOCK"
+    protocol         = "6"
+    stateless        = false
+
+    tcp_options {
+      min = 22
+      max = 22
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.admin_bastion_target_cidr != ""
+      error_message = "admin_bastion_target_cidr must be set when temporary Bastion connectivity is enabled."
+    }
+  }
+}
