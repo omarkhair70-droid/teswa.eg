@@ -816,3 +816,27 @@ Verified:
 - public SSH exposure: none.
 
 The next action is connection-only: source the local connection file and open the SSH-backed serial console. Accept the OCI console host key if prompted, then press Enter to activate the serial console. Do not reboot or edit GRUB until the live console output is confirmed.
+
+
+## Serial-console public-key authentication correction
+
+The first connection attempt reached Oracle's instance-console SSH endpoint and passed host-key validation, but authentication failed with:
+
+`Permission denied (publickey)`
+
+followed by a closed key-exchange.
+
+Oracle's current serial-console documentation requires the selected private identity file to be specified with `-i` on **both** SSH layers in the Linux/Mac connection command: the outer console SSH command and the nested SSH `ProxyCommand`. The service-provided connection string can omit that identity argument when a non-default key/ssh-agent is used.
+
+The original helper only replaced placeholder key tokens if they happened to appear in OCI's returned connection string; it did not inject `-i` when the returned string contained no placeholder. That allowed an ACTIVE console resource to exist while the local SSH client authenticated with the wrong/default key.
+
+Lane 3 now:
+
+- keeps the existing ACTIVE console connection;
+- retrieves its current connection string read-only;
+- injects the persistent Core bootstrap RSA private key into every SSH layer;
+- adds `IdentitiesOnly=yes` to force that key;
+- rewrites only the ignored local connection-command file;
+- performs no reboot, guest mutation, network mutation, or OCI resource mutation.
+
+The console connection does not need to be recreated for this correction.
