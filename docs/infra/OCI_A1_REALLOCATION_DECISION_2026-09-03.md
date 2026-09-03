@@ -1,7 +1,7 @@
 # Teswa / Nova A1 Reallocation Decision — 2026-09-03
 
 **Branch:** `infra/oracle-platform-20260903`  
-**Status:** APPROVED TARGET; preflight required before execution.
+**Status:** CLOSED / VERIFIED.
 
 ## Evidence
 
@@ -64,3 +64,17 @@ Read-only preflight passed against the live Nova instance:
 - `preflight=PASS`
 
 The guarded resize step is now approved.
+
+
+## Execution result
+
+The Nova resize completed and was verified:
+
+- transition observed: `STOPPING -> STARTING -> RUNNING`
+- final allocation: 1 OCPU / 6 GB RAM
+- `resize_shape_check=PASS`
+- A1 service usage after resize: 1 OCPU used
+- expected released Teswa allocation: 1 OCPU / 6 GB RAM
+- `verify=PASS`
+
+No further Nova change is approved in this lane. Phase 3 now consumes at most the released Teswa A1 allocation.
