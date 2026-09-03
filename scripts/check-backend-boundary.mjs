@@ -6,12 +6,10 @@ const sourceRoots = ['app', 'components', 'lib'];
 const providerAdapterPrefix = 'lib/backend/adapters/supabase/';
 
 const legacyDirectClientImports = new Set([
-  'components/profile/ProfileConnectionsScreen.tsx',
   'lib/account-deletion.ts',
   'lib/admin-reports.ts',
   'lib/admin.ts',
   'lib/analytics.ts',
-  'lib/badges.ts',
   'lib/city-pulse.ts',
   'lib/dolab/index.ts',
   'lib/dolab/media-item-link.ts',
@@ -29,10 +27,8 @@ const legacyDirectClientImports = new Set([
   'lib/motion-interest.ts',
   'lib/motion-video-drops.ts',
   'lib/my-listings.ts',
-  'lib/people.ts',
   'lib/personal-living-world.ts',
   'lib/policy-acceptance.ts',
-  'lib/profile-images.ts',
   'lib/publish-item.ts',
   'lib/pulse-video-viewer.ts',
   'lib/reports.ts',
@@ -41,9 +37,6 @@ const legacyDirectClientImports = new Set([
   'lib/story-discovery.ts',
   'lib/story-likes.ts',
   'lib/story-views.ts',
-  'lib/trust-metrics.ts',
-  'lib/user-blocks.ts',
-  'lib/user-follows.ts',
   'lib/chat/supabase-direct-chat.ts',
   'lib/contextual-conversations.ts',
 ]);
@@ -172,6 +165,39 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenNotificationTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: notification provider access must stay behind Teswa backend contracts (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'app/(auth)/profile-setup.tsx',
+      'components/profile/ProfileConnectionsScreen.tsx',
+      'lib/people.ts',
+      'lib/user-follows.ts',
+      'lib/user-blocks.ts',
+      'lib/trust-metrics.ts',
+      'lib/badges.ts',
+      'lib/direct-privacy.ts',
+      'lib/profile-images.ts',
+    ].includes(relativePath)) {
+      const forbiddenProfileTokens = [
+        ".from('profiles')",
+        ".from('user_blocks')",
+        "rpc('get_user_follow_state'",
+        "rpc('follow_user'",
+        "rpc('unfollow_user'",
+        "rpc('get_profile_followers'",
+        "rpc('get_profile_following'",
+        "rpc('get_user_block_state'",
+        "rpc('get_user_trust_metrics'",
+        "rpc('get_my_trust_metrics'",
+        "rpc('get_user_badges'",
+        "rpc('get_my_badges'",
+        "rpc('refresh_my_badges'",
+      ];
+      for (const token of forbiddenProfileTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: profile/social provider access must stay behind ProfileSocialContract (${token})`);
         }
       }
     }
