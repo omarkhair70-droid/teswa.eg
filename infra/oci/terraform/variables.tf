@@ -4,29 +4,33 @@ variable "region" {
   default     = "me-jeddah-1"
 }
 
-variable "compartment_ocid" {
-  description = "Dedicated compartment OCID for Teswa resources. Do not point this at Nova-owned resources."
+variable "tenancy_ocid" {
+  description = "OCI tenancy OCID used only as the parent for the dedicated Teswa compartment."
   type        = string
 }
 
 variable "vcn_cidr" {
-  description = "Teswa VCN CIDR. Must be verified not to overlap any existing Nova/Balcona VCN."
+  description = "Teswa-only VCN CIDR. Nova is 10.0.0.0/16; this default is intentionally non-overlapping."
   type        = string
+  default     = "10.20.0.0/16"
 }
 
 variable "public_subnet_cidr" {
   description = "Public edge subnet CIDR inside the Teswa VCN."
   type        = string
+  default     = "10.20.0.0/24"
 }
 
 variable "app_subnet_cidr" {
   description = "Private application subnet CIDR inside the Teswa VCN."
   type        = string
+  default     = "10.20.10.0/24"
 }
 
 variable "data_subnet_cidr" {
   description = "Private PostgreSQL/data subnet CIDR inside the Teswa VCN."
   type        = string
+  default     = "10.20.20.0/24"
 }
 
 variable "enable_object_storage" {
