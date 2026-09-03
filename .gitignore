@@ -11,7 +11,6 @@ infra/oci/inventory/out/
 
 # Terraform local/authenticated artifacts. Never commit state, variables, or plans.
 infra/oci/terraform/.terraform/
-infra/oci/terraform/.terraform.lock.hcl
 infra/oci/terraform/terraform.tfvars
 infra/oci/terraform/*.tfstate
 infra/oci/terraform/*.tfstate.*
