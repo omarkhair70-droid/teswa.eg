@@ -24,12 +24,17 @@ function mapUser(user: {
   const displayName = displayNameCandidates.find(
     (value): value is string => typeof value === 'string' && value.trim().length > 0,
   );
+  const avatarCandidates = [metadata.avatar_url, metadata.picture];
+  const avatarUrl = avatarCandidates.find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  );
 
   return {
     id: user.id,
     email: user.email ?? null,
     phone: user.phone ?? null,
     displayName: displayName?.trim() ?? null,
+    avatarUrl: avatarUrl?.trim() ?? null,
   };
 }
 
