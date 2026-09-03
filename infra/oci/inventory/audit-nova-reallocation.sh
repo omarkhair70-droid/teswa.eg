@@ -153,7 +153,7 @@ PY
     return 0
   fi
 
-  printf '%s' "$raw" | python3 - "$label" <<'PY'
+  printf '%s' "$raw" | python3 -c '
 import json,sys
 label=sys.argv[1]
 payload=json.load(sys.stdin)
@@ -169,7 +169,7 @@ else:
     print(f"{label}_samples={len(values)}")
     print(f"{label}_avg={sum(values)/len(values):.2f}")
     print(f"{label}_max={max(values):.2f}")
-PY
+' "$label"
 }
 
 echo
