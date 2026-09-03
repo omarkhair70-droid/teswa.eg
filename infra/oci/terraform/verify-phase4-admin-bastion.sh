@@ -31,11 +31,18 @@ echo "private_endpoint_assigned=$([ -n "$ENDPOINT" ] && echo true || echo false)
 [ "$STATE" = "ACTIVE" ] || exit 3
 [ -n "$ENDPOINT" ] || exit 4
 
-RULES="$(oci network nsg rules list --network-security-group-id "$APP_NSG" --all --output json)"
-printf '%s' "$RULES" | python3 - "$ENDPOINT" <<'PY'
+RULES_FILE="$(mktemp)"
+trap 'rm -f "$RULES_FILE"' EXIT
+oci network nsg rules list \
+  --network-security-group-id "$APP_NSG" \
+  --all \
+  --output json >"$RULES_FILE"
+
+python3 - "$ENDPOINT" "$RULES_FILE" <<'PY'
 import json,sys
-endpoint=sys.argv[1]
-rows=json.load(sys.stdin).get("data",[])
+endpoint,path=sys.argv[1:]
+with open(path,encoding="utf-8") as f:
+    rows=json.load(f).get("data",[])
 ok=False
 for r in rows:
     if r.get("direction")!="INGRESS" or r.get("protocol")!="6":
