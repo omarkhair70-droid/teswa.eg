@@ -34,7 +34,7 @@ echo "private_endpoint_assigned=$([ -n "$ENDPOINT" ] && echo true || echo false)
 RULES_FILE="$(mktemp)"
 trap 'rm -f "$RULES_FILE"' EXIT
 oci network nsg rules list \
-  --network-security-group-id "$APP_NSG" \
+  --nsg-id "$APP_NSG" \
   --all \
   --output json >"$RULES_FILE"
 
