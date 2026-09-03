@@ -25,19 +25,40 @@ echo "TESWA PHASE 4 RUN COMMAND IAM PREFLIGHT"
 echo "mode=read-only"
 echo
 
-DG_JSON="$(oci iam dynamic-group list   --compartment-id "$TENANCY_OCID"   --all   --output json)"
+set +e
+DG_JSON="$(oci iam dynamic-group list   --compartment-id "$TENANCY_OCID"   --all   --output json 2>/tmp/teswa-phase4-dg.err)"
+DG_RC=$?
+set -e
 
-printf '%s' "$DG_JSON" | python3 -c '
+if [ "$DG_RC" -ne 0 ]; then
+  echo "dynamic_group_list=ERROR" >&2
+  cat /tmp/teswa-phase4-dg.err >&2
+  exit 3
+elif [ -z "$(printf '%s' "$DG_JSON" | tr -d '[:space:]')" ]; then
+  echo "matching_dynamic_groups=0"
+else
+  printf '%s' "$DG_JSON" | python3 -c '
 import json,sys
 rows=[x for x in json.load(sys.stdin).get("data",[]) if x.get("name")=="teswa-run-command-instances" and x.get("lifecycle-state")!="DELETED"]
 print("matching_dynamic_groups=%d" % len(rows))
 for x in rows:
     print("dynamic_group_state=%s" % x.get("lifecycle-state"))
 '
+fi
 
-POL_JSON="$(oci iam policy list   --compartment-id "$TENANCY_OCID"   --all   --output json)"
+set +e
+POL_JSON="$(oci iam policy list   --compartment-id "$TENANCY_OCID"   --all   --output json 2>/tmp/teswa-phase4-policy.err)"
+POL_RC=$?
+set -e
 
-printf '%s' "$POL_JSON" | python3 -c '
+if [ "$POL_RC" -ne 0 ]; then
+  echo "policy_list=ERROR" >&2
+  cat /tmp/teswa-phase4-policy.err >&2
+  exit 4
+elif [ -z "$(printf '%s' "$POL_JSON" | tr -d '[:space:]')" ]; then
+  echo "matching_root_policies=0"
+else
+  printf '%s' "$POL_JSON" | python3 -c '
 import json,sys
 rows=[x for x in json.load(sys.stdin).get("data",[]) if x.get("name")=="teswa-run-command-policy" and x.get("lifecycle-state")!="DELETED"]
 print("matching_root_policies=%d" % len(rows))
@@ -47,6 +68,7 @@ for x in rows:
         if "instance-agent-command-execution-family" in s:
             print("run_command_execution_statement=present")
 '
+fi
 
 for name in teswa-core-01 teswa-edge-01; do
   INSTANCE_ID="$(oci compute instance list     --compartment-id "$COMPARTMENT"     --display-name "$name"     --lifecycle-state RUNNING     --all     --query 'data[0].id'     --raw-output)"
