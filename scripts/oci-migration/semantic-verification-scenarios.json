@@ -29,8 +29,8 @@
     {"id":"media.file_too_large","domain":"media","kind":"negative","contract":"MediaStorageContract.upload","hard":true},
     {"id":"media.public_url_to_key","domain":"media","kind":"compatibility","contract":"MediaStorageContract.getObjectKeyFromPublicUrl","hard":true},
 
-    {"id":"profile.mine","domain":"profile","kind":"read","contract":"ProfileContract.getMine","hard":true},
-    {"id":"profile.public","domain":"profile","kind":"read","contract":"ProfileContract.getPublic","hard":true},
+    {"id":"profile.mine","domain":"profile","kind":"read","contract":"ProfileReadContract.getMine","hard":true},
+    {"id":"profile.public","domain":"profile","kind":"read","contract":"ProfileReadContract.getPublic","hard":true},
     {"id":"profile.update","domain":"profile","kind":"controlled_write","contract":"ProfileContract.updateMine","hard":true},
     {"id":"profile.username_taken","domain":"profile","kind":"negative","contract":"ProfileContract.updateMine","hard":true},
     {"id":"profile.trust","domain":"profile","kind":"read","contract":"ProfileContract.getTrust","hard":true},
