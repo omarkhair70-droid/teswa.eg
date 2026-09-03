@@ -20,7 +20,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   marketplace: {
     target: 'lib/backend/adapters/supabase/marketplace-adapter.ts',
     legacyFiles: [
-      'lib/marketplace-items.ts',
       'lib/publish-item.ts',
       'lib/edit-listing.ts',
       'lib/edit-listing-images.ts',
