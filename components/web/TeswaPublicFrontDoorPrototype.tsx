@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  LayoutChangeEvent,
   Linking,
   Platform,
   Pressable,
@@ -18,6 +19,9 @@ import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/lib/auth';
 
 const PLAY_URL = 'https://play.google.com/store/apps/details?id=com.teswa.mobile';
+const MOVEMENT_SCREEN = 'https://raw.githubusercontent.com/omarkhair70-droid/omar-khair-portfolio/main/public/work/teswa/10-movement.webp';
+
+type SectionKey = 'value' | 'product' | 'swap';
 
 const productScreens = [
   {
@@ -408,12 +412,118 @@ function OfferCarry({ wide, reducedMotion }: { wide: boolean; reducedMotion: boo
   );
 }
 
+
+function LivingWorldPulse({ wide, reducedMotion }: { wide: boolean; reducedMotion: boolean }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reducedMotion) {
+      pulse.setValue(0.5);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reducedMotion]);
+
+  return (
+    <View style={styles.livingSection}>
+      <View style={[styles.livingInner, wide && styles.livingInnerWide]}>
+        <View style={[styles.livingCopy, wide && styles.livingCopyWide]}>
+          <View style={styles.livingKicker}>
+            <View style={styles.livingKickerDot} />
+            <AppText weight="bold" style={styles.livingKickerText}>Living World / عالم تِسوى</AppText>
+          </View>
+          <AppText weight="bold" style={styles.livingTitle}>تِسوى مش Marketplace ساكت.</AppText>
+          <AppText style={styles.livingBody}>
+            السوق هو نقطة البداية. حوالي الحاجة فيه قصص، Motion، ناس، ومكان — عشان الاكتشاف يبقى عالم بيتحرّك، مش ليستة منتجات.
+          </AppText>
+
+          <View style={styles.livingSignals}>
+            {[
+              ['play-circle-outline', 'Motion'],
+              ['albums-outline', 'قصص'],
+              ['people-outline', 'ناس'],
+              ['navigate-outline', 'قريب منك'],
+            ].map(([icon, label]) => (
+              <View key={label} style={styles.livingSignal}>
+                <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={15} color="#F6C58F" />
+                <AppText weight="semibold" style={styles.livingSignalText}>{label}</AppText>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={[styles.livingScene, !wide && styles.livingSceneMobile]}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.livingRing,
+              styles.livingRingOuter,
+              {
+                opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.14, 0.34] }),
+                transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.04] }) }],
+              },
+            ]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.livingRing,
+              styles.livingRingInner,
+              {
+                opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.12] }),
+                transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1.02, 0.94] }) }],
+              },
+            ]}
+          />
+
+          <View style={styles.livingPhone}>
+            <ExpoImage
+              source={{ uri: MOVEMENT_SCREEN }}
+              style={styles.livingImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={180}
+            />
+          </View>
+
+          <View style={[styles.livingFloat, styles.livingFloatOne]}>
+            <Ionicons name="location-outline" size={14} color="#B8623F" />
+            <AppText weight="bold" style={styles.livingFloatText}>نبض المدينة</AppText>
+          </View>
+          <View style={[styles.livingFloat, styles.livingFloatTwo]}>
+            <Ionicons name="sparkles-outline" size={14} color="#3E7C73" />
+            <AppText weight="bold" style={styles.livingFloatText}>فرص حواليك</AppText>
+          </View>
+          <View style={[styles.livingFloat, styles.livingFloatThree]}>
+            <Ionicons name="videocam-outline" size={14} color="#8A5A2D" />
+            <AppText weight="bold" style={styles.livingFloatText}>حركة تِسوى</AppText>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function TeswaPublicFrontDoorPrototype() {
   const router = useRouter();
   const { user } = useAuth();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const reducedMotion = useReducedMotion();
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionOffsets = useRef<Record<SectionKey, number>>({
+    value: 0,
+    product: 0,
+    swap: 0,
+  });
 
   const enterTeswa = () => {
     router.push((user ? '/(tabs)/home' : '/(auth)/login') as never);
@@ -423,18 +533,32 @@ export function TeswaPublicFrontDoorPrototype() {
     void Linking.openURL(PLAY_URL);
   };
 
-  const navLinks = useMemo(() => [
+  const navLinks = useMemo<{ label: string; target: SectionKey }[]>(() => [
     { label: 'الفكرة', target: 'value' },
     { label: 'المنتج', target: 'product' },
     { label: 'التبديل', target: 'swap' },
   ], []);
 
+  const registerSection = (key: SectionKey) => (event: LayoutChangeEvent) => {
+    sectionOffsets.current[key] = event.nativeEvent.layout.y;
+  };
+
+  const scrollToSection = (key: SectionKey) => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, sectionOffsets.current[key] - 72),
+      animated: !reducedMotion,
+    });
+  };
+
   return (
     <View style={styles.page}>
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        stickyHeaderIndices={[0]}
       >
+        <View style={styles.navShell}>
         <View style={[styles.nav, !wide && styles.navMobile]}>
           <View style={styles.brand}>
             <View style={styles.brandMark}><AppText weight="bold" style={styles.brandMarkText}>تِ</AppText></View>
@@ -443,7 +567,17 @@ export function TeswaPublicFrontDoorPrototype() {
 
           {wide ? (
             <View style={styles.navLinks}>
-              {navLinks.map((link) => <AppText key={link.target} style={styles.navLink}>{link.label}</AppText>)}
+              {navLinks.map((link) => (
+                <Pressable
+                  key={link.target}
+                  accessibilityRole="link"
+                  accessibilityLabel={`انتقل إلى قسم ${link.label}`}
+                  onPress={() => scrollToSection(link.target)}
+                  style={({ pressed }) => [styles.navLinkButton, pressed && styles.navLinkPressed]}
+                >
+                  <AppText style={styles.navLink}>{link.label}</AppText>
+                </Pressable>
+              ))}
             </View>
           ) : null}
 
@@ -451,6 +585,7 @@ export function TeswaPublicFrontDoorPrototype() {
             <AppText weight="bold" style={styles.navEnterText}>{user ? 'افتح تسوى' : 'دخول'}</AppText>
             <Ionicons name="arrow-back" size={15} color="#1D1A16" />
           </Pressable>
+        </View>
         </View>
 
         <View style={[styles.hero, wide && styles.heroWide]}>
@@ -493,11 +628,19 @@ export function TeswaPublicFrontDoorPrototype() {
           <AppText weight="bold" style={styles.valueBandBig}>خلّي الحاجة تكمل.</AppText>
         </View>
 
-        <ValueJourney wide={wide} reducedMotion={reducedMotion} />
+        <View onLayout={registerSection('value')}>
+          <ValueJourney wide={wide} reducedMotion={reducedMotion} />
+        </View>
 
-        <ProductEvidence wide={wide} />
+        <LivingWorldPulse wide={wide} reducedMotion={reducedMotion} />
 
-        <OfferCarry wide={wide} reducedMotion={reducedMotion} />
+        <View onLayout={registerSection('product')}>
+          <ProductEvidence wide={wide} />
+        </View>
+
+        <View onLayout={registerSection('swap')}>
+          <OfferCarry wide={wide} reducedMotion={reducedMotion} />
+        </View>
 
         <View style={[styles.finalCta, wide && styles.finalCtaWide]}>
           <View style={styles.finalCtaGlow} />
@@ -537,6 +680,13 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#F9F3EA' },
   scrollContent: { flexGrow: 1 },
 
+  navShell: {
+    width: '100%',
+    backgroundColor: 'rgba(249,243,234,0.97)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(29,26,22,0.06)',
+    zIndex: 30,
+  },
   nav: {
     width: '100%',
     maxWidth: 1240,
@@ -553,7 +703,9 @@ const styles = StyleSheet.create({
   brandMark: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#B8623F', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-5deg' }] },
   brandMarkText: { color: '#FFFDF8', fontSize: 23 },
   brandName: { fontSize: 22, color: '#1D1A16' },
-  navLinks: { flexDirection: 'row-reverse', alignItems: 'center', gap: 28 },
+  navLinks: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  navLinkButton: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: 999 },
+  navLinkPressed: { backgroundColor: 'rgba(184,98,63,0.08)' },
   navLink: { color: '#746A61', fontSize: 14 },
   navEnter: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(29,26,22,0.14)', backgroundColor: 'rgba(255,253,248,0.72)' },
   navEnterText: { color: '#1D1A16', fontSize: 13 },
@@ -641,7 +793,120 @@ const styles = StyleSheet.create({
   journeyNodeNote: { color: '#746A61', fontSize: 11, marginTop: 4, textAlign: 'center' },
   carryObject: { position: 'absolute', right: 48, top: 36, width: 42, height: 42, borderRadius: 14, backgroundColor: '#B8623F', alignItems: 'center', justifyContent: 'center', zIndex: 5, shadowColor: '#B8623F', shadowOpacity: 0.25, shadowRadius: 18 },
 
-  evidenceSection: { width: '100%', maxWidth: 1240, alignSelf: 'center', paddingHorizontal: 18, paddingBottom: 120 },
+
+  livingSection: {
+    width: '100%',
+    backgroundColor: '#171C33',
+    paddingVertical: 104,
+    paddingHorizontal: 18,
+    overflow: 'hidden',
+  },
+  livingInner: {
+    width: '100%',
+    maxWidth: 1180,
+    alignSelf: 'center',
+    gap: 48,
+  },
+  livingInnerWide: {
+    minHeight: 640,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 70,
+  },
+  livingCopy: { alignItems: 'flex-end' },
+  livingCopyWide: { width: '45%' },
+  livingKicker: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  livingKickerDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#F6A15B' },
+  livingKickerText: { color: '#F6C58F', fontSize: 12 },
+  livingTitle: {
+    color: '#FFFFFF',
+    fontSize: 39,
+    lineHeight: 52,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  livingBody: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    lineHeight: 30,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    marginTop: 16,
+    maxWidth: 540,
+  },
+  livingSignals: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 9,
+    marginTop: 24,
+  },
+  livingSignal: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  livingSignalText: { color: 'rgba(255,255,255,0.82)', fontSize: 11 },
+  livingScene: {
+    width: '48%',
+    minHeight: 560,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  livingSceneMobile: { width: '100%', minHeight: 530 },
+  livingRing: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: '#F6A15B',
+    borderRadius: 999,
+  },
+  livingRingOuter: { width: 470, height: 470 },
+  livingRingInner: { width: 330, height: 330, borderColor: '#65A49A' },
+  livingPhone: {
+    width: 255,
+    height: 500,
+    borderRadius: 35,
+    overflow: 'hidden',
+    backgroundColor: '#0D1020',
+    borderWidth: 7,
+    borderColor: 'rgba(255,255,255,0.9)',
+    shadowColor: '#000000',
+    shadowOpacity: 0.34,
+    shadowRadius: 36,
+    shadowOffset: { width: 0, height: 18 },
+    zIndex: 3,
+  },
+  livingImage: { width: '100%', height: '100%' },
+  livingFloat: {
+    position: 'absolute',
+    zIndex: 6,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,253,248,0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+  livingFloatOne: { top: 82, left: 8 },
+  livingFloatTwo: { top: 205, right: 2 },
+  livingFloatThree: { bottom: 84, left: 12 },
+  livingFloatText: { color: '#2A2723', fontSize: 11 },
+
+  evidenceSection: { width: '100%', maxWidth: 1240, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 110, paddingBottom: 120 },
   evidenceGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 24, justifyContent: 'space-between' },
   evidenceGridMobile: { flexDirection: 'column' },
   evidenceCard: { width: '48%', borderRadius: 30, backgroundColor: '#FFFDF8', borderWidth: 1, borderColor: 'rgba(29,26,22,0.08)', padding: 16, gap: 18 },
