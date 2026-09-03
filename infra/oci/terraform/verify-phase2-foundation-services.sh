@@ -24,7 +24,7 @@ bucket_check() {
 
   raw="$(oci os bucket get     --bucket-name "$name"     --namespace-name "$NAMESPACE"     --output json)"
 
-  printf '%s' "$raw" | python3 - "$name" "$COMPARTMENT" "$expect_versioning" <<'PY'
+  printf '%s' "$raw" | python3 -c '
 import json,sys
 name, expected_compartment, expected_versioning = sys.argv[1:]
 p=json.load(sys.stdin).get("data",{})
@@ -43,14 +43,14 @@ print("bucket=%s private=%s versioning=%s compartment_match=%s" % (
 ))
 if not ok:
     raise SystemExit(2)
-PY
+' "$name" "$COMPARTMENT" "$expect_versioning"
 }
 
 bucket_check "$MEDIA" "any"
 bucket_check "$BACKUPS" "Enabled"
 
 VAULT_JSON="$(oci kms management vault get --vault-id "$VAULT" --output json)"
-printf '%s' "$VAULT_JSON" | python3 - "$COMPARTMENT" <<'PY'
+printf '%s' "$VAULT_JSON" | python3 -c '
 import json,sys
 expected_compartment=sys.argv[1]
 p=json.load(sys.stdin).get("data",{})
@@ -65,10 +65,10 @@ print("vault_name=%s vault_type=%s state=%s compartment_match=%s" % (
 ))
 if vtype!="DEFAULT" or compartment!=expected_compartment or state not in ("ACTIVE","CREATING"):
     raise SystemExit(3)
-PY
+' "$COMPARTMENT"
 
 TOPIC_JSON="$(oci ons topic get --topic-id "$TOPIC" --output json)"
-printf '%s' "$TOPIC_JSON" | python3 - "$COMPARTMENT" <<'PY'
+printf '%s' "$TOPIC_JSON" | python3 -c '
 import json,sys
 expected_compartment=sys.argv[1]
 p=json.load(sys.stdin).get("data",{})
@@ -81,7 +81,7 @@ print("topic_name=%s state=%s compartment_match=%s" % (
 ))
 if p.get("name")!="teswa-ops" or compartment!=expected_compartment or state not in ("ACTIVE","CREATING"):
     raise SystemExit(4)
-PY
+' "$COMPARTMENT"
 
 echo
 echo "Terraform drift check:"
