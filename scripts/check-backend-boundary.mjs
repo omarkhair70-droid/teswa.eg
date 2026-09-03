@@ -7,9 +7,6 @@ const providerAdapterPrefix = 'lib/backend/adapters/supabase/';
 
 const legacyDirectClientImports = new Set([
   'app/(auth)/profile-setup.tsx',
-  'app/(tabs)/messages.tsx',
-  'app/contextual/[id].tsx',
-  'app/deal/[id].tsx',
   'components/profile/ProfileConnectionsScreen.tsx',
   'lib/account-deletion.ts',
   'lib/admin-reports.ts',
@@ -152,6 +149,16 @@ for (const sourceRoot of sourceRoots) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: deal lifecycle provider access must stay behind DealLifecycleContract (${token})`);
         }
+      }
+    }
+
+    if (
+      content.includes('postgres_changes')
+      || content.includes('.channel(')
+      || content.includes('removeChannel(')
+    ) {
+      if (!isAdapter && !relativePath.startsWith('lib/supabase/')) {
+        violations.push(`${relativePath}: provider Realtime access must go through MessagingRealtimeContract`);
       }
     }
 
