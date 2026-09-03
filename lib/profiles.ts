@@ -1,3 +1,4 @@
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
 import { supabase } from '@/lib/supabase/client';
 import { validateUsername } from '@/lib/username';
@@ -17,11 +18,7 @@ export function isProfileComplete(profile: Pick<AppProfile, 'display_name' | 'us
 }
 
 export async function fetchMyProfile(userId: string): Promise<AppProfile | null> {
-  const profileRequest = supabase
-    .from('profiles')
-    .select('id, display_name, username, bio, city')
-    .eq('id', userId)
-    .maybeSingle();
+  const profileRequest = teswaBackendRuntime.profiles.getMine(userId);
 
   const timeoutRequest = new Promise<never>((_, reject) => {
     setTimeout(() => {
@@ -31,10 +28,16 @@ export async function fetchMyProfile(userId: string): Promise<AppProfile | null>
     }, PROFILE_FETCH_TIMEOUT_MS);
   });
 
-  const { data, error } = await Promise.race([profileRequest, timeoutRequest]);
+  const profile = await Promise.race([profileRequest, timeoutRequest]);
+  if (!profile) return null;
 
-  if (error) throw error;
-  return data;
+  return {
+    id: profile.id,
+    display_name: profile.displayName,
+    username: profile.username,
+    bio: profile.bio,
+    city: profile.city,
+  };
 }
 
 export type AccountProfile = {
@@ -186,25 +189,41 @@ if (!usernameValidation.ok) {
 }
 
 export async function fetchMyAccountProfile(userId: string): Promise<AccountProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, username, avatar_url, cover_url, city, area, bio, successful_swaps_count, response_rate, profile_tagline, created_at')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  const profile = await teswaBackendRuntime.profiles.getMine(userId);
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.displayName,
+    username: profile.username,
+    avatar_url: profile.avatarUrl,
+    cover_url: profile.coverUrl,
+    city: profile.city,
+    area: profile.area,
+    bio: profile.bio,
+    successful_swaps_count: profile.successfulSwapsCount,
+    response_rate: profile.responseRate,
+    profile_tagline: profile.profileTagline,
+    created_at: profile.createdAt ?? '',
+  };
 }
 
 export async function fetchPublicProfileById(profileId: string): Promise<PublicProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, username, avatar_url, cover_url, city, area, bio, successful_swaps_count, response_rate, profile_tagline, created_at')
-    .eq('id', profileId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  const profile = await teswaBackendRuntime.profiles.getPublic(profileId);
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.displayName,
+    username: profile.username,
+    avatar_url: profile.avatarUrl,
+    cover_url: profile.coverUrl,
+    city: profile.city,
+    area: profile.area,
+    bio: profile.bio,
+    successful_swaps_count: profile.successfulSwapsCount,
+    response_rate: profile.responseRate,
+    profile_tagline: profile.profileTagline,
+    created_at: profile.createdAt ?? '',
+  };
 }
 
 export async function fetchPublicProfileActiveListings(
