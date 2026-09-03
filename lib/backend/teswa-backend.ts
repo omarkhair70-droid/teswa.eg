@@ -7,6 +7,7 @@ import type {
   NotificationsContract,
   OffersDealsContract,
   ProfileContract,
+  StoriesContract,
 } from '@/lib/backend/contracts';
 
 export interface TeswaBackend {
@@ -18,4 +19,5 @@ export interface TeswaBackend {
   media: MediaStorageContract;
   notifications: NotificationsContract;
   analytics: AnalyticsContract;
+  stories: StoriesContract;
 }
