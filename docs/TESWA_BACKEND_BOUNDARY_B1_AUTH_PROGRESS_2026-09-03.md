@@ -83,3 +83,32 @@ Behavior preserved:
 The existing diagnostics event labels containing `supabase_*` are temporarily preserved for compatibility with the diagnostics screen. They are now legacy observability labels only; the feature modules no longer import/call Supabase directly.
 
 Direct Supabase client imports ratchet **62 -> 58**.
+
+
+## Slice B1.4 — Remove remaining feature-level Auth SDK calls
+
+Removed direct `supabase.auth.*` access from the remaining feature/service auth call sites:
+
+- `lib/direct-privacy.ts`
+- `lib/account-deletion.ts`
+- `lib/chat/direct-runtime-auth.ts`
+- `lib/analytics.ts`
+- `lib/stories.ts`
+- `lib/dolab/chat-bridge.ts`
+- `lib/chat/native-direct-channel.ts`
+
+Key details:
+
+- provider-neutral `TeswaAuthUser.avatarUrl` replaces Direct Chat access to raw `user_metadata`;
+- Stories now gets `accessToken` from `TeswaAuthSession`; its raw Supabase Storage upload remains explicitly deferred to B2 Media/Storage;
+- account deletion still invokes the Supabase Edge Function directly, but its session dependency is now Teswa-owned;
+- files that still use Supabase for DB/Storage/Functions keep that non-Auth provider dependency for later domain slices.
+
+Direct Supabase client imports ratchet **58 -> 55** because three Auth-only files no longer need the provider client.
+
+The boundary checker now rejects any `supabase.auth.*` usage outside:
+
+- `lib/backend/adapters/supabase/**`
+- `lib/supabase/**`
+
+This turns the B1 Auth boundary into an enforced architectural rule.
