@@ -53,3 +53,18 @@ The boundary checker now freezes direct Supabase Storage access to the current l
 Current SDK Storage legacy files: **11**
 
 Any new `supabase.storage` access outside the Supabase adapter is rejected, and stale Storage allowlist entries fail validation after migration.
+
+
+## Slice B2.3 — Item video Storage boundary
+
+Migrated item-video Storage operations behind `MediaStorageContract`:
+
+- `lib/item-videos.ts` upload;
+- item-video signed URL generation and cache refresh;
+- item-video cleanup in `lib/publish-item.ts` rollback paths.
+
+Removed feature knowledge of the physical `item-videos` bucket.
+
+`lib/item-videos.ts` still reads the `item_videos` DB row through Supabase and therefore remains a Marketplace-domain migration candidate, but it no longer owns Storage transport.
+
+Direct SDK Storage legacy files ratchet **11 -> 10**.
