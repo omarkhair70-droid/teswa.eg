@@ -40,14 +40,19 @@ export interface ProfileReadContract {
   getPublic(profileId: string): Promise<TeswaProfile | null>;
 }
 
-export interface ProfileContract extends ProfileReadContract {
+export interface ProfileCoreContract extends ProfileReadContract {
   updateMine(input: {
     userId: string;
-    displayName?: string;
-    username?: string;
+    displayName: string;
+    username: string;
+    profileTagline?: string | null;
     bio?: string | null;
     city?: string | null;
+    area?: string | null;
   }): Promise<TeswaResult<TeswaProfile, 'username_taken' | 'validation' | 'not_found' | 'unknown'>>;
+}
+
+export interface ProfileContract extends ProfileCoreContract {
 
   getTrust(profileId: string): Promise<ProfileTrustSnapshot>;
   getBadges(profileId: string): Promise<ProfileBadge[]>;
