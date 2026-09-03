@@ -30,7 +30,6 @@ const legacyDirectClientImports = new Set([
   'lib/item-video-presence.ts',
   'lib/item-videos.ts',
   'lib/listing-lifecycle.ts',
-  'lib/marketplace-items.ts',
   'lib/messages.ts',
   'lib/motion-interest.ts',
   'lib/motion-video-drops.ts',
