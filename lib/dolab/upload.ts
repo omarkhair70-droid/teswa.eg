@@ -1,5 +1,4 @@
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 import type { DolabPendingMedia } from '@/lib/dolab/media-types';
 import type { DolabMedia, DolabMediaType } from '@/lib/dolab/types';
@@ -106,34 +105,46 @@ export async function uploadDolabPendingMedia(
   }
 }
 
-export async function saveDolabMediaRow(userId: string, input: SaveDolabMediaRowInput): Promise<DolabResult<DolabMedia | null>> {
-  const { data, error } = await supabase
-    .from('dolab_media')
-    .insert({
-      user_id: userId,
-      dolab_item_id: input.dolabItemId ?? null,
-      media_type: input.mediaType,
-      storage_path: input.storagePath,
-      thumbnail_path: null,
-      duration_ms: input.durationMs ?? null,
-      width: input.width ?? null,
-      height: input.height ?? null,
-      mime_type: input.mimeType ?? null,
-      size_bytes: input.sizeBytes ?? null,
-      sort_order: input.sortOrder ?? 0,
-    })
-    .select('*')
-    .single();
+export async function saveDolabMediaRow(
+  userId: string,
+  input: SaveDolabMediaRowInput,
+): Promise<DolabResult<DolabMedia | null>> {
+  const result = await teswaBackendRuntime.dolab.createMediaRow(userId, {
+    dolabItemId: input.dolabItemId ?? null,
+    mediaType: input.mediaType,
+    storagePath: input.storagePath,
+    durationMs: input.durationMs ?? null,
+    width: input.width ?? null,
+    height: input.height ?? null,
+    mimeType: input.mimeType ?? null,
+    sizeBytes: input.sizeBytes ?? null,
+    sortOrder: input.sortOrder ?? 0,
+  });
 
-  const normalized = normalizeDolabPersistenceError(error);
+  if (result.ok) {
+    return { data: result.data, error: null };
+  }
+
+  const normalized = normalizeDolabPersistenceError(result.cause as any);
   if (normalized?.kind === 'schema_missing') {
     return {
       data: null,
-      error: { ...normalized, message: 'تعذر تسجيل الميديا في الدولاب السحابي. النسخة المحلية ما زالت محفوظة.' },
+      error: {
+        ...normalized,
+        message: 'تعذر تسجيل الميديا في الدولاب السحابي. النسخة المحلية ما زالت محفوظة.',
+      },
     };
   }
 
-  return { data: (data as DolabMedia | null) ?? null, error: normalized };
+  return {
+    data: null,
+    error:
+      normalized
+      ?? {
+        kind: 'unknown',
+        message: 'تعذرت المزامنة مع السحابة. آخر نسخة على الجهاز ما زالت محفوظة.',
+      },
+  };
 }
 
 export async function uploadAndSaveDolabMedia(
