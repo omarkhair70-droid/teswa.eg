@@ -69,3 +69,49 @@ export interface OffersDealsContract {
   sendDealText(dealId: string, userId: string, body: string): Promise<TeswaResult<DealMessage, 'unauthorized' | 'unknown'>>;
   confirmDealCompleted(dealId: string, userId: string, note?: string): Promise<TeswaResult<{ completed: boolean }, 'unauthorized' | 'invalid_status' | 'unknown'>>;
 }
+
+
+export type OfferLifecycleRecord = {
+  id: string;
+  status: OfferStatus;
+  message: string | null;
+  requestedItemId: string;
+  offeredItemId: string;
+  senderId: string;
+  receiverId: string;
+  createdAt: IsoDateTime | null;
+};
+
+export type OfferItemValidationRecord = {
+  id: string;
+  title: string | null;
+  ownerId: string;
+  status: string;
+};
+
+export interface OfferLifecycleContract {
+  getItemForValidation(itemId: string): Promise<OfferItemValidationRecord | null>;
+  listIncoming(userId: string): Promise<OfferLifecycleRecord[]>;
+  listSent(userId: string): Promise<OfferLifecycleRecord[]>;
+  getOffer(offerId: string): Promise<OfferLifecycleRecord | null>;
+  getLatestDealId(offerId: string): Promise<string | null>;
+  getLatestDealIds(offerIds: string[]): Promise<Map<string, string>>;
+  listOwnedActiveItemIds(userId: string): Promise<string[]>;
+
+  markThinking(offerId: string, note?: string | null): Promise<TeswaResult<void, 'unknown'>>;
+  softReject(offerId: string, note?: string | null): Promise<TeswaResult<void, 'unknown'>>;
+  accept(offerId: string): Promise<TeswaResult<{ dealId: string }, 'unknown'>>;
+
+  create(input: {
+    requestedItemId: string;
+    offeredItemId: string;
+    senderId: string;
+    receiverId: string;
+    message?: string | null;
+  }): Promise<TeswaResult<{ offerId: string }, 'unknown'>>;
+
+  recordCreatedEvent(input: {
+    offerId: string;
+    actorId: string;
+  }): Promise<TeswaResult<void, 'unknown'>>;
+}
