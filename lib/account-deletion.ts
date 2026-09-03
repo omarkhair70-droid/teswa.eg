@@ -1,3 +1,4 @@
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
 
 export type AccountDeletionResult =
@@ -13,11 +14,12 @@ type DeleteAccountResponse = {
 const DEFAULT_ERROR_MESSAGE = 'تعذر حذف الحساب حالياً. حاول مرة تانية بعد قليل.';
 
 export async function requestMyAccountDeletion(): Promise<AccountDeletionResult> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  let session = null;
+  try {
+    session = await teswaBackendRuntime.auth.getSession();
+  } catch {}
 
-  if (!session?.access_token) {
+  if (!session?.accessToken) {
     return { ok: false, reason: 'unauthenticated', message: 'لازم تسجل دخولك أولاً قبل حذف الحساب.' };
   }
 
