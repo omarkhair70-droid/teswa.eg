@@ -6,11 +6,6 @@ const sourceRoots = ['app', 'components', 'lib'];
 const providerAdapterPrefix = 'lib/backend/adapters/supabase/';
 
 const legacyDirectClientImports = new Set([
-  'lib/account-deletion.ts',
-  'lib/admin-reports.ts',
-  'lib/admin.ts',
-  'lib/reports.ts',
-  'lib/reviews.ts',
 ]);
 
 const legacyProviderTypeImports = new Set([
@@ -318,6 +313,35 @@ for (const sourceRoot of sourceRoots) {
       for (const token of forbiddenTailTokens) {
         if (content.includes(token)) {
           violations.push(`${relativePath}: provider access must stay behind Teswa backend contracts (${token})`);
+        }
+      }
+    }
+
+    if ([
+      'lib/account-deletion.ts',
+      'lib/admin-reports.ts',
+      'lib/admin.ts',
+      'lib/reports.ts',
+      'lib/reviews.ts',
+    ].includes(relativePath)) {
+      const forbiddenFinalTokens = [
+        ".from('reviews')",
+        ".from('reports')",
+        ".from('direct_conversations')",
+        ".from('direct_messages')",
+        ".from('swap_deals')",
+        ".from('stories')",
+        ".from('items')",
+        ".from('profiles')",
+        "rpc('is_admin_user'",
+        "rpc('review_report'",
+        "rpc('hide_item_for_moderation'",
+        "rpc('report_",
+        "functions.invoke",
+      ];
+      for (const token of forbiddenFinalTokens) {
+        if (content.includes(token)) {
+          violations.push(`${relativePath}: trust/safety provider access must stay behind Teswa contracts (${token})`);
         }
       }
     }
