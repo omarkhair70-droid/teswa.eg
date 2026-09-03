@@ -1,3 +1,8 @@
+output "teswa_compartment_id" {
+  value       = oci_identity_compartment.teswa.id
+  description = "Dedicated Teswa platform compartment OCID."
+}
+
 output "teswa_vcn_id" {
   value       = oci_core_vcn.teswa.id
   description = "Teswa-only VCN OCID."
