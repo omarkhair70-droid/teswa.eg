@@ -317,3 +317,108 @@ export type NativeDirectReactionToggleResult = {
   enabled: boolean;
   count: number;
 };
+
+
+export type ContextualMessageTransportRecord = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string | null;
+  messageKind: 'text' | 'voice';
+  mediaStoragePath: string | null;
+  mediaDurationMs: number | null;
+  createdAt: IsoDateTime;
+};
+
+export type ContextualParticipantTransportRecord = {
+  id: string;
+  displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+};
+
+export type ContextualConversationSummaryTransportRecord = {
+  conversationId: string;
+  contextType: 'story_reply';
+  contextEntityId: string;
+  otherParticipant: ContextualParticipantTransportRecord;
+  latestMessage: {
+    id: string;
+    body: string;
+    senderId: string;
+    createdAt: IsoDateTime;
+    kind: 'text' | 'voice';
+    durationMs: number | null;
+  } | null;
+  unreadCount: number;
+  lastActivityAt: IsoDateTime;
+};
+
+export type ContextualThreadTransportRecord = {
+  id: string;
+  contextType: 'story_reply';
+  contextEntityId: string;
+  starterId: string;
+  recipientId: string;
+  otherParticipant: ContextualParticipantTransportRecord;
+  messages: ContextualMessageTransportRecord[];
+};
+
+export interface ContextualMessagingTransportContract {
+  notifyMessage(input: {
+    conversationId: string;
+    messageId: string;
+    kind: 'story_reply_initial' | 'thread_message';
+  }): Promise<TeswaResult<void, 'unknown'>>;
+
+  markRead(conversationId: string): Promise<TeswaResult<void, 'unknown'>>;
+  getUnreadCount(): Promise<number>;
+
+  getStoryOwnerId(storyId: string): Promise<string | null>;
+
+  createStoryReplyThread(input: {
+    storyId: string;
+    body: string;
+  }): Promise<
+    TeswaResult<
+      { conversationId: string; messageId: string },
+      'not_found' | 'unknown'
+    >
+  >;
+
+  listSummaries(
+    userId: string,
+  ): Promise<ContextualConversationSummaryTransportRecord[]>;
+
+  getThread(input: {
+    conversationId: string;
+    currentUserId: string;
+  }): Promise<
+    TeswaResult<
+      ContextualThreadTransportRecord | null,
+      'unauthorized' | 'unknown'
+    >
+  >;
+
+  getOtherParticipantId(input: {
+    conversationId: string;
+    currentUserId: string;
+  }): Promise<string | null>;
+
+  sendText(input: {
+    conversationId: string;
+    senderId: string;
+    body: string;
+  }): Promise<TeswaResult<ContextualMessageTransportRecord, 'unknown'>>;
+
+  ensureStoryReplyConversation(
+    storyId: string,
+  ): Promise<TeswaResult<{ conversationId: string }, 'not_found' | 'unknown'>>;
+
+  sendVoiceMetadata(input: {
+    conversationId: string;
+    senderId: string;
+    mediaStoragePath: string;
+    mediaDurationMs: number;
+  }): Promise<TeswaResult<ContextualMessageTransportRecord, 'unknown'>>;
+}
