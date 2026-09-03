@@ -34,7 +34,6 @@ export const SUPABASE_ADAPTER_MIGRATION_MANIFEST = {
   messaging: {
     target: 'lib/backend/adapters/supabase/messaging-adapter.ts',
     legacyFiles: [
-      'lib/direct-messages.ts',
       'lib/chat/supabase-direct-chat.ts',
       'lib/contextual-conversations.ts',
     ],
