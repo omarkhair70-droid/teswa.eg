@@ -20,7 +20,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import {
   createContextualVoiceMessageSignedUrl,
@@ -137,51 +137,41 @@ export default function Screen() {
 
   useEffect(() => {
     if (!user?.id || !conversationId) return;
-    const channel = supabase
-      .channel(`contextual_${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'contextual_messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const row = payload.new as any;
-          if (messageIdsRef.current.has(row.id)) return;
 
-          messageIdsRef.current.add(row.id);
-          const nextMessage: UiMessage = {
-            id: row.id,
-            conversationId: row.conversation_id,
-            senderId: row.sender_id,
-            body: row.body,
-            messageKind: row.message_kind === 'voice' ? 'voice' : 'text',
-            mediaStoragePath: row.media_storage_path ?? null,
-            mediaDurationMs: row.media_duration_ms ?? null,
-            createdAt: row.created_at,
-          };
+    const unsubscribe = teswaBackendRuntime.realtime.subscribeContextual(conversationId, {
+      onMessage: (message) => {
+        if (messageIdsRef.current.has(message.id)) return;
 
-          setThread((prev: any) => (prev ? { ...prev, messages: [...prev.messages, nextMessage] } : prev));
+        messageIdsRef.current.add(message.id);
+        const nextMessage: UiMessage = {
+          id: message.id,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          body: message.body,
+          messageKind: message.messageKind,
+          mediaStoragePath: message.mediaStoragePath,
+          mediaDurationMs: message.mediaDurationMs,
+          createdAt: message.createdAt,
+        };
 
-          if (row.sender_id !== user.id) {
-            void markContextualThreadReadFromMobile(conversationId).finally(() => {
-              void refreshBadges();
-            });
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setRealtimeStatus('live');
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          setRealtimeStatus('unavailable');
+        setThread((prev: any) => (
+          prev ? { ...prev, messages: [...prev.messages, nextMessage] } : prev
+        ));
+
+        if (message.senderId !== user.id) {
+          void markContextualThreadReadFromMobile(conversationId).finally(() => {
+            void refreshBadges();
+          });
         }
-      });
+      },
+      onStatus: (status) => {
+        if (status === 'live') setRealtimeStatus('live');
+        else if (status === 'offline') setRealtimeStatus('unavailable');
+        else setRealtimeStatus('connecting');
+      },
+    });
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    return unsubscribe;
   }, [conversationId, refreshBadges, user?.id]);
 
   const handleSend = useCallback(async () => {
