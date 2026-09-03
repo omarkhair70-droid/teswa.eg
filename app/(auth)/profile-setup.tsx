@@ -9,7 +9,7 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import {
   USERNAME_MAX_LENGTH,
   USERNAME_RULES_AR,
@@ -49,16 +49,11 @@ export default function ProfileSetupScreen() {
     normalizedUsername: string,
   ) =>
     withTimeout(
-      supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: userId,
-            display_name: displayName.trim(),
-            username: normalizedUsername,
-          },
-          { onConflict: 'id' },
-        ),
+      teswaBackendRuntime.profiles.setupMine({
+        userId,
+        displayName: displayName.trim(),
+        username: normalizedUsername,
+      }),
       UPSERT_TIMEOUT_MS,
       'PROFILE_UPSERT_TIMEOUT',
     );
@@ -103,8 +98,10 @@ export default function ProfileSetupScreen() {
         usernameValidation.normalized,
       );
 
-      if (attemptOneResult.error) {
-        handleUpsertError(attemptOneResult.error);
+      if (!attemptOneResult.ok) {
+        handleUpsertError({
+          code: attemptOneResult.reason === 'username_taken' ? '23505' : undefined,
+        });
         return;
       }
 
@@ -129,8 +126,10 @@ export default function ProfileSetupScreen() {
             usernameValidation.normalized,
           );
 
-          if (attemptTwoResult.error) {
-            handleUpsertError(attemptTwoResult.error);
+          if (!attemptTwoResult.ok) {
+            handleUpsertError({
+              code: attemptTwoResult.reason === 'username_taken' ? '23505' : undefined,
+            });
             return;
           }
 
