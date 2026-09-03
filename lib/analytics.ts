@@ -1,7 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
-import { supabase } from '@/lib/supabase/client';
 
 export type AnalyticsEventName =
   | 'app_opened'
@@ -90,21 +89,17 @@ export async function trackEvent(eventName: AnalyticsEventName, options: TrackEv
     const appVersion = Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? null;
     const platform = Platform.OS;
 
-    const { data, error } = await supabase.rpc('track_analytics_event', {
-      p_event_name: eventName,
-      p_session_id: getAnalyticsSessionId(),
-      p_route: options.route ?? null,
-      p_entity_type: options.entityType ?? null,
-      p_entity_id: options.entityId ?? null,
-      p_metadata: sanitizeMetadata(options.metadata),
-      p_app_version: appVersion,
-      p_platform: platform,
+    const result = await teswaBackendRuntime.analytics.track(eventName, {
+      sessionId: getAnalyticsSessionId(),
+      route: options.route ?? null,
+      entityType: options.entityType ?? null,
+      entityId: options.entityId ?? null,
+      metadata: sanitizeMetadata(options.metadata),
+      appVersion,
+      platform,
     });
 
-    if (error) throw error;
-
-    const result = data as { ok?: boolean; reason?: string } | null;
-    if (result?.ok === false && __DEV__) {
+    if (!result.accepted && __DEV__) {
       console.warn('[analytics] trackEvent rejected', {
         eventName,
         reason: result.reason ?? 'unknown',
