@@ -26,11 +26,11 @@ Observed on 2026-09-03:
 
 Branch: `refactor/backend-boundary-20260903`
 
-The branch has introduced Teswa-owned contracts and the concrete Supabase Auth
-adapter. Email login/signup, AuthProvider session ownership, Google browser/native
-auth, and the remaining feature-level auth SDK calls now route through the Teswa
-Auth boundary. Media, marketplace, offers/deals, messaging/realtime, and
-notification consumer migration is still in progress.
+The branch has completed B1 Auth isolation and is actively progressing through
+B2 Media/Storage. Profile images, item videos, item images, Dolab media, and
+multiple messaging voice-storage paths have moved behind MediaStorageContract.
+Marketplace, offers/deals, messaging/realtime, notifications, and the remaining
+high-risk media surfaces are still in progress.
 
 Lane 4 may prepare source/target verification now. Production provider switching
 must wait for the relevant Lane 2 boundary slices.
@@ -218,6 +218,63 @@ python3 scripts/oci-migration/check-portable-baseline.py \
   /tmp/teswa-oci-source-baseline-*/public-schema.raw.sql \
   --report /tmp/teswa-portability-report.json
 ```
+
+### `compile-portable-baseline.py`
+
+Compiles a format-v3 source manifest into reviewed OCI baseline layers without
+connecting to a database:
+
+- `00-extensions.sql` — only portable PostgreSQL extensions;
+- `10-structure.sql` — public enums + tables/columns;
+- `20-integrity.sql` — non-FK constraints, indexes, views;
+- `30-public-foreign-keys.sql` — public -> public FKs only;
+- `rebuild-review.json` — RLS/auth/runtime/provider surfaces intentionally
+  excluded from blind replay.
+
+```bash
+python3 scripts/oci-migration/compile-portable-baseline.py \
+  /tmp/teswa-source.json \
+  --output-dir /tmp/teswa-portable-baseline
+```
+
+### `capture-public-data-snapshot.sh`
+
+Creates a transaction-consistent `pg_dump` custom archive for public application
+data. The source session is forced read-only and the archive stays outside Git.
+
+```bash
+export TESWA_SOURCE_DATABASE_URL='postgresql://...'
+bash scripts/oci-migration/capture-public-data-snapshot.sh
+```
+
+### `apply-initial-target-load.sh`
+
+Applies the portable structure, restores the public-data archive, then applies
+integrity/public-FK layers to an **empty isolated OCI PostgreSQL target**.
+
+It is intentionally target-mutating and therefore requires all of:
+
+- `TESWA_OCI_DATABASE_URL`;
+- `TESWA_TARGET_ASSERT_HOST`;
+- `TESWA_ALLOW_TARGET_WRITE=YES`.
+
+It refuses Supabase-looking hosts and refuses a non-empty target public schema.
+
+### `capture-identity-anchor.py` / `compare-identity-anchors.py`
+
+Capture and compare non-PII SHA-256 fingerprints of identity UUID sets. This
+lets Lane 4 prove UUID continuity even if OCI uses a different physical identity
+table than Supabase `auth.users`.
+
+### `export-supabase-storage-bytes.py`
+
+Reads the storage metadata manifest, downloads the actual source objects using
+server credentials from environment variables, and computes SHA-256 from the
+bytes. It performs GETs only and never writes to Supabase Storage.
+
+The resulting manifest is compatible with:
+
+`compare-storage-manifests.py --require-content-sha256`.
 
 ## Next execution gate
 
