@@ -70,3 +70,9 @@ output "app_nsg_id" {
   value       = oci_core_network_security_group.app.id
   description = "Teswa application NSG OCID."
 }
+
+
+output "admin_bastion_egress_security_list_id" {
+  value       = var.enable_admin_bastion_connectivity ? oci_core_security_list.admin_bastion_egress[0].id : null
+  description = "Temporary Bastion egress security-list OCID when enabled."
+}
