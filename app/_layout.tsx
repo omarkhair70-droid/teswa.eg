@@ -433,6 +433,25 @@ function RootNavigator({ onFirstScreenReady }: { onFirstScreenReady?: () => void
     }
   }, [bootstrapReady, hasSatisfiedAccountGate, loadingProfile, loadingPolicyAcceptance, segments, user, onboardingCompleted, profileCompleted, profileCheckError, requiredPoliciesAccepted, policyAcceptanceCheckError, router, usingCachedAccountGate]);
 
+  const renderRootGroup = segments[0];
+  const renderLeaf = segments.at(1);
+  const renderPublicLegalRoute = renderRootGroup === 'legal' && (
+    renderLeaf === 'privacy'
+    || renderLeaf === 'terms'
+    || renderLeaf === 'community-guidelines'
+  );
+  const renderPublicSurface = (
+    renderPublicLegalRoute
+    || renderRootGroup === 'account-deletion'
+    || renderRootGroup === 'landing-preview'
+    || (Platform.OS === 'web' && (!renderRootGroup || renderRootGroup === 'index'))
+  );
+
+  // Public web/legal surfaces must never wait for account bootstrap or profile gates.
+  if (renderPublicSurface) {
+    return <Stack screenOptions={{ headerShown: false }} />;
+  }
+
   if (!bootstrapReady) {
     return (
       <AccountGateLoadingState
