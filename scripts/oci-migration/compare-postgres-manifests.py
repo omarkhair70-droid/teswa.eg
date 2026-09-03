@@ -2,29 +2,36 @@
 """
 Compare Teswa PostgreSQL migration manifests.
 
-Hard gates:
-- public tables/columns/views/enums/indexes/constraints
+Default hard gates are provider-neutral migration parity:
+- public table identity (RLS flags are reviewed separately)
+- columns
+- views
+- enums
+- indexes
+- non-FK constraints
+- public -> public foreign keys
 - table row counts
 - deep row checksums when --require-deep is used
 - primary-key set checksums when available
 
-Provider-runtime surfaces are always reported because OCI may intentionally
-rebuild them behind Teswa-owned boundaries:
+Provider/runtime surfaces are review-only by default because OCI may rebuild
+them behind Teswa-owned boundaries:
+- RLS flags/policies
+- external-schema FKs (notably auth.users)
 - functions
 - triggers
-- RLS/storage policies
-- realtime publication tables
+- Realtime publications
 - extensions
-- Supabase auth/storage provider metadata
+- Supabase auth/storage metadata
 
-Use --strict-provider-runtime only when exact SQL/provider parity is expected.
+Use --strict-provider-runtime only for an environment where exact SQL/provider
+parity is intentionally expected.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +47,8 @@ STRUCTURAL_KEYS = (
 )
 
 PROVIDER_RUNTIME_KEYS = (
+    "table_security",
+    "external_foreign_keys",
     "functions",
     "triggers",
     "policies",
@@ -52,10 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("source")
     parser.add_argument("target")
-    parser.add_argument(
-        "--report",
-        help="Optional JSON report path.",
-    )
+    parser.add_argument("--report", help="Optional JSON report path.")
     parser.add_argument(
         "--require-deep",
         action="store_true",
@@ -64,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--strict-provider-runtime",
         action="store_true",
-        help="Also make functions/triggers/policies/publications/extensions exact hard gates.",
+        help="Also make provider/runtime review categories exact hard gates.",
     )
     return parser.parse_args()
 
@@ -81,7 +87,11 @@ def same(a: Any, b: Any) -> bool:
     return canonical(a) == canonical(b)
 
 
-def keyed_diff(source_rows: list[dict[str, Any]], target_rows: list[dict[str, Any]], keys: tuple[str, ...]) -> dict[str, Any]:
+def keyed_diff(
+    source_rows: list[dict[str, Any]],
+    target_rows: list[dict[str, Any]],
+    keys: tuple[str, ...],
+) -> dict[str, Any]:
     def row_key(row: dict[str, Any]) -> str:
         return "|".join(str(row.get(k)) for k in keys)
 
@@ -103,15 +113,66 @@ def keyed_diff(source_rows: list[dict[str, Any]], target_rows: list[dict[str, An
     }
 
 
+def catalog_rows(key: str, manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    catalog = manifest.get("catalog", {})
+
+    if key == "tables":
+        return [
+            {
+                "schema_name": row.get("schema_name"),
+                "table_name": row.get("table_name"),
+            }
+            for row in catalog.get("tables", [])
+        ]
+
+    if key == "table_security":
+        return [
+            {
+                "schema_name": row.get("schema_name"),
+                "table_name": row.get("table_name"),
+                "rls_enabled": row.get("rls_enabled"),
+                "rls_forced": row.get("rls_forced"),
+            }
+            for row in catalog.get("tables", [])
+        ]
+
+    if key == "constraints":
+        # Cross-schema/provider FKs are not structural hard gates.
+        return [
+            row
+            for row in catalog.get("constraints", [])
+            if str(row.get("constraint_type") or "") != "f"
+        ]
+
+    if key == "foreign_keys":
+        # Only public -> public FKs are provider-neutral structural gates.
+        return [
+            row
+            for row in catalog.get("foreign_keys", [])
+            if row.get("target_schema") == "public"
+        ]
+
+    if key == "external_foreign_keys":
+        return [
+            row
+            for row in catalog.get("foreign_keys", [])
+            if row.get("target_schema") != "public"
+        ]
+
+    return list(catalog.get(key, []))
+
+
 def catalog_diff(key: str, source: dict[str, Any], target: dict[str, Any]) -> dict[str, Any]:
     key_columns: dict[str, tuple[str, ...]] = {
         "tables": ("schema_name", "table_name"),
+        "table_security": ("schema_name", "table_name"),
         "columns": ("schema_name", "table_name", "ordinal_position", "column_name"),
         "views": ("schema_name", "view_name"),
         "enums": ("schema_name", "enum_name", "enumsortorder"),
         "indexes": ("schema_name", "table_name", "index_name"),
         "constraints": ("schema_name", "table_name", "constraint_name"),
         "foreign_keys": ("source_schema", "source_table", "constraint_name"),
+        "external_foreign_keys": ("source_schema", "source_table", "constraint_name"),
         "functions": ("schema_name", "function_name", "identity_arguments"),
         "triggers": ("schema_name", "table_name", "trigger_name"),
         "policies": ("schema_name", "table_name", "policy_name"),
@@ -119,8 +180,8 @@ def catalog_diff(key: str, source: dict[str, Any], target: dict[str, Any]) -> di
         "extensions": ("extension_name",),
     }
     return keyed_diff(
-        source.get("catalog", {}).get(key, []),
-        target.get("catalog", {}).get(key, []),
+        catalog_rows(key, source),
+        catalog_rows(key, target),
         key_columns[key],
     )
 
@@ -142,31 +203,37 @@ def data_diff(source: dict[str, Any], target: dict[str, Any], require_deep: bool
         dst = dst_tables[name]
 
         if src.get("row_count") != dst.get("row_count"):
-            row_count_mismatch.append({
-                "table": name,
-                "source": src.get("row_count"),
-                "target": dst.get("row_count"),
-            })
+            row_count_mismatch.append(
+                {
+                    "table": name,
+                    "source": src.get("row_count"),
+                    "target": dst.get("row_count"),
+                }
+            )
 
         src_row = src.get("row_checksum_md5")
         dst_row = dst.get("row_checksum_md5")
         if require_deep and (not src_row or not dst_row):
             deep_missing.append(name)
         elif src_row is not None and dst_row is not None and src_row != dst_row:
-            row_checksum_mismatch.append({
-                "table": name,
-                "source": src_row,
-                "target": dst_row,
-            })
+            row_checksum_mismatch.append(
+                {
+                    "table": name,
+                    "source": src_row,
+                    "target": dst_row,
+                }
+            )
 
         src_pk = src.get("pk_set_checksum_md5")
         dst_pk = dst.get("pk_set_checksum_md5")
         if src_pk is not None and dst_pk is not None and src_pk != dst_pk:
-            pk_checksum_mismatch.append({
-                "table": name,
-                "source": src_pk,
-                "target": dst_pk,
-            })
+            pk_checksum_mismatch.append(
+                {
+                    "table": name,
+                    "source": src_pk,
+                    "target": dst_pk,
+                }
+            )
 
     match = not (
         missing
@@ -266,11 +333,7 @@ def main() -> int:
         suffix = " [HARD]" if args.strict_provider_runtime else " [REVIEW]"
         print(summarize_category(key, diff) + suffix)
     print()
-    print(
-        "PASS hard migration gates"
-        if not hard_failed
-        else "FAIL hard migration gates"
-    )
+    print("PASS hard migration gates" if not hard_failed else "FAIL hard migration gates")
 
     if args.report:
         out = Path(args.report)
