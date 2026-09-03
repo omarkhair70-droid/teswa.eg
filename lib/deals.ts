@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import type { DealLifecycleMessageRecord } from '@/lib/backend/contracts/offers-deals';
 import { fetchExchangeItemSummariesByIds } from '@/lib/exchange-item-summaries';
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { supabase } from '@/lib/supabase/client';
@@ -78,156 +79,192 @@ async function notify(payload: Record<string, unknown>) {
 }
 
 async function getDealParticipantProfiles(participantIds: string[]) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id,display_name,avatar_url,username,successful_swaps_count,response_rate')
-    .in('id', participantIds);
-  if (error) throw error;
-  return new Map((data ?? []).map((p) => [p.id as string, {
-    id: p.id as string,
-    displayName: (p.display_name as string | null) ?? null,
-    avatarUrl: (p.avatar_url as string | null) ?? null,
-    username: (p.username as string | null) ?? null,
-    successfulSwapsCount: (p.successful_swaps_count as number | null) ?? null,
-    responseRate: (p.response_rate as number | null) ?? null,
-  }]));
+  const profiles = await Promise.all(
+    participantIds.map((participantId) => teswaBackendRuntime.profiles.getPublic(participantId)),
+  );
+
+  return new Map(
+    profiles
+      .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile))
+      .map((profile) => [
+        profile.id,
+        {
+          id: profile.id,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          username: profile.username,
+          successfulSwapsCount: profile.successfulSwapsCount,
+          responseRate: profile.responseRate,
+        } satisfies DealParticipantSummary,
+      ]),
+  );
 }
 
-function toMessageRow(row: any): DealRoomMessage {
+function toMessageRow(row: DealLifecycleMessageRecord): DealRoomMessage {
   return {
-    id: row.id as string,
-    dealId: row.deal_id as string,
-    senderId: row.sender_id as string,
-    body: row.body as string,
-    messageType: row.message_type === 'voice' ? 'voice' : 'text',
-    audioStoragePath: (row.audio_storage_path as string | null) ?? null,
-    audioDurationMs: (row.audio_duration_ms as number | null) ?? null,
-    audioMimeType: (row.audio_mime_type as string | null) ?? null,
-    audioSizeBytes: (row.audio_size_bytes as number | null) ?? null,
-    createdAt: row.created_at as string,
+    id: row.id,
+    dealId: row.dealId,
+    senderId: row.senderId,
+    body: row.body,
+    messageType: row.messageType,
+    audioStoragePath: row.audioStoragePath,
+    audioDurationMs: row.audioDurationMs,
+    audioMimeType: row.audioMimeType,
+    audioSizeBytes: row.audioSizeBytes,
+    createdAt: row.createdAt,
   };
 }
 
 export async function fetchDealRoomById(dealId: string, currentUserId: string): Promise<DealRoomResult> {
-  const { data: deal, error: dealError } = await supabase
-    .from('swap_deals')
-    .select('id,status,accepted_at,created_at,requested_item_id,offered_item_id,requester_id,offerer_id')
-    .eq('id', dealId)
-    .maybeSingle();
-
-  if (dealError) throw dealError;
+  const deal = await teswaBackendRuntime.deals.getDeal(dealId);
   if (!deal) return { ok: false, reason: 'not_found' };
 
-  const requesterId = deal.requester_id as string;
-  const offererId = deal.offerer_id as string;
-  if (currentUserId !== requesterId && currentUserId !== offererId) return { ok: false, reason: 'unauthorized' };
+  const requesterId = deal.requesterId;
+  const offererId = deal.offererId;
+  if (currentUserId !== requesterId && currentUserId !== offererId) {
+    return { ok: false, reason: 'unauthorized' };
+  }
 
   const viewerRole: DealViewerRole = currentUserId === requesterId ? 'requester' : 'offerer';
   const otherParticipantId = viewerRole === 'requester' ? offererId : requesterId;
 
-  const [requestedItem, offeredItem, confirmationsRes, messagesRes, profilesById, myReviewRes] = await Promise.all([
-    fetchExchangeItemSummariesByIds([deal.requested_item_id as string]).then((r) => r[0] ?? null),
-    fetchExchangeItemSummariesByIds([deal.offered_item_id as string]).then((r) => r[0] ?? null),
-    supabase.from('deal_confirmations').select('user_id').eq('deal_id', dealId),
-    supabase.from('deal_messages').select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at').eq('deal_id', dealId).order('created_at', { ascending: true }).limit(100),
+  const [
+    requestedItem,
+    offeredItem,
+    confirmerIds,
+    messages,
+    profilesById,
+    myReviewResult,
+  ] = await Promise.all([
+    fetchExchangeItemSummariesByIds([deal.requestedItemId]).then((rows) => rows[0] ?? null),
+    fetchExchangeItemSummariesByIds([deal.offeredItemId]).then((rows) => rows[0] ?? null),
+    teswaBackendRuntime.deals.listConfirmationUserIds(dealId),
+    teswaBackendRuntime.deals.listMessages(dealId, 100),
     getDealParticipantProfiles([requesterId, offererId]),
-    supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('deal_id', dealId).eq('reviewer_id', currentUserId),
+    teswaBackendRuntime.deals.hasReview(dealId, currentUserId),
   ]);
 
-  if (confirmationsRes.error) throw confirmationsRes.error;
-  if (messagesRes.error) throw messagesRes.error;
-  if (myReviewRes.error && __DEV__) {
+  if (!myReviewResult.ok && __DEV__) {
     console.log('[deals] alreadyRated lookup failed, fallback to false', {
       dealId,
       currentUserId,
-      code: myReviewRes.error.code,
-      message: myReviewRes.error.message,
+      message: myReviewResult.message,
     });
   }
 
-  const confirmerIds = new Set((confirmationsRes.data ?? []).map((r) => r.user_id as string));
-  const iConfirmed = confirmerIds.has(currentUserId);
-  const otherConfirmed = confirmerIds.has(otherParticipantId);
-  const canCoordinate = ['coordinating', 'completed_pending_confirmation'].includes(deal.status as string);
+  const confirmerIdSet = new Set(confirmerIds);
+  const iConfirmed = confirmerIdSet.has(currentUserId);
+  const otherConfirmed = confirmerIdSet.has(otherParticipantId);
+  const canCoordinate = ['coordinating', 'completed_pending_confirmation'].includes(deal.status);
 
-  const requester = profilesById.get(requesterId) ?? { id: requesterId, displayName: null, avatarUrl: null, username: null, successfulSwapsCount: null, responseRate: null };
-  const offerer = profilesById.get(offererId) ?? { id: offererId, displayName: null, avatarUrl: null, username: null, successfulSwapsCount: null, responseRate: null };
+  const requester = profilesById.get(requesterId) ?? {
+    id: requesterId,
+    displayName: null,
+    avatarUrl: null,
+    username: null,
+    successfulSwapsCount: null,
+    responseRate: null,
+  };
+  const offerer = profilesById.get(offererId) ?? {
+    id: offererId,
+    displayName: null,
+    avatarUrl: null,
+    username: null,
+    successfulSwapsCount: null,
+    responseRate: null,
+  };
 
   return {
     ok: true,
     deal: {
-      id: deal.id as string,
+      id: deal.id,
       status: deal.status as DealStatus,
-      acceptedAt: (deal.accepted_at as string | null) ?? null,
-      createdAt: (deal.created_at as string | null) ?? null,
+      acceptedAt: deal.acceptedAt,
+      createdAt: deal.createdAt,
       viewerRole,
       requester,
       offerer,
-      otherParticipant: profilesById.get(otherParticipantId) ?? { id: otherParticipantId, displayName: null, avatarUrl: null, username: null, successfulSwapsCount: null, responseRate: null },
+      otherParticipant: profilesById.get(otherParticipantId) ?? {
+        id: otherParticipantId,
+        displayName: null,
+        avatarUrl: null,
+        username: null,
+        successfulSwapsCount: null,
+        responseRate: null,
+      },
       requestedItem,
       offeredItem,
       iConfirmed,
       otherConfirmed,
       canSendMessage: canCoordinate,
       canConfirmCompletion: canCoordinate && !iConfirmed,
-      alreadyRated: myReviewRes.error ? false : (myReviewRes.count ?? 0) > 0,
-      messages: (messagesRes.data ?? []).map(toMessageRow),
+      alreadyRated: myReviewResult.ok ? myReviewResult.data : false,
+      messages: messages.map(toMessageRow),
     },
   };
 }
 
 export async function markDealThreadReadFromMobile(dealId: string): Promise<void> {
-  const { error } = await supabase.rpc('mark_deal_thread_read', { p_deal_id: dealId });
-  if (error && __DEV__) console.log('[deals] mark_deal_thread_read failed', error);
+  const result = await teswaBackendRuntime.deals.markRead(dealId);
+  if (!result.ok && __DEV__) {
+    console.log('[deals] mark_deal_thread_read failed', result.message);
+  }
 }
 
-export async function sendDealMessageFromMobile(input: { dealId: string; currentUserId: string; body: string }) {
+export async function sendDealMessageFromMobile(input: {
+  dealId: string;
+  currentUserId: string;
+  body: string;
+}) {
   const body = input.body.trim();
-  if (!body) return { ok: false as const, reason: 'invalid_body' as const, message: 'اكتب رسالة الأول.' };
-  if (body.length > 800) return { ok: false as const, reason: 'invalid_body' as const, message: 'الرسالة طويلة زيادة عن الحد (800 حرف).' };
+  if (!body) {
+    return { ok: false as const, reason: 'invalid_body' as const, message: 'اكتب رسالة الأول.' };
+  }
+  if (body.length > 800) {
+    return { ok: false as const, reason: 'invalid_body' as const, message: 'الرسالة طويلة زيادة عن الحد (800 حرف).' };
+  }
 
-  const { data: deal, error: dealError } = await supabase
-    .from('swap_deals')
-    .select('id,status,requester_id,offerer_id')
-    .eq('id', input.dealId)
-    .maybeSingle();
-
-  if (dealError) throw dealError;
+  const deal = await teswaBackendRuntime.deals.getDeal(input.dealId);
   if (!deal) return { ok: false as const, reason: 'not_found' as const, message: 'الصفقة غير موجودة.' };
 
-  const requesterId = deal.requester_id as string;
-  const offererId = deal.offerer_id as string;
+  const requesterId = deal.requesterId;
+  const offererId = deal.offererId;
   if (input.currentUserId !== requesterId && input.currentUserId !== offererId) {
     return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بالمراسلة في الصفقة دي.' };
   }
 
-  if (!canTransitionDealStatus(deal.status as string, 'completed_pending_confirmation') && deal.status !== 'completed_pending_confirmation') {
+  if (
+    !canTransitionDealStatus(deal.status, 'completed_pending_confirmation')
+    && deal.status !== 'completed_pending_confirmation'
+  ) {
     return { ok: false as const, reason: 'invalid_status' as const, message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   }
 
   const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
   const blockedState = await fetchUserBlockState(input.currentUserId, otherParticipantId);
   if (!blockedState.ok) return { ok: false as const, reason: 'unknown' as const, message: blockedState.message };
-  if (blockedState.state.isBlockedEitherDirection) return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكن إرسال رسائل لأن بينكما حظر.' };
+  if (blockedState.state.isBlockedEitherDirection) {
+    return { ok: false as const, reason: 'unauthorized' as const, message: 'لا يمكن إرسال رسائل لأن بينكما حظر.' };
+  }
 
   const since = new Date(Date.now() - 60_000).toISOString();
-  const { count, error: rateError } = await supabase
-    .from('deal_messages')
-    .select('id', { head: true, count: 'exact' })
-    .eq('deal_id', input.dealId)
-    .eq('sender_id', input.currentUserId)
-    .gte('created_at', since);
-  if (rateError) throw rateError;
-  if ((count ?? 0) >= 5) {
+  const recentCount = await teswaBackendRuntime.deals.countMessagesSince(
+    input.dealId,
+    input.currentUserId,
+    since,
+  );
+  if (recentCount >= 5) {
     return { ok: false as const, reason: 'rate_limited' as const, message: 'استنى دقيقة قبل إرسال رسائل جديدة كتير.' };
   }
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('deal_messages')
-    .insert({ deal_id: input.dealId, sender_id: input.currentUserId, body })
-    .select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at')
-    .single();
-  if (insertError) throw insertError;
+  const insertResult = await teswaBackendRuntime.deals.insertTextMessage({
+    dealId: input.dealId,
+    senderId: input.currentUserId,
+    body,
+  });
+  if (!insertResult.ok) {
+    throw insertResult.cause ?? new Error(insertResult.message);
+  }
 
   void notify({
     target_user_id: otherParticipantId,
@@ -237,41 +274,69 @@ export async function sendDealMessageFromMobile(input: { dealId: string; current
     target_deal_id: input.dealId,
     target_offer_id: null,
     target_item_id: null,
-    target_message_id: inserted.id,
+    target_message_id: insertResult.data.id,
   });
-  return { ok: true as const, message: toMessageRow(inserted) };
+
+  return { ok: true as const, message: toMessageRow(insertResult.data) };
 }
 
-export async function confirmDealCompletedFromMobile(input: { dealId: string; currentUserId: string; note?: string }) {
-  const { data: deal, error: dealError } = await supabase
-    .from('swap_deals')
-    .select('id,status,requester_id,offerer_id')
-    .eq('id', input.dealId)
-    .maybeSingle();
-  if (dealError) throw dealError;
+export async function confirmDealCompletedFromMobile(input: {
+  dealId: string;
+  currentUserId: string;
+  note?: string;
+}) {
+  const deal = await teswaBackendRuntime.deals.getDeal(input.dealId);
   if (!deal) return { ok: false as const, reason: 'not_found' as const, message: 'الصفقة غير موجودة.' };
 
-  const requesterId = deal.requester_id as string;
-  const offererId = deal.offerer_id as string;
+  const requesterId = deal.requesterId;
+  const offererId = deal.offererId;
   if (input.currentUserId !== requesterId && input.currentUserId !== offererId) {
     return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بتأكيد الصفقة دي.' };
   }
 
-  if (!canTransitionDealStatus(deal.status as string, 'completed_pending_confirmation') && deal.status !== 'completed_pending_confirmation') {
+  if (
+    !canTransitionDealStatus(deal.status, 'completed_pending_confirmation')
+    && deal.status !== 'completed_pending_confirmation'
+  ) {
     return { ok: false as const, reason: 'invalid_status' as const, message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   }
 
-  const { error: insertError } = await supabase.from('deal_confirmations').insert({ deal_id: input.dealId, user_id: input.currentUserId, note: input.note?.trim() || null });
-  if (insertError && insertError.code !== '23505') throw insertError;
+  const confirmResult = await teswaBackendRuntime.deals.confirm({
+    dealId: input.dealId,
+    userId: input.currentUserId,
+    note: input.note,
+  });
+  if (!confirmResult.ok) {
+    throw confirmResult.cause ?? new Error(confirmResult.message);
+  }
 
-  const { data: completed, error: completeError } = await supabase.rpc('complete_deal_if_ready', { p_deal_id: input.dealId });
-  if (completeError) throw completeError;
+  const completeResult = await teswaBackendRuntime.deals.completeIfReady(input.dealId);
+  if (!completeResult.ok) {
+    throw completeResult.cause ?? new Error(completeResult.message);
+  }
+  const completed = completeResult.data;
 
   const otherParticipantId = input.currentUserId === requesterId ? offererId : requesterId;
   if (completed) {
     void Promise.all([
-      notify({ target_user_id: requesterId, notification_type: 'deal_completed', notification_title: 'المقايضة تمت', notification_body: 'الطرفين أكدوا الإتمام. تقدروا تسيبوا تقييم لبعض.', target_deal_id: input.dealId, target_offer_id: null, target_item_id: null }),
-      notify({ target_user_id: offererId, notification_type: 'deal_completed', notification_title: 'المقايضة تمت', notification_body: 'الطرفين أكدوا الإتمام. تقدروا تسيبوا تقييم لبعض.', target_deal_id: input.dealId, target_offer_id: null, target_item_id: null }),
+      notify({
+        target_user_id: requesterId,
+        notification_type: 'deal_completed',
+        notification_title: 'المقايضة تمت',
+        notification_body: 'الطرفين أكدوا الإتمام. تقدروا تسيبوا تقييم لبعض.',
+        target_deal_id: input.dealId,
+        target_offer_id: null,
+        target_item_id: null,
+      }),
+      notify({
+        target_user_id: offererId,
+        notification_type: 'deal_completed',
+        notification_title: 'المقايضة تمت',
+        notification_body: 'الطرفين أكدوا الإتمام. تقدروا تسيبوا تقييم لبعض.',
+        target_deal_id: input.dealId,
+        target_offer_id: null,
+        target_item_id: null,
+      }),
     ]);
   } else {
     void notify({
@@ -285,7 +350,7 @@ export async function confirmDealCompletedFromMobile(input: { dealId: string; cu
     });
   }
 
-  return { ok: true as const, completed: Boolean(completed) };
+  return { ok: true as const, completed };
 }
 
 
@@ -328,27 +393,32 @@ export async function sendDealVoiceMessageFromMobile(input: {
   sizeBytes?: number | null;
 }) {
   const localUri = input.localUri.trim();
-  if (!localUri) return { ok: false as const, reason: 'invalid_audio' as const, message: 'تعذر قراءة التسجيل الصوتي.' };
-  if (input.durationMs < 500) return { ok: false as const, reason: 'invalid_duration' as const, message: 'التسجيل قصير جدًا. سجّل رسالة أوضح.' };
-  if (input.durationMs > 120000) return { ok: false as const, reason: 'invalid_duration' as const, message: 'مدة الرسالة الصوتية لا يمكن أن تتجاوز دقيقتين.' };
-  if ((input.sizeBytes ?? 0) > DEAL_VOICE_MESSAGE_MAX_SIZE_BYTES) return { ok: false as const, reason: 'file_too_large' as const, message: 'حجم الرسالة الصوتية كبير جدًا.' };
+  if (!localUri) {
+    return { ok: false as const, reason: 'invalid_audio' as const, message: 'تعذر قراءة التسجيل الصوتي.' };
+  }
+  if (input.durationMs < 500) {
+    return { ok: false as const, reason: 'invalid_duration' as const, message: 'التسجيل قصير جدًا. سجّل رسالة أوضح.' };
+  }
+  if (input.durationMs > 120000) {
+    return { ok: false as const, reason: 'invalid_duration' as const, message: 'مدة الرسالة الصوتية لا يمكن أن تتجاوز دقيقتين.' };
+  }
+  if ((input.sizeBytes ?? 0) > DEAL_VOICE_MESSAGE_MAX_SIZE_BYTES) {
+    return { ok: false as const, reason: 'file_too_large' as const, message: 'حجم الرسالة الصوتية كبير جدًا.' };
+  }
 
-  const { data: deal, error: dealError } = await supabase
-    .from('swap_deals')
-    .select('id,status,requester_id,offerer_id')
-    .eq('id', input.dealId)
-    .maybeSingle();
-
-  if (dealError) throw dealError;
+  const deal = await teswaBackendRuntime.deals.getDeal(input.dealId);
   if (!deal) return { ok: false as const, reason: 'not_found' as const, message: 'الصفقة غير موجودة.' };
 
-  const requesterId = deal.requester_id as string;
-  const offererId = deal.offerer_id as string;
+  const requesterId = deal.requesterId;
+  const offererId = deal.offererId;
   if (input.currentUserId !== requesterId && input.currentUserId !== offererId) {
     return { ok: false as const, reason: 'unauthorized' as const, message: 'غير مسموح لك بالمراسلة في الصفقة دي.' };
   }
 
-  if (!canTransitionDealStatus(deal.status as string, 'completed_pending_confirmation') && deal.status !== 'completed_pending_confirmation') {
+  if (
+    !canTransitionDealStatus(deal.status, 'completed_pending_confirmation')
+    && deal.status !== 'completed_pending_confirmation'
+  ) {
     return { ok: false as const, reason: 'invalid_status' as const, message: 'لا يمكن تنفيذ الإجراء على الحالة الحالية.' };
   }
 
@@ -360,21 +430,20 @@ export async function sendDealVoiceMessageFromMobile(input: {
   }
 
   const since = new Date(Date.now() - 60_000).toISOString();
-  const { count, error: rateError } = await supabase
-    .from('deal_messages')
-    .select('id', { head: true, count: 'exact' })
-    .eq('deal_id', input.dealId)
-    .eq('sender_id', input.currentUserId)
-    .gte('created_at', since);
-  if (rateError) throw rateError;
-  if ((count ?? 0) >= 5) {
+  const recentCount = await teswaBackendRuntime.deals.countMessagesSince(
+    input.dealId,
+    input.currentUserId,
+    since,
+  );
+  if (recentCount >= 5) {
     return { ok: false as const, reason: 'rate_limited' as const, message: 'استنى دقيقة قبل إرسال رسائل جديدة كتير.' };
   }
 
   const contentType = input.mimeType || 'audio/m4a';
   const ext = getAudioExtension(input.fileName, contentType);
   const safeName = sanitizeAudioFileName(input.fileName, `voice.${ext}`);
-  const uploadPath = `deals/${input.dealId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
+  const uploadPath =
+    `deals/${input.dealId}/${input.currentUserId}/${Date.now()}-${Crypto.randomUUID()}-${safeName}`;
 
   const uploadResult = await teswaBackendRuntime.media.upload({
     purpose: 'deal_voice',
@@ -388,32 +457,55 @@ export async function sendDealVoiceMessageFromMobile(input: {
     },
     objectKeyHint: uploadPath,
   });
+
   if (!uploadResult.ok) {
-    if (__DEV__) console.log('[deals] voice upload failed', { uploadPath, message: uploadResult.message });
-    return { ok: false as const, reason: uploadResult.reason === 'file_too_large' ? 'file_too_large' as const : 'upload_failed' as const, message: uploadResult.reason === 'file_too_large' ? 'حجم الرسالة الصوتية كبير جدًا.' : 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.' };
+    if (__DEV__) {
+      console.log('[deals] voice upload failed', {
+        uploadPath,
+        message: uploadResult.message,
+      });
+    }
+    return {
+      ok: false as const,
+      reason: uploadResult.reason === 'file_too_large'
+        ? 'file_too_large' as const
+        : 'upload_failed' as const,
+      message: uploadResult.reason === 'file_too_large'
+        ? 'حجم الرسالة الصوتية كبير جدًا.'
+        : 'تعذر رفع الرسالة الصوتية. حاول مرة أخرى.',
+    };
   }
 
-  const { data: inserted, error: insertError } = await supabase
-    .from('deal_messages')
-    .insert({
-      deal_id: input.dealId,
-      sender_id: input.currentUserId,
-      body: 'رسالة صوتية',
-      message_type: 'voice',
-      audio_storage_path: uploadPath,
-      audio_duration_ms: input.durationMs,
-      audio_mime_type: contentType,
-      audio_size_bytes: input.sizeBytes ?? null,
-    })
-    .select('id,deal_id,sender_id,body,message_type,audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes,created_at')
-    .single();
+  const insertResult = await teswaBackendRuntime.deals.insertVoiceMessage({
+    dealId: input.dealId,
+    senderId: input.currentUserId,
+    body: 'رسالة صوتية',
+    audioStoragePath: uploadPath,
+    audioDurationMs: input.durationMs,
+    audioMimeType: contentType,
+    audioSizeBytes: input.sizeBytes ?? null,
+  });
 
-  if (insertError) {
+  if (!insertResult.ok) {
     await teswaBackendRuntime.media.remove([
-      { purpose: 'deal_voice', objectKey: uploadPath, contentType, sizeBytes: input.sizeBytes ?? null },
+      {
+        purpose: 'deal_voice',
+        objectKey: uploadPath,
+        contentType,
+        sizeBytes: input.sizeBytes ?? null,
+      },
     ]);
-    if (__DEV__) console.log('[deals] voice insert failed', { uploadPath, message: insertError.message });
-    return { ok: false as const, reason: 'insert_failed' as const, message: 'تعذر إرسال الرسالة الصوتية. حاول مرة أخرى.' };
+    if (__DEV__) {
+      console.log('[deals] voice insert failed', {
+        uploadPath,
+        message: insertResult.message,
+      });
+    }
+    return {
+      ok: false as const,
+      reason: 'insert_failed' as const,
+      message: 'تعذر إرسال الرسالة الصوتية. حاول مرة أخرى.',
+    };
   }
 
   void notify({
@@ -424,7 +516,8 @@ export async function sendDealVoiceMessageFromMobile(input: {
     target_deal_id: input.dealId,
     target_offer_id: null,
     target_item_id: null,
-    target_message_id: inserted.id,
+    target_message_id: insertResult.data.id,
   });
-  return { ok: true as const, message: toMessageRow(inserted) };
+
+  return { ok: true as const, message: toMessageRow(insertResult.data) };
 }
