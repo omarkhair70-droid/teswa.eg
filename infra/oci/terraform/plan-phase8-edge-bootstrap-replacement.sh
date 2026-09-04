@@ -4,6 +4,7 @@ set -Eeuo pipefail
 TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 PLAN="${TESWA_PHASE8_EDGE_PLAN:-/tmp/teswa-phase8-edge-bootstrap-replacement.plan}"
 JSON="${TESWA_PHASE8_EDGE_PLAN_JSON:-/tmp/teswa-phase8-edge-bootstrap-replacement.json}"
+STATE_JSON="${TESWA_PHASE8_STATE_JSON:-/tmp/teswa-phase8-current-state.json}"
 
 [ -x "$TF" ] || { echo "Terraform binary not found at $TF" >&2; exit 1; }
 
@@ -13,19 +14,45 @@ COMPARTMENT="$("$TF" output -raw teswa_compartment_id)"
 [ -n "$COMPARTMENT" ] || { echo "phase8_edge_plan=FAIL reason=missing_compartment" >&2; exit 2; }
 
 TENANCY="$(oci iam compartment get --compartment-id "$COMPARTMENT" --query 'data."compartment-id"' --raw-output)"
-EDGE_ID="$(oci compute instance list --compartment-id "$COMPARTMENT" --display-name teswa-edge-01 --lifecycle-state RUNNING --all --query 'data[0].id' --raw-output)"
-CORE_ID="$(oci compute instance list --compartment-id "$COMPARTMENT" --display-name teswa-core-01 --lifecycle-state RUNNING --all --query 'data[0].id' --raw-output)"
+[ -n "$TENANCY" ] && [ "$TENANCY" != "null" ] && [ "$TENANCY" != "None" ] || {
+  echo "phase8_edge_plan=FAIL reason=missing_tenancy" >&2
+  exit 3
+}
 
-for pair in "TENANCY:$TENANCY" "EDGE_ID:$EDGE_ID" "CORE_ID:$CORE_ID"; do
-  k="${pair%%:*}"; v="${pair#*:}"
-  [ -n "$v" ] && [ "$v" != "null" ] && [ "$v" != "None" ] || { echo "phase8_edge_plan=FAIL reason=missing_$k" >&2; exit 3; }
-done
+"$TF" state pull > "$STATE_JSON"
+IMAGES="$(python3 - "$STATE_JSON" <<'PY'
+import json,sys
+p=json.load(open(sys.argv[1],encoding="utf-8"))
 
-EDGE_IMAGE="$(oci compute instance get --instance-id "$EDGE_ID" --query 'data.image' --raw-output)"
-CORE_IMAGE="$(oci compute instance get --instance-id "$CORE_ID" --query 'data.image' --raw-output)"
+def image_for(name, expected_display, expected_shape):
+    matches=[]
+    for r in p.get("resources",[]):
+        if r.get("type") != "oci_core_instance" or r.get("name") != name:
+            continue
+        for inst in r.get("instances",[]):
+            a=inst.get("attributes") or {}
+            if a.get("display_name") != expected_display or a.get("shape") != expected_shape:
+                continue
+            sd=a.get("source_details") or []
+            source_id=(sd[0] if sd else {}).get("source_id")
+            if source_id:
+                matches.append(source_id)
+    if len(matches) != 1:
+        raise SystemExit(f"state image lookup failed for {expected_display}: count={len(matches)}")
+    return matches[0]
 
-[ -n "$EDGE_IMAGE" ] && [ "$EDGE_IMAGE" != "null" ] || { echo "phase8_edge_plan=FAIL reason=missing_edge_image" >&2; exit 4; }
-[ -n "$CORE_IMAGE" ] && [ "$CORE_IMAGE" != "null" ] || { echo "phase8_edge_plan=FAIL reason=missing_core_image" >&2; exit 4; }
+edge=image_for("edge","teswa-edge-01","VM.Standard.E2.1.Micro")
+core=image_for("core","teswa-core-01","VM.Standard.A1.Flex")
+print(edge+"|"+core)
+PY
+)" || { echo "phase8_edge_plan=FAIL reason=state_image_lookup" >&2; exit 4; }
+
+EDGE_IMAGE="${IMAGES%%|*}"
+CORE_IMAGE="${IMAGES#*|}"
+[ -n "$EDGE_IMAGE" ] && [ -n "$CORE_IMAGE" ] && [ "$EDGE_IMAGE" != "$IMAGES" ] || {
+  echo "phase8_edge_plan=FAIL reason=invalid_state_images" >&2
+  exit 4
+}
 
 rm -f "$PLAN" "$JSON"
 
@@ -33,6 +60,7 @@ echo "TESWA PHASE 8 EDGE BOOTSTRAP REPLACEMENT PLAN"
 echo "mode=plan-only"
 echo "target=teswa-edge-01"
 echo "replacement_scope=edge_only"
+echo "image_source=terraform_state"
 echo "public_ssh_rule_change=none_expected"
 echo "core_change=none_expected"
 echo "network_change=none_expected"
