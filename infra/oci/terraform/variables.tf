@@ -85,6 +85,12 @@ variable "enable_run_command_iam" {
   default     = true
 }
 
+variable "enable_lane3_backup_iam" {
+  description = "Create the Core-only write path to teswa-backups for Lane 3 PostgreSQL backup and restore verification."
+  type        = bool
+  default     = false
+}
+
 variable "enable_lane4_rehearsal_readonly_iam" {
   description = "Create the narrowly scoped read-only IAM path for teswa-core-01 to Lane 4 rehearsal objects in teswa-backups."
   type        = bool
