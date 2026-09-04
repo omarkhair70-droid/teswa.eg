@@ -147,7 +147,7 @@ resource "oci_core_instance" "edge" {
 
       http://$${EDGE_PRIVATE_IP}:8080 {
         respond /healthz "teswa-edge-caddy-ok" 200
-${local.phase8b_edge_proxy_caddy_block}
+      ${local.phase8b_edge_proxy_caddy_block}
         respond 404
       }
       CADDYFILE
@@ -200,7 +200,7 @@ ${local.phase8b_edge_proxy_caddy_block}
         sleep 1
       done
       curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/healthz" | grep -qx 'teswa-edge-caddy-ok'
-${local.phase8b_edge_proxy_boot_verify}
+      ${local.phase8b_edge_proxy_boot_verify}
       ss -ltnH | awk '$4 ~ /(^|:)80$/ || $4 ~ /(^|:)443$/ {found=1} END {exit found ? 1 : 0}'
       ss -ltnH | awk -v addr="$EDGE_PRIVATE_IP:8080" '$4 == addr {found=1} END {exit found ? 0 : 1}'
 
