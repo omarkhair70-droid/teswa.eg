@@ -25,4 +25,4 @@ PY
 
 chmod 0700 "$TMP"
 echo "safe_closeout_patch=PASS"
-exec bash "$TMP"
+bash "$TMP"
