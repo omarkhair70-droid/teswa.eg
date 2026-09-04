@@ -23,6 +23,7 @@ EDGE_ID="$(oci compute instance list \
 }
 
 TMP="$(mktemp)"
+LIST_JSON="$(mktemp)"
 CURRENT_HISTORY_ID=""
 cleanup_current() {
   if [ -n "$CURRENT_HISTORY_ID" ]; then
@@ -34,23 +35,58 @@ cleanup_current() {
 }
 cleanup() {
   cleanup_current
-  rm -f "$TMP"
+  rm -f "$TMP" "$LIST_JSON"
 }
 trap cleanup EXIT INT TERM
 
 cleanup_stale_verifier_histories() {
+  local attempt=1
+  local ok=false
+  : > "$LIST_JSON"
+
+  while [ "$attempt" -le 4 ]; do
+    if oci compute console-history list \
+      --compartment-id "$COMPARTMENT" \
+      --instance-id "$EDGE_ID" \
+      --all \
+      --output json > "$LIST_JSON"; then
+      if python3 - "$LIST_JSON" <<'PY'
+import json,sys
+p=sys.argv[1]
+try:
+    with open(p,encoding="utf-8") as f:
+        obj=json.load(f)
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if isinstance(obj,dict) and isinstance(obj.get("data",[]),list) else 1)
+PY
+      then
+        ok=true
+        break
+      fi
+    fi
+    echo "console_history_list_retry=$attempt"
+    sleep 3
+    attempt=$((attempt + 1))
+  done
+
+  if [ "$ok" != true ]; then
+    echo "phase8_caddy_boot_console_verify=FAIL reason=console_history_list_unavailable" >&2
+    echo "hint=no_guest_or_terraform_mutation_occurred" >&2
+    return 1
+  fi
+
   local ids
-  ids="$(oci compute console-history list \
-    --compartment-id "$COMPARTMENT" \
-    --instance-id "$EDGE_ID" \
-    --all \
-    --output json | \
-    python3 -c 'import json,sys
-name=sys.argv[1]
-rows=json.load(sys.stdin).get("data",[])
+  ids="$(python3 - "$LIST_JSON" "$DISPLAY_NAME" <<'PY'
+import json,sys
+path,name=sys.argv[1:]
+with open(path,encoding="utf-8") as f:
+    rows=json.load(f).get("data",[])
 for row in rows:
     if row.get("display-name")==name and row.get("id"):
-        print(row["id"])' "$DISPLAY_NAME")"
+        print(row["id"])
+PY
+)"
 
   local count=0
   while IFS= read -r history_id; do
