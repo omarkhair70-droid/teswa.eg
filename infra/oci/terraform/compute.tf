@@ -1,22 +1,20 @@
 locals {
-  phase8b_edge_proxy_caddy_block = var.enable_phase8b_internal_proxy ? <<-EOT
-        handle /internal/api-health {
-          rewrite * /healthz
-          reverse_proxy http://${var.phase8b_core_private_ip}:3100
-        }
+  phase8b_edge_proxy_caddy_block = var.enable_phase8b_internal_proxy ? join("\n", [
+    "handle /internal/api-health {",
+    "  rewrite * /healthz",
+    "  reverse_proxy http://${var.phase8b_core_private_ip}:3100",
+    "}",
+    "",
+    "handle /internal/realtime-health {",
+    "  rewrite * /healthz",
+    "  reverse_proxy http://${var.phase8b_core_private_ip}:3200",
+    "}",
+  ]) : ""
 
-        handle /internal/realtime-health {
-          rewrite * /healthz
-          reverse_proxy http://${var.phase8b_core_private_ip}:3200
-        }
-  EOT
-  : ""
-
-  phase8b_edge_proxy_boot_verify = var.enable_phase8b_internal_proxy ? <<-EOT
-      curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/internal/api-health" | grep -Fq '"service":"teswa-api"'
-      curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/internal/realtime-health" | grep -Fq '"service":"teswa-realtime"'
-  EOT
-  : ""
+  phase8b_edge_proxy_boot_verify = var.enable_phase8b_internal_proxy ? join("\n", [
+    "curl --fail --silent --show-error \"http://$EDGE_PRIVATE_IP:8080/internal/api-health\" | grep -Fq '\"service\":\"teswa-api\"'",
+    "curl --fail --silent --show-error \"http://$EDGE_PRIVATE_IP:8080/internal/realtime-health\" | grep -Fq '\"service\":\"teswa-realtime\"'",
+  ]) : ""
 }
 
 data "oci_identity_availability_domains" "teswa" {
