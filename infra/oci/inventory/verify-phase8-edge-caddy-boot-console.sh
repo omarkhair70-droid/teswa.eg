@@ -5,7 +5,9 @@ TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 POLL_SECONDS="${POLL_SECONDS:-15}"
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-480}"
 DISPLAY_NAME="teswa-phase8-caddy-boot-verify"
+
 [ -x "$TF" ] || { echo "Terraform binary not found at $TF" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 not found" >&2; exit 1; }
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../terraform" && pwd)"
 COMPARTMENT="$("$TF" output -raw teswa_compartment_id)"
@@ -22,153 +24,164 @@ EDGE_ID="$(oci compute instance list \
   exit 2
 }
 
-TMP="$(mktemp)"
-LIST_JSON="$(mktemp)"
-CURRENT_HISTORY_ID=""
-cleanup_current() {
-  if [ -n "$CURRENT_HISTORY_ID" ]; then
-    oci compute console-history delete \
-      --instance-console-history-id "$CURRENT_HISTORY_ID" \
-      --force >/dev/null 2>&1 || true
-    CURRENT_HISTORY_ID=""
-  fi
-}
-cleanup() {
-  cleanup_current
-  rm -f "$TMP" "$LIST_JSON"
-}
-trap cleanup EXIT INT TERM
-
-cleanup_stale_verifier_histories() {
-  local attempt=1
-  local ok=false
-  : > "$LIST_JSON"
-
-  while [ "$attempt" -le 4 ]; do
-    if oci compute console-history list \
-      --compartment-id "$COMPARTMENT" \
-      --instance-id "$EDGE_ID" \
-      --all \
-      --output json > "$LIST_JSON"; then
-      if python3 - "$LIST_JSON" <<'PY'
-import json,sys
-p=sys.argv[1]
-try:
-    with open(p,encoding="utf-8") as f:
-        obj=json.load(f)
-except Exception:
-    raise SystemExit(1)
-raise SystemExit(0 if isinstance(obj,dict) and isinstance(obj.get("data",[]),list) else 1)
-PY
-      then
-        ok=true
-        break
-      fi
-    fi
-    echo "console_history_list_retry=$attempt"
-    sleep 3
-    attempt=$((attempt + 1))
-  done
-
-  if [ "$ok" != true ]; then
-    echo "phase8_caddy_boot_console_verify=FAIL reason=console_history_list_unavailable" >&2
-    echo "hint=no_guest_or_terraform_mutation_occurred" >&2
-    return 1
-  fi
-
-  local ids
-  ids="$(python3 - "$LIST_JSON" "$DISPLAY_NAME" <<'PY'
-import json,sys
-path,name=sys.argv[1:]
-with open(path,encoding="utf-8") as f:
-    rows=json.load(f).get("data",[])
-for row in rows:
-    if row.get("display-name")==name and row.get("id"):
-        print(row["id"])
-PY
-)"
-
-  local count=0
-  while IFS= read -r history_id; do
-    [ -n "$history_id" ] || continue
-    oci compute console-history delete \
-      --instance-console-history-id "$history_id" \
-      --force >/dev/null
-    count=$((count + 1))
-  done <<< "$ids"
-  echo "stale_verifier_histories_deleted=$count"
-}
-
 echo "TESWA PHASE 8 EDGE CADDY BOOT CONSOLE VERIFY"
 echo "target=teswa-edge-01"
 echo "guest_command_created=false"
 echo "run_command_dependency=none"
-echo "console_history_capture=ephemeral"
+echo "console_history_transport=python_sdk"
 echo "max_wait_seconds=$MAX_WAIT_SECONDS"
 
-# Previous verifier revisions retained every poll capture until process exit and
-# could hit OCI's per-instance console-history limit. Remove only histories
-# created by this verifier, never unrelated operator/recovery histories.
-cleanup_stale_verifier_histories
+python3 - "$COMPARTMENT" "$EDGE_ID" "$DISPLAY_NAME" "$POLL_SECONDS" "$MAX_WAIT_SECONDS" <<'PY'
+import os
+import sys
+import time
+from pathlib import Path
 
-elapsed=0
-last_marker=""
-while true; do
-  CURRENT_HISTORY_ID="$(oci compute console-history capture \
-    --instance-id "$EDGE_ID" \
-    --display-name "$DISPLAY_NAME" \
-    --wait-for-state SUCCEEDED \
-    --wait-interval-seconds 5 \
-    --query 'data.id' \
-    --raw-output)"
+try:
+    import oci
+except Exception as exc:
+    print(f"phase8_caddy_boot_console_verify=FAIL reason=oci_python_sdk_unavailable detail={type(exc).__name__}")
+    raise SystemExit(10)
 
-  [ -n "$CURRENT_HISTORY_ID" ] && [ "$CURRENT_HISTORY_ID" != "null" ] && [ "$CURRENT_HISTORY_ID" != "None" ] || {
-    echo "phase8_caddy_boot_console_verify=FAIL reason=console_capture_missing_id" >&2
-    exit 3
-  }
+compartment_id, instance_id, display_name, poll_s, max_wait_s = sys.argv[1:]
+poll_s = int(poll_s)
+max_wait_s = int(max_wait_s)
 
-  : > "$TMP"
-  oci compute console-history get-content \
-    --instance-console-history-id "$CURRENT_HISTORY_ID" \
-    --file "$TMP"
 
-  # Recycle this capture immediately so repeated polling cannot exhaust OCI's
-  # console-history quota.
-  cleanup_current
+def build_client():
+    cfg_path = os.path.expanduser(os.environ.get("OCI_CLI_CONFIG_FILE", "~/.oci/config"))
+    profile = os.environ.get("OCI_CLI_PROFILE", "DEFAULT")
+    auth = os.environ.get("OCI_CLI_AUTH", "").strip().lower()
+    cfg = oci.config.from_file(file_location=cfg_path, profile_name=profile)
 
-  last_marker="$(grep -a 'TESWA_PHASE8_CADDY_BOOT=' "$TMP" | tail -n 1 || true)"
-  if [ -n "$last_marker" ]; then
-    echo "boot_marker=$last_marker"
-  else
-    echo "boot_marker=not_yet_visible elapsed_seconds=$elapsed"
-  fi
+    if auth == "instance_principal":
+        signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+        return oci.core.ComputeClient({"region": cfg.get("region")}, signer=signer), "instance_principal"
 
-  if grep -aq 'TESWA_PHASE8_CADDY_BOOT=PASS' "$TMP"; then
-    PASS_LINE="$(grep -a 'TESWA_PHASE8_CADDY_BOOT=PASS' "$TMP" | tail -n 1)"
-    echo "$PASS_LINE"
-    echo "run_command_dependency=none"
-    echo "production_cutover=none"
-    echo "dns_change=none"
-    echo "phase8_caddy_boot_console_verify=PASS"
-    exit 0
-  fi
+    token_file = cfg.get("security_token_file")
+    if auth == "security_token" or token_file:
+        if not token_file:
+            raise RuntimeError("security_token auth requested but security_token_file is missing")
+        token = Path(os.path.expanduser(token_file)).read_text(encoding="utf-8").strip()
+        key = oci.signer.load_private_key_from_file(
+            os.path.expanduser(cfg["key_file"]),
+            pass_phrase=cfg.get("pass_phrase"),
+        )
+        signer = oci.auth.signers.SecurityTokenSigner(token, key)
+        return oci.core.ComputeClient({"region": cfg["region"]}, signer=signer), "security_token"
 
-  if grep -aq 'TESWA_PHASE8_CADDY_BOOT=FAIL' "$TMP"; then
-    FAIL_LINE="$(grep -a 'TESWA_PHASE8_CADDY_BOOT=FAIL' "$TMP" | tail -n 1)"
-    echo "$FAIL_LINE"
-    echo "phase8_caddy_boot_console_verify=FAIL reason=guest_bootstrap_failed"
-    exit 4
-  fi
+    return oci.core.ComputeClient(cfg), "api_key"
 
-  if [ "$elapsed" -ge "$MAX_WAIT_SECONDS" ]; then
-    echo "--- console_tail ---"
-    tail -n 80 "$TMP" | tr -cd '\11\12\15\40-\176'
-    echo "--- end_console_tail ---"
-    echo "phase8_caddy_boot_console_verify=FAIL reason=boot_marker_not_found_after_wait"
-    echo "hint=inspect_cloud_init_console_output_before_any_replacement_or_runtime_mutation"
-    exit 5
-  fi
 
-  sleep "$POLL_SECONDS"
-  elapsed=$((elapsed + POLL_SECONDS))
-done
+def content_bytes(response):
+    data = response.data
+    if isinstance(data, (bytes, bytearray)):
+        return bytes(data)
+    if hasattr(data, "content"):
+        value = data.content
+        if isinstance(value, bytes):
+            return value
+    if hasattr(data, "raw"):
+        return data.raw.read()
+    if hasattr(data, "read"):
+        return data.read()
+    return str(data).encode("utf-8", errors="replace")
+
+
+try:
+    client, auth_mode = build_client()
+    print(f"sdk_auth_mode={auth_mode}")
+
+    histories = oci.pagination.list_call_get_all_results(
+        client.list_console_histories,
+        compartment_id,
+        instance_id=instance_id,
+    ).data
+
+    stale = [h for h in histories if getattr(h, "display_name", None) == display_name]
+    deleted = 0
+    for history in stale:
+        hid = getattr(history, "id", None)
+        if not hid:
+            continue
+        client.delete_console_history(hid)
+        deleted += 1
+    print(f"stale_verifier_histories_deleted={deleted}")
+except Exception as exc:
+    print(f"phase8_caddy_boot_console_verify=FAIL reason=sdk_controlplane_setup_failed detail={type(exc).__name__}:{str(exc)[:240]}")
+    raise SystemExit(11)
+
+elapsed = 0
+last_text = ""
+while True:
+    history_id = None
+    try:
+        details = oci.core.models.CaptureConsoleHistoryDetails(
+            instance_id=instance_id,
+            display_name=display_name,
+        )
+        response = client.capture_console_history(details)
+        history_id = response.data.id
+
+        deadline = time.time() + 90
+        state = None
+        while time.time() < deadline:
+            meta = client.get_console_history(history_id).data
+            state = getattr(meta, "lifecycle_state", None)
+            if state == "SUCCEEDED":
+                break
+            if state == "FAILED":
+                print("phase8_caddy_boot_console_verify=FAIL reason=console_capture_failed")
+                raise SystemExit(12)
+            time.sleep(3)
+        else:
+            print(f"phase8_caddy_boot_console_verify=FAIL reason=console_capture_timeout state={state}")
+            raise SystemExit(13)
+
+        raw = content_bytes(client.get_console_history_content(history_id))
+        text = raw.decode("utf-8", errors="replace")
+        last_text = text
+
+        markers = [line for line in text.splitlines() if "TESWA_PHASE8_CADDY_BOOT=" in line]
+        if markers:
+            print(f"boot_marker={markers[-1]}")
+        else:
+            print(f"boot_marker=not_yet_visible elapsed_seconds={elapsed}")
+
+        pass_lines = [line for line in markers if "TESWA_PHASE8_CADDY_BOOT=PASS" in line]
+        if pass_lines:
+            print(pass_lines[-1])
+            print("run_command_dependency=none")
+            print("production_cutover=none")
+            print("dns_change=none")
+            print("phase8_caddy_boot_console_verify=PASS")
+            raise SystemExit(0)
+
+        fail_lines = [line for line in markers if "TESWA_PHASE8_CADDY_BOOT=FAIL" in line]
+        if fail_lines:
+            print(fail_lines[-1])
+            print("phase8_caddy_boot_console_verify=FAIL reason=guest_bootstrap_failed")
+            raise SystemExit(14)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print(f"phase8_caddy_boot_console_verify=FAIL reason=sdk_console_operation_failed detail={type(exc).__name__}:{str(exc)[:240]}")
+        raise SystemExit(15)
+    finally:
+        if history_id:
+            try:
+                client.delete_console_history(history_id)
+            except Exception:
+                pass
+
+    if elapsed >= max_wait_s:
+        print("--- console_tail ---")
+        tail = "\n".join(last_text.splitlines()[-80:])
+        print("".join(ch for ch in tail if ch in "\n\r\t" or 32 <= ord(ch) <= 126))
+        print("--- end_console_tail ---")
+        print("phase8_caddy_boot_console_verify=FAIL reason=boot_marker_not_found_after_wait")
+        raise SystemExit(16)
+
+    time.sleep(poll_s)
+    elapsed += poll_s
+PY
