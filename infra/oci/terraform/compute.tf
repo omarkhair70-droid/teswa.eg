@@ -1,3 +1,24 @@
+locals {
+  phase8b_edge_proxy_caddy_block = var.enable_phase8b_internal_proxy ? <<-EOT
+        handle /internal/api-health {
+          rewrite * /healthz
+          reverse_proxy http://${var.phase8b_core_private_ip}:3100
+        }
+
+        handle /internal/realtime-health {
+          rewrite * /healthz
+          reverse_proxy http://${var.phase8b_core_private_ip}:3200
+        }
+  EOT
+  : ""
+
+  phase8b_edge_proxy_boot_verify = var.enable_phase8b_internal_proxy ? <<-EOT
+      curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/internal/api-health" | grep -Fq '"service":"teswa-api"'
+      curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/internal/realtime-health" | grep -Fq '"service":"teswa-realtime"'
+  EOT
+  : ""
+}
+
 data "oci_identity_availability_domains" "teswa" {
   compartment_id = var.tenancy_ocid
 }
@@ -57,6 +78,7 @@ resource "oci_core_instance" "edge" {
     hostname_label   = "edge01"
     nsg_ids          = [oci_core_network_security_group.edge.id]
     subnet_id        = oci_core_subnet.public_edge.id
+    private_ip       = var.enable_phase8b_internal_proxy ? var.phase8b_edge_private_ip : null
   }
 
   metadata = {
@@ -125,6 +147,7 @@ resource "oci_core_instance" "edge" {
 
       http://$${EDGE_PRIVATE_IP}:8080 {
         respond /healthz "teswa-edge-caddy-ok" 200
+${local.phase8b_edge_proxy_caddy_block}
         respond 404
       }
       CADDYFILE
@@ -177,14 +200,14 @@ resource "oci_core_instance" "edge" {
         sleep 1
       done
       curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/healthz" | grep -qx 'teswa-edge-caddy-ok'
-
+${local.phase8b_edge_proxy_boot_verify}
       ss -ltnH | awk '$4 ~ /(^|:)80$/ || $4 ~ /(^|:)443$/ {found=1} END {exit found ? 1 : 0}'
       ss -ltnH | awk -v addr="$EDGE_PRIVATE_IP:8080" '$4 == addr {found=1} END {exit found ? 0 : 1}'
 
       install -d -m 0755 /var/lib/teswa
-      printf '%s\n' "version=$(/usr/bin/caddy version | awk '{print $1}') listener=$EDGE_PRIVATE_IP:8080 public_listener=false" > /var/lib/teswa/phase8-caddy-boot-pass
+      printf '%s\n' "version=$(/usr/bin/caddy version | awk '{print $1}') listener=$EDGE_PRIVATE_IP:8080 public_listener=false phase8b_proxy=${var.enable_phase8b_internal_proxy}" > /var/lib/teswa/phase8-caddy-boot-pass
       chmod 0644 /var/lib/teswa/phase8-caddy-boot-pass
-      printf '%s\n' "TESWA_PHASE8_CADDY_BOOT=PASS version=$(/usr/bin/caddy version | awk '{print $1}') listener=$EDGE_PRIVATE_IP:8080 public_listener=false" >&3 || true
+      printf '%s\n' "TESWA_PHASE8_CADDY_BOOT=PASS version=$(/usr/bin/caddy version | awk '{print $1}') listener=$EDGE_PRIVATE_IP:8080 public_listener=false phase8b_proxy=${var.enable_phase8b_internal_proxy}" >&3 || true
     EOF
     )
   }
@@ -206,6 +229,16 @@ resource "oci_core_instance" "edge" {
     precondition {
       condition     = var.edge_image_ocid != ""
       error_message = "edge_image_ocid must be pinned by the Phase 3 preflight."
+    }
+
+    precondition {
+      condition     = !var.enable_phase8b_internal_proxy || trimspace(var.phase8b_core_private_ip) != ""
+      error_message = "phase8b_core_private_ip must be pinned when the Phase 8B internal proxy is enabled."
+    }
+
+    precondition {
+      condition     = !var.enable_phase8b_internal_proxy || trimspace(var.phase8b_edge_private_ip) != ""
+      error_message = "phase8b_edge_private_ip must preserve the current Edge private IP when the Phase 8B internal proxy is enabled."
     }
   }
 }
