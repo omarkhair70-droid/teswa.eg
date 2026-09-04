@@ -16,10 +16,13 @@ if old not in s:
     raise SystemExit("safe_closeout_patch=FAIL reason=iam_guard_block_not_found")
 s=s.replace(old,new,1)
 old_j='for u in teswa-api teswa-realtime teswa-workers postgresql-17; do systemctl is-active --quiet "$u"; journalctl -u "$u" -n 1 --no-pager | grep -q .; done'
-new_j='for u in teswa-api teswa-realtime teswa-workers postgresql-17; do systemctl is-active --quiet "$u"; sudo journalctl -u "$u" -n 1 --no-pager | grep -q .; done'
+new_j='for u in teswa-api teswa-realtime teswa-workers postgresql-17; do timeout 10 systemctl is-active --quiet "$u"; timeout 10 sudo journalctl -u "$u" -n 1 --no-pager | grep -q .; done'
 if old_j not in s:
     raise SystemExit("safe_closeout_patch=FAIL reason=journal_guard_not_found")
 s=s.replace(old_j,new_j,1)
+s=s.replace('curl -fsS "http://$CORE:3100/healthz"','curl -fsS --connect-timeout 3 --max-time 10 "http://$CORE:3100/healthz"',1)
+s=s.replace('curl -fsS "http://$CORE:3200/healthz"','curl -fsS --connect-timeout 3 --max-time 10 "http://$CORE:3200/healthz"',1)
+s=s.replace('curl -fsS "http://$EDGE:8080/healthz"','curl -fsS --connect-timeout 3 --max-time 10 "http://$EDGE:8080/healthz"',1)
 open(dst,"w",encoding="utf-8").write(s)
 PY
 
