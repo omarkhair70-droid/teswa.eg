@@ -61,7 +61,6 @@ variable "freeform_tags" {
   }
 }
 
-
 variable "enable_compute_phase3" {
   description = "Create the Teswa Phase 3 edge/core compute foundation."
   type        = bool
@@ -79,7 +78,6 @@ variable "edge_image_ocid" {
   type        = string
   default     = ""
 }
-
 
 variable "enable_run_command_iam" {
   description = "Create the least-privilege dynamic group and IAM policy required for Teswa instances to poll Run Command executions."
@@ -99,7 +97,6 @@ variable "lane4_rehearsal_core_instance_ocid" {
   default     = ""
 }
 
-
 variable "enable_admin_bastion" {
   description = "Create a temporary OCI Bastion admin path for private-core bootstrap. Keep false outside reviewed bootstrap windows."
   type        = bool
@@ -111,7 +108,6 @@ variable "admin_bastion_client_cidrs" {
   type        = list(string)
   default     = []
 }
-
 
 variable "enable_admin_bastion_connectivity" {
   description = "Temporarily attach least-privilege Bastion egress to the private app subnet for Core SSH bootstrap."
@@ -125,13 +121,11 @@ variable "admin_bastion_target_cidr" {
   default     = ""
 }
 
-
 variable "admin_bastion_endpoint_cidr" {
   description = "Exact live Bastion private endpoint CIDR used only for temporary canonical SSH ingress. Captured locally after Bastion creation."
   type        = string
   default     = ""
 }
-
 
 variable "enable_core_bootstrap_metadata" {
   description = "Launch teswa-core-01 with the one-time SSH and cloud-init bootstrap metadata required for private administration and Run Command sudo."
@@ -147,6 +141,24 @@ variable "core_bootstrap_private_ip" {
 
 variable "core_bootstrap_ssh_public_key" {
   description = "Public SSH key installed for the default opc user at Core launch. Generated locally; the private key never enters Terraform or Git."
+  type        = string
+  default     = ""
+}
+
+variable "enable_phase8b_internal_proxy" {
+  description = "Bake the Phase 8B Edge-to-Core health proxy into the Edge instance without opening public 80/443 listeners."
+  type        = bool
+  default     = false
+}
+
+variable "phase8b_core_private_ip" {
+  description = "Pinned teswa-core-01 private IPv4 used as the Phase 8B Caddy upstream."
+  type        = string
+  default     = ""
+}
+
+variable "phase8b_edge_private_ip" {
+  description = "Existing teswa-edge-01 private IPv4 to preserve across the Phase 8B immutable Edge replacement."
   type        = string
   default     = ""
 }
