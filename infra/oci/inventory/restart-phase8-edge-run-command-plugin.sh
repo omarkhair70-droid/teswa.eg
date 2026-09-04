@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 TF="${TF_BIN:-$HOME/.local/bin/terraform}"
 POLL_SECONDS="${POLL_SECONDS:-10}"
-MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-300}"
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-720}"
 
 [ -x "$TF" ] || { echo "Terraform binary not found at $TF" >&2; exit 1; }
 if [ "${TESWA_ALLOW_EDGE_RUN_COMMAND_RESTART:-}" != "YES" ]; then
@@ -19,7 +19,14 @@ EDGE_ID="$(oci compute instance list --compartment-id "$COMPARTMENT" --display-n
 base="$(mktemp)"
 disabled="$(mktemp)"
 enabled="$(mktemp)"
-trap 'rm -f "$base" "$disabled" "$enabled"' EXIT
+restore_needed=false
+cleanup() {
+  if [ "$restore_needed" = true ]; then
+    oci compute instance update --instance-id "$EDGE_ID" --agent-config "file://$enabled" --force >/dev/null 2>&1 || true
+  fi
+  rm -f "$base" "$disabled" "$enabled"
+}
+trap cleanup EXIT INT TERM
 
 oci compute instance get --instance-id "$EDGE_ID" --query 'data."agent-config"' --output json > "$base"
 
@@ -36,23 +43,30 @@ def pick(*names, default=None):
 
 plugins=pick("plugins-config","pluginsConfig",default=[]) or []
 normalized=[]
+seen=False
 for p in plugins:
     name=p.get("name")
     state=p.get("desired-state",p.get("desiredState"))
-    if name and state:
-        normalized.append({"name":name,"desiredState":state})
+    if not name or not state:
+        continue
+    if name == "Compute Instance Run Command":
+        seen=True
+        continue
+    normalized.append({"name":name,"desiredState":state})
 
 base_cfg={
     "areAllPluginsDisabled": bool(pick("are-all-plugins-disabled","areAllPluginsDisabled",default=False)),
+    "isManagementDisabled": bool(pick("is-management-disabled","isManagementDisabled",default=False)),
     "isMonitoringDisabled": bool(pick("is-monitoring-disabled","isMonitoringDisabled",default=False)),
-    "pluginsConfig": normalized,
 }
 if base_cfg["areAllPluginsDisabled"]:
     raise SystemExit("all plugins are globally disabled; refusing")
+if base_cfg["isManagementDisabled"]:
+    raise SystemExit("management plugins are globally disabled; refusing")
 
-for path,flag in ((disabled_path,True),(enabled_path,False)):
+for path,state in ((disabled_path,"DISABLED"),(enabled_path,"ENABLED")):
     cfg=dict(base_cfg)
-    cfg["isManagementDisabled"]=flag
+    cfg["pluginsConfig"]=normalized + [{"name":"Compute Instance Run Command","desiredState":state}]
     with open(path,"w",encoding="utf-8") as f:
         json.dump(cfg,f,separators=(",",":"))
 PY
@@ -78,37 +92,35 @@ wait_for_status() {
   done
 }
 
-restore_enabled() {
-  oci compute instance update --instance-id "$EDGE_ID" --agent-config "file://$enabled" --force >/dev/null 2>&1 || true
-}
-
 current="$(plugin_status)"
 echo "TESWA PHASE 8 EDGE RUN COMMAND PLUGIN RESTART"
-echo "mutation=agent_config_management_toggle_only"
+echo "mutation=run_command_plugin_toggle_only"
 echo "target=teswa-edge-01"
 echo "current_run_command_status=$current"
 echo "instance_reboot=none"
 echo "ssh_change=none"
 echo "network_change=none"
 echo "terraform_resource_change=none"
+echo "max_status_wait_seconds=$MAX_WAIT_SECONDS"
 [ "$current" = "RUNNING" ] || { echo "phase8_run_command_restart=FAIL reason=plugin_not_running_before_toggle status=$current"; exit 4; }
 
-# Stop management plugins through the supported instance agentConfig switch.
+# Disable only the Compute Instance Run Command plugin.
+restore_needed=true
 oci compute instance update --instance-id "$EDGE_ID" --agent-config "file://$disabled" --force >/dev/null
 if ! wait_for_status STOPPED; then
-  restore_enabled
   echo "phase8_run_command_restart=FAIL reason=plugin_did_not_stop"
   exit 5
 fi
 
-# Restore the original management-enabled state.
+# Re-enable only the Compute Instance Run Command plugin.
 oci compute instance update --instance-id "$EDGE_ID" --agent-config "file://$enabled" --force >/dev/null
 if ! wait_for_status RUNNING; then
-  restore_enabled
   echo "phase8_run_command_restart=FAIL reason=plugin_did_not_restart"
   exit 6
 fi
 
+restore_needed=false
 echo "final_run_command_status=RUNNING"
+echo "run_command_desired_state=ENABLED"
 echo "management_enabled_restored=true"
 echo "phase8_run_command_restart=PASS"
