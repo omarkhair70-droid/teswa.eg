@@ -63,10 +63,118 @@ resource "oci_core_instance" "edge" {
     user_data = base64encode(<<-EOF
       #!/bin/bash
       set -Eeuo pipefail
+
+      exec 3>/dev/console || true
+      CADDY_VERSION="2.11.4"
+      CADDY_ASSET="caddy_$${CADDY_VERSION}_linux_amd64.tar.gz"
+      CADDY_BASE_URL="https://github.com/caddyserver/caddy/releases/download/v$${CADDY_VERSION}"
+      TMPDIR_CADDY="$(mktemp -d)"
+
+      cleanup() {
+        rc=$?
+        if [ "$rc" -ne 0 ]; then
+          printf '%s\n' "TESWA_PHASE8_CADDY_BOOT=FAIL rc=$rc" >&3 || true
+        fi
+        rm -rf "$TMPDIR_CADDY"
+      }
+      trap cleanup EXIT
+
+      printf '%s\n' 'TESWA_PHASE8_CADDY_BOOT=START' >&3 || true
+
       install -d -m 0750 /etc/sudoers.d
       printf '%s\n' 'ocarun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/101-oracle-cloud-agent-run-command
       chmod 0440 /etc/sudoers.d/101-oracle-cloud-agent-run-command
       /usr/sbin/visudo -cf /etc/sudoers.d/101-oracle-cloud-agent-run-command
+
+      command -v curl >/dev/null
+      command -v tar >/dev/null
+      command -v sha512sum >/dev/null
+
+      curl --fail --silent --show-error --location \
+        --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 300 \
+        -o "$TMPDIR_CADDY/$CADDY_ASSET" \
+        "$CADDY_BASE_URL/$CADDY_ASSET"
+      curl --fail --silent --show-error --location \
+        --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 120 \
+        -o "$TMPDIR_CADDY/caddy_checksums.txt" \
+        "$CADDY_BASE_URL/caddy_$${CADDY_VERSION}_checksums.txt"
+
+      (
+        cd "$TMPDIR_CADDY"
+        grep "  $CADDY_ASSET$" caddy_checksums.txt > caddy_asset_checksum.txt
+        [ -s caddy_asset_checksum.txt ]
+        sha512sum -c caddy_asset_checksum.txt
+        tar -xzf "$CADDY_ASSET" caddy
+      )
+
+      install -o root -g root -m 0755 "$TMPDIR_CADDY/caddy" /usr/bin/caddy
+      restorecon -v /usr/bin/caddy >/dev/null 2>&1 || true
+
+      getent group caddy >/dev/null 2>&1 || groupadd --system caddy
+      id caddy >/dev/null 2>&1 || useradd --system --gid caddy --home-dir /var/lib/caddy --create-home --shell /sbin/nologin caddy
+      install -d -o root -g caddy -m 0750 /etc/caddy
+      install -d -o caddy -g caddy -m 0750 /var/lib/caddy /var/log/caddy
+
+      cat > /etc/caddy/Caddyfile <<'CADDYFILE'
+      {
+        auto_https off
+        admin off
+      }
+
+      http://127.0.0.1:8080 {
+        respond /healthz "teswa-edge-caddy-ok" 200
+        respond 404
+      }
+      CADDYFILE
+      chown root:caddy /etc/caddy/Caddyfile
+      chmod 0640 /etc/caddy/Caddyfile
+      restorecon -Rv /etc/caddy >/dev/null 2>&1 || true
+
+      cat > /etc/systemd/system/caddy.service <<'UNIT'
+      [Unit]
+      Description=Teswa Edge Caddy
+      Documentation=https://caddyserver.com/docs/
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=notify
+      User=caddy
+      Group=caddy
+      ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
+      ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --force
+      TimeoutStopSec=5s
+      LimitNOFILE=1048576
+      PrivateTmp=true
+      ProtectSystem=full
+      AmbientCapabilities=CAP_NET_BIND_SERVICE
+      CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+      NoNewPrivileges=true
+      Environment=XDG_DATA_HOME=/var/lib/caddy
+      Environment=XDG_CONFIG_HOME=/var/lib/caddy
+
+      [Install]
+      WantedBy=multi-user.target
+      UNIT
+      chmod 0644 /etc/systemd/system/caddy.service
+      restorecon -v /etc/systemd/system/caddy.service >/dev/null 2>&1 || true
+
+      /usr/bin/caddy validate --config /etc/caddy/Caddyfile
+      systemctl daemon-reload
+      systemctl enable --now caddy.service
+
+      for _ in $(seq 1 30); do
+        if curl --fail --silent --show-error http://127.0.0.1:8080/healthz | grep -qx 'teswa-edge-caddy-ok'; then
+          break
+        fi
+        sleep 1
+      done
+      curl --fail --silent --show-error http://127.0.0.1:8080/healthz | grep -qx 'teswa-edge-caddy-ok'
+
+      ss -ltnH | awk '$4 ~ /(^|:)80$/ || $4 ~ /(^|:)443$/ {found=1} END {exit found ? 1 : 0}'
+      ss -ltnH | awk '$4 == "127.0.0.1:8080" {found=1} END {exit found ? 0 : 1}'
+
+      printf '%s\n' "TESWA_PHASE8_CADDY_BOOT=PASS version=$(/usr/bin/caddy version | awk '{print $1}') listener=127.0.0.1:8080 public_listener=false" >&3 || true
     EOF
     )
   }
