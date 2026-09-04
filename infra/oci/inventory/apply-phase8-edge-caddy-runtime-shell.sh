@@ -55,7 +55,7 @@ curl -fsS http://127.0.0.1:8080/healthz | grep -Fq teswa-edge-caddy-ok || { echo
 ss -ltnH | grep -Eq "127\\.0\\.0\\.1:8080[[:space:]]" || { echo "caddy_shell=FAIL reason=loopback_listener_missing"; exit 15; }
 if ss -ltnH | grep -Eq "(^|[[:space:]])([^[:space:]]*:)?(80|443)[[:space:]]"; then echo "caddy_shell=FAIL reason=unexpected_public_listener"; exit 16; fi
 if $SUDO firewall-cmd --query-port=8080/tcp >/dev/null 2>&1; then echo "caddy_shell=FAIL reason=firewall_8080_open"; exit 17; fi
-echo "caddy_version=$(caddy version | awk "{print \$1}")"
+echo "caddy_version=$(caddy version | head -n1)"
 echo "service_active=active"
 echo "service_enabled=enabled"
 echo "listen_address=127.0.0.1"
