@@ -59,6 +59,18 @@ resource "oci_core_instance" "edge" {
     subnet_id        = oci_core_subnet.public_edge.id
   }
 
+  metadata = {
+    user_data = base64encode(<<-EOF
+      #!/bin/bash
+      set -Eeuo pipefail
+      install -d -m 0750 /etc/sudoers.d
+      printf '%s\n' 'ocarun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/101-oracle-cloud-agent-run-command
+      chmod 0440 /etc/sudoers.d/101-oracle-cloud-agent-run-command
+      /usr/sbin/visudo -cf /etc/sudoers.d/101-oracle-cloud-agent-run-command
+    EOF
+    )
+  }
+
   source_details {
     source_type             = "image"
     source_id               = var.edge_image_ocid
