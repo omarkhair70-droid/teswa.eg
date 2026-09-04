@@ -87,6 +87,18 @@ variable "enable_run_command_iam" {
   default     = true
 }
 
+variable "enable_lane4_rehearsal_readonly_iam" {
+  description = "Create the narrowly scoped read-only IAM path for teswa-core-01 to Lane 4 rehearsal objects in teswa-backups."
+  type        = bool
+  default     = false
+}
+
+variable "lane4_rehearsal_core_instance_ocid" {
+  description = "teswa-core-01 instance OCID used only for the Lane 4 rehearsal read-only dynamic group. Supply locally; never commit it."
+  type        = string
+  default     = ""
+}
+
 
 variable "enable_admin_bastion" {
   description = "Create a temporary OCI Bastion admin path for private-core bootstrap. Keep false outside reviewed bootstrap windows."
