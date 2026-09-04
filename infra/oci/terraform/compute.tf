@@ -69,6 +69,7 @@ resource "oci_core_instance" "edge" {
       CADDY_ASSET="caddy_$${CADDY_VERSION}_linux_amd64.tar.gz"
       CADDY_BASE_URL="https://github.com/caddyserver/caddy/releases/download/v$${CADDY_VERSION}"
       TMPDIR_CADDY="$(mktemp -d)"
+      EDGE_PRIVATE_IP="$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
 
       cleanup() {
         rc=$?
@@ -80,6 +81,7 @@ resource "oci_core_instance" "edge" {
       trap cleanup EXIT
 
       printf '%s\n' 'TESWA_PHASE8_CADDY_BOOT=START' >&3 || true
+      [ -n "$EDGE_PRIVATE_IP" ]
 
       install -d -m 0750 /etc/sudoers.d
       printf '%s\n' 'ocarun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/101-oracle-cloud-agent-run-command
@@ -115,13 +117,13 @@ resource "oci_core_instance" "edge" {
       install -d -o root -g caddy -m 0750 /etc/caddy
       install -d -o caddy -g caddy -m 0750 /var/lib/caddy /var/log/caddy
 
-      cat > /etc/caddy/Caddyfile <<'CADDYFILE'
+      cat > /etc/caddy/Caddyfile <<CADDYFILE
       {
         auto_https off
         admin off
       }
 
-      http://127.0.0.1:8080 {
+      http://$${EDGE_PRIVATE_IP}:8080 {
         respond /healthz "teswa-edge-caddy-ok" 200
         respond 404
       }
@@ -159,22 +161,30 @@ resource "oci_core_instance" "edge" {
       chmod 0644 /etc/systemd/system/caddy.service
       restorecon -v /etc/systemd/system/caddy.service >/dev/null 2>&1 || true
 
+      if systemctl is-active --quiet firewalld; then
+        firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="${var.app_subnet_cidr}" port port="8080" protocol="tcp" accept'
+        firewall-cmd --reload
+      fi
+
       /usr/bin/caddy validate --config /etc/caddy/Caddyfile
       systemctl daemon-reload
       systemctl enable --now caddy.service
 
       for _ in $(seq 1 30); do
-        if curl --fail --silent --show-error http://127.0.0.1:8080/healthz | grep -qx 'teswa-edge-caddy-ok'; then
+        if curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/healthz" | grep -qx 'teswa-edge-caddy-ok'; then
           break
         fi
         sleep 1
       done
-      curl --fail --silent --show-error http://127.0.0.1:8080/healthz | grep -qx 'teswa-edge-caddy-ok'
+      curl --fail --silent --show-error "http://$EDGE_PRIVATE_IP:8080/healthz" | grep -qx 'teswa-edge-caddy-ok'
 
       ss -ltnH | awk '$4 ~ /(^|:)80$/ || $4 ~ /(^|:)443$/ {found=1} END {exit found ? 1 : 0}'
-      ss -ltnH | awk '$4 == "127.0.0.1:8080" {found=1} END {exit found ? 0 : 1}'
+      ss -ltnH | awk -v addr="$EDGE_PRIVATE_IP:8080" '$4 == addr {found=1} END {exit found ? 0 : 1}'
 
-      printf '%s\n' "TESWA_PHASE8_CADDY_BOOT=PASS version=$(/usr/bin/caddy version | awk '{print $1}') listener=127.0.0.1:8080 public_listener=false" >&3 || true
+      install -d -m 0755 /var/lib/teswa
+      printf '%s\n' "version=$(/usr/bin/caddy version | awk '{print $1}') listener=$EDGE_PRIVATE_IP:8080 public_listener=false" > /var/lib/teswa/phase8-caddy-boot-pass
+      chmod 0644 /var/lib/teswa/phase8-caddy-boot-pass
+      printf '%s\n' "TESWA_PHASE8_CADDY_BOOT=PASS version=$(/usr/bin/caddy version | awk '{print $1}') listener=$EDGE_PRIVATE_IP:8080 public_listener=false" >&3 || true
     EOF
     )
   }
