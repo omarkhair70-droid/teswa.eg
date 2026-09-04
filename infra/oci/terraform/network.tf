@@ -87,6 +87,22 @@ resource "oci_core_network_security_group_security_rule" "edge_http" {
   }
 }
 
+resource "oci_core_network_security_group_security_rule" "edge_caddy_verify_from_app" {
+  count                     = var.enable_compute_phase3 ? 1 : 0
+  network_security_group_id = oci_core_network_security_group.edge.id
+  direction                 = "INGRESS"
+  protocol                  = "6"
+  source                    = oci_core_network_security_group.app.id
+  source_type               = "NETWORK_SECURITY_GROUP"
+
+  tcp_options {
+    destination_port_range {
+      min = 8080
+      max = 8080
+    }
+  }
+}
+
 resource "oci_core_network_security_group_security_rule" "edge_to_app" {
   network_security_group_id = oci_core_network_security_group.edge.id
   direction                 = "EGRESS"
