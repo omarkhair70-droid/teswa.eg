@@ -73,8 +73,8 @@ APP_NSG_ID="$(oci network nsg list \
   exit 5
 }
 
-EDGE_RULES="$(oci network nsg rules list --network-security-group-id "$EDGE_NSG_ID" --all --output json)"
-APP_RULES="$(oci network nsg rules list --network-security-group-id "$APP_NSG_ID" --all --output json)"
+EDGE_RULES="$(oci network nsg rules list --nsg-id "$EDGE_NSG_ID" --all --output json)"
+APP_RULES="$(oci network nsg rules list --nsg-id "$APP_NSG_ID" --all --output json)"
 
 python3 - "$APP_NSG_ID" "$EDGE_NSG_ID" "$EDGE_RULES" "$APP_RULES" <<'PY'
 import json,sys
