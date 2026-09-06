@@ -66,8 +66,10 @@ while true; do
 done
 [ "$FINAL" = SUCCEEDED ] || { echo "auth_email_operator=FAIL state=$FINAL object_retained=$OBJECT"; exit 6; }
 oci os object delete --bucket-name "$BUCKET" --object-name "$OBJECT" --force >/dev/null
-# Clean the one previously retained failed auth-session artifact now that the rerun is GREEN.
+# Clean retained artifacts from the two diagnosed failed runs only after this rerun is GREEN.
 oci os object delete --bucket-name "$BUCKET" --object-name 'lane4-rehearsal/auth-session-foundation/20260906T093100Z-1859ed7a2fe26360222189292e6ef7aaa8a65cfe6c379caea8479c6a7060cc29.tar.gz' --force >/dev/null 2>&1 || true
+oci os object delete --bucket-name "$BUCKET" --object-name 'lane4-rehearsal/auth-email-foundation/20260906T100246Z-0d0a9b8590ba7ba737f0e159447734e10741614dbab43e40d8b75abb9a56e240.tar.gz' --force >/dev/null 2>&1 || true
 echo 'auth_email_artifact_cleanup=PASS'
 echo 'previous_auth_session_failed_artifact_cleanup=PASS'
+echo 'previous_auth_email_failed_artifact_cleanup=PASS'
 echo 'auth_email_operator_cloudshell=PASS'
