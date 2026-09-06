@@ -5,7 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
+
+
+def valid_anchor(value: dict) -> bool:
+    count = value.get('distinct_non_null_count')
+    digest = value.get('uuid_set_sha256')
+    return (
+        value.get('format_version') == 1
+        and type(count) is int and count > 0
+        and isinstance(digest, str) and re.fullmatch(r'[0-9a-f]{64}', digest) is not None
+        and value.get('read_only') is True
+        and value.get('identifiers_emitted') is False
+    )
 
 
 def main() -> int:
@@ -20,10 +33,12 @@ def main() -> int:
 
     count_match = source.get("distinct_non_null_count") == target.get("distinct_non_null_count")
     hash_match = source.get("uuid_set_sha256") == target.get("uuid_set_sha256")
-    passed = bool(count_match and hash_match)
+    inputs_valid = valid_anchor(source) and valid_anchor(target)
+    passed = bool(inputs_valid and count_match and hash_match)
 
     report = {
         "hard_gate_pass": passed,
+        "inputs_valid": inputs_valid,
         "source": {
             "label": source.get("label"),
             "relation": source.get("relation"),
