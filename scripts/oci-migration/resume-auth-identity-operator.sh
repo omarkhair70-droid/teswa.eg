@@ -99,7 +99,8 @@ DIR=/var/tmp/teswa-lane4-identity-\${SHA:0:12}
 echo 'guest_hostname='\"\$(hostname -s)\"
 echo 'target_identity_source=oci_control_plane_instance_id'
 systemctl is-active --quiet postgresql-17 || { echo 'auth_identity_operator=FAIL reason=postgres_inactive'; exit 11; }
-[ -x \"\$P\" ] || { echo 'auth_identity_operator=FAIL reason=psql_missing'; exit 12; }
+sudo -u postgres test -x \"\$P\" || { echo 'auth_identity_operator=FAIL reason=psql_missing_for_postgres_user'; exit 12; }
+echo 'psql_access=postgres_sudo_context'
 db_name=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc 'SELECT current_database()')\"
 pg_major=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc \"SELECT current_setting('server_version_num')::int / 10000\")\"
 server_addr=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc \"SELECT coalesce(inet_server_addr()::text,'local')\")\"
