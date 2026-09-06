@@ -68,10 +68,6 @@ python3 - "$CONTENT_FILE" "$SCRIPT_TEXT" <<'PY'
 import json,sys; json.dump({'source':{'sourceType':'TEXT','text':sys.argv[2]},'output':{'outputType':'TEXT'}},open(sys.argv[1],'w'))
 PY
 python3 - "$TARGET_FILE" "$INSTANCE_ID" <<'PY'
-import json,sys; json.dump({'instanceId':sys.argv[1]},open(sys.argv[1],'w'))
-PY
-# Correct target JSON (kept separate to avoid shell interpolation mistakes).
-python3 - "$TARGET_FILE" "$INSTANCE_ID" <<'PY'
 import json,sys; json.dump({'instanceId':sys.argv[2]},open(sys.argv[1],'w'))
 PY
 CID="$(oci instance-agent command create --compartment-id "$COMPARTMENT" --content "file://$CONTENT_FILE" --target "file://$TARGET_FILE" --timeout-in-seconds 300 --display-name 'teswa-lane4-smart-reengagement-shadow' --query 'data.id' --raw-output)"
