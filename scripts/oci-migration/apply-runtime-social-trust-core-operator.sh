@@ -7,11 +7,11 @@ BUCKET=teswa-backups
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 WORK="$(mktemp -d)"; ARCHIVE="$WORK/social-trust-core.tar.gz"; CONTENT="$WORK/content.json"; TARGET="$WORK/target.json"; UPLOADED=false
 cleanup(){ rm -rf "$WORK"; if [ "$UPLOADED" = true ]; then oci os object delete --bucket-name "$BUCKET" --object-name "$OBJECT" --force >/dev/null 2>&1 || true; fi; }; trap cleanup EXIT
-for f in runtime-social-trust-core.sql verify-runtime-social-trust-core.sql social-trust-core-guest-apply.sh; do [ -f "$ROOT/scripts/oci-migration/$f" ] || { echo "social_trust_operator=FAIL reason=missing_$f" >&2; exit 2; }; done
+for f in runtime-social-trust-support.sql runtime-social-trust-core.sql verify-runtime-social-trust-core.sql social-trust-core-guest-apply.sh; do [ -f "$ROOT/scripts/oci-migration/$f" ] || { echo "social_trust_operator=FAIL reason=missing_$f" >&2; exit 2; }; done
 mkdir -p "$WORK/stage"
-cp "$ROOT/scripts/oci-migration/runtime-social-trust-core.sql" "$ROOT/scripts/oci-migration/verify-runtime-social-trust-core.sql" "$ROOT/scripts/oci-migration/social-trust-core-guest-apply.sh" "$WORK/stage/"
+cp "$ROOT/scripts/oci-migration/runtime-social-trust-support.sql" "$ROOT/scripts/oci-migration/runtime-social-trust-core.sql" "$ROOT/scripts/oci-migration/verify-runtime-social-trust-core.sql" "$ROOT/scripts/oci-migration/social-trust-core-guest-apply.sh" "$WORK/stage/"
 chmod 700 "$WORK/stage/social-trust-core-guest-apply.sh"
-tar -C "$WORK/stage" -czf "$ARCHIVE" runtime-social-trust-core.sql verify-runtime-social-trust-core.sql social-trust-core-guest-apply.sh
+tar -C "$WORK/stage" -czf "$ARCHIVE" runtime-social-trust-support.sql runtime-social-trust-core.sql verify-runtime-social-trust-core.sql social-trust-core-guest-apply.sh
 SHA="$(sha256sum "$ARCHIVE"|awk '{print $1}')"; OBJECT="lane4-rehearsal/social-trust-core/$STAMP-$SHA.tar.gz"
 INSTANCE_ID="$(oci search resource structured-search --query-text "query instance resources where displayName = 'teswa-core-01'" --query 'data.items[0].identifier' --raw-output)"
 [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != null ] || { echo 'social_trust_operator=FAIL reason=core_instance_not_found'; exit 3; }
@@ -22,6 +22,7 @@ oci os object put --bucket-name "$BUCKET" --name "$OBJECT" --file "$ARCHIVE" --f
 echo 'TESWA LANE 4 SOCIAL TRUST CORE OPERATOR'
 echo 'database=teswa_rehearsal'
 echo 'functions=11'
+echo 'support_helpers=3'
 echo 'policies=22'
 echo 'review_report_service_bypass=deferred'
 echo 'supabase_mutation=none'
