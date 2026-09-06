@@ -37,7 +37,13 @@ PEER="$(sudo -u teswaauth "$P" -X -qAt -v ON_ERROR_STOP=1 -d "$DB" -c 'SELECT te
 echo 'auth_session_database_auth=unix_peer_no_password'
 echo 'auth_session_direct_table_access=false'
 
-CLIENT_ID="$(python3 - "$CONFIG" <<'PY'
+# The persistent auth-shadow assets are intentionally root:teswaauth 0640.
+# Read config as the service principal, not as the Run Command user. Also make
+# only the temporary stage directory/server source traversable/readable for the
+# same principal during the self-test; the stage is removed by the operator.
+chmod 0755 "$STAGE"
+chmod 0644 "$STAGE/auth-session-shadow-server.py"
+CLIENT_ID="$(sudo -u teswaauth python3 - "$CONFIG" <<'PY'
 import json,sys
 x=json.load(open(sys.argv[1])); v=x.get('google_web_client_id')
 assert isinstance(v,str) and v.endswith('.apps.googleusercontent.com')
