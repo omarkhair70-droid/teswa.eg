@@ -265,7 +265,7 @@ echo "lane3_recovery_cleanup=PASS"
 
 echo "[5/5] final full Terraform drift"
 LANE4=false
-if "$TF" state list 2>/dev/null | grep -q '^oci_identity_dynamic_group\.lane4_rehearsal_core'; then LANE4=true; fi
+if "$TF" state list 2>/dev/null | grep -q '^oci_identity_dynamic_group\.teswa_core_lane4_rehearsal_readonly\[0\]$'; then LANE4=true; fi
 FINAL=("${COMMON[@]}" -var="enable_object_storage=true" -var="enable_vault=true" -var="enable_notifications=true" -var="enable_run_command_iam=true" -var="enable_lane3_backup_iam=true" -var="enable_admin_bastion=false" -var="enable_admin_bastion_connectivity=false")
 if [ "$LANE4" = true ]; then FINAL+=(-var="enable_lane4_rehearsal_readonly_iam=true" -var="lane4_rehearsal_core_instance_ocid=$CORE_ID"); fi
 rm -f "$PLAN_FINAL"
