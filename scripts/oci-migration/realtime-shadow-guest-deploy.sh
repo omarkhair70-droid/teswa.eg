@@ -146,9 +146,9 @@ PY
 )"
 RESP="$(curl -fsS -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:3120/v1/realtime/events?after=$PROBE_AFTER&limit=10&wait_ms=0")"
 unset TOKEN
-printf '%s' "$RESP" | python3 - "$PROBE_EVENT" <<'PY'
+python3 - "$PROBE_EVENT" "$RESP" <<'PY'
 import json,sys
-x=json.load(sys.stdin); eid=int(sys.argv[1])
+x=json.loads(sys.argv[2]); eid=int(sys.argv[1])
 assert x.get('hasEvents') is True
 assert any(int(e['event_id'])==eid for e in x.get('events',[]))
 assert int(x.get('nextAfter',0))>=eid
