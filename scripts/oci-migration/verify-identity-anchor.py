@@ -50,9 +50,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('identity_map')
     p.add_argument('--output', required=True)
+    p.add_argument('--psql', default='/usr/pgsql-17/bin/psql')
     a = p.parse_args()
     expected = json.loads(Path(a.identity_map).read_text())
-    proc = subprocess.run(['sudo', '-u', 'postgres', '/usr/pgsql-17/bin/psql', '-X', '-q', '-A', '-t',
+    proc = subprocess.run(['sudo', '-u', 'postgres', a.psql, '-X', '-q', '-A', '-t',
                            '-v', 'ON_ERROR_STOP=1', '-d', 'teswa_rehearsal'],
                           input=SQL, capture_output=True, text=True)
     if proc.returncode:
