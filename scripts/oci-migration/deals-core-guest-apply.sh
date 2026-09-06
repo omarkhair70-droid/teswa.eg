@@ -17,12 +17,12 @@ sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$STAGE/runtime-deals-cor
 echo 'deals_runtime_apply=PASS'
 sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$STAGE/verify-runtime-deals-core.sql"
 
-read -r DEAL UID PEER <<<"$(sudo -u postgres "$P" -d "$DB" -AtF' ' -c "SELECT id,requester_id,offerer_id FROM public.swap_deals ORDER BY id LIMIT 1")"
-[ -n "${DEAL:-}" ] && [ -n "${UID:-}" ] && [ -n "${PEER:-}" ] || { echo 'deals_operator=FAIL reason=no_deal_fixture'; exit 16; }
-OUTSIDER="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT id FROM teswa_identity.users WHERE id NOT IN ('$UID'::uuid,'$PEER'::uuid) ORDER BY id LIMIT 1")"
+read -r DEAL ACTOR PEER <<<"$(sudo -u postgres "$P" -d "$DB" -AtF' ' -c "SELECT id,requester_id,offerer_id FROM public.swap_deals ORDER BY id LIMIT 1")"
+[ -n "${DEAL:-}" ] && [ -n "${ACTOR:-}" ] && [ -n "${PEER:-}" ] || { echo 'deals_operator=FAIL reason=no_deal_fixture'; exit 16; }
+OUTSIDER="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT id FROM teswa_identity.users WHERE id NOT IN ('$ACTOR'::uuid,'$PEER'::uuid) ORDER BY id LIMIT 1")"
 [ -n "$OUTSIDER" ] || { echo 'deals_operator=FAIL reason=no_outsider_fixture'; exit 17; }
 
-participant="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SELECT set_config('teswa.user_id','$UID',true); SET LOCAL ROLE teswa_app_authenticated; SELECT count(*) FROM public.swap_deals WHERE id='$DEAL'::uuid; ROLLBACK" | tail -n1)"
+participant="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SELECT set_config('teswa.user_id','$ACTOR',true); SET LOCAL ROLE teswa_app_authenticated; SELECT count(*) FROM public.swap_deals WHERE id='$DEAL'::uuid; ROLLBACK" | tail -n1)"
 outsider="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SELECT set_config('teswa.user_id','$OUTSIDER',true); SET LOCAL ROLE teswa_app_authenticated; SELECT count(*) FROM public.swap_deals WHERE id='$DEAL'::uuid; ROLLBACK" | tail -n1)"
 unauth="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SET LOCAL ROLE teswa_app_authenticated; SELECT count(*) FROM public.swap_deals WHERE id='$DEAL'::uuid; ROLLBACK" | tail -n1)"
 [ "$participant" = 1 ] || { echo "deals_operator=FAIL reason=participant_visibility value=$participant"; exit 18; }
@@ -30,7 +30,7 @@ unauth="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SET LOCAL ROLE teswa
 [ "$unauth" = 0 ] || { echo "deals_operator=FAIL reason=unauth_visibility value=$unauth"; exit 20; }
 
 exp_messages="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT count(*) FROM public.deal_messages WHERE deal_id='$DEAL'::uuid")"
-got_messages="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SELECT set_config('teswa.user_id','$UID',true); SET LOCAL ROLE teswa_app_authenticated; SELECT count(*) FROM public.deal_messages WHERE deal_id='$DEAL'::uuid; ROLLBACK" | tail -n1)"
+got_messages="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "BEGIN; SELECT set_config('teswa.user_id','$ACTOR',true); SET LOCAL ROLE teswa_app_authenticated; SELECT count(*) FROM public.deal_messages WHERE deal_id='$DEAL'::uuid; ROLLBACK" | tail -n1)"
 [ "$got_messages" = "$exp_messages" ] || { echo "deals_operator=FAIL reason=message_participant_visibility expected=$exp_messages got=$got_messages"; exit 21; }
 
 exp_reviews="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM public.reviews')"
