@@ -10,8 +10,8 @@ Source safety:
 - logical bucket/key names are preserved in metadata
 - local filenames are opaque hashes to avoid path-traversal/key portability bugs
 
-The resulting hashed manifest is the source side for
-compare-storage-manifests.py --require-content-sha256.
+Accepts either a legacy service_role JWT or a modern sb_secret API key through
+TESWA_SUPABASE_ADMIN_KEY. Legacy compatibility env vars are also supported.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", required=True)
     p.add_argument("--output-manifest", required=True)
     p.add_argument("--supabase-url-env", default="TESWA_SUPABASE_URL")
-    p.add_argument("--service-role-key-env", default="TESWA_SUPABASE_SERVICE_ROLE_KEY")
+    p.add_argument("--admin-key-env", default="TESWA_SUPABASE_ADMIN_KEY")
     p.add_argument("--timeout-seconds", type=int, default=120)
     return p.parse_args()
 
@@ -54,17 +54,38 @@ def local_name(bucket: str, key: str) -> str:
     return hashlib.sha256((bucket + "\0" + key).encode("utf-8")).hexdigest()
 
 
+def resolve_admin_key(primary_env: str) -> str:
+    for name in (
+        primary_env,
+        "TESWA_SUPABASE_SECRET_KEY",
+        "TESWA_SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+    ):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def admin_headers(key: str) -> dict[str, str]:
+    headers = {
+        "apikey": key,
+        "User-Agent": "Teswa-Lane4-ReadOnly-Storage-Export/2",
+    }
+    # sb_secret keys are API keys, not JWTs. Legacy service_role remains a JWT.
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key}"
+    return headers
+
+
 def main() -> int:
     args = parse_args()
     source = json.loads(Path(args.storage_manifest).read_text(encoding="utf-8"))
 
     base_url = os.environ.get(args.supabase_url_env, "").strip()
-    service_key = os.environ.get(args.service_role_key_env, "").strip()
-    if not base_url or not service_key:
-        print(
-            f"Set {args.supabase_url_env} and {args.service_role_key_env}.",
-            file=sys.stderr,
-        )
+    admin_key = resolve_admin_key(args.admin_key_env)
+    if not base_url or not admin_key:
+        print(f"Set {args.supabase_url_env} and {args.admin_key_env}.", file=sys.stderr)
         return 2
 
     if not base_url.startswith("https://"):
@@ -74,12 +95,7 @@ def main() -> int:
     out_dir = Path(args.output_dir)
     objects_dir = out_dir / "objects"
     objects_dir.mkdir(parents=True, exist_ok=True)
-
-    headers = {
-        "Authorization": f"Bearer {service_key}",
-        "apikey": service_key,
-        "User-Agent": "Teswa-Lane4-ReadOnly-Storage-Export/1",
-    }
+    headers = admin_headers(admin_key)
 
     exported: list[dict[str, Any]] = []
     total_bytes = 0
