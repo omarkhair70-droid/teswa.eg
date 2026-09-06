@@ -32,14 +32,18 @@ J="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT job_id FROM teswa_jobs.push_ou
 [ -n "$J" ] || { echo 'push_post_rls_compat=FAIL reason=outbox_job_missing'; exit 16; }
 VN="$(sudo -u teswapush "$P" -d "$DB" -Atqc "SELECT count(*) FROM public.notifications WHERE id='$N'::uuid")"
 VD="$(sudo -u teswapush "$P" -d "$DB" -Atqc "SELECT count(*) FROM public.push_devices WHERE id='$D'::uuid")"
-echo "push_role_notification_visible=$VN"
-echo "push_role_device_visible=$VD"
+echo "push_role_preclaim_notification_visible=$VN"
+echo "push_role_preclaim_device_visible=$VD"
+[ "$VN" = 0 ] && [ "$VD" = 0 ] || { echo 'push_post_rls_compat=FAIL reason=preclaim_rows_should_be_hidden'; exit 18; }
 R="$(sudo -u teswapush env TESWA_DB="$DB" TESWA_PUSH_SEND_ENABLED=0 python3 "$W" --once)"
 echo "push_post_rls_worker_result=$R"
 printf '%s' "$R" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x.get("processed") is True and x.get("status")=="skipped" and x.get("reason")=="rehearsal_send_disabled" and int(x.get("deviceCount",0))==1' || { echo 'push_post_rls_compat=FAIL reason=worker_cannot_read_rls_protected_notification_path'; exit 17; }
-[ "$VN" = 1 ] && [ "$VD" = 1 ] || { echo 'push_post_rls_compat=FAIL reason=direct_rls_visibility'; exit 18; }
+STATUS="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT status||':'||coalesce(last_error,'') FROM teswa_jobs.push_outbox WHERE job_id=$J")"
+[ "$STATUS" = 'skipped:rehearsal_send_disabled' ] || { echo "push_post_rls_compat=FAIL reason=unexpected_job_status value=$STATUS"; exit 19; }
 echo 'push_worker_presence_check=sudo'
 echo 'push_worker_service_role_readable=true'
+echo 'push_preclaim_rls_isolation=PASS'
+echo 'push_active_job_rls_bridge=PASS'
 echo 'push_post_rls_outbound_performed=false'
 echo 'push_post_rls_probe_cleanup=PASS'
 echo 'push_post_rls_compat=PASS'
