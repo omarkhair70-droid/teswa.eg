@@ -186,7 +186,7 @@ class PgStore:
         uid, email, phone, display_name, avatar_url = out.split("|", 4)
         return {"id": uid, "email": email or None, "phone": phone or None, "displayName": display_name or None, "avatarUrl": avatar_url or None}
 
-    def bootstrap_signup(self, email: str, password: str, display_name: str | None):
+    def bootstrap_signup(self, email: str, password: str, display_name=None):
         user_id = str(uuid.uuid4())
         raw_token = secrets.token_urlsafe(40)
         token_sha = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
