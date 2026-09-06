@@ -55,15 +55,15 @@ for b in nginx caddy httpd apache2; do command -v "$b" >/dev/null 2>&1 && echo "
 
 echo '[loopback_health]'
 python3 - <<'PY'
-import json, urllib.request, urllib.error
-for port,path in [(3110,'/healthz'),(3100,'/healthz'),(3100,'/health'),(8080,'/healthz')]:
+import json, urllib.request
+for port,path in [(3110,'/health'),(3110,'/healthz'),(3100,'/healthz'),(3100,'/health'),(8080,'/healthz')]:
     url=f'http://127.0.0.1:{port}{path}'
     try:
         with urllib.request.urlopen(url,timeout=1.5) as r:
             body=r.read(4096).decode('utf-8','replace')
             try:
                 data=json.loads(body)
-                safe={k:data.get(k) for k in ('status','service','mode','productionTraffic','supabaseRuntimeDependency') if k in data}
+                safe={k:data.get(k) for k in ('status','service','mode','productionTraffic','supabaseRuntimeDependency','confirmationDispatchConfigured','googlePositiveDeferred') if k in data}
                 print(f'health port={port} path={path} code={r.status} json={json.dumps(safe,separators=(",",":"))}')
             except Exception:
                 print(f'health port={port} path={path} code={r.status} body_non_json=true')
