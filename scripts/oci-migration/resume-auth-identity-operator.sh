@@ -147,7 +147,7 @@ rm -rf "$DIR"; mkdir -m 700 "$DIR"; tar -C "$DIR" -xzf "$DIR.tgz"; rm -f "$DIR.t
 schema="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT count(*) FROM pg_namespace WHERE nspname='teswa_identity'")"
 if [ "$schema" = 0 ]; then
   echo 'identity_anchor_state=absent_apply_once'
-  sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" -f "$DIR/apply-identity-anchor.sql"
+  sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$DIR/apply-identity-anchor.sql"
 elif [ "$schema" = 1 ]; then
   echo 'identity_anchor_state=present_skip_apply'
 else
