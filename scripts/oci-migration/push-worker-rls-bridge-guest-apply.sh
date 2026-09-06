@@ -10,7 +10,12 @@ sudo -n true || { echo 'push_rls_bridge=FAIL reason=no_passwordless_sudo'; exit 
 [ -f "$SQL" ] || { echo 'push_rls_bridge=FAIL reason=missing_sql'; exit 12; }
 systemctl is-active --quiet postgresql-17 || { echo 'push_rls_bridge=FAIL reason=postgres_inactive'; exit 13; }
 
-sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" -f "$SQL"
+# The Run Command staging directory is private to ocarun. Passing -f "$SQL" to
+# psql running as postgres fails because postgres cannot traverse that directory.
+# Open the SQL file in the current shell and stream it over stdin instead; this
+# keeps the stage private while letting postgres execute only the file contents.
+echo 'push_rls_bridge_sql_transport=stdin'
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$SQL"
 
 BYPASS="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT rolbypassrls FROM pg_roles WHERE rolname='teswapush'")"
 [ "$BYPASS" = f ] || { echo 'push_rls_bridge=FAIL reason=worker_role_bypassrls'; exit 14; }
