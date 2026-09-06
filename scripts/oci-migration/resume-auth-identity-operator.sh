@@ -67,6 +67,9 @@ LIVE_STATE="$(oci compute instance get --instance-id "$INSTANCE_ID" --query 'dat
   echo "auth_identity_operator=FAIL reason=wrong_or_unavailable_target" >&2; exit 4;
 }
 
+echo "control_plane_target=$LIVE_NAME"
+echo "control_plane_instance_state=$LIVE_STATE"
+
 STAGE="$(mktemp -d)"
 ARCHIVE="$(mktemp --suffix=.tar.gz)"
 CONTENT_FILE="$(mktemp)"
@@ -93,8 +96,19 @@ DB=teswa_rehearsal
 OBJ='$OBJECT'
 SHA='$ARCHIVE_SHA'
 DIR=/var/tmp/teswa-lane4-identity-\${SHA:0:12}
-[ \"\$(hostname -s)\" = teswa-core-01 ] || { echo 'auth_identity_operator=FAIL reason=wrong_host'; exit 10; }
+echo 'guest_hostname='\"\$(hostname -s)\"
+echo 'target_identity_source=oci_control_plane_instance_id'
 systemctl is-active --quiet postgresql-17 || { echo 'auth_identity_operator=FAIL reason=postgres_inactive'; exit 11; }
+[ -x \"\$P\" ] || { echo 'auth_identity_operator=FAIL reason=psql_missing'; exit 12; }
+db_name=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc 'SELECT current_database()')\"
+pg_major=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc \"SELECT current_setting('server_version_num')::int / 10000\")\"
+server_addr=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc \"SELECT coalesce(inet_server_addr()::text,'local')\")\"
+[ \"\$db_name\" = \"\$DB\" ] || { echo 'auth_identity_operator=FAIL reason=wrong_database'; exit 13; }
+[ \"\$pg_major\" = 17 ] || { echo 'auth_identity_operator=FAIL reason=wrong_postgres_major'; exit 14; }
+[ \"\$server_addr\" = local ] || { echo 'auth_identity_operator=FAIL reason=nonlocal_postgres_connection'; exit 15; }
+echo \"database_target=\$db_name\"
+echo \"postgres_major=\$pg_major\"
+echo \"postgres_connection=\$server_addr\"
 python3 - \"\$OBJ\" \"\$DIR.tgz\" <<'PY'
 import oci,sys
 s=oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
@@ -113,7 +127,7 @@ if [ \"\$schema\" = 0 ]; then
 elif [ \"\$schema\" = 1 ]; then
   echo 'identity_anchor_state=present_skip_apply'
 else
-  echo 'auth_identity_operator=FAIL reason=unexpected_identity_schema_count'; exit 12
+  echo 'auth_identity_operator=FAIL reason=unexpected_identity_schema_count'; exit 16
 fi
 python3 \"\$DIR/verify-identity-anchor.py\" \"\$DIR/identity-map.json\" --output \"\$DIR/identity-verify.json\"
 api_active=false; systemctl is-active --quiet teswa-api && api_active=true || true
