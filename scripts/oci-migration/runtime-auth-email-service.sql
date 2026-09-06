@@ -42,8 +42,23 @@ AS $fn$
   LIMIT 1
 $fn$;
 
+CREATE OR REPLACE FUNCTION teswa_auth.get_email_account_state(p_email text)
+RETURNS TABLE(user_id uuid,email_confirmed boolean)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'teswa_auth','pg_catalog'
+AS $fn$
+  SELECT a.user_id, a.email_confirmed_at IS NOT NULL
+  FROM teswa_auth.email_accounts a
+  WHERE lower(btrim(a.email)) = lower(btrim(p_email))
+  LIMIT 1
+$fn$;
+
 REVOKE ALL ON FUNCTION teswa_auth.get_auth_user(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION teswa_auth.get_email_account_state(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION teswa_auth.get_auth_user(uuid) TO teswaauth;
+GRANT EXECUTE ON FUNCTION teswa_auth.get_email_account_state(text) TO teswaauth;
 
 COMMIT;
 SELECT 'runtime_auth_email_service=PASS' AS result;
