@@ -7,17 +7,35 @@ trap 'rm -rf "$WORK"' EXIT
 CONTENT="$WORK/content.json"
 TARGET="$WORK/target.json"
 
-INSTANCE_ID="$(oci search resource structured-search --query-text "query instance resources where displayName = 'teswa-core-01'" --query 'data.items[0].identifier' --raw-output)"
+progress() { echo "progress=$1"; }
+oci_bounded() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 30s oci "$@"
+  else
+    oci "$@"
+  fi
+}
+fail_step() {
+  echo "ingress_discovery=FAIL reason=oci_timeout_or_error step=$1"
+  exit 20
+}
+
+progress=unused
+progress resolve_instance
+INSTANCE_ID="$(oci_bounded search resource structured-search --query-text "query instance resources where displayName = 'teswa-core-01'" --query 'data.items[0].identifier' --raw-output)" || fail_step resolve_instance
 [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != null ] || { echo 'ingress_discovery=FAIL reason=core_instance_not_found'; exit 2; }
-COMPARTMENT="$(oci compute instance get --instance-id "$INSTANCE_ID" --query 'data."compartment-id"' --raw-output)"
-STATE="$(oci compute instance get --instance-id "$INSTANCE_ID" --query 'data."lifecycle-state"' --raw-output)"
+
+progress read_instance
+COMPARTMENT="$(oci_bounded compute instance get --instance-id "$INSTANCE_ID" --query 'data."compartment-id"' --raw-output)" || fail_step read_compartment
+STATE="$(oci_bounded compute instance get --instance-id "$INSTANCE_ID" --query 'data."lifecycle-state"' --raw-output)" || fail_step read_instance_state
 [ "$STATE" = RUNNING ] || { echo "ingress_discovery=FAIL reason=target_state value=$STATE"; exit 3; }
 
-VNIC_ID="$(oci compute instance list-vnics --instance-id "$INSTANCE_ID" --query 'data[0].id' --raw-output)"
-PRIVATE_IP="$(oci network vnic get --vnic-id "$VNIC_ID" --query 'data."private-ip"' --raw-output)"
-PUBLIC_IP="$(oci network vnic get --vnic-id "$VNIC_ID" --query 'data."public-ip"' --raw-output)"
-SUBNET_ID="$(oci network vnic get --vnic-id "$VNIC_ID" --query 'data."subnet-id"' --raw-output)"
-NSGS="$(oci network vnic get --vnic-id "$VNIC_ID" --query 'data."nsg-ids"' --raw-output 2>/dev/null || true)"
+progress read_vnic
+VNIC_ID="$(oci_bounded compute instance list-vnics --instance-id "$INSTANCE_ID" --query 'data[0].id' --raw-output)" || fail_step list_vnics
+PRIVATE_IP="$(oci_bounded network vnic get --vnic-id "$VNIC_ID" --query 'data."private-ip"' --raw-output)" || fail_step read_private_ip
+PUBLIC_IP="$(oci_bounded network vnic get --vnic-id "$VNIC_ID" --query 'data."public-ip"' --raw-output)" || fail_step read_public_ip
+SUBNET_ID="$(oci_bounded network vnic get --vnic-id "$VNIC_ID" --query 'data."subnet-id"' --raw-output)" || fail_step read_subnet
+NSGS="$(oci_bounded network vnic get --vnic-id "$VNIC_ID" --query 'data."nsg-ids"' --raw-output 2>/dev/null || true)"
 
 echo 'TESWA OCI APP INGRESS REALITY DISCOVERY'
 echo 'mutation=none'
@@ -27,7 +45,7 @@ echo "instance_state=$STATE"
 echo "private_ip=$PRIVATE_IP"
 echo "public_ip=${PUBLIC_IP:-null}"
 echo "subnet_id=$SUBNET_ID"
-echo "nsg_ids=${NSGS:-[]}" 
+echo "nsg_ids=${NSGS:-[]}"
 
 SCRIPT_TEXT="$(cat <<'GUEST'
 set -Eeuo pipefail
@@ -94,10 +112,13 @@ python3 - "$TARGET" "$INSTANCE_ID" <<'PY'
 import json,sys
 json.dump({'instanceId':sys.argv[2]},open(sys.argv[1],'w'))
 PY
-CID="$(oci instance-agent command create --compartment-id "$COMPARTMENT" --content "file://$CONTENT" --target "file://$TARGET" --timeout-in-seconds 180 --display-name 'teswa-app-ingress-reality-discovery' --query 'data.id' --raw-output)"
+
+progress submit_run_command
+CID="$(oci_bounded instance-agent command create --compartment-id "$COMPARTMENT" --content "file://$CONTENT" --target "file://$TARGET" --timeout-in-seconds 180 --display-name 'teswa-app-ingress-reality-discovery' --query 'data.id' --raw-output)" || fail_step submit_run_command
 echo "command_id=$CID"
+progress wait_run_command
 while true; do
-  J="$(oci instance-agent command-execution get --command-id "$CID" --instance-id "$INSTANCE_ID" --output json)"
+  J="$(oci_bounded instance-agent command-execution get --command-id "$CID" --instance-id "$INSTANCE_ID" --output json)" || fail_step poll_run_command
   S="$(printf '%s' "$J" | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["lifecycle-state"])')"
   echo "state=$S"
   case "$S" in
