@@ -91,7 +91,6 @@ echo "identity_artifact_sha256=$ARCHIVE_SHA"
 
 SCRIPT_TEXT="$(cat <<EOF
 set -Eeuo pipefail
-P=/usr/pgsql-17/bin/psql
 DB=teswa_rehearsal
 OBJ='$OBJECT'
 SHA='$ARCHIVE_SHA'
@@ -99,7 +98,24 @@ DIR=/var/tmp/teswa-lane4-identity-\${SHA:0:12}
 echo 'guest_hostname='\"\$(hostname -s)\"
 echo 'target_identity_source=oci_control_plane_instance_id'
 systemctl is-active --quiet postgresql-17 || { echo 'auth_identity_operator=FAIL reason=postgres_inactive'; exit 11; }
-sudo -u postgres test -x \"\$P\" || { echo 'auth_identity_operator=FAIL reason=psql_missing_for_postgres_user'; exit 12; }
+P=''
+for candidate in /usr/pgsql-17/bin/psql /usr/bin/psql; do
+  if sudo -u postgres \"\$candidate\" --version >/dev/null 2>&1; then P=\"\$candidate\"; break; fi
+done
+if [ -z \"\$P\" ]; then
+  candidate=\"\$(rpm -ql postgresql17 2>/dev/null | awk '/\\/psql\$/ {print; exit}' || true)\"
+  if [ -n \"\$candidate\" ] && sudo -u postgres \"\$candidate\" --version >/dev/null 2>&1; then P=\"\$candidate\"; fi
+fi
+if [ -z \"\$P\" ]; then
+  echo 'postgres_service_active=true'
+  echo 'postgres17_package='\"\$(rpm -q postgresql17 2>/dev/null || echo missing)\"
+  echo 'postgres17_server_package='\"\$(rpm -q postgresql17-server 2>/dev/null || echo missing)\"
+  echo 'auth_identity_operator=FAIL reason=psql_client_unresolvable'
+  exit 12
+fi
+echo \"psql_path=\$P\"
+probe=\"\$(sudo -u postgres \"\$P\" -d postgres -Atqc 'SELECT 1')\"
+[ \"\$probe\" = 1 ] || { echo 'auth_identity_operator=FAIL reason=psql_probe_failed'; exit 12; }
 echo 'psql_access=postgres_sudo_context'
 db_name=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc 'SELECT current_database()')\"
 pg_major=\"\$(sudo -u postgres \"\$P\" -d \"\$DB\" -Atqc \"SELECT current_setting('server_version_num')::int / 10000\")\"
