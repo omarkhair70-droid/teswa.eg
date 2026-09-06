@@ -25,14 +25,14 @@ echo 'auth_email_database_auth=unix_peer_no_password'
 echo 'auth_email_direct_table_access=false'
 echo 'legacy_import_runtime_exposed=false'
 
-UID="$(python3 - <<'PY'
+TEST_UID="$(python3 - <<'PY'
 import uuid
 print(uuid.uuid4())
 PY
 )"
 TOKEN="$(printf 'teswa-email-confirmation-rehearsal-only' | sha256sum | awk '{print $1}')"
 OUT="$(sudo -u teswaauth "$P" -X -qAt -F '|' -v ON_ERROR_STOP=1 -d "$DB" \
-  -v uid="$UID" -v token="$TOKEN" <<'SQL'
+  -v uid="$TEST_UID" -v token="$TOKEN" <<'SQL'
 BEGIN;
 SELECT 'bootstrap='||teswa_auth.bootstrap_email_signup(:'uid'::uuid,'lane4-email-test@teswa.invalid','Teswa-Rehearsal-Password-2026','Lane4 Email Test',:'token',now()+interval '20 minutes');
 SELECT 'before_confirm='||email_confirmed::text FROM teswa_auth.verify_email_password('lane4-email-test@teswa.invalid','Teswa-Rehearsal-Password-2026');
@@ -46,7 +46,7 @@ printf '%s\n' "$OUT"
 grep -qx 'bootstrap=true' <<<"$OUT" || { echo 'auth_email_foundation=FAIL reason=bootstrap'; exit 18; }
 grep -qx 'before_confirm=false' <<<"$OUT" || { echo 'auth_email_foundation=FAIL reason=preconfirm_state'; exit 19; }
 grep -qx 'wrong_password_rows=0' <<<"$OUT" || { echo 'auth_email_foundation=FAIL reason=password_rejection'; exit 20; }
-grep -qx "confirmed_user=$UID" <<<"$OUT" || { echo 'auth_email_foundation=FAIL reason=confirmation'; exit 21; }
+grep -qx "confirmed_user=$TEST_UID" <<<"$OUT" || { echo 'auth_email_foundation=FAIL reason=confirmation'; exit 21; }
 grep -qx 'after_confirm=true' <<<"$OUT" || { echo 'auth_email_foundation=FAIL reason=postconfirm_state'; exit 22; }
 
 USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
