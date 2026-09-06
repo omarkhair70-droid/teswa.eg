@@ -17,12 +17,19 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS teswa_auth.email_accounts (
   user_id uuid PRIMARY KEY REFERENCES teswa_identity.users(id) ON DELETE CASCADE,
   email text NOT NULL,
-  password_hash text NOT NULL CHECK (password_hash ~ '^\\$2[aby]\\$'),
+  password_hash text NOT NULL,
   email_confirmed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   source text NOT NULL DEFAULT 'teswa' CHECK (source IN ('teswa','supabase_migrated'))
 );
+-- The first rehearsal revision over-escaped a regex in this CHECK. Replace it
+-- deterministically with prefix validation that accepts PostgreSQL/Supabase
+-- bcrypt variants without regex escaping ambiguity.
+ALTER TABLE teswa_auth.email_accounts DROP CONSTRAINT IF EXISTS email_accounts_password_hash_check;
+ALTER TABLE teswa_auth.email_accounts
+  ADD CONSTRAINT email_accounts_password_hash_check
+  CHECK (left(password_hash,4) IN ('$2a$','$2b$','$2y$'));
 CREATE UNIQUE INDEX IF NOT EXISTS teswa_auth_email_accounts_email_uq ON teswa_auth.email_accounts(lower(btrim(email)));
 ALTER TABLE teswa_auth.email_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE teswa_auth.email_accounts FORCE ROW LEVEL SECURITY;
@@ -121,7 +128,8 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path TO 'teswa_auth','teswa_identity','pg_catalog'
 AS $fn$
 BEGIN
-  IF p_user_id IS NULL OR NOT EXISTS(SELECT 1 FROM teswa_identity.users WHERE id=p_user_id) OR p_password_hash !~ '^\\$2[aby]\\$' THEN
+  IF p_user_id IS NULL OR NOT EXISTS(SELECT 1 FROM teswa_identity.users WHERE id=p_user_id)
+     OR left(p_password_hash,4) NOT IN ('$2a$','$2b$','$2y$') THEN
     RAISE EXCEPTION 'invalid_legacy_email_account' USING errcode='22023';
   END IF;
   INSERT INTO teswa_auth.email_accounts(user_id,email,password_hash,email_confirmed_at,created_at,updated_at,source)
