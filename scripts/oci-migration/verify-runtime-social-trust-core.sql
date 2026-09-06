@@ -3,14 +3,19 @@
 DO $$
 declare
   v_count integer;
+  v_support integer;
   v_bad integer;
   v_policy_count integer;
   v_policy_bad integer;
   v_code text;
-  v_a uuid;
-  v_b uuid;
-  v_following boolean;
 begin
+  select count(*) into v_support
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.proname in (
+    'get_user_badges','get_user_trust_metrics','enforce_reports_rate_limit'
+  );
+  if v_support <> 3 then raise exception 'expected 3 social/trust support helpers, found %',v_support; end if;
+
   select count(*) into v_count
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.proname in (
@@ -23,11 +28,12 @@ begin
   select count(*) into v_bad
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.proname in (
+    'get_user_badges','get_user_trust_metrics','enforce_reports_rate_limit',
     'follow_user','unfollow_user','get_user_block_state','get_user_follow_state',
     'get_my_badges','get_my_trust_metrics','is_admin_user','refresh_my_badges',
     'report_user','report_story','report_direct_message'
   ) and pg_get_functiondef(p.oid) like '%auth.uid()%';
-  if v_bad <> 0 then raise exception 'auth.uid remains in % social/trust functions',v_bad; end if;
+  if v_bad <> 0 then raise exception 'auth.uid remains in % social/trust functions/helpers',v_bad; end if;
 
   select count(*) into v_policy_count
   from pg_policies where schemaname='public' and policyname in (
@@ -57,10 +63,18 @@ declare
   v_b uuid;
   v_code text;
   v_following boolean;
+  v_badge_count integer;
+  v_metric_count integer;
 begin
   select id into v_a from teswa_identity.users order by id limit 1;
   select id into v_b from teswa_identity.users where id<>v_a order by id limit 1;
   if v_a is null or v_b is null then raise exception 'need two identity users'; end if;
+
+  select count(*) into v_badge_count from public.get_user_badges(v_a);
+  if v_badge_count < 0 then raise exception 'badge helper invalid count'; end if;
+  select count(*) into v_metric_count from public.get_user_trust_metrics(v_a);
+  if v_metric_count > 1 then raise exception 'trust helper returned multiple rows'; end if;
+  perform public.enforce_reports_rate_limit(v_a);
 
   delete from public.user_follows where follower_id=v_a and followed_id=v_b;
   delete from public.user_blocks where (blocker_id=v_a and blocked_user_id=v_b) or (blocker_id=v_b and blocked_user_id=v_a);
@@ -80,4 +94,5 @@ end$$;
 ROLLBACK;
 
 SELECT CASE WHEN teswa_runtime.current_user_id() IS NULL THEN 'social_transaction_identity_cleanup=PASS' ELSE 'social_transaction_identity_cleanup=FAIL' END;
+SELECT 'runtime_social_trust_support=PASS' AS support_result;
 SELECT 'runtime_social_trust_core=PASS' AS result;
