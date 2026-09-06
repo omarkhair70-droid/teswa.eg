@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 STAGE="${1:?stage directory required}"
 P=/usr/pgsql-17/bin/psql
 DB=teswa_rehearsal
@@ -11,6 +12,25 @@ CONFIG="$APP/config.json"
 SQL="$STAGE/runtime-auth-email-service.sql"
 SERVER="$STAGE/auth-email-runtime-server.py"
 CRED="$STAGE/legacy-email.json"
+TMP=""
+TEST_UID=""
+
+cleanup_guest() {
+  if [ -n "${TEST_UID:-}" ]; then
+    sudo -u postgres "$P" -X -q -v ON_ERROR_STOP=0 -d "$DB" <<SQL >/dev/null 2>&1 || true
+BEGIN;
+DELETE FROM teswa_auth.sessions WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_accounts WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM public.profiles WHERE id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.external_identities WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.users WHERE id='$TEST_UID'::uuid;
+COMMIT;
+SQL
+  fi
+  [ -z "${TMP:-}" ] || rm -rf "$TMP"
+}
+trap cleanup_guest EXIT
 
 sudo -n true || { echo 'auth_email_runtime=FAIL reason=no_passwordless_sudo'; exit 10; }
 [ "$(hostname -s)" = core01 ] || { echo 'auth_email_runtime=FAIL reason=unexpected_guest_hostname'; exit 11; }
@@ -22,15 +42,16 @@ done
 BASE_OK="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT (to_regclass('teswa_auth.email_accounts') IS NOT NULL AND to_regclass('teswa_auth.sessions') IS NOT NULL AND to_regclass('teswa_identity.users') IS NOT NULL)::text")"
 [ "$BASE_OK" = t ] || { echo 'auth_email_runtime=FAIL reason=auth_foundation_missing'; exit 14; }
 
-python3 - "$CRED" <<'PY'
+LEGACY_UID="$(python3 - "$CRED" <<'PY'
 import json,sys,uuid
 x=json.load(open(sys.argv[1]))
-assert set(x) >= {'user_id','email','password_hash','email_confirmed_at','created_at','updated_at'}
-uuid.UUID(x['user_id'])
+u=str(uuid.UUID(x['user_id']))
 assert isinstance(x['email'],str) and '@' in x['email']
 assert isinstance(x['password_hash'],str) and x['password_hash'].startswith(('$2a$','$2b$','$2y$')) and len(x['password_hash']) >= 50
-print('legacy_email_credential_payload_validation=PASS')
+print(u)
 PY
+)"
+echo 'legacy_email_credential_payload_validation=PASS'
 
 sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$SQL"
 echo 'auth_email_runtime_schema_apply=PASS'
@@ -49,7 +70,6 @@ sql=f"SELECT teswa_auth.import_legacy_email_account('{uid}'::uuid,{txt(x['email'
 proc=subprocess.run(['sudo','-u','postgres',psql,'-X','-qAt','-v','ON_ERROR_STOP=1','-d',db],input=sql.encode(),capture_output=True,check=False)
 if proc.returncode != 0 or proc.stdout.decode().strip() != 't':
     raise SystemExit('auth_email_runtime=FAIL reason=legacy_import_failed')
-# Compare the exact stored hash to the source material without printing either value.
 check=f"SELECT count(*)=1 AND bool_and(password_hash={txt(x['password_hash'])}) FROM teswa_auth.email_accounts WHERE user_id='{uid}'::uuid AND lower(email)=lower({txt(x['email'])}) AND source='supabase_migrated';"
 proc=subprocess.run(['sudo','-u','postgres',psql,'-X','-qAt','-v','ON_ERROR_STOP=1','-d',db],input=check.encode(),capture_output=True,check=False)
 if proc.returncode != 0 or proc.stdout.decode().strip() != 't':
@@ -62,15 +82,10 @@ echo 'legacy_email_password_hash_exact_match=PASS'
 
 EMAIL_COUNT="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT count(*) FROM teswa_auth.email_accounts WHERE source='supabase_migrated'")"
 [ "$EMAIL_COUNT" = 1 ] || { echo "auth_email_runtime=FAIL reason=legacy_email_account_count_$EMAIL_COUNT"; exit 15; }
-EMAIL_IDENTITY_OK="$(python3 - "$CRED" "$P" "$DB" <<'PY'
-import json,subprocess,sys
-x=json.load(open(sys.argv[1])); uid=x['user_id']; psql=sys.argv[2]; db=sys.argv[3]
-sql=f"SELECT (EXISTS(SELECT 1 FROM teswa_identity.users WHERE id='{uid}'::uuid) AND EXISTS(SELECT 1 FROM teswa_identity.external_identities WHERE provider='email' AND user_id='{uid}'::uuid))::text;"
-p=subprocess.run(['sudo','-u','postgres',psql,'-X','-qAt','-d',db],input=sql.encode(),capture_output=True,check=False)
-print(p.stdout.decode().strip() if p.returncode==0 else 'f')
-PY
-)"
+EMAIL_IDENTITY_OK="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT (EXISTS(SELECT 1 FROM teswa_identity.users WHERE id='$LEGACY_UID'::uuid) AND EXISTS(SELECT 1 FROM teswa_identity.external_identities WHERE provider='email' AND user_id='$LEGACY_UID'::uuid))::text")"
 [ "$EMAIL_IDENTITY_OK" = t ] || { echo 'auth_email_runtime=FAIL reason=legacy_email_identity_mapping'; exit 16; }
+rm -f "$CRED"
+echo 'guest_legacy_credential_file_cleanup=PASS'
 
 CLIENT_ID="$(sudo -u teswaauth python3 - "$CONFIG" <<'PY'
 import json,sys
@@ -81,8 +96,6 @@ PY
 )"
 [ -n "$CLIENT_ID" ] || { echo 'auth_email_runtime=FAIL reason=google_client_missing'; exit 17; }
 
-chmod 0755 "$STAGE"
-chmod 0644 "$SERVER"
 sudo systemctl stop teswa-auth-shadow
 sudo install -o root -g teswaauth -m 0640 "$SERVER" "$APP/server.py"
 sudo systemctl daemon-reload
@@ -105,16 +118,12 @@ assert x["productionTraffic"] is False and x["supabaseRuntimeDependency"] is Fal
 assert x["identityUsers"]==32 and x["identityMappings"]==32
 assert x["confirmationDispatchConfigured"] is False and x["googlePositiveDeferred"] is True
 '
-
 echo 'auth_email_runtime_service_health=PASS'
 
-# Synthetic HTTP E2E: sign-up -> resend -> internal confirmation -> password sign-in
-# -> session restore -> refresh rotation -> replay rejection -> logout revocation.
 STAMP="$(date +%s)"
 TEST_EMAIL="lane4-auth-e2e-${STAMP}@teswa.invalid"
 TEST_PASS='Teswa-E2E-Rehearsal-Password-2026'
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' RETURN
 
 code="$(curl -sS -o "$TMP/signup.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" http://127.0.0.1:3110/v1/auth/sign-up)"
 [ "$code" = 201 ] || { echo "auth_email_runtime=FAIL reason=signup_http_$code"; exit 19; }
@@ -171,7 +180,8 @@ DELETE FROM teswa_identity.external_identities WHERE user_id='$TEST_UID'::uuid;
 DELETE FROM teswa_identity.users WHERE id='$TEST_UID'::uuid;
 COMMIT;
 SQL
-rm -rf "$TMP"
+TEST_UID=""
+rm -rf "$TMP"; TMP=""
 
 USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
 EMAILS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_auth.email_accounts')"
