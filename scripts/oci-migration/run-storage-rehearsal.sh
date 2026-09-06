@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Run the first real Teswa Storage migration rehearsal:
-# Supabase metadata -> source byte export/hash -> OCI upload ->
+# Supabase Storage HTTP metadata -> source byte export/hash -> OCI upload ->
 # OCI byte re-download/hash -> exact parity report.
 #
 # Source is read-only. OCI teswa-media is target-mutating.
@@ -20,10 +20,9 @@ need() {
 }
 
 need python3
-need psql
 need oci
 
-for name in   TESWA_SOURCE_DATABASE_URL   TESWA_SUPABASE_URL   TESWA_SUPABASE_SERVICE_ROLE_KEY   TESWA_OCI_COMPARTMENT_OCID
+for name in TESWA_SUPABASE_URL TESWA_SUPABASE_ADMIN_KEY TESWA_OCI_COMPARTMENT_OCID
 do
   if [[ -z "${!name:-}" ]]; then
     echo "Missing required environment variable: $name" >&2
@@ -49,20 +48,35 @@ MAP="${TESWA_OCI_STORAGE_BUCKET_MAP:-$ROOT/scripts/oci-migration/oci-storage-buc
 
 mkdir -p "$OUT"
 
-echo "[1/5] Capture read-only Supabase Storage metadata..."
-python3 "$ROOT/scripts/oci-migration/capture-supabase-storage-manifest.py"   --database-url-env TESWA_SOURCE_DATABASE_URL   --output "$OUT/source-storage.json"
+echo "[1/5] Capture read-only Supabase Storage metadata through Storage API..."
+python3 "$ROOT/scripts/oci-migration/capture-supabase-storage-manifest-http.py" \
+  --output "$OUT/source-storage.json"
 
 echo "[2/5] Download and hash source bytes..."
-python3 "$ROOT/scripts/oci-migration/export-supabase-storage-bytes.py"   "$OUT/source-storage.json"   --output-dir "$OUT/source-bytes"   --output-manifest "$OUT/source-storage-hashed.json"
+python3 "$ROOT/scripts/oci-migration/export-supabase-storage-bytes.py" \
+  "$OUT/source-storage.json" \
+  --output-dir "$OUT/source-bytes" \
+  --output-manifest "$OUT/source-storage-hashed.json"
 
 echo "[3/5] Upload verified source bytes to OCI teswa-media..."
-python3 "$ROOT/scripts/oci-migration/upload-storage-to-oci.py"   "$OUT/source-storage-hashed.json"   --export-dir "$OUT/source-bytes"   --bucket-map "$MAP"   --output-manifest "$OUT/oci-upload-record.json"
+python3 "$ROOT/scripts/oci-migration/upload-storage-to-oci.py" \
+  "$OUT/source-storage-hashed.json" \
+  --export-dir "$OUT/source-bytes" \
+  --bucket-map "$MAP" \
+  --output-manifest "$OUT/oci-upload-record.json"
 
 echo "[4/5] Re-download and hash actual OCI target bytes..."
-python3 "$ROOT/scripts/oci-migration/export-oci-storage-bytes.py"   "$OUT/oci-upload-record.json"   --output-dir "$OUT/oci-bytes"   --output-manifest "$OUT/oci-storage-hashed.json"
+python3 "$ROOT/scripts/oci-migration/export-oci-storage-bytes.py" \
+  "$OUT/oci-upload-record.json" \
+  --output-dir "$OUT/oci-bytes" \
+  --output-manifest "$OUT/oci-storage-hashed.json"
 
 echo "[5/5] Require exact source/target byte parity..."
-python3 "$ROOT/scripts/oci-migration/compare-storage-manifests.py"   "$OUT/source-storage-hashed.json"   "$OUT/oci-storage-hashed.json"   --require-content-sha256   --report "$OUT/storage-parity-report.json"
+python3 "$ROOT/scripts/oci-migration/compare-storage-manifests.py" \
+  "$OUT/source-storage-hashed.json" \
+  "$OUT/oci-storage-hashed.json" \
+  --require-content-sha256 \
+  --report "$OUT/storage-parity-report.json"
 
 python3 - "$OUT" <<'PY'
 import hashlib, json, pathlib, sys
@@ -88,4 +102,4 @@ echo "STORAGE REHEARSAL GREEN"
 echo "Evidence: $OUT"
 echo "Supabase source mutations: none"
 echo "OCI target deletions: none"
-echo "Do not commit this directory; it contains production media bytes."
+echo "Do not commit this directory; it contains production media bytes until operator cleanup."
