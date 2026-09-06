@@ -46,7 +46,7 @@ python3 - "$CONTENT" "$SCRIPT_TEXT" <<'PY'
 import json,sys; json.dump({'source':{'sourceType':'TEXT','text':sys.argv[2]},'output':{'outputType':'TEXT'}},open(sys.argv[1],'w'))
 PY
 python3 - "$TARGET" "$INSTANCE_ID" <<'PY'
-import json,sys; json.dump({'instanceId':sys.argv[1]},open(sys.argv[2],'w'))
+import json,sys; json.dump({'instanceId':sys.argv[2]},open(sys.argv[1],'w'))
 PY
 CID="$(oci instance-agent command create --compartment-id "$COMPARTMENT" --content "file://$CONTENT" --target "file://$TARGET" --timeout-in-seconds 300 --display-name 'teswa-lane4-notifications-analytics-core' --query 'data.id' --raw-output)"; echo "command_id=$CID"
 while true; do J="$(oci instance-agent command-execution get --command-id "$CID" --instance-id "$INSTANCE_ID" --output json)"; S="$(printf '%s' "$J"|python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["lifecycle-state"])')"; echo "state=$S"; case "$S" in SUCCEEDED|FAILED|TIMED_OUT|CANCELED) printf '%s' "$J"|python3 -c 'import json,sys;c=json.load(sys.stdin)["data"].get("content") or {};print(c.get("text",""));print(c.get("message",""))'; [ "$S" = SUCCEEDED ] || exit 6; break;; esac; sleep 3; done
