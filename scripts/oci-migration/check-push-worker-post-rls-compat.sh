@@ -17,7 +17,8 @@ cleanup(){ [ -z "$N" ] || sudo -u postgres "$P" -d "$DB" -qAtc "DELETE FROM publ
 trap cleanup EXIT
 sudo -n true || { echo 'push_post_rls_compat=FAIL reason=no_sudo'; exit 10; }
 [ "$(hostname -s)" = core01 ] || { echo 'push_post_rls_compat=FAIL reason=wrong_host'; exit 11; }
-[ -f "$W" ] || { echo 'push_post_rls_compat=FAIL reason=worker_missing'; exit 12; }
+sudo test -f "$W" || { echo 'push_post_rls_compat=FAIL reason=worker_missing'; exit 12; }
+sudo -u teswapush test -r "$W" || { echo 'push_post_rls_compat=FAIL reason=worker_not_readable_by_service_role'; exit 12; }
 id teswapush >/dev/null 2>&1 || { echo 'push_post_rls_compat=FAIL reason=role_missing'; exit 13; }
 systemctl is-active --quiet teswa-push-shadow && WAS=1 || true
 systemctl cat teswa-push-shadow | grep -q 'TESWA_PUSH_SEND_ENABLED=0' || { echo 'push_post_rls_compat=FAIL reason=send_not_forced_off'; exit 14; }
@@ -37,6 +38,8 @@ R="$(sudo -u teswapush env TESWA_DB="$DB" TESWA_PUSH_SEND_ENABLED=0 python3 "$W"
 echo "push_post_rls_worker_result=$R"
 printf '%s' "$R" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x.get("processed") is True and x.get("status")=="skipped" and x.get("reason")=="rehearsal_send_disabled" and int(x.get("deviceCount",0))==1' || { echo 'push_post_rls_compat=FAIL reason=worker_cannot_read_rls_protected_notification_path'; exit 17; }
 [ "$VN" = 1 ] && [ "$VD" = 1 ] || { echo 'push_post_rls_compat=FAIL reason=direct_rls_visibility'; exit 18; }
+echo 'push_worker_presence_check=sudo'
+echo 'push_worker_service_role_readable=true'
 echo 'push_post_rls_outbound_performed=false'
 echo 'push_post_rls_probe_cleanup=PASS'
 echo 'push_post_rls_compat=PASS'
