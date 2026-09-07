@@ -10,12 +10,26 @@ MARK=/etc/teswa/lane4-domain-shadow-owned
 GATEWAY=/opt/teswa/api-shell/shadow_gateway.py
 TMP="$(mktemp -d)"
 TEST_UID=""
+TEST_ITEM_ID=""
+ACCESS=""
+MEDIA_KEY=""
 ROLLBACK=true
 
 cleanup() {
+  if [ -n "${ACCESS:-}" ] && [ -n "${MEDIA_KEY:-}" ]; then
+    python3 - "$TMP/media-delete.json" "$TEST_UID" "$MEDIA_KEY" <<'PY' >/dev/null 2>&1 || true
+import json,sys
+json.dump({'objects':[{'purpose':'item_image','objectKey':sys.argv[3],'contentType':'image/jpeg','sizeBytes':None}]},open(sys.argv[1],'w'))
+PY
+    curl --noproxy '*' --max-time 8 -sS -X DELETE -H 'Content-Type: application/json' -H "Authorization: Bearer $ACCESS" --data-binary "@$TMP/media-delete.json" http://127.0.0.1:3130/v1/media/objects >/dev/null 2>&1 || true
+  fi
   if [ -n "${TEST_UID:-}" ]; then
     sudo -u postgres "$P" -X -q -v ON_ERROR_STOP=0 -d "$DB" <<SQL >/dev/null 2>&1 || true
 BEGIN;
+DELETE FROM public.item_wanted_tags WHERE item_id=NULLIF('$TEST_ITEM_ID','')::uuid;
+DELETE FROM public.item_videos WHERE item_id=NULLIF('$TEST_ITEM_ID','')::uuid;
+DELETE FROM public.item_images WHERE item_id=NULLIF('$TEST_ITEM_ID','')::uuid;
+DELETE FROM public.items WHERE id=NULLIF('$TEST_ITEM_ID','')::uuid;
 DELETE FROM teswa_auth.sessions WHERE user_id='$TEST_UID'::uuid;
 DELETE FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid;
 DELETE FROM teswa_auth.email_accounts WHERE user_id='$TEST_UID'::uuid;
@@ -167,7 +181,57 @@ done
 [ -s "$TMP/gateway-health.json" ] || { echo 'domain_read_deploy=FAIL gateway_health_timeout'; sudo journalctl -u teswa-api -n 40 --no-pager || true; exit 21; }
 CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/gateway-feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://$BIND:3100/v1/marketplace/feed?limit=1")"
 [ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL gateway_feed_http_$CODE bind=$BIND"; cat "$TMP/gateway-feed.json" || true; exit 19; }
-unset ACCESS PASS TOKEN_SHA
+
+TEST_ITEM_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+MEDIA_KEY="items/$TEST_UID/$TEST_ITEM_ID/rehearsal.jpg"
+printf 'teswa-oci-media-proof' > "$TMP/media.bin"
+MEDIA_SIZE="$(wc -c < "$TMP/media.bin" | tr -d ' ')"
+python3 - "$TMP/media-create.json" "$MEDIA_KEY" "$MEDIA_SIZE" <<'PY'
+import json,sys
+json.dump({'purpose':'item_image','objectKey':sys.argv[2],'contentType':'image/jpeg','sizeBytes':int(sys.argv[3])},open(sys.argv[1],'w'))
+PY
+CODE="$(curl --noproxy '*' --max-time 12 -sS -o "$TMP/media-grant.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $ACCESS" --data-binary "@$TMP/media-create.json" "http://$BIND:3100/v1/media/uploads")"
+[ "$CODE" = 201 ] || { echo "domain_media_rehearsal=FAIL grant_http_$CODE"; cat "$TMP/media-grant.json" || true; exit 22; }
+UPLOAD_URL="$(python3 - "$TMP/media-grant.json" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1]))['uploadUrl'])
+PY
+)"
+CODE="$(curl --noproxy '*' --max-time 20 -sS -o "$TMP/media-put.json" -w '%{http_code}' -X PUT -H 'Content-Type: image/jpeg' -H 'If-None-Match: *' --data-binary "@$TMP/media.bin" "$UPLOAD_URL")"
+case "$CODE" in 200|201) ;; *) echo "domain_media_rehearsal=FAIL put_http_$CODE"; cat "$TMP/media-put.json" || true; exit 23;; esac
+CODE="$(curl --noproxy '*' --max-time 12 -sS -o "$TMP/media-complete.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $ACCESS" --data-binary "@$TMP/media-create.json" "http://$BIND:3100/v1/media/uploads/complete")"
+[ "$CODE" = 200 ] || { echo "domain_media_rehearsal=FAIL complete_http_$CODE"; cat "$TMP/media-complete.json" || true; exit 24; }
+PUBLIC_URL="$(python3 - "$TMP/media-complete.json" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1]))['publicUrl'])
+PY
+)"
+curl --noproxy '*' --max-time 20 -fsS "$PUBLIC_URL" -o "$TMP/media-read.bin"
+cmp -s "$TMP/media.bin" "$TMP/media-read.bin" || { echo 'domain_media_rehearsal=FAIL byte_mismatch'; exit 25; }
+
+CATEGORY_ID="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c 'SELECT id FROM public.categories WHERE is_active IS TRUE ORDER BY sort_order NULLS LAST,id LIMIT 1')"
+python3 - "$TMP/publish.json" "$TEST_ITEM_ID" "$TEST_UID" "$CATEGORY_ID" "$PUBLIC_URL" <<'PY'
+import json,sys
+item,user,category,url=sys.argv[2:]
+json.dump({'itemId':item,'ownerId':user,'title':'Oracle rehearsal item','categoryId':category,
+'description':'Temporary verified rehearsal row','condition':'good_used','conditionNotes':None,
+'city':'Cairo','area':None,'locationLatitude':None,'locationLongitude':None,'desireMode':'flexible',
+'desireText':None,'itemStory':None,'swapReason':None,'goodFor':None,
+'images':[{'imageUrl':url,'isPrimary':True,'sortOrder':0}]},open(sys.argv[1],'w'))
+PY
+CODE="$(curl --noproxy '*' --max-time 12 -sS -o "$TMP/publish-result.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $ACCESS" --data-binary "@$TMP/publish.json" "http://$BIND:3100/v1/marketplace/items")"
+[ "$CODE" = 201 ] || { echo "domain_publish_rehearsal=FAIL publish_http_$CODE"; cat "$TMP/publish-result.json" || true; exit 26; }
+CODE="$(curl --noproxy '*' --max-time 12 -sS -o "$TMP/published-detail.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://$BIND:3100/v1/marketplace/items/$TEST_ITEM_ID/detail")"
+[ "$CODE" = 200 ] || { echo "domain_publish_rehearsal=FAIL detail_http_$CODE"; cat "$TMP/published-detail.json" || true; exit 27; }
+python3 - "$TMP/published-detail.json" "$TEST_ITEM_ID" "$PUBLIC_URL" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); assert x['id']==sys.argv[2] and x['title']=='Oracle rehearsal item'
+assert len(x['images'])==1 and x['images'][0]['imageUrl']==sys.argv[3]
+PY
+echo 'domain_media_object_bytes=PASS'
+echo 'domain_listing_publish_rls=PASS'
+echo 'domain_published_detail_rls=PASS'
+unset PASS TOKEN_SHA
 ROLLBACK=false
 echo 'domain_service_role_nobypassrls=PASS'
 echo 'domain_feed_database_rls=PASS'
