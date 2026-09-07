@@ -7,10 +7,12 @@ on:
       - fix/oracle-exchange-read-integration-20260907
       - fix/oracle-exchange-read-closure-20260907
       - fix/oracle-exchange-lifecycle-20260907
+      - fix/oracle-exchange-read-completion-20260907
     paths:
       - scripts/oci-migration/oracle_domain_read.py
       - scripts/oci-migration/oracle_domain_service.py
       - scripts/oci-migration/oracle_exchange_read.py
+      - scripts/oci-migration/oracle_exchange_read_extra.py
       - scripts/oci-migration/oracle_media.py
       - scripts/oci-migration/oracle_marketplace_write.py
       - scripts/oci-migration/oracle_exchange.py
@@ -19,6 +21,7 @@ on:
       - scripts/oci-migration/test_oracle_exchange_lifecycle.py
       - scripts/oci-migration/test_oracle_exchange_read.py
       - scripts/oci-migration/test_oracle_exchange_read_order.py
+      - scripts/oci-migration/test_oracle_exchange_read_extra.py
       - scripts/oci-migration/test_oracle_domain_marketplace_write.py
       - scripts/oci-migration/test_oracle_domain_write_transaction.py
       - scripts/oci-migration/test_oracle_domain_media.py
@@ -36,6 +39,7 @@ on:
       - scripts/test-oracle-exchange-lifecycle-adapter.cjs
       - lib/backend/adapters/oracle/exchange-read-adapter.ts
       - scripts/test-oracle-exchange-read-adapter.cjs
+      - scripts/test-oracle-exchange-read-extra-adapter.cjs
       - scripts/oci-migration/test_oracle_domain_read.py
       - .github/workflows/oracle-domain-read-contract.yml
   workflow_dispatch:
@@ -55,6 +59,7 @@ jobs:
           python -m py_compile scripts/oci-migration/oracle_domain_read.py
           python -m py_compile scripts/oci-migration/oracle_domain_service.py
           python -m py_compile scripts/oci-migration/oracle_exchange_read.py
+          python -m py_compile scripts/oci-migration/oracle_exchange_read_extra.py
           python -m py_compile scripts/oci-migration/oracle_media.py
           python -m py_compile scripts/oci-migration/oracle_marketplace_write.py
           python -m py_compile scripts/oci-migration/oracle_exchange.py
@@ -62,6 +67,7 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read_order.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read_extra.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_lifecycle.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_media.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_marketplace_write.py -v
@@ -81,4 +87,5 @@ jobs:
           node scripts/test-oracle-exchange-adapter.cjs
           node scripts/test-oracle-exchange-read-adapter.cjs
           node scripts/test-oracle-exchange-lifecycle-adapter.cjs
+          node scripts/test-oracle-exchange-read-extra-adapter.cjs
           npm run typecheck:app
