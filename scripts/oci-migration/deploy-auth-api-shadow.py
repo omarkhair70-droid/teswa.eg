@@ -36,12 +36,14 @@ def main():
         (out/'execution.json').write_text(json.dumps(result, indent=2)+'\n')
         data = result['data']; state = data['lifecycle-state']
         print('state='+state)
+        print('delivery_state='+str(data.get('delivery-state', 'unknown')))
+        print('time_updated='+str(data.get('time-updated', 'unknown')))
         if state in ('SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'):
             content = data.get('content') or {}
             print(content.get('text', ''))
             print('exit_code='+str(content.get('exit-code')))
             raise SystemExit(0 if state == 'SUCCEEDED' and content.get('exit-code') == 0 else 2)
-        return
+        raise SystemExit(3)  # pending is not a successful deployment
     os.umask(0o077)
     root = Path(__file__).resolve().parent
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')

@@ -45,7 +45,7 @@ sudo systemctl restart teswa-api
 BIND="$(sudo sed -n 's/.*--bind \([0-9.]*\).*/\1/p' "$UNIT")"
 READY=false
 for _ in $(seq 1 15); do
-  if curl --noproxy '*' -fsS "http://$BIND:3100/healthz" > "$STAGE/health.json" 2>/dev/null; then READY=true; break; fi
+  if curl --noproxy '*' --max-time 5 -fsS "http://$BIND:3100/healthz" > "$STAGE/health.json" 2>/dev/null; then READY=true; break; fi
   sleep 1
 done
 [ "$READY" = true ]
