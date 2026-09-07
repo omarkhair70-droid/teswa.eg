@@ -5,8 +5,13 @@ const ts = require('typescript');
 const source = fs.readFileSync('lib/backend/adapters/oracle/exchange-adapter.ts', 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const mod = { exports: {} };
-vm.runInNewContext(js, { module: mod, exports: mod.exports, require, Map, Promise });
-const { createOracleOfferWriteAdapter, createOracleDealWriteAdapter } = mod.exports;
+const offerReadMethods = Object.fromEntries(['getItemForValidation','listIncoming','listSent','getOffer','getLatestDealId','getLatestDealIds','listOwnedActiveItemIds'].map(name => [name, async () => null]));
+const dealReadMethods = Object.fromEntries(['getDeal','getUnreadCount','listConversationInbox','listConfirmationUserIds','listMessages','hasReview','countMessagesSince'].map(name => [name, async () => null]));
+const localRequire = id => id.includes('exchange-read-adapter')
+  ? { createOracleOfferReadAdapter: () => offerReadMethods, createOracleDealReadAdapter: () => dealReadMethods }
+  : require(id);
+vm.runInNewContext(js, { module: mod, exports: mod.exports, require: localRequire, Map, Promise });
+const { createOracleOfferWriteAdapter, createOracleDealWriteAdapter, createOracleOfferLifecycleAdapter, createOracleDealLifecycleAdapter } = mod.exports;
 const OFFER = '33333333-3333-4333-8333-333333333333';
 const DEAL = '44444444-4444-4444-8444-444444444444';
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -52,5 +57,11 @@ const error = { ok: false, status: 409, reason: 'conflict', retryable: false };
   const malformed = { request: async () => ok({ completed: 1, ok: false }) };
   assert.equal((await createOracleOfferWriteAdapter(malformed).markThinking(OFFER)).ok, false);
   assert.equal((await createOracleDealWriteAdapter(malformed).completeIfReady(DEAL)).ok, false);
+  const fullOffers = createOracleOfferLifecycleAdapter(transport);
+  const fullDeals = createOracleDealLifecycleAdapter(transport);
+  for (const method of ['getItemForValidation','listIncoming','listSent','getOffer','getLatestDealId','getLatestDealIds','listOwnedActiveItemIds','create','recordCreatedEvent','accept','markThinking','softReject'])
+    assert.equal(typeof fullOffers[method], 'function');
+  for (const method of ['getDeal','getUnreadCount','listConversationInbox','listConfirmationUserIds','listMessages','hasReview','markRead','countMessagesSince','insertTextMessage','insertVoiceMessage','confirm','completeIfReady'])
+    assert.equal(typeof fullDeals[method], 'function');
   process.stdout.write('oracle_exchange_lifecycle_adapter=PASS\n');
 })().catch(error => { console.error(error); process.exitCode = 1; });

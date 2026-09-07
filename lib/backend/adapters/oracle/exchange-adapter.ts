@@ -1,5 +1,6 @@
 import type { DealLifecycleContract, DealLifecycleMessageRecord, OfferLifecycleContract } from '@/lib/backend/contracts/offers-deals';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
+import { createOracleDealReadAdapter, createOracleOfferReadAdapter } from '@/lib/backend/adapters/oracle/exchange-read-adapter';
 
 export type OracleOfferWriteAdapter = Pick<OfferLifecycleContract,'create'|'recordCreatedEvent'|'accept'|'markThinking'|'softReject'>;
 export type OracleDealWriteAdapter = Pick<DealLifecycleContract,'insertTextMessage'|'insertVoiceMessage'|'markRead'|'confirm'|'completeIfReady'>;
@@ -68,4 +69,12 @@ export function createOracleDealWriteAdapter(transport:OracleHttpTransport):Orac
       return result.ok&&typeof result.data.completed==='boolean' ? {ok:true,data:result.data.completed} : failed('Oracle deal completion failed.');
     },
   };
+}
+
+export function createOracleOfferLifecycleAdapter(transport: OracleHttpTransport): OfferLifecycleContract {
+  return { ...createOracleOfferReadAdapter(transport), ...createOracleOfferWriteAdapter(transport) };
+}
+
+export function createOracleDealLifecycleAdapter(transport: OracleHttpTransport): DealLifecycleContract {
+  return { ...createOracleDealReadAdapter(transport), ...createOracleDealWriteAdapter(transport) };
 }
