@@ -26,6 +26,28 @@ def require_actor(body, user_id):
     if valid_uuid(body.get('userId')) != user_id: raise ApiError(403,'actor_mismatch')
 
 
+def voice_input(body, deal_id, user_id):
+    expected={'dealId','senderId','body','audioStoragePath','audioDurationMs','audioMimeType','audioSizeBytes','messageType'}
+    if set(body)!=expected or body.get('messageType')!='voice': raise ApiError(400,'invalid_voice_message')
+    if valid_uuid(body.get('dealId'))!=deal_id: raise ApiError(400,'deal_mismatch')
+    if valid_uuid(body.get('senderId'))!=user_id: raise ApiError(403,'sender_mismatch')
+    message=clean_message(body.get('body'))
+    path=body.get('audioStoragePath')
+    expected_prefix='deals/%s/%s/' % (deal_id,user_id)
+    if not isinstance(path,str) or not path.startswith(expected_prefix) or len(path)>1024 or '/' in path[len(expected_prefix):]:
+        raise ApiError(400,'invalid_voice_path')
+    duration=body.get('audioDurationMs')
+    if not isinstance(duration,int) or isinstance(duration,bool) or not 500<=duration<=120000:
+        raise ApiError(400,'invalid_voice_duration')
+    mime=body.get('audioMimeType')
+    if mime not in ('audio/m4a','audio/mp4','audio/aac','audio/mpeg','audio/wav','audio/webm','audio/ogg'):
+        raise ApiError(400,'invalid_voice_mime')
+    size=body.get('audioSizeBytes')
+    if size is not None and (not isinstance(size,int) or isinstance(size,bool) or not 1<=size<=15728640):
+        raise ApiError(400,'invalid_voice_size')
+    return message or 'رسالة صوتية',path,duration,mime,size
+
+
 def run_void(db, user_id, function, *args):
     # Include the function result in the JSON expression so the volatile RPC
     # cannot be pruned as an unused subquery projection.
@@ -96,13 +118,21 @@ class ExchangeApi:
             return 200,result
         match=re.fullmatch(r'/v1/deals/([0-9a-fA-F-]{36})/messages',parsed.path)
         if match:
-            if set(body)!={'senderId','body'} or valid_uuid(body['senderId'])!=user_id: raise ApiError(403,'sender_mismatch')
-            deal_id=valid_uuid(match.group(1)); message=clean_message(body['body'])
-            if not message: raise ApiError(400,'invalid_message')
-            statement="""WITH x AS (INSERT INTO public.deal_messages(deal_id,sender_id,body,message_type)
-              VALUES('%s'::uuid,'%s'::uuid,%s,'text') RETURNING id,deal_id AS \"dealId\",sender_id AS \"senderId\",
+            deal_id=valid_uuid(match.group(1))
+            if body.get('messageType')=='voice':
+                message,path,duration,mime,size=voice_input(body,deal_id,user_id)
+                values="'%s'::uuid,'%s'::uuid,%s,'voice',%s,%d,%s,%s" % (
+                    deal_id,user_id,sql_text(message),sql_text(path),duration,sql_text(mime),str(size) if size is not None else 'NULL')
+            else:
+                if set(body)!={'senderId','body'} or valid_uuid(body['senderId'])!=user_id: raise ApiError(403,'sender_mismatch')
+                message=clean_message(body['body'])
+                if not message: raise ApiError(400,'invalid_message')
+                values="'%s'::uuid,'%s'::uuid,%s,'text',NULL,NULL,NULL,NULL" % (deal_id,user_id,sql_text(message))
+            statement="""WITH x AS (INSERT INTO public.deal_messages(deal_id,sender_id,body,message_type,
+              audio_storage_path,audio_duration_ms,audio_mime_type,audio_size_bytes)
+              VALUES(%s) RETURNING id,deal_id AS \"dealId\",sender_id AS \"senderId\",
               body,message_type AS \"messageType\",audio_storage_path AS \"audioStoragePath\",
               audio_duration_ms AS \"audioDurationMs\",audio_mime_type AS \"audioMimeType\",
-              audio_size_bytes AS \"audioSizeBytes\",created_at AS \"createdAt\") SELECT row_to_json(x) FROM x""" % (deal_id,user_id,sql_text(message))
+              audio_size_bytes AS \"audioSizeBytes\",created_at AS \"createdAt\") SELECT row_to_json(x) FROM x""" % values
             return 201,self.db.query(user_id,statement)
         raise ApiError(404,'not_found')

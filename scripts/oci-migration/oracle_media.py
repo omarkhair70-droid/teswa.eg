@@ -7,6 +7,7 @@ import secrets
 from urllib.parse import urlsplit
 
 from oracle_domain_read import ApiError, AuthResolver, valid_uuid
+from oracle_marketplace_write import PgWriteRunner
 
 PURPOSE_PREFIX = {
     'profile_image': 'profile-images', 'item_image': 'item-images',
@@ -19,7 +20,7 @@ PUBLIC_PURPOSES = {'profile_image', 'item_image'}
 MAX_OBJECT_BYTES = 100 * 1024 * 1024
 
 
-def object_input(value, user_id, require_size=True):
+def object_input(value, user_id, require_size=True, allow_non_owner=False):
     if not isinstance(value, dict) or set(value) - {'purpose', 'objectKey', 'contentType', 'sizeBytes'}:
         raise ApiError(400, 'invalid_media_object')
     purpose, key = value.get('purpose'), value.get('objectKey')
@@ -31,7 +32,7 @@ def object_input(value, user_id, require_size=True):
         raise ApiError(400, 'invalid_media_object')
     # Every current Teswa upload key carries the owner UUID as a full segment.
     # The API derives that UUID from Auth; it never trusts an ownerId body field.
-    if user_id not in key.split('/'):
+    if not allow_non_owner and user_id not in key.split('/'):
         raise ApiError(403, 'media_not_owned')
     content_type = value.get('contentType')
     if content_type is not None and (not isinstance(content_type, str)
@@ -44,6 +45,16 @@ def object_input(value, user_id, require_size=True):
                                                   or not (1 <= size <= MAX_OBJECT_BYTES)):
         raise ApiError(400, 'invalid_media_size')
     return purpose, key, content_type, size, PURPOSE_PREFIX[purpose] + '/' + key
+
+
+class DealMediaAuthorizer:
+    def __init__(self, db=None): self.db=db or PgWriteRunner()
+    def can_read(self, user_id, key):
+        match=re.fullmatch(r'deals/([0-9a-fA-F-]{36})/([0-9a-fA-F-]{36})/[^/]+',key)
+        if not match: return False
+        deal_id=valid_uuid(match.group(1)); valid_uuid(match.group(2))
+        result=self.db.query(user_id,"SELECT json_build_object('allowed',EXISTS(SELECT 1 FROM public.swap_deals WHERE id='%s'::uuid))" % deal_id)
+        return isinstance(result,dict) and result.get('allowed') is True
 
 
 class OciStorage:
@@ -92,9 +103,10 @@ class OciStorage:
 
 
 class MediaApi:
-    def __init__(self, auth=None, storage=None):
+    def __init__(self, auth=None, storage=None, deal_authorizer=None):
         self.auth = auth or AuthResolver()
         self.storage = storage
+        self.deal_authorizer = deal_authorizer
 
     def store(self):
         if self.storage is None:
@@ -132,7 +144,12 @@ class MediaApi:
             expires = body.pop('expiresInSeconds', 3600)
             if not isinstance(expires, int) or not (60 <= expires <= 3600):
                 raise ApiError(400, 'invalid_expiry')
-            purpose, key, _content_type, _size, physical = object_input(body, user_id, False)
+            purpose_value=body.get('purpose')
+            purpose, key, _content_type, _size, physical = object_input(
+                body, user_id, False, allow_non_owner=purpose_value=='deal_voice')
+            if purpose=='deal_voice':
+                authorizer=self.deal_authorizer or DealMediaAuthorizer()
+                if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
             if self.store().head(physical) is None:
                 raise ApiError(404, 'media_not_found')
             return 200, {'signedUrl': self.store().par(physical, 'ObjectRead', expires, 'read'),

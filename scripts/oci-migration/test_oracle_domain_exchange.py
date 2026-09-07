@@ -22,4 +22,14 @@ class Tests(unittest.TestCase):
  def test_message_insert_is_rls_identity_bound_and_encoded(self):
   db=DB({'dealId':D,'senderId':UID}); status,_=exchange.ExchangeApi(Auth(),db).handle('POST','/v1/deals/'+D+'/messages','x',{'senderId':UID,'body':"hi'); DROP TABLE x;--"})
   self.assertEqual(status,201); self.assertNotIn('DROP TABLE',db.calls[0][1]); self.assertIn("decode('",db.calls[0][1])
+ def test_voice_message_is_identity_path_and_shape_bound(self):
+  row={'dealId':D,'senderId':UID,'messageType':'voice','audioStoragePath':f'deals/{D}/{UID}/voice.m4a'}; db=DB(row)
+  body={'dealId':D,'senderId':UID,'body':'رسالة صوتية','messageType':'voice','audioStoragePath':row['audioStoragePath'],
+        'audioDurationMs':1200,'audioMimeType':'audio/m4a','audioSizeBytes':1024}
+  status,out=exchange.ExchangeApi(Auth(),db).handle('POST',f'/v1/deals/{D}/messages','x',body)
+  self.assertEqual((status,out),(201,row)); self.assertIn("'voice'",db.calls[0][1]); self.assertIn('audio_storage_path',db.calls[0][1])
+  for field,value,code in [('audioDurationMs',499,'invalid_voice_duration'),('audioMimeType','text/plain','invalid_voice_mime'),('audioStoragePath',f'deals/{D}/{OTHER}/x.m4a','invalid_voice_path')]:
+   bad={**body,field:value}
+   with self.subTest(field=field),self.assertRaises(exchange.ApiError) as error: exchange.ExchangeApi(Auth(),DB({})).handle('POST',f'/v1/deals/{D}/messages','x',bad)
+   self.assertEqual(error.exception.code,code)
 if __name__=='__main__':unittest.main()

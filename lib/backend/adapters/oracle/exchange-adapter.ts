@@ -2,7 +2,7 @@ import type { DealLifecycleContract, DealLifecycleMessageRecord, OfferLifecycleC
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
 export type OracleOfferWriteAdapter = Pick<OfferLifecycleContract,'create'|'recordCreatedEvent'|'accept'|'markThinking'|'softReject'>;
-export type OracleDealWriteAdapter = Pick<DealLifecycleContract,'insertTextMessage'|'markRead'|'confirm'|'completeIfReady'>;
+export type OracleDealWriteAdapter = Pick<DealLifecycleContract,'insertTextMessage'|'insertVoiceMessage'|'markRead'|'confirm'|'completeIfReady'>;
 
 function failed(message: string) {
   return {ok:false as const,reason:'unknown' as const,message};
@@ -42,6 +42,17 @@ export function createOracleDealWriteAdapter(transport:OracleHttpTransport):Orac
       const result=await transport.request<DealLifecycleMessageRecord>({method:'POST',path:`/v1/deals/${input.dealId}/messages`,body:{senderId:input.senderId,body:input.body}});
       if(!result.ok||!result.data||result.data.dealId!==input.dealId||result.data.senderId!==input.senderId)
         return failed('Oracle deal message failed.');
+      return {ok:true,data:result.data};
+    },
+    async insertVoiceMessage(input) {
+      const result=await transport.request<DealLifecycleMessageRecord>({
+        method:'POST', path:`/v1/deals/${input.dealId}/messages`,
+        body:{...input,messageType:'voice'},
+      });
+      if(!result.ok||!result.data||result.data.dealId!==input.dealId
+        ||result.data.senderId!==input.senderId||result.data.messageType!=='voice'
+        ||result.data.audioStoragePath!==input.audioStoragePath)
+        return failed('Oracle deal voice message failed.');
       return {ok:true,data:result.data};
     },
     async markRead(dealId) {

@@ -15,31 +15,37 @@ const error = { ok: false, status: 409, reason: 'conflict', retryable: false };
 
 (async () => {
   const calls = [];
-  const responses = [ok({ ok: true }), ok({ ok: true }), ok({ ok: true }), ok({ ok: true }), ok({ completed: false }), ok({ completed: true })];
+  const voicePath = `deals/${DEAL}/${USER}/voice.m4a`;
+  const voiceInput = { dealId: DEAL, senderId: USER, body: 'voice', audioStoragePath: voicePath, audioDurationMs: 1000, audioMimeType: 'audio/m4a', audioSizeBytes: 42 };
+  const responses = [ok({ ok: true }), ok({ ok: true }), ok({ dealId: DEAL, senderId: USER, messageType: 'voice', audioStoragePath: voicePath }), ok({ ok: true }), ok({ ok: true }), ok({ completed: false }), ok({ completed: true })];
   const transport = { request: async input => { calls.push(input); return responses.shift(); } };
   const offers = createOracleOfferWriteAdapter(transport);
   const deals = createOracleDealWriteAdapter(transport);
   assert.equal((await offers.markThinking(OFFER, '  thinking  ')).ok, true);
   assert.equal((await offers.softReject(OFFER, '  no thanks  ')).ok, true);
+  assert.equal((await deals.insertVoiceMessage(voiceInput)).ok, true);
   assert.equal((await deals.markRead(DEAL)).ok, true);
   assert.equal((await deals.confirm({ dealId: DEAL, userId: USER, note: '  done  ' })).ok, true);
   assert.equal((await deals.completeIfReady(DEAL)).data, false);
   assert.equal((await deals.completeIfReady(DEAL)).data, true);
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 7);
   assert.equal(calls[0].path, `/v1/offers/${OFFER}/thinking`);
   assert.equal(calls[0].body.note, 'thinking');
   assert.equal(calls[1].path, `/v1/offers/${OFFER}/soft-reject`);
-  assert.equal(calls[2].path, `/v1/deals/${DEAL}/read`);
-  assert.equal(calls[3].path, `/v1/deals/${DEAL}/confirmations`);
-  assert.equal(calls[3].body.userId, USER);
-  assert.equal(calls[3].body.note, 'done');
-  assert.equal(calls[4].path, `/v1/deals/${DEAL}/complete`);
+  assert.equal(calls[2].body.messageType, 'voice');
+  assert.equal(calls[2].body.audioStoragePath, voicePath);
+  assert.equal(calls[3].path, `/v1/deals/${DEAL}/read`);
+  assert.equal(calls[4].path, `/v1/deals/${DEAL}/confirmations`);
+  assert.equal(calls[4].body.userId, USER);
+  assert.equal(calls[4].body.note, 'done');
+  assert.equal(calls[5].path, `/v1/deals/${DEAL}/complete`);
   assert.ok(calls.every(call => call.method === 'POST'));
   const rejected = { request: async () => error };
   const badOffers = createOracleOfferWriteAdapter(rejected);
   const badDeals = createOracleDealWriteAdapter(rejected);
   for (const result of [
     await badOffers.markThinking(OFFER), await badOffers.softReject(OFFER),
+    await badDeals.insertVoiceMessage(voiceInput),
     await badDeals.markRead(DEAL), await badDeals.confirm({ dealId: DEAL, userId: USER }),
     await badDeals.completeIfReady(DEAL),
   ]) assert.equal(result.ok, false);

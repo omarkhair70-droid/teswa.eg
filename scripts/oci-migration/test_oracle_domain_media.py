@@ -59,5 +59,18 @@ class MediaTests(unittest.TestCase):
                 media.MediaApi(Auth(),Storage()).handle('POST','/v1/media/uploads','Bearer valid',body)
             self.assertEqual(error.exception.status,400)
 
+    def test_deal_voice_read_allows_only_rls_authorized_participant(self):
+        key='deals/33333333-3333-4333-8333-333333333333/22222222-2222-4222-8222-222222222222/voice.m4a'
+        physical='deal-voice-messages/'+key; store=Storage(); store.objects[physical]={'sizeBytes':12,'contentType':'audio/m4a'}
+        class Allowed:
+            def __init__(self,value): self.value=value
+            def can_read(self,user_id,object_key): return self.value and user_id==UID and object_key==key
+        body={'purpose':'deal_voice','objectKey':key,'contentType':None,'sizeBytes':None,'expiresInSeconds':60}
+        status,out=media.MediaApi(Auth(),store,Allowed(True)).handle('POST','/v1/media/signed-url','Bearer valid',dict(body))
+        self.assertEqual(status,200); self.assertIn('signedUrl',out)
+        with self.assertRaises(media.ApiError) as error:
+            media.MediaApi(Auth(),store,Allowed(False)).handle('POST','/v1/media/signed-url','Bearer valid',dict(body))
+        self.assertEqual(error.exception.status,403)
+
 
 if __name__ == '__main__': unittest.main()
