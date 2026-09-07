@@ -51,17 +51,17 @@ function logGoogleNativeFallbackDiagnostic(reason: GoogleFlowReason, details?: R
   console.log('[GoogleSignIn]', { flow: 'native_to_browser_fallback', reason, ...details });
 }
 
+function oracleSelected(): boolean {
+  return process.env.EXPO_PUBLIC_TESWA_BACKEND_PROVIDER === 'oracle';
+}
+
 export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: string | null }> {
   const existing = inFlightCallbackCompletion.get(url);
-  if (existing) {
-    return existing;
-  }
+  if (existing) return existing;
 
   const now = Date.now();
   const lastSuccessAt = recentSuccessfulCallbacks.get(url);
-  if (lastSuccessAt && now - lastSuccessAt < RECENT_CALLBACK_TTL_MS) {
-    return { error: null };
-  }
+  if (lastSuccessAt && now - lastSuccessAt < RECENT_CALLBACK_TTL_MS) return { error: null };
 
   const completionPromise = (async () => {
     logGoogleBrowserOAuthDiagnostic('callback_received');
@@ -69,20 +69,15 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
       params: OAuthCallbackParams;
       errorCode: string | null;
     };
-
     const hasErrorParams = Boolean(errorCode || params.error || params.error_description);
     logGoogleBrowserOAuthDiagnostic('callback_has_error_params', { hasErrorParams });
-    if (errorCode || params.error || params.error_description) {
-      return { error: GOOGLE_AUTH_CALLBACK_FAILED };
-    }
+    if (errorCode || params.error || params.error_description) return { error: GOOGLE_AUTH_CALLBACK_FAILED };
 
     const hasTokens = Boolean(params.access_token && params.refresh_token);
     logGoogleBrowserOAuthDiagnostic('callback_has_tokens', { hasTokens });
     const code = typeof params.code === 'string' ? params.code : null;
     logGoogleBrowserOAuthDiagnostic('callback_has_code', { hasCode: Boolean(code) });
-    if (!hasTokens && !code) {
-      return { error: GOOGLE_AUTH_CALLBACK_FAILED };
-    }
+    if (!hasTokens && !code) return { error: GOOGLE_AUTH_CALLBACK_FAILED };
 
     const completionResult = await teswaBackendRuntime.auth.completeExternalSignIn(url);
     if (hasTokens) {
@@ -96,17 +91,13 @@ export async function completeGoogleOAuthFromUrl(url: string): Promise<{ error: 
   inFlightCallbackCompletion.set(url, completionPromise);
   try {
     const result = await completionPromise;
-    if (!result.error) {
-      recentSuccessfulCallbacks.set(url, Date.now());
-    }
+    if (!result.error) recentSuccessfulCallbacks.set(url, Date.now());
     return result;
   } finally {
     inFlightCallbackCompletion.delete(url);
     const cutoff = Date.now() - RECENT_CALLBACK_TTL_MS;
     for (const [callbackUrl, completedAt] of recentSuccessfulCallbacks.entries()) {
-      if (completedAt < cutoff) {
-        recentSuccessfulCallbacks.delete(callbackUrl);
-      }
+      if (completedAt < cutoff) recentSuccessfulCallbacks.delete(callbackUrl);
     }
   }
 }
@@ -116,33 +107,18 @@ export async function signInWithGoogleBrowserOAuth(): Promise<{ error: string | 
     logGoogleBrowserOAuthDiagnostic('start');
     const redirectTo = makeRedirectUri({ scheme: 'teswa', path: 'auth/callback' });
     logGoogleBrowserOAuthDiagnostic('redirect_uri_created');
-
-    const authStart = await teswaBackendRuntime.auth.startExternalSignIn({
-      provider: 'google',
-      redirectTo,
-    });
+    const authStart = await teswaBackendRuntime.auth.startExternalSignIn({ provider: 'google', redirectTo });
     const authorizationUrl = authStart.ok ? authStart.data.authorizationUrl : null;
     logGoogleBrowserOAuthDiagnostic('supabase_oauth_url_created', {
-      hasUrl: Boolean(authorizationUrl),
-      hasSupabaseError: !authStart.ok,
+      hasUrl: Boolean(authorizationUrl), hasSupabaseError: !authStart.ok,
     });
-
-    if (!authStart.ok || !authorizationUrl) {
-      return { error: GOOGLE_AUTH_ERROR };
-    }
+    if (!authStart.ok || !authorizationUrl) return { error: GOOGLE_AUTH_ERROR };
 
     logGoogleBrowserOAuthDiagnostic('open_auth_session_start');
     const result = await WebBrowser.openAuthSessionAsync(authorizationUrl, redirectTo);
     logGoogleBrowserOAuthDiagnostic('open_auth_session_result', { resultType: result.type });
-
-    if (result.type === 'cancel' || result.type === 'dismiss') {
-      return { error: GOOGLE_AUTH_CANCELLED };
-    }
-
-    if (result.type !== 'success' || !result.url) {
-      return { error: GOOGLE_AUTH_CALLBACK_FAILED };
-    }
-
+    if (result.type === 'cancel' || result.type === 'dismiss') return { error: GOOGLE_AUTH_CANCELLED };
+    if (result.type !== 'success' || !result.url) return { error: GOOGLE_AUTH_CALLBACK_FAILED };
     logGoogleBrowserOAuthDiagnostic('callback_completion_start');
     const callbackResult = await completeGoogleOAuthFromUrl(result.url);
     logGoogleBrowserOAuthDiagnostic('callback_completion_result', { hasError: Boolean(callbackResult.error) });
@@ -158,12 +134,17 @@ export async function testGoogleBrowserOAuthForDiagnostics(): Promise<{ error: s
 }
 
 export async function signInWithGoogle(): Promise<{ error: string | null }> {
+  const oracle = oracleSelected();
+  // The current Oracle Auth contract supports native Google ID tokens, not
+  // browser OAuth. Never silently switch providers or attempt an unsupported
+  // browser flow when the rehearsal is selected.
   if (Platform.OS === 'web') {
-    return signInWithGoogleBrowserOAuth();
+    return oracle ? { error: GOOGLE_AUTH_ERROR } : signInWithGoogleBrowserOAuth();
   }
 
   const nativeGoogleEnabled = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED === 'true';
   if (!nativeGoogleEnabled) {
+    if (oracle) return { error: GOOGLE_AUTH_ERROR };
     logGoogleNativeFallbackDiagnostic('native_disabled');
     return signInWithGoogleBrowserOAuth();
   }
@@ -171,39 +152,37 @@ export async function signInWithGoogle(): Promise<{ error: string | null }> {
   try {
     const nativeResult = await signInWithGoogleNative();
     const nativeSuccess = nativeResult.status === 'success' && nativeResult.reason === 'native_success' && nativeResult.error === null;
-    if (nativeSuccess) {
-      return { error: null };
-    }
+    if (nativeSuccess) return { error: null };
 
     const activeSession = await teswaBackendRuntime.auth.getSession();
     const hasActiveSession = Boolean(activeSession);
     const sessionBackedNativeSuccess =
       hasActiveSession && (nativeResult.reason === 'native_success' || nativeResult.status === 'success');
-    if (sessionBackedNativeSuccess) {
-      return { error: null };
+    if (sessionBackedNativeSuccess) return { error: null };
+
+    // Preserve the existing Supabase flow, but do not turn a cancelled or
+    // failed Oracle sign-in into a browser attempt that cannot create an
+    // Oracle session. A failed native result is never an authenticated user.
+    if (oracle) {
+      return { error: nativeResult.status === 'cancelled' ? GOOGLE_AUTH_CANCELLED : (nativeResult.error ?? GOOGLE_AUTH_ERROR) };
     }
 
     if (nativeResult.fallbackToBrowser === false) {
       logGoogleNativeFallbackDiagnostic('native_missing_fallback_flag', {
-        status: nativeResult.status,
-        reason: nativeResult.reason ?? null,
+        status: nativeResult.status, reason: nativeResult.reason ?? null,
       });
     }
-
     logGoogleNativeFallbackDiagnostic('native_non_success', {
-      status: nativeResult.status,
-      reason: nativeResult.reason ?? 'unknown',
-      hasError: Boolean(nativeResult.error),
+      status: nativeResult.status, reason: nativeResult.reason ?? 'unknown', hasError: Boolean(nativeResult.error),
     });
-
     if (nativeResult.reason) {
       logGoogleSignInDiagnostic('browser_fallback', nativeResult.reason);
     } else {
       logGoogleNativeFallbackDiagnostic('native_missing_reason');
     }
-
     return signInWithGoogleBrowserOAuth();
   } catch {
+    if (oracle) return { error: GOOGLE_AUTH_ERROR };
     logGoogleNativeFallbackDiagnostic('native_throw');
     return signInWithGoogleBrowserOAuth();
   }
