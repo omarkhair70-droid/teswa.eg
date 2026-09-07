@@ -5,6 +5,7 @@ import re
 from urllib.parse import parse_qs, urlsplit
 
 from oracle_domain_read import ApiError, AuthResolver, PgReadRunner, integer, valid_uuid
+from oracle_exchange_read_extra import handle_extra
 
 UUID_PATH = r'([0-9a-fA-F-]{36})'
 
@@ -77,6 +78,9 @@ class ExchangeReadApi:
         if any(len(values) != 1 for values in args.values()):
             raise ApiError(400, 'invalid_query')
         user_id = self.auth.resolve(authorization)
+        extra = handle_extra(parsed, args, user_id, self.db)
+        if extra is not None:
+            return extra
         if parsed.path == '/v1/offers':
             if set(args) - {'direction', 'limit', 'offset'}:
                 raise ApiError(400, 'invalid_query')

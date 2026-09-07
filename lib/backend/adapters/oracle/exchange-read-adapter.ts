@@ -1,15 +1,20 @@
 import type {
+  DealConversationTransportRecord,
   DealLifecycleContract,
   DealLifecycleMessageRecord,
   DealLifecycleRecord,
+  OfferItemValidationRecord,
   OfferLifecycleContract,
   OfferLifecycleRecord,
 } from '@/lib/backend/contracts/offers-deals';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
 export type OracleOfferReadAdapter = Pick<OfferLifecycleContract,
-  'listIncoming' | 'listSent' | 'getOffer' | 'getLatestDealId' | 'getLatestDealIds'>;
-export type OracleDealReadAdapter = Pick<DealLifecycleContract, 'getDeal' | 'listMessages'>;
+  'getItemForValidation' | 'listOwnedActiveItemIds' | 'listIncoming' | 'listSent' |
+  'getOffer' | 'getLatestDealId' | 'getLatestDealIds'>;
+export type OracleDealReadAdapter = Pick<DealLifecycleContract,
+  'getDeal' | 'listMessages' | 'getUnreadCount' | 'listConversationInbox' |
+  'listConfirmationUserIds' | 'hasReview' | 'countMessagesSince'>;
 
 type Page<T> = { items: T[]; hasMore: boolean };
 type OfferRow = OfferLifecycleRecord & { dealId: string | null };
@@ -21,6 +26,10 @@ function failure(): never {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 async function readOne<T extends { id: string }>(
@@ -45,8 +54,8 @@ async function readPage<T>(
   return result.data;
 }
 
-// The existing lifecycle interfaces return arrays, not pages. Drain the bounded
-// HTTP pages rather than silently dropping records after the first 50/100.
+// The lifecycle interfaces return arrays, not pages. Drain the bounded HTTP
+// pages instead of silently dropping records after the first 50/100.
 async function collect<T>(
   transport: OracleHttpTransport, path: string,
   query: Record<string, string | number>, pageSize: number, maximum = MAX_ROWS,
@@ -64,6 +73,13 @@ async function collect<T>(
   return items;
 }
 
+async function readCount(transport: OracleHttpTransport, path: string,
+  query?: Record<string, string | number>): Promise<number> {
+  const result = await transport.request<{ count: number }>({ path, query });
+  if (!result.ok || !isRecord(result.data) || !validCount(result.data.count)) return failure();
+  return result.data.count;
+}
+
 function offerPath(offerId: string): string {
   return `/v1/offers/${offerId}`;
 }
@@ -71,6 +87,16 @@ function offerPath(offerId: string): string {
 export function createOracleOfferReadAdapter(transport: OracleHttpTransport): OracleOfferReadAdapter {
   const getRow = (offerId: string) => readOne<OfferRow>(transport, offerPath(offerId), offerId);
   return {
+    async getItemForValidation(itemId) {
+      const row = await readOne<OfferItemValidationRecord>(transport, `/v1/offers/items/${itemId}`, itemId);
+      if (row && (typeof row.ownerId !== 'string' || typeof row.status !== 'string')) return failure();
+      return row;
+    },
+    async listOwnedActiveItemIds(userId) {
+      const rows = await collect<{ id: string }>(transport, '/v1/offers/owned-active-items', { userId }, 50);
+      if (rows.some(row => !isRecord(row) || typeof row.id !== 'string')) return failure();
+      return rows.map(row => row.id);
+    },
     async listIncoming(_userId) {
       const rows = await collect<OfferRow>(transport, '/v1/offers', { direction: 'incoming' }, 50);
       return rows.filter(row => row.status === 'pending' || row.status === 'thinking');
@@ -104,6 +130,24 @@ export function createOracleDealReadAdapter(transport: OracleHttpTransport): Ora
     async getDeal(dealId) {
       return readOne<DealLifecycleRecord>(transport, `/v1/deals/${dealId}`, dealId);
     },
+    async getUnreadCount() {
+      return readCount(transport, '/v1/deals/unread-count');
+    },
+    async listConversationInbox(userId) {
+      const rows = await collect<DealConversationTransportRecord>(
+        transport, '/v1/deals/inbox', { userId }, 50,
+      );
+      if (rows.some(row => !isRecord(row) || typeof row.dealId !== 'string'
+          || !isRecord(row.otherParticipant) || typeof row.otherParticipant.id !== 'string'
+          || !validCount(row.unreadCount) || typeof row.lastActivityAt !== 'string')) return failure();
+      return rows;
+    },
+    async listConfirmationUserIds(dealId) {
+      const result = await transport.request<{ userIds: string[] }>({ path: `/v1/deals/${dealId}/confirmations` });
+      if (!result.ok || !isRecord(result.data) || !Array.isArray(result.data.userIds)
+          || result.data.userIds.some(id => typeof id !== 'string')) return failure();
+      return result.data.userIds;
+    },
     async listMessages(dealId, limit = 100) {
       if (!Number.isInteger(limit) || limit < 0 || limit > MAX_ROWS) return failure();
       if (limit === 0) return [];
@@ -112,6 +156,18 @@ export function createOracleDealReadAdapter(transport: OracleHttpTransport): Ora
       );
       if (rows.some(row => !isRecord(row) || row.dealId !== dealId)) return failure();
       return rows;
+    },
+    async hasReview(dealId, reviewerId) {
+      const result = await transport.request<{ hasReview: boolean }>({
+        path: `/v1/deals/${dealId}/reviews`, query: { reviewerId },
+      });
+      if (!result.ok || !isRecord(result.data) || typeof result.data.hasReview !== 'boolean') {
+        return { ok: false, reason: 'unknown', message: 'Oracle review lookup failed.' };
+      }
+      return { ok: true, data: result.data.hasReview };
+    },
+    async countMessagesSince(dealId, senderId, since) {
+      return readCount(transport, `/v1/deals/${dealId}/messages/count`, { senderId, since });
     },
   };
 }
