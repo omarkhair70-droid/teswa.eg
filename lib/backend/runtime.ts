@@ -1,4 +1,5 @@
 import type { TeswaBackend } from '@/lib/backend/teswa-backend';
+import { selectTeswaBackendRuntime } from '@/lib/backend/runtime-composition';
 import { createSupabaseAuthAdapter } from '@/lib/backend/adapters/supabase/auth-adapter';
 import { createSupabaseAnalyticsAdapter } from '@/lib/backend/adapters/supabase/analytics-adapter';
 import { createSupabaseAccountLifecycleAdapter } from '@/lib/backend/adapters/supabase/account-adapter';
@@ -32,23 +33,30 @@ import type { ModerationContract } from '@/lib/backend/contracts/moderation';
 
 export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract; discovery: DiscoveryContract; dolab: DolabContract; analytics: AnalyticsContract; policies: PolicyAcceptanceContract; reviews: ReviewsContract; moderation: ModerationContract; account: AccountLifecycleContract };
 
-export const teswaBackendRuntime: TeswaBackendRuntime = {
-  auth: createSupabaseAuthAdapter(),
-  account: createSupabaseAccountLifecycleAdapter(),
-  analytics: createSupabaseAnalyticsAdapter(),
-  policies: createSupabasePolicyAcceptanceAdapter(),
-  media: createSupabaseMediaStorageAdapter(),
-  marketplace: createSupabaseMarketplaceReadAdapter(),
-  offers: createSupabaseOfferLifecycleAdapter(),
-  deals: createSupabaseDealLifecycleAdapter(),
-  realtime: createSupabaseMessagingRealtimeAdapter(),
-  directMessaging: createSupabaseDirectMessagingAdapter(),
-  contextualMessaging: createSupabaseContextualMessagingAdapter(),
-  notifications: createSupabaseNotificationsAdapter(),
-  profiles: createSupabaseProfileAdapter(),
-  reviews: createSupabaseReviewsAdapter(),
-  moderation: createSupabaseModerationAdapter(),
-  stories: createSupabaseStoriesAdapter(),
-  discovery: createSupabaseDiscoveryAdapter(),
-  dolab: createSupabaseDolabAdapter(),
-};
+// Production remains on Supabase. Oracle must supply a complete backend before
+// it can be selected; an Oracle Auth + Supabase data hybrid is not supported.
+export const teswaBackendRuntime: TeswaBackendRuntime = selectTeswaBackendRuntime(
+  process.env.EXPO_PUBLIC_TESWA_BACKEND_PROVIDER,
+  {
+    supabase: () => ({
+      auth: createSupabaseAuthAdapter(),
+      account: createSupabaseAccountLifecycleAdapter(),
+      analytics: createSupabaseAnalyticsAdapter(),
+      policies: createSupabasePolicyAcceptanceAdapter(),
+      media: createSupabaseMediaStorageAdapter(),
+      marketplace: createSupabaseMarketplaceReadAdapter(),
+      offers: createSupabaseOfferLifecycleAdapter(),
+      deals: createSupabaseDealLifecycleAdapter(),
+      realtime: createSupabaseMessagingRealtimeAdapter(),
+      directMessaging: createSupabaseDirectMessagingAdapter(),
+      contextualMessaging: createSupabaseContextualMessagingAdapter(),
+      notifications: createSupabaseNotificationsAdapter(),
+      profiles: createSupabaseProfileAdapter(),
+      reviews: createSupabaseReviewsAdapter(),
+      moderation: createSupabaseModerationAdapter(),
+      stories: createSupabaseStoriesAdapter(),
+      discovery: createSupabaseDiscoveryAdapter(),
+      dolab: createSupabaseDolabAdapter(),
+    }),
+  },
+);
