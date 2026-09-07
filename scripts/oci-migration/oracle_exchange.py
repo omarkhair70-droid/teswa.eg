@@ -12,6 +12,30 @@ def clean_message(value, maximum=2000):
     return value.strip() or None
 
 
+def uuid_path(value):
+    return "'%s'::uuid" % valid_uuid(value)
+
+
+def optional_note(body, maximum=1000):
+    if set(body)-{'note'}: raise ApiError(400,'invalid_note')
+    note=clean_message(body.get('note'),maximum)
+    return sql_text(note) if note is not None else 'NULL'
+
+
+def require_actor(body, user_id):
+    if valid_uuid(body.get('userId')) != user_id: raise ApiError(403,'actor_mismatch')
+
+
+def run_void(db, user_id, function, *args):
+    # Include the function result in the JSON expression so the volatile RPC
+    # cannot be pruned as an unused subquery projection.
+    statement="SELECT json_build_object('ok',true,'result',public.%s(%s))" % (function,','.join(args))
+    result=db.query(user_id,statement)
+    if not isinstance(result,dict) or result.get('ok') is not True:
+        raise ApiError(503,'domain_write_failed')
+    return 200,{'ok':True}
+
+
 class ExchangeApi:
     def __init__(self,auth=None,db=None): self.auth=auth or AuthResolver(); self.db=db or PgWriteRunner()
     def handle(self,method,target,authorization,body):
@@ -35,12 +59,40 @@ class ExchangeApi:
             result=self.db.query(user_id,statement)
             if not result.get('offerId') or result.get('eventRecorded') is not True: raise ApiError(503,'offer_create_failed')
             return 201,result
+        match=re.fullmatch(r'/v1/offers/([0-9a-fA-F-]{36})/(thinking|soft-reject)',parsed.path)
+        if match:
+            offer_id=uuid_path(match.group(1)); note=optional_note(body)
+            function='mark_offer_thinking' if match.group(2)=='thinking' else 'soft_reject_offer'
+            return run_void(self.db,user_id,function,offer_id,note)
         match=re.fullmatch(r'/v1/offers/([0-9a-fA-F-]{36})/accept',parsed.path)
         if match:
             if body: raise ApiError(400,'invalid_accept')
             offer_id=valid_uuid(match.group(1))
             result=self.db.query(user_id,"SELECT json_build_object('dealId',public.accept_offer('%s'::uuid))" % offer_id)
             if not result.get('dealId'): raise ApiError(503,'offer_accept_failed')
+            return 200,result
+        match=re.fullmatch(r'/v1/deals/([0-9a-fA-F-]{36})/read',parsed.path)
+        if match:
+            if body: raise ApiError(400,'invalid_read')
+            return run_void(self.db,user_id,'mark_deal_thread_read',uuid_path(match.group(1)))
+        match=re.fullmatch(r'/v1/deals/([0-9a-fA-F-]{36})/confirmations',parsed.path)
+        if match:
+            if set(body)-{'userId','note'}: raise ApiError(400,'invalid_confirmation')
+            require_actor(body,user_id)
+            note=clean_message(body.get('note'),1000)
+            statement="""WITH inserted AS (
+              INSERT INTO public.deal_confirmations(deal_id,user_id,note)
+              VALUES(%s,%s,%s) ON CONFLICT DO NOTHING RETURNING 1)
+              SELECT json_build_object('ok',true,'inserted',count(*)) FROM inserted""" % (
+                uuid_path(match.group(1)),uuid_path(user_id),sql_text(note) if note is not None else 'NULL')
+            result=self.db.query(user_id,statement)
+            if not isinstance(result,dict) or result.get('ok') is not True: raise ApiError(503,'deal_confirm_failed')
+            return 200,{'ok':True}
+        match=re.fullmatch(r'/v1/deals/([0-9a-fA-F-]{36})/complete',parsed.path)
+        if match:
+            if body: raise ApiError(400,'invalid_complete')
+            result=self.db.query(user_id,"SELECT json_build_object('completed',public.complete_deal_if_ready(%s))" % uuid_path(match.group(1)))
+            if not isinstance(result,dict) or not isinstance(result.get('completed'),bool): raise ApiError(503,'deal_complete_failed')
             return 200,result
         match=re.fullmatch(r'/v1/deals/([0-9a-fA-F-]{36})/messages',parsed.path)
         if match:

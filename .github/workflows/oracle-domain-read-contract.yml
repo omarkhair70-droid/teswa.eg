@@ -6,6 +6,7 @@ on:
       - fix/oracle-publish-top-level-20260907
       - fix/oracle-exchange-read-integration-20260907
       - fix/oracle-exchange-read-closure-20260907
+      - fix/oracle-exchange-lifecycle-20260907
     paths:
       - scripts/oci-migration/oracle_domain_read.py
       - scripts/oci-migration/oracle_domain_service.py
@@ -15,6 +16,7 @@ on:
       - scripts/oci-migration/oracle_exchange.py
       - scripts/oci-migration/runtime-domain-api-grants.sql
       - scripts/oci-migration/test_oracle_domain_exchange.py
+      - scripts/oci-migration/test_oracle_exchange_lifecycle.py
       - scripts/oci-migration/test_oracle_exchange_read.py
       - scripts/oci-migration/test_oracle_exchange_read_order.py
       - scripts/oci-migration/test_oracle_domain_marketplace_write.py
@@ -31,6 +33,7 @@ on:
       - scripts/test-oracle-marketplace-write-adapter.cjs
       - lib/backend/adapters/oracle/exchange-adapter.ts
       - scripts/test-oracle-exchange-adapter.cjs
+      - scripts/test-oracle-exchange-lifecycle-adapter.cjs
       - lib/backend/adapters/oracle/exchange-read-adapter.ts
       - scripts/test-oracle-exchange-read-adapter.cjs
       - scripts/oci-migration/test_oracle_domain_read.py
@@ -59,6 +62,7 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read_order.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_lifecycle.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_media.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_marketplace_write.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_write_transaction.py -v
@@ -76,4 +80,5 @@ jobs:
           node scripts/test-oracle-marketplace-write-adapter.cjs
           node scripts/test-oracle-exchange-adapter.cjs
           node scripts/test-oracle-exchange-read-adapter.cjs
+          node scripts/test-oracle-exchange-lifecycle-adapter.cjs
           npm run typecheck:app
