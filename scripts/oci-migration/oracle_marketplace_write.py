@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import math
 import os
+import re
 import subprocess
 from urllib.parse import urlsplit
 
@@ -56,8 +58,7 @@ def publish_input(body, user_id):
             'locationLatitude':lat,'locationLongitude':lon,'desireMode':mode,
             'desireText':text(body['desireText'],'desire_text',1000),
             'itemStory':text(body['itemStory'],'item_story',600),
-            'swapReason':text(body['swapReason'],'swap_reason',240),
-            'goodFor':text(body['goodFor'],'good_for',240),'images':normalized}
+            'swapReason':text(body['swapReason'],'swap_reason',240),'goodFor':text(body['goodFor'],'good_for',240),'images':normalized}
 
 
 def json_expr(value):
@@ -85,22 +86,47 @@ def publish_sql(value):
       SELECT json_build_object('itemId',(SELECT id FROM inserted),'imagesInserted',(SELECT count(*) FROM images))""" % payload
 
 
+_SQLSTATE = re.compile(r'(?m)^(?:ERROR|FATAL|PANIC):\s*([0-9A-Z]{5})(?:\s|$)')
+
+
+def sqlstate_from_stderr(stderr):
+    """Return only the SQLSTATE; never log SQL, values, or raw database errors."""
+    match = _SQLSTATE.search(stderr or '')
+    return match.group(1) if match else 'unknown'
+
+
 class PgWriteRunner:
     def __init__(self,database_url=None,psql='/usr/pgsql-17/bin/psql'):
         self.database_url=database_url or os.environ.get('TESWA_DOMAIN_DATABASE_URL'); self.psql=psql
-    def query(self,user_id,statement):
+
+    def _execute(self,user_id,statement,rollback=False):
         if not self.database_url: raise ApiError(503,'domain_database_not_configured')
         user_id=valid_uuid(user_id)
+        # A data-modifying WITH must be the top-level statement. Do not wrap it
+        # in SELECT (...); PostgreSQL rejects that with SQLSTATE 0A000.
         sql=("BEGIN; SET LOCAL ROLE teswa_app_authenticated; SELECT set_config('teswa.user_id','%s',true);\n" % user_id
-             +"SELECT ("+statement+")::text;\nCOMMIT;")
+             + statement + ";\n" + ("ROLLBACK;" if rollback else "COMMIT;"))
         env={**os.environ,'PGOPTIONS':'-c statement_timeout=8000 -c lock_timeout=1000 -c row_security=on'}
-        try: proc=subprocess.run([self.psql,'-X','-qAt','-v','ON_ERROR_STOP=1','-d',self.database_url],input=sql,text=True,capture_output=True,timeout=12,env=env,check=False)
+        try:
+            proc=subprocess.run([self.psql,'-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate','-d',self.database_url],input=sql,text=True,capture_output=True,timeout=12,env=env,check=False)
         except (OSError,subprocess.TimeoutExpired): raise ApiError(503,'domain_write_failed')
-        if proc.returncode: raise ApiError(409,'domain_write_rejected')
+        if proc.returncode:
+            logging.getLogger(__name__).warning('domain_write_rejected sqlstate=%s',sqlstate_from_stderr(proc.stderr))
+            raise ApiError(409,'domain_write_rejected')
         lines=proc.stdout.strip().splitlines()
         if len(lines)!=2: raise ApiError(503,'domain_write_failed')
         try: return json.loads(lines[1])
         except ValueError: raise ApiError(503,'domain_write_failed')
+
+    def query(self,user_id,statement):
+        return self._execute(user_id,statement)
+
+    def diagnose(self,user_id,statement):
+        """Operator-only rollback probe; never exposed as an HTTP endpoint."""
+        if self.database_url != 'dbname=teswa_rehearsal':
+            raise ApiError(503,'rehearsal_database_required')
+        guard="DO $$ BEGIN IF current_database() <> 'teswa_rehearsal' THEN RAISE EXCEPTION 'rehearsal_database_required'; END IF; END $$;\n"
+        return self._execute(user_id,guard+statement,rollback=True)
 
 
 class MarketplaceWriteApi:
