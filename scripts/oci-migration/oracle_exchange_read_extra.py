@@ -1,4 +1,4 @@
-"""Additional authenticated, read-only deal queries for the OCI rehearsal.
+"""Additional authenticated, read-only Exchange queries for the OCI rehearsal.
 
 The caller supplies the identity resolved by Oracle Auth. All SQL runs through
 PgReadRunner's restricted role, transaction-local identity and read-only transaction.
@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import re
-from urllib.parse import parse_qs, urlsplit
 
 from oracle_domain_read import ApiError, integer, sql_text, valid_uuid
 
@@ -41,9 +40,24 @@ def page_result(value, limit):
     return {'items': rows[:limit], 'hasMore': len(rows) > limit}
 
 
+def item_validation_sql(item_id):
+    return """SELECT row_to_json(x) FROM (
+      SELECT i.id,i.title,i.owner_id AS "ownerId",i.status
+      FROM public.items i WHERE i.id='%s'::uuid) x""" % valid_uuid(item_id)
+
+
+def owned_active_ids_sql(user_id, limit, offset):
+    return """SELECT json_build_object('items',coalesce(json_agg(row_to_json(x) ORDER BY x."createdAt" DESC,x.id DESC),'[]'::json),
+      'hasMore',count(*)>%d) FROM (
+      SELECT i.id,i.created_at AS "createdAt" FROM public.items i
+      WHERE i.owner_id='%s'::uuid AND i.status='active'::public.item_status
+      ORDER BY i.created_at DESC,i.id DESC LIMIT %d OFFSET %d) x""" % (
+        limit, valid_uuid(user_id), limit + 1, offset)
+
+
 def inbox_sql(user_id, limit, offset):
     user_id = valid_uuid(user_id)
-    return """SELECT json_build_object('items',coalesce(json_agg(row_to_json(x)),'[]'::json),
+    return """SELECT json_build_object('items',coalesce(json_agg(row_to_json(x) ORDER BY x."lastActivityAt" DESC,x."dealId" DESC),'[]'::json),
       'hasMore',count(*)>%d) FROM (
       SELECT d.id AS "dealId",d.status,d.created_at AS "createdAt",
         d.requested_item_id AS "requestedItemId",d.offered_item_id AS "offeredItemId",
@@ -62,7 +76,7 @@ def inbox_sql(user_id, limit, offset):
         FROM public.deal_messages m WHERE m.deal_id=d.id
         ORDER BY m.created_at DESC,m.id DESC LIMIT 1) lm ON true
       WHERE %s
-      ORDER BY coalesce(lm.created_at,d.created_at) DESC,d.id DESC
+      ORDER BY coalesce(lm.created_at,d.created_at) DESC NULLS LAST,d.id DESC
       LIMIT %d OFFSET %d) x""" % (
         limit, user_id, user_id, user_id, PARTICIPANT % (user_id, user_id), limit + 1, offset)
 
@@ -103,6 +117,23 @@ def valid_since(value):
 def handle_extra(parsed, args, user_id, db):
     """Return a handled response, or None for an endpoint owned by the base API."""
     path = parsed.path
+    if path == '/v1/offers/owned-active-items':
+        require_query(args, ('userId', 'limit', 'offset'))
+        require_actor(args, user_id)
+        limit = integer(args.get('limit', [None])[0], 20, 50)
+        offset = integer(args.get('offset', [None])[0], 0, 10000)
+        if limit < 1:
+            raise ApiError(400, 'invalid_pagination')
+        return 200, page_result(db.query(user_id, owned_active_ids_sql(user_id, limit, offset)), limit)
+    match = re.fullmatch(r'/v1/offers/items/' + UUID_PATH, path)
+    if match:
+        require_query(args, ())
+        row = db.query(user_id, item_validation_sql(match.group(1)))
+        if row is None:
+            raise ApiError(404, 'not_found')
+        if not isinstance(row, dict) or row.get('id') != valid_uuid(match.group(1)):
+            raise ApiError(503, 'domain_query_failed')
+        return 200, row
     if path == '/v1/deals/unread-count':
         require_query(args, ())
         count = count_result(db.query(user_id, 'SELECT public.get_unread_deal_messages_count()'))
