@@ -11,9 +11,9 @@ const compiled = ts.transpileModule(source, {
   reportDiagnostics: true,
 });
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
-const exports = {};
-vm.runInNewContext(compiled.outputText, { exports, module: { exports } });
-const select = exports.selectTeswaBackendRuntime;
+const moduleExports = {};
+vm.runInNewContext(compiled.outputText, { exports: moduleExports, module: { exports: moduleExports } });
+const select = moduleExports.selectTeswaBackendRuntime;
 const names = [
   'auth', 'account', 'analytics', 'policies', 'media', 'marketplace',
   'offers', 'deals', 'realtime', 'directMessaging', 'contextualMessaging',
