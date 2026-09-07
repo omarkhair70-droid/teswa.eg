@@ -17,7 +17,7 @@ import tarfile
 def cli(*args):
     r = subprocess.run(['oci', *args, '--output', 'json'], text=True, capture_output=True, timeout=45)
     if r.returncode:
-        raise SystemExit(r.stderr)
+        raise SystemExit('OCI '+ ' '.join(args[:3])+' failed (exit '+str(r.returncode)+'): '+(r.stderr.strip() or r.stdout.strip()))
     return json.loads(r.stdout or '{"data":[]}')
 
 
@@ -64,7 +64,7 @@ def main():
     sha = hashlib.sha256(archive.read_bytes()).hexdigest()
     obj = 'lane4-rehearsal/auth-gateway/'+stamp+'-'+sha+'.tar.gz'
     cli('os', 'object', 'put', '--bucket-name', 'teswa-backups', '--name', obj,
-        '--file', str(archive), '--if-none-match', '*')
+        '--file', str(archive), '--no-overwrite')
     script = '''set -Eeuo pipefail
 umask 077
 [ "$(hostname -s)" = core01 ]
