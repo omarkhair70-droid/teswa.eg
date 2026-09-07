@@ -43,7 +43,10 @@ def deal_sql(user_id, deal_id):
       AND (d.requester_id='%s'::uuid OR d.offerer_id='%s'::uuid)) x""" % (deal_id, user_id, user_id)
 
 
-def messages_sql(user_id, deal_id, limit, offset):
+def messages_sql(user_id, deal_id, limit, offset, order='desc'):
+    if order not in ('asc', 'desc'):
+        raise ApiError(400, 'invalid_order')
+    direction = 'ASC' if order == 'asc' else 'DESC'
     return """SELECT json_build_object('items',coalesce(json_agg(row_to_json(x)),'[]'::json),
       'hasMore',count(*)>%d) FROM (SELECT m.id,m.deal_id AS \"dealId\",
       m.sender_id AS \"senderId\",m.body,m.message_type AS \"messageType\",
@@ -53,8 +56,8 @@ def messages_sql(user_id, deal_id, limit, offset):
       WHERE m.deal_id='%s'::uuid AND EXISTS (
         SELECT 1 FROM public.swap_deals d WHERE d.id=m.deal_id
         AND (d.requester_id='%s'::uuid OR d.offerer_id='%s'::uuid))
-      ORDER BY m.created_at DESC,m.id DESC LIMIT %d OFFSET %d) x""" % (
-        limit, deal_id, user_id, user_id, limit + 1, offset)
+      ORDER BY m.created_at %s,m.id %s LIMIT %d OFFSET %d) x""" % (
+        limit, deal_id, user_id, user_id, direction, direction, limit + 1, offset)
 
 
 class ExchangeReadApi:
@@ -98,12 +101,13 @@ class ExchangeReadApi:
             return 200, row
         match = re.fullmatch(r'/v1/deals/' + UUID_PATH + r'/messages', parsed.path)
         if match:
-            if set(args) - {'limit', 'offset'}:
+            if set(args) - {'limit', 'offset', 'order'}:
                 raise ApiError(400, 'invalid_query')
             limit = integer(args.get('limit', [None])[0], 50, 100)
             offset = integer(args.get('offset', [None])[0], 0, 10000)
+            order = args.get('order', ['desc'])[0]
             if limit < 1:
                 raise ApiError(400, 'invalid_pagination')
-            result = self.db.query(user_id, messages_sql(user_id, valid_uuid(match.group(1)), limit, offset))
+            result = self.db.query(user_id, messages_sql(user_id, valid_uuid(match.group(1)), limit, offset, order))
             return 200, {'items': result['items'][:limit], 'hasMore': len(result['items']) > limit}
         raise ApiError(404, 'not_found')
