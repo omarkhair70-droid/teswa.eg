@@ -42,7 +42,10 @@ jobs:
             cat "$RUNNER_TEMP/oracle-merge-conflicts.txt"
             exit 1
           fi
-          git diff --cached --check
+          # Historical Markdown hard line breaks are intentional. Keep their
+          # bytes unchanged while retaining whitespace checks for executable
+          # and configuration files. This does not bypass conflict detection.
+          git diff --cached --check -- . ':!*.md'
           if ! git diff --cached --quiet; then
             git commit -m 'Integrate verified Oracle migration runtime [oracle-closure-merge]'
           else
