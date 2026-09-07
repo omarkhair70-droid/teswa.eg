@@ -224,7 +224,7 @@ json.dump({'itemId':item,'ownerId':user,'title':'Oracle rehearsal item','categor
 'images':[{'imageUrl':url,'isPrimary':True,'sortOrder':0}]},open(sys.argv[1],'w'))
 PY
 CODE="$(curl --noproxy '*' --max-time 12 -sS -o "$TMP/publish-result.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $ACCESS" --data-binary "@$TMP/publish.json" "http://$BIND:3100/v1/marketplace/items")"
-[ "$CODE" = 201 ] || { echo "domain_publish_rehearsal=FAIL publish_http_$CODE"; cat "$TMP/publish-result.json" || true; exit 26; }
+[ "$CODE" = 201 ] || { echo "domain_publish_rehearsal=FAIL publish_http_$CODE"; cat "$TMP/publish-result.json" || true; sudo journalctl -u teswa-domain-shadow -n 20 --no-pager | grep 'domain_write_rejected' | tail -1 || true; exit 26; }
 CODE="$(curl --noproxy '*' --max-time 12 -sS -o "$TMP/published-detail.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://$BIND:3100/v1/marketplace/items/$TEST_ITEM_ID/detail")"
 [ "$CODE" = 200 ] || { echo "domain_publish_rehearsal=FAIL detail_http_$CODE"; cat "$TMP/published-detail.json" || true; exit 27; }
 python3 - "$TMP/published-detail.json" "$TEST_ITEM_ID" "$PUBLIC_URL" <<'PY'
