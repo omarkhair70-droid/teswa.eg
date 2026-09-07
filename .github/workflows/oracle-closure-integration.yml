@@ -1,0 +1,76 @@
+name: Oracle Closure Integration
+on:
+  push:
+    branches:
+      - integration/oracle-closure-20260907
+    paths:
+      - .github/workflows/oracle-closure-integration.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: oracle-closure-integration
+  cancel-in-progress: false
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: "!contains(github.event.head_commit.message, '[oracle-closure-merge]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/oracle-closure-20260907
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Assemble only the pinned migration checkpoint
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha=937a1af13a56ce185f8390ac0fd84f27f122f394
+          original=$(git rev-parse HEAD)
+          git fetch origin "$source_sha"
+          if git merge-base --is-ancestor "$source_sha" HEAD; then
+            echo 'already_integrated=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git merge --no-commit --no-ff "$source_sha"; then
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/oracle-merge-conflicts.txt"
+            echo 'merge_conflicts=true' >> "$GITHUB_OUTPUT"
+            cat "$RUNNER_TEMP/oracle-merge-conflicts.txt"
+            exit 1
+          fi
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'Integrate verified Oracle migration runtime [oracle-closure-merge]'
+          else
+            git merge --abort || true
+            echo 'already_integrated=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch origin integration/oracle-closure-20260907
+          test "$(git rev-parse origin/integration/oracle-closure-20260907)" = "$original"
+          git push origin HEAD:refs/heads/integration/oracle-closure-20260907
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: oracle-closure-merge-conflicts
+          path: ${{ runner.temp }}/oracle-merge-conflicts.txt
+          if-no-files-found: ignore
+      - uses: actions/setup-node@v4
+        if: success()
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify integrated application boundary
+        if: success()
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/check-backend-boundary.mjs
+          node scripts/test-oracle-auth-contract.cjs
+          node scripts/test-oracle-http-transport.cjs
+          node scripts/test-backend-provider-composition.cjs
+          node scripts/test-oracle-google-provider.cjs
+          npm run typecheck:app
