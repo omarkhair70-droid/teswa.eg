@@ -16,6 +16,8 @@ on:
       - scripts/oci-migration/oracle_media.py
       - scripts/oci-migration/oracle_marketplace_write.py
       - scripts/oci-migration/oracle_exchange.py
+      - scripts/oci-migration/deploy-domain-read-shadow.py
+      - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
       - scripts/oci-migration/runtime-domain-api-grants.sql
       - scripts/oci-migration/test_oracle_domain_exchange.py
       - scripts/oci-migration/test_oracle_exchange_lifecycle.py
@@ -65,6 +67,8 @@ jobs:
           python -m py_compile scripts/oci-migration/oracle_media.py
           python -m py_compile scripts/oci-migration/oracle_marketplace_write.py
           python -m py_compile scripts/oci-migration/oracle_exchange.py
+          python -m py_compile scripts/oci-migration/deploy-domain-read-shadow.py
+          bash -n scripts/oci-migration/domain-read-shadow-guest-deploy.sh
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_read.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read.py -v
