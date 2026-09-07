@@ -27,6 +27,7 @@ DOMAIN_GET = (
     re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
 )
 DOMAIN_MUTATIONS = {
+    ('POST', '/v1/marketplace/items'),
     ('POST', '/v1/media/uploads'),
     ('POST', '/v1/media/uploads/complete'),
     ('POST', '/v1/media/signed-url'),

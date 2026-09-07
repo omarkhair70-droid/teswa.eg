@@ -39,7 +39,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_media.py oracle_domain_service.py auth-api-shadow-gateway.py; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_media.py oracle_domain_service.py auth-api-shadow-gateway.py; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -66,6 +66,7 @@ sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1
 
 sudo install -d -o root -g teswaapi -m 0750 "$APP"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_read.py" "$APP/oracle_domain_read.py"
+sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_marketplace_write.py" "$APP/oracle_marketplace_write.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_media.py" "$APP/oracle_media.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_service.py" "$APP/server.py"
 sudo install -o root -g root -m 0644 "$STAGE/auth-api-shadow-gateway.py" "$GATEWAY"
@@ -159,6 +160,11 @@ import json,sys
 x=json.load(open(sys.argv[1])); assert x['id']==sys.argv[2] and isinstance(x['images'],list) and isinstance(x['wantedTags'],list)
 PY
 BIND="$(sudo sed -n 's/.*--bind \([0-9.]*\).*/\1/p' /etc/systemd/system/teswa-api.service)"
+for _ in $(seq 1 20); do
+  curl --noproxy '*' --max-time 3 -fsS "http://$BIND:3100/healthz" > "$TMP/gateway-health.json" 2>/dev/null && break
+  sleep 1
+done
+[ -s "$TMP/gateway-health.json" ] || { echo 'domain_read_deploy=FAIL gateway_health_timeout'; sudo journalctl -u teswa-api -n 40 --no-pager || true; exit 21; }
 CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/gateway-feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://$BIND:3100/v1/marketplace/feed?limit=1")"
 [ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL gateway_feed_http_$CODE bind=$BIND"; cat "$TMP/gateway-feed.json" || true; exit 19; }
 unset ACCESS PASS TOKEN_SHA

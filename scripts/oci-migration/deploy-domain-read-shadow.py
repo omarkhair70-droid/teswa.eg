@@ -32,7 +32,7 @@ def main():
     matches=cli('search','resource','structured-search','--query-text',"query instance resources where displayName = 'teswa-core-01'")['data']['items']
     assert len(matches)==1; info=cli('compute','instance','get','--instance-id',matches[0]['identifier'])['data']
     assert info['lifecycle-state']=='RUNNING'; compartment=info['compartment-id']
-    names=('oracle_domain_read.py','oracle_media.py','oracle_domain_service.py','auth-api-shadow-gateway.py','domain-read-shadow-guest-deploy.sh')
+    names=('oracle_domain_read.py','oracle_marketplace_write.py','oracle_media.py','oracle_domain_service.py','auth-api-shadow-gateway.py','domain-read-shadow-guest-deploy.sh')
     archive=out/'bundle.tar.gz'
     with tarfile.open(archive,'w:gz') as tar:
         for name in names: tar.add(root/name,arcname=name)
