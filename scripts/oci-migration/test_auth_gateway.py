@@ -23,6 +23,10 @@ class Upstream(BaseHTTPRequestHandler):
         self.rfile.read(int(self.headers.get('Content-Length', 0)))
         self.reply()
 
+    def do_DELETE(self):
+        self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        self.reply()
+
     def reply(self):
         self.seen.append((self.path, dict(self.headers)))
         result = {'status': 'ok'} if self.path == '/healthz' else {'error': 'invalid_session'}
@@ -75,6 +79,20 @@ class GatewayTests(unittest.TestCase):
             self.assertEqual(response.status, 401)
             response.read(); conn.close()
             self.assertEqual(Upstream.seen[-1][0], '/v1/marketplace/feed?limit=20')
+        finally:
+            server.shutdown(); server.server_close(); domain.shutdown(); domain.server_close()
+            gateway_thread.join(2); thread.join(2)
+
+    def test_media_mutations_forward_only_to_domain_upstream(self):
+        domain = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
+        thread = threading.Thread(target=domain.serve_forever, daemon=True); thread.start()
+        server = gateway.Server(('127.0.0.1', 0), self.upstream.server_port, domain.server_port)
+        gateway_thread = threading.Thread(target=server.serve_forever, daemon=True); gateway_thread.start()
+        try:
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+            conn.request('POST', '/v1/media/uploads', '{}', {'Content-Type':'application/json','Authorization':'Bearer test'})
+            response=conn.getresponse(); self.assertEqual(response.status,401); response.read(); conn.close()
+            self.assertEqual(Upstream.seen[-1][0],'/v1/media/uploads')
         finally:
             server.shutdown(); server.server_close(); domain.shutdown(); domain.server_close()
             gateway_thread.join(2); thread.join(2)

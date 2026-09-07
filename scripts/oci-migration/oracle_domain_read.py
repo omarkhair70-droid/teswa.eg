@@ -103,19 +103,29 @@ class PgReadRunner:
 FEED_COLUMNS = ('id,title,description,cover_image_url,category,item_condition,'
                 'city,owner_display_name,created_at')
 
+FEED_SOURCE = """public.items i
+LEFT JOIN public.categories c ON c.id=i.category_id
+LEFT JOIN public.profiles p ON p.id=i.owner_id"""
+
 def feed_sql(limit, offset, filters):
     clauses = []
     for key, column in [('category','category'), ('condition','item_condition'), ('city','city')]:
         if filters.get(key):
-            clauses.append(column + ' = ' + sql_text(filters[key]))
+            clauses.append({'category':'c.name_ar','item_condition':'i.condition','city':'i.city'}.get(column,column)
+                           + ' = ' + sql_text(filters[key]))
     if filters.get('query'):
         pattern = '%' + filters['query'].replace('\\','\\\\').replace('%','\\%').replace('_','\\_') + '%'
         text = sql_text(pattern)
-        clauses.append('(title ILIKE '+text+" ESCAPE '\\' OR description ILIKE "+text+" ESCAPE '\\')")
-    where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
+        clauses.append('(i.title ILIKE '+text+" ESCAPE '\\' OR i.description ILIKE "+text+" ESCAPE '\\')")
+    clauses.insert(0, "i.status='active'::public.item_status")
+    clauses.append('(p.id IS NULL OR coalesce(p.is_banned,false)=false)')
+    where = ' WHERE ' + ' AND '.join(clauses)
     return ("SELECT json_build_object('items',coalesce(json_agg(row_to_json(t)),'[]'::json),'hasMore',count(*) > %d) "
-            "FROM (SELECT %s FROM public.marketplace_items%s ORDER BY created_at DESC,id DESC LIMIT %d OFFSET %d) t" %
-            (limit, FEED_COLUMNS, where, limit+1, offset))
+            "FROM (SELECT i.id,i.title,i.description,(SELECT m.image_url FROM public.item_images m "
+            "WHERE m.item_id=i.id ORDER BY m.is_primary DESC,m.sort_order NULLS LAST,m.id LIMIT 1) AS cover_image_url,"
+            "c.name_ar AS category,i.condition AS item_condition,i.city,p.display_name AS owner_display_name,i.created_at "
+            "FROM %s%s ORDER BY i.created_at DESC,i.id DESC LIMIT %d OFFSET %d) t" %
+            (limit, FEED_SOURCE, where, limit+1, offset))
 
 def map_feed(row):
     return dict(id=row['id'], title=row.get('title'), description=row.get('description'),
@@ -180,7 +190,11 @@ class MarketplaceReadApi:
         match = re.fullmatch(r'/v1/marketplace/items/([0-9a-fA-F-]{36})', parsed.path)
         if match and not parsed.query:
             item_id = valid_uuid(match.group(1))
-            sql = ("SELECT row_to_json(t) FROM (SELECT id,title,description,cover_image_url,category,item_condition,city,owner_display_name,created_at FROM public.marketplace_items WHERE id='%s'::uuid) t" % item_id)
+            sql = ("SELECT row_to_json(t) FROM (SELECT i.id,i.title,i.description,"
+                   "(SELECT m.image_url FROM public.item_images m WHERE m.item_id=i.id ORDER BY m.is_primary DESC,m.sort_order NULLS LAST,m.id LIMIT 1) AS cover_image_url,"
+                   "c.name_ar AS category,i.condition AS item_condition,i.city,p.display_name AS owner_display_name,i.created_at "
+                   "FROM %s WHERE i.id='%s'::uuid AND i.status='active'::public.item_status "
+                   "AND (p.id IS NULL OR coalesce(p.is_banned,false)=false)) t" % (FEED_SOURCE,item_id))
             row = self.db.query(user_id, sql)
             if row is None:
                 raise ApiError(404, 'not_found')

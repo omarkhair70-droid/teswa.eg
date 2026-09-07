@@ -8,8 +8,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from oracle_domain_read import ApiError, MarketplaceReadApi
+from oracle_media import MediaApi
 
 MAX_RESPONSE = 1024 * 1024
+MAX_BODY = 128 * 1024
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -33,7 +35,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
-    def do_GET(self):
+    def dispatch(self):
         if self.path == '/healthz':
             self.send_json(200, {'status': 'ok', 'service': 'teswa-domain-shadow',
                                  'productionTraffic': False,
@@ -43,8 +45,29 @@ class Handler(BaseHTTPRequestHandler):
         if len(values) != 1:
             self.send_json(401, {'error': 'invalid_session'})
             return
+        body = None
+        if self.command in ('POST', 'DELETE'):
+            if self.headers.get('Transfer-Encoding') is not None or self.headers.get_content_type() != 'application/json':
+                self.send_json(415, {'error': 'json_body_required'})
+                return
+            lengths = self.headers.get_all('Content-Length') or []
+            try:
+                length = int(lengths[0]) if len(lengths) == 1 else -1
+            except ValueError:
+                length = -1
+            if length <= 0 or length > MAX_BODY:
+                self.send_json(413, {'error': 'invalid_body_size'})
+                return
+            try:
+                body = json.loads(self.rfile.read(length))
+            except (ValueError, UnicodeDecodeError):
+                self.send_json(400, {'error': 'invalid_json_object'})
+                return
         try:
-            status, body = self.server.api.handle('GET', self.path, values[0])
+            if self.path.startswith('/v1/media/'):
+                status, body = self.server.media.handle(self.command, self.path, values[0], body)
+            else:
+                status, body = self.server.api.handle(self.command, self.path, values[0])
         except ApiError as exc:
             self.send_json(exc.status, {'error': exc.code})
             return
@@ -53,14 +76,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(status, body)
 
+    do_GET = dispatch
+    do_POST = dispatch
+    do_DELETE = dispatch
+
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, api=None):
+    def __init__(self, address, api=None, media=None):
         super().__init__(address, Handler)
         self.api = api or MarketplaceReadApi()
+        self.media = media or MediaApi()
         self.slots = threading.BoundedSemaphore(24)
 
     def process_request(self, request, address):

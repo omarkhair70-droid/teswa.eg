@@ -6,11 +6,15 @@ on:
     paths:
       - scripts/oci-migration/oracle_domain_read.py
       - scripts/oci-migration/oracle_domain_service.py
+      - scripts/oci-migration/oracle_media.py
+      - scripts/oci-migration/test_oracle_domain_media.py
       - scripts/oci-migration/test_oracle_domain_service.py
       - scripts/oci-migration/auth-api-shadow-gateway.py
       - scripts/oci-migration/test_auth_gateway.py
       - lib/backend/adapters/oracle/marketplace-read-adapter.ts
       - scripts/test-oracle-marketplace-read-adapter.cjs
+      - lib/backend/adapters/oracle/media-adapter.ts
+      - scripts/test-oracle-media-adapter.cjs
       - scripts/oci-migration/test_oracle_domain_read.py
       - .github/workflows/oracle-domain-read-contract.yml
   workflow_dispatch:
@@ -28,8 +32,10 @@ jobs:
       - name: Verify authenticated read contract
         run: |
           python -m py_compile scripts/oci-migration/oracle_domain_read.py
+          python -m py_compile scripts/oci-migration/oracle_media.py
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_read.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_media.py -v
           python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
       - uses: actions/setup-node@v4
         with:
@@ -39,4 +45,5 @@ jobs:
       - name: Verify Oracle marketplace adapter and application types
         run: |
           node scripts/test-oracle-marketplace-read-adapter.cjs
+          node scripts/test-oracle-media-adapter.cjs
           npm run typecheck:app

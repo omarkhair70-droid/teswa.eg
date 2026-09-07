@@ -26,6 +26,12 @@ DOMAIN_GET = (
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
     re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
 )
+DOMAIN_MUTATIONS = {
+    ('POST', '/v1/media/uploads'),
+    ('POST', '/v1/media/uploads/complete'),
+    ('POST', '/v1/media/signed-url'),
+    ('DELETE', '/v1/media/objects'),
+}
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.
 PENDING_DELIVERY = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
@@ -71,6 +77,10 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path
             upstream_port = self.server.domain_port
             upstream_name = 'domain'
+        if path is None and (self.command, self.path) in DOMAIN_MUTATIONS:
+            path = self.path
+            upstream_port = self.server.domain_port
+            upstream_name = 'domain'
         if path is None:
             self.send_json(404, {'error': 'not_found'})
             return
@@ -89,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         if length < 0 or length > MAX_BODY or (self.command == 'GET' and length):
             self.send_json(413, {'error': 'invalid_body_size'})
             return
-        if self.command == 'POST' and (
+        if self.command in ('POST', 'DELETE') and (
             not length or self.headers.get_content_type() != 'application/json'
         ):
             self.send_json(415, {'error': 'json_body_required'})
@@ -126,6 +136,7 @@ class Handler(BaseHTTPRequestHandler):
 
     do_GET = dispatch
     do_POST = dispatch
+    do_DELETE = dispatch
 
 
 class Server(ThreadingHTTPServer):
