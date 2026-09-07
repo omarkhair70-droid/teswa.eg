@@ -46,6 +46,11 @@ def publish_input(body, user_id):
         url=image['imageUrl']
         parsed=urlsplit(url) if isinstance(url,str) and len(url)<=4096 else None
         if not parsed or parsed.scheme!='https' or not parsed.netloc: raise ApiError(400,'invalid_images')
+        marker='teswa-object=item_image:'
+        object_key=parsed.fragment[len(marker):] if parsed.fragment.startswith(marker) else ''
+        if (not object_key or user_id not in object_key.split('/') or object_key.startswith('/')
+                or '\\' in object_key or any(part in ('','.','..') for part in object_key.split('/'))):
+            raise ApiError(403,'image_not_owned')
         if not isinstance(image['isPrimary'],bool) or image['sortOrder'] != index:
             raise ApiError(400,'invalid_images')
         normalized.append({'imageUrl':url,'isPrimary':image['isPrimary'],'sortOrder':index})

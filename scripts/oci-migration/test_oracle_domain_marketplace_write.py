@@ -20,7 +20,7 @@ def body():
       'condition':'good_used','conditionNotes':None,'city':'القاهرة','area':None,
       'locationLatitude':30.1,'locationLongitude':31.2,'desireMode':'flexible','desireText':None,
       'itemStory':None,'swapReason':None,'goodFor':None,
-      'images':[{'imageUrl':'https://object.example/p/read#teswa-object=item_image:items/x','isPrimary':True,'sortOrder':0}]}
+      'images':[{'imageUrl':'https://object.example/p/read#teswa-object=item_image:items/'+UID+'/'+IID+'/image.jpg','isPrimary':True,'sortOrder':0}]}
 
 class WriteTests(unittest.TestCase):
     def test_publish_uses_authenticated_owner_and_atomic_sql(self):
@@ -36,6 +36,13 @@ class WriteTests(unittest.TestCase):
             with self.subTest(mutate=mutate),self.assertRaises(write.ApiError):
                 write.MarketplaceWriteApi(Auth(),db).handle('POST','/v1/marketplace/items','Bearer valid',value)
             self.assertEqual(db.calls,[])
+    def test_foreign_or_unbound_image_is_rejected(self):
+        for url in ('https://object.example/image.jpg',
+                    'https://object.example/image.jpg#teswa-object=item_image:items/44444444-4444-4444-8444-444444444444/item/image.jpg'):
+            value=body(); value['images'][0]['imageUrl']=url; db=DB()
+            with self.subTest(url=url),self.assertRaises(write.ApiError) as error:
+                write.MarketplaceWriteApi(Auth(),db).handle('POST','/v1/marketplace/items','Bearer valid',value)
+            self.assertEqual(error.exception.status,403); self.assertEqual(db.calls,[])
     def test_text_is_base64_encoded_out_of_sql(self):
         value=body(); value['title']="x'); DROP TABLE public.items; --"
         sql=write.publish_sql(write.publish_input(value,UID))
