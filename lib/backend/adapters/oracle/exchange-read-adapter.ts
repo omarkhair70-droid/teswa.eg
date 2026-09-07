@@ -3,13 +3,15 @@ import type {
   DealLifecycleContract,
   DealLifecycleMessageRecord,
   DealLifecycleRecord,
+  OfferItemValidationRecord,
   OfferLifecycleContract,
   OfferLifecycleRecord,
 } from '@/lib/backend/contracts/offers-deals';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
 export type OracleOfferReadAdapter = Pick<OfferLifecycleContract,
-  'listIncoming' | 'listSent' | 'getOffer' | 'getLatestDealId' | 'getLatestDealIds'>;
+  'getItemForValidation' | 'listOwnedActiveItemIds' | 'listIncoming' | 'listSent' |
+  'getOffer' | 'getLatestDealId' | 'getLatestDealIds'>;
 export type OracleDealReadAdapter = Pick<DealLifecycleContract,
   'getDeal' | 'listMessages' | 'getUnreadCount' | 'listConversationInbox' |
   'listConfirmationUserIds' | 'hasReview' | 'countMessagesSince'>;
@@ -85,6 +87,16 @@ function offerPath(offerId: string): string {
 export function createOracleOfferReadAdapter(transport: OracleHttpTransport): OracleOfferReadAdapter {
   const getRow = (offerId: string) => readOne<OfferRow>(transport, offerPath(offerId), offerId);
   return {
+    async getItemForValidation(itemId) {
+      const row = await readOne<OfferItemValidationRecord>(transport, `/v1/offers/items/${itemId}`, itemId);
+      if (row && (typeof row.ownerId !== 'string' || typeof row.status !== 'string')) return failure();
+      return row;
+    },
+    async listOwnedActiveItemIds(userId) {
+      const rows = await collect<{ id: string }>(transport, '/v1/offers/owned-active-items', { userId }, 50);
+      if (rows.some(row => !isRecord(row) || typeof row.id !== 'string')) return failure();
+      return rows.map(row => row.id);
+    },
     async listIncoming(_userId) {
       const rows = await collect<OfferRow>(transport, '/v1/offers', { direction: 'incoming' }, 50);
       return rows.filter(row => row.status === 'pending' || row.status === 'thinking');
