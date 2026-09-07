@@ -33,6 +33,10 @@ DOMAIN_MUTATIONS = {
     ('POST', '/v1/media/signed-url'),
     ('DELETE', '/v1/media/objects'),
 }
+DOMAIN_MUTATION_PATTERNS = (
+    re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
+    re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
+)
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.
 PENDING_DELIVERY = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
@@ -78,7 +82,8 @@ class Handler(BaseHTTPRequestHandler):
             path = self.path
             upstream_port = self.server.domain_port
             upstream_name = 'domain'
-        if path is None and (self.command, self.path) in DOMAIN_MUTATIONS:
+        if path is None and ((self.command, self.path) in DOMAIN_MUTATIONS or
+                             (self.command == 'POST' and any(rule.fullmatch(self.path) for rule in DOMAIN_MUTATION_PATTERNS))):
             path = self.path
             upstream_port = self.server.domain_port
             upstream_name = 'domain'

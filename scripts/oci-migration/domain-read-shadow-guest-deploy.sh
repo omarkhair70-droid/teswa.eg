@@ -53,7 +53,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_marketplace_write.py oracle_media.py oracle_domain_service.py auth-api-shadow-gateway.py; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_exchange.py oracle_media.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -74,6 +74,7 @@ ALTER ROLE teswaapi LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBY
 GRANT teswa_app_authenticated TO teswaapi;
 GRANT SELECT ON public.categories TO teswa_app_authenticated;
 SQL
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$STAGE/runtime-domain-api-grants.sql"
 ROLE_OK="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT count(*) FROM pg_roles WHERE rolname='teswaapi' AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls")"
 [ "$ROLE_OK" = 1 ] || { echo 'domain_read_deploy=FAIL unsafe_database_role'; exit 13; }
 sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1
@@ -81,6 +82,7 @@ sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1
 sudo install -d -o root -g teswaapi -m 0750 "$APP"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_read.py" "$APP/oracle_domain_read.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_marketplace_write.py" "$APP/oracle_marketplace_write.py"
+sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_exchange.py" "$APP/oracle_exchange.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_media.py" "$APP/oracle_media.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_service.py" "$APP/server.py"
 sudo install -o root -g root -m 0644 "$STAGE/auth-api-shadow-gateway.py" "$GATEWAY"

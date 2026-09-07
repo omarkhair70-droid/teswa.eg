@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from oracle_domain_read import ApiError, MarketplaceReadApi
 from oracle_media import MediaApi
 from oracle_marketplace_write import MarketplaceWriteApi
+from oracle_exchange import ExchangeApi
 
 MAX_RESPONSE = 1024 * 1024
 MAX_BODY = 128 * 1024
@@ -67,6 +68,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path.startswith('/v1/media/'):
                 status, body = self.server.media.handle(self.command, self.path, values[0], body)
+            elif self.path == '/v1/offers' or self.path.startswith('/v1/offers/') or self.path.startswith('/v1/deals/'):
+                status, body = self.server.exchange.handle(self.command, self.path, values[0], body)
             elif self.command != 'GET':
                 status, body = self.server.marketplace_write.handle(self.command, self.path, values[0], body)
             else:
@@ -88,11 +91,12 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, api=None, media=None, marketplace_write=None):
+    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None):
         super().__init__(address, Handler)
         self.api = api or MarketplaceReadApi()
         self.media = media or MediaApi()
         self.marketplace_write = marketplace_write or MarketplaceWriteApi()
+        self.exchange = exchange or ExchangeApi()
         self.slots = threading.BoundedSemaphore(24)
 
     def process_request(self, request, address):

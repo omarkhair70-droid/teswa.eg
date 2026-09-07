@@ -8,6 +8,9 @@ on:
       - scripts/oci-migration/oracle_domain_service.py
       - scripts/oci-migration/oracle_media.py
       - scripts/oci-migration/oracle_marketplace_write.py
+      - scripts/oci-migration/oracle_exchange.py
+      - scripts/oci-migration/runtime-domain-api-grants.sql
+      - scripts/oci-migration/test_oracle_domain_exchange.py
       - scripts/oci-migration/test_oracle_domain_marketplace_write.py
       - scripts/oci-migration/test_oracle_domain_media.py
       - scripts/oci-migration/test_oracle_domain_service.py
@@ -18,6 +21,8 @@ on:
       - lib/backend/adapters/oracle/media-adapter.ts
       - lib/backend/adapters/oracle/marketplace-write-adapter.ts
       - scripts/test-oracle-marketplace-write-adapter.cjs
+      - lib/backend/adapters/oracle/exchange-adapter.ts
+      - scripts/test-oracle-exchange-adapter.cjs
       - scripts/test-oracle-media-adapter.cjs
       - scripts/oci-migration/test_oracle_domain_read.py
       - .github/workflows/oracle-domain-read-contract.yml
@@ -38,10 +43,12 @@ jobs:
           python -m py_compile scripts/oci-migration/oracle_domain_read.py
           python -m py_compile scripts/oci-migration/oracle_media.py
           python -m py_compile scripts/oci-migration/oracle_marketplace_write.py
+          python -m py_compile scripts/oci-migration/oracle_exchange.py
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_read.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_media.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_marketplace_write.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_exchange.py -v
           python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
       - uses: actions/setup-node@v4
         with:
@@ -53,4 +60,5 @@ jobs:
           node scripts/test-oracle-marketplace-read-adapter.cjs
           node scripts/test-oracle-media-adapter.cjs
           node scripts/test-oracle-marketplace-write-adapter.cjs
+          node scripts/test-oracle-exchange-adapter.cjs
           npm run typecheck:app
