@@ -44,6 +44,20 @@ class DomainReadTests(unittest.TestCase):
         with self.assertRaises(domain.ApiError) as error:
             domain.MarketplaceReadApi(Auth(),DB(None)).handle('GET','/v1/marketplace/items/'+IID,'Bearer valid')
         self.assertEqual(error.exception.status,404)
+    def test_full_detail_uses_rls_query_and_returns_contract(self):
+        detail = {'id':IID,'images':[],'wantedTags':[],'ownerPresence':None}
+        db = DB(detail)
+        status, body = domain.MarketplaceReadApi(Auth(),db).handle(
+            'GET','/v1/marketplace/items/'+IID+'/detail','Bearer valid')
+        self.assertEqual((status,body),(200,detail))
+        self.assertIn("i.status='active'",db.calls[0][1])
+        self.assertIn('item_wanted_tags',db.calls[0][1])
+    def test_owner_active_list_is_bounded(self):
+        db = DB([])
+        status, body = domain.MarketplaceReadApi(Auth(),db).handle(
+            'GET','/v1/marketplace/owners/'+UID+'/active?limit=24','Bearer valid')
+        self.assertEqual((status,body),(200,{'items':[]}))
+        self.assertIn('LIMIT 24',db.calls[0][1])
     def test_query_is_encoded_not_interpolated(self):
         value="x'); DROP TABLE public.items; --"
         sql = domain.feed_sql(20,0,{'query':value})

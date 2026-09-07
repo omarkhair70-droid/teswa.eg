@@ -114,6 +114,7 @@ for _ in $(seq 1 20); do
   curl --noproxy '*' --max-time 3 -fsS http://127.0.0.1:3130/healthz > "$TMP/health.json" 2>/dev/null && break
   sleep 1
 done
+[ -s "$TMP/health.json" ] || { echo 'domain_read_deploy=FAIL service_health_timeout'; sudo journalctl -u teswa-domain-shadow -n 40 --no-pager || true; exit 14; }
 python3 - "$TMP/health.json" <<'PY'
 import json,sys
 x=json.load(open(sys.argv[1])); assert x['status']=='ok' and x['productionTraffic'] is False and x['supabaseRuntimeDependency'] is False
@@ -121,34 +122,47 @@ PY
 
 STAMP="$(date +%s)"; EMAIL="domain-read-$STAMP@teswa.invalid"; PASS='Teswa-Domain-Read-2026'
 CODE="$(curl --noproxy '*' --max-time 5 -sS -o "$TMP/signup.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" http://127.0.0.1:3110/v1/auth/sign-up)"
-[ "$CODE" = 201 ] || { echo "domain_read_deploy=FAIL signup_$CODE"; exit 14; }
+[ "$CODE" = 201 ] || { echo "domain_read_deploy=FAIL signup_http_$CODE"; cat "$TMP/signup.json" || true; exit 15; }
 TEST_UID="$(python3 - "$TMP/signup.json" <<'PY'
 import json,sys,uuid
 x=json.load(open(sys.argv[1])); v=x['user']['id']; uuid.UUID(v); print(v)
 PY
 )"
 TOKEN_SHA="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT token_sha256 FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1")"
-[ ${#TOKEN_SHA} -eq 64 ]
+[ ${#TOKEN_SHA} -eq 64 ] || { echo 'domain_read_deploy=FAIL confirmation_token_missing'; exit 16; }
 sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT teswa_auth.consume_email_confirmation('$TOKEN_SHA')" | grep -qx "$TEST_UID"
 CODE="$(curl --noproxy '*' --max-time 5 -sS -o "$TMP/login.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" http://127.0.0.1:3110/v1/auth/sign-in/password)"
-[ "$CODE" = 200 ]
+[ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL signin_http_$CODE"; cat "$TMP/login.json" || true; exit 17; }
 ACCESS="$(python3 - "$TMP/login.json" <<'PY'
 import json,sys
 print(json.load(open(sys.argv[1]))['access_token'])
 PY
 )"
 CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" http://127.0.0.1:3130/v1/marketplace/feed?limit=1)"
-[ "$CODE" = 200 ]
+[ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL direct_feed_http_$CODE"; cat "$TMP/feed.json" || true; exit 18; }
 python3 - "$TMP/feed.json" <<'PY'
 import json,sys
 x=json.load(open(sys.argv[1])); assert isinstance(x['items'],list) and isinstance(x['hasMore'],bool)
 PY
+ITEM_ID="$(python3 - "$TMP/feed.json" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); print(x['items'][0]['id'] if x['items'] else '')
+PY
+)"
+[ -n "$ITEM_ID" ] || { echo 'domain_read_deploy=FAIL empty_rehearsal_feed'; exit 19; }
+CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/detail.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://127.0.0.1:3130/v1/marketplace/items/$ITEM_ID/detail")"
+[ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL detail_http_$CODE"; cat "$TMP/detail.json" || true; exit 20; }
+python3 - "$TMP/detail.json" "$ITEM_ID" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); assert x['id']==sys.argv[2] and isinstance(x['images'],list) and isinstance(x['wantedTags'],list)
+PY
 BIND="$(sudo sed -n 's/.*--bind \([0-9.]*\).*/\1/p' /etc/systemd/system/teswa-api.service)"
 CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/gateway-feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://$BIND:3100/v1/marketplace/feed?limit=1")"
-[ "$CODE" = 200 ]
+[ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL gateway_feed_http_$CODE bind=$BIND"; cat "$TMP/gateway-feed.json" || true; exit 19; }
 unset ACCESS PASS TOKEN_SHA
 ROLLBACK=false
 echo 'domain_service_role_nobypassrls=PASS'
 echo 'domain_feed_database_rls=PASS'
+echo 'domain_item_detail_database_rls=PASS'
 echo 'domain_feed_gateway_auth=PASS'
 echo 'domain_read_deploy=PASS production_traffic=false source_mutation=none'

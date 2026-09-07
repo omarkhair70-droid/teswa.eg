@@ -123,6 +123,36 @@ def map_feed(row):
                 condition=row.get('item_condition'), city=row.get('city'),
                 ownerDisplayName=row.get('owner_display_name'), createdAt=row['created_at'])
 
+def detail_sql(item_id):
+    return """SELECT CASE WHEN i.id IS NULL THEN NULL ELSE json_build_object(
+      'id',i.id,'title',i.title,'description',i.description,'condition',i.condition,
+      'conditionNotes',i.condition_notes,'city',i.city,'area',i.area,'ownerId',i.owner_id,
+      'itemStory',i.item_story,'swapReason',i.swap_reason,'goodFor',i.good_for,
+      'desireMode',i.desire_mode,'desireText',i.desire_text,'category',c.name_ar,
+      'wantedTags',coalesce((SELECT json_agg(t.tag ORDER BY t.tag)
+        FROM public.item_wanted_tags t WHERE t.item_id=i.id),'[]'::json),
+      'images',coalesce((SELECT json_agg(json_build_object('imageUrl',m.image_url,
+        'isPrimary',m.is_primary,'sortOrder',m.sort_order) ORDER BY m.is_primary DESC,
+        m.sort_order NULLS LAST,m.id) FROM public.item_images m WHERE m.item_id=i.id),'[]'::json),
+      'ownerPresence',CASE WHEN p.id IS NULL OR coalesce(p.is_banned,false) THEN NULL ELSE
+        json_build_object('id',p.id,'displayName',p.display_name,'username',p.username,
+        'avatarUrl',p.avatar_url,'profileTagline',p.profile_tagline,'city',p.city,'area',p.area,
+        'successfulSwapsCount',p.successful_swaps_count,'responseRate',p.response_rate) END)
+      END FROM public.items i LEFT JOIN public.categories c ON c.id=i.category_id
+      LEFT JOIN public.profiles p ON p.id=i.owner_id
+      WHERE i.id='%s'::uuid AND i.status='active'::public.item_status
+      AND (p.id IS NULL OR coalesce(p.is_banned,false)=false)""" % item_id
+
+def owner_listings_sql(profile_id, limit):
+    return """SELECT coalesce(json_agg(row_to_json(x)),'[]'::json) FROM (
+      SELECT i.id,i.title,
+        (SELECT m.image_url FROM public.item_images m WHERE m.item_id=i.id
+          ORDER BY m.is_primary DESC,m.sort_order NULLS LAST,m.id LIMIT 1) AS \"imageUrl\",
+        c.name_ar AS category,i.city,i.area,i.created_at AS \"createdAt\"
+      FROM public.items i LEFT JOIN public.categories c ON c.id=i.category_id
+      WHERE i.owner_id='%s'::uuid AND i.status='active'::public.item_status
+      ORDER BY i.created_at DESC,i.id DESC LIMIT %d) x""" % (profile_id, limit)
+
 class MarketplaceReadApi:
     def __init__(self, auth=None, db=None):
         self.auth = auth or AuthResolver()
@@ -155,4 +185,21 @@ class MarketplaceReadApi:
             if row is None:
                 raise ApiError(404, 'not_found')
             return 200, map_feed(row)
+        match = re.fullmatch(r'/v1/marketplace/items/([0-9a-fA-F-]{36})/detail', parsed.path)
+        if match and not parsed.query:
+            item_id = valid_uuid(match.group(1))
+            row = self.db.query(user_id, detail_sql(item_id))
+            if row is None:
+                raise ApiError(404, 'not_found')
+            return 200, row
+        match = re.fullmatch(r'/v1/marketplace/owners/([0-9a-fA-F-]{36})/active', parsed.path)
+        if match:
+            args = parse_qs(parsed.query, keep_blank_values=True)
+            if any(len(v) != 1 for v in args.values()) or set(args)-{'limit'}:
+                raise ApiError(400, 'invalid_query')
+            limit = integer(args.get('limit', [None])[0], 6, 24)
+            if limit < 1:
+                raise ApiError(400, 'invalid_pagination')
+            profile_id = valid_uuid(match.group(1))
+            return 200, {'items': self.db.query(user_id, owner_listings_sql(profile_id, limit))}
         raise ApiError(404, 'not_found')

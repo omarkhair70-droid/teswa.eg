@@ -23,6 +23,8 @@ ROUTES = {
 DOMAIN_GET = (
     re.compile(r'^/v1/marketplace/feed(?:\?[^#]*)?$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
+    re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
 )
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.
