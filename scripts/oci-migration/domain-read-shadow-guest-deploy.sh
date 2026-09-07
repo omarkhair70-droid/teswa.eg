@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+STAGE="${1:?stage directory required}"
+P=/usr/pgsql-17/bin/psql
+DB=teswa_rehearsal
+APP=/opt/teswa/domain-shadow
+UNIT=/etc/systemd/system/teswa-domain-shadow.service
+MARK=/etc/teswa/lane4-domain-shadow-owned
+GATEWAY=/opt/teswa/api-shell/shadow_gateway.py
+TMP="$(mktemp -d)"
+TEST_UID=""
+ROLLBACK=true
+
+cleanup() {
+  if [ -n "${TEST_UID:-}" ]; then
+    sudo -u postgres "$P" -X -q -v ON_ERROR_STOP=0 -d "$DB" <<SQL >/dev/null 2>&1 || true
+BEGIN;
+DELETE FROM teswa_auth.sessions WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_accounts WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM public.profiles WHERE id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.external_identities WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.users WHERE id='$TEST_UID'::uuid;
+COMMIT;
+SQL
+  fi
+  if [ "$ROLLBACK" = true ]; then
+    sudo systemctl disable --now teswa-domain-shadow >/dev/null 2>&1 || true
+    if [ -f "$TMP/gateway.py" ]; then sudo install -o root -g root -m 0644 "$TMP/gateway.py" "$GATEWAY"; fi
+    sudo systemctl restart teswa-api >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+
+[ "$(hostname -s)" = core01 ] || { echo 'domain_read_deploy=FAIL wrong_host'; exit 10; }
+sudo -n true
+systemctl is-active --quiet postgresql-17
+systemctl is-active --quiet teswa-auth-shadow
+systemctl is-active --quiet teswa-api
+for file in oracle_domain_read.py oracle_domain_service.py auth-api-shadow-gateway.py; do
+  [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
+done
+if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
+  echo 'domain_read_deploy=FAIL unowned_unit'; exit 12
+fi
+sudo cp -p "$GATEWAY" "$TMP/gateway.py"
+
+if ! id teswaapi >/dev/null 2>&1; then
+  sudo useradd --system --home-dir /nonexistent --shell /sbin/nologin teswaapi
+fi
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" <<'SQL'
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='teswaapi') THEN
+    CREATE ROLE teswaapi LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  END IF;
+END $$;
+ALTER ROLE teswaapi LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT teswa_app_authenticated TO teswaapi;
+SQL
+ROLE_OK="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT count(*) FROM pg_roles WHERE rolname='teswaapi' AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls")"
+[ "$ROLE_OK" = 1 ] || { echo 'domain_read_deploy=FAIL unsafe_database_role'; exit 13; }
+sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1
+
+sudo install -d -o root -g teswaapi -m 0750 "$APP"
+sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_read.py" "$APP/oracle_domain_read.py"
+sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_service.py" "$APP/server.py"
+sudo install -o root -g root -m 0644 "$STAGE/auth-api-shadow-gateway.py" "$GATEWAY"
+cat > "$TMP/unit" <<EOF
+[Unit]
+Description=Teswa Oracle domain shadow
+After=network-online.target postgresql-17.service teswa-auth-shadow.service
+Requires=postgresql-17.service teswa-auth-shadow.service
+
+[Service]
+Type=simple
+User=teswaapi
+Group=teswaapi
+WorkingDirectory=$APP
+Environment=PYTHONUNBUFFERED=1
+Environment=TESWA_DOMAIN_DATABASE_URL=dbname=teswa_rehearsal
+ExecStart=/usr/bin/python3 $APP/server.py --bind 127.0.0.1 --port 3130
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+TasksMax=96
+MemoryMax=160M
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo install -o root -g root -m 0644 "$TMP/unit" "$UNIT"
+sudo install -d -m 0755 /etc/teswa
+sudo touch "$MARK"
+sudo systemctl daemon-reload
+sudo systemctl enable --now teswa-domain-shadow >/dev/null
+sudo systemctl restart teswa-api
+
+for _ in $(seq 1 20); do
+  curl --noproxy '*' --max-time 3 -fsS http://127.0.0.1:3130/healthz > "$TMP/health.json" 2>/dev/null && break
+  sleep 1
+done
+python3 - "$TMP/health.json" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); assert x['status']=='ok' and x['productionTraffic'] is False and x['supabaseRuntimeDependency'] is False
+PY
+
+STAMP="$(date +%s)"; EMAIL="domain-read-$STAMP@teswa.invalid"; PASS='Teswa-Domain-Read-2026'
+CODE="$(curl --noproxy '*' --max-time 5 -sS -o "$TMP/signup.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" http://127.0.0.1:3110/v1/auth/sign-up)"
+[ "$CODE" = 201 ] || { echo "domain_read_deploy=FAIL signup_$CODE"; exit 14; }
+TEST_UID="$(python3 - "$TMP/signup.json" <<'PY'
+import json,sys,uuid
+x=json.load(open(sys.argv[1])); v=x['user']['id']; uuid.UUID(v); print(v)
+PY
+)"
+TOKEN_SHA="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT token_sha256 FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1")"
+[ ${#TOKEN_SHA} -eq 64 ]
+sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT teswa_auth.consume_email_confirmation('$TOKEN_SHA')" | grep -qx "$TEST_UID"
+CODE="$(curl --noproxy '*' --max-time 5 -sS -o "$TMP/login.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" http://127.0.0.1:3110/v1/auth/sign-in/password)"
+[ "$CODE" = 200 ]
+ACCESS="$(python3 - "$TMP/login.json" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1]))['access_token'])
+PY
+)"
+CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" http://127.0.0.1:3130/v1/marketplace/feed?limit=1)"
+[ "$CODE" = 200 ]
+python3 - "$TMP/feed.json" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); assert isinstance(x['items'],list) and isinstance(x['hasMore'],bool)
+PY
+BIND="$(sudo sed -n 's/.*--bind \([0-9.]*\).*/\1/p' /etc/systemd/system/teswa-api.service)"
+CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/gateway-feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" "http://$BIND:3100/v1/marketplace/feed?limit=1")"
+[ "$CODE" = 200 ]
+unset ACCESS PASS TOKEN_SHA
+ROLLBACK=false
+echo 'domain_service_role_nobypassrls=PASS'
+echo 'domain_feed_database_rls=PASS'
+echo 'domain_feed_gateway_auth=PASS'
+echo 'domain_read_deploy=PASS production_traffic=false source_mutation=none'

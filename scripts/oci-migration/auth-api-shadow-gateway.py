@@ -8,6 +8,7 @@ import argparse
 import http.client
 import ipaddress
 import json
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -19,6 +20,10 @@ ROUTES = {
         'google', 'password', 'sign-in/password', 'refresh', 'logout',
     )},
 }
+DOMAIN_GET = (
+    re.compile(r'^/v1/marketplace/feed(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
+)
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.
 PENDING_DELIVERY = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
@@ -58,6 +63,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(503, {'error': 'confirmation_delivery_not_configured'})
             return
         path = ROUTES.get((self.command, self.path))
+        upstream_port = self.server.auth_port
+        upstream_name = 'auth'
+        if path is None and self.command == 'GET' and any(rule.fullmatch(self.path) for rule in DOMAIN_GET):
+            path = self.path
+            upstream_port = self.server.domain_port
+            upstream_name = 'domain'
         if path is None:
             self.send_json(404, {'error': 'not_found'})
             return
@@ -96,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
         headers = {'Content-Type': 'application/json', 'Connection': 'close'}
         if auth_values:
             headers['Authorization'] = auth_values[0]
-        conn = http.client.HTTPConnection('127.0.0.1', self.server.auth_port, timeout=8)
+        conn = http.client.HTTPConnection('127.0.0.1', upstream_port, timeout=8)
         try:
             conn.request(self.command, path, body=body, headers=headers)
             response = conn.getresponse()
@@ -107,7 +118,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('invalid_upstream_json')
             self.send_bytes(response.status, payload)
         except (OSError, ValueError, http.client.HTTPException):
-            self.send_json(502, {'error': 'auth_upstream_unavailable'})
+            self.send_json(502, {'error': upstream_name + '_upstream_unavailable'})
         finally:
             conn.close()
 
@@ -119,9 +130,10 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, auth_port=3110):
+    def __init__(self, address, auth_port=3110, domain_port=3130):
         super().__init__(address, Handler)
         self.auth_port = auth_port
+        self.domain_port = domain_port
         self.slots = threading.BoundedSemaphore(16)
 
     def process_request(self, request, address):

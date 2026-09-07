@@ -5,6 +5,12 @@ on:
       - integration/oracle-domain-closure-20260907
     paths:
       - scripts/oci-migration/oracle_domain_read.py
+      - scripts/oci-migration/oracle_domain_service.py
+      - scripts/oci-migration/test_oracle_domain_service.py
+      - scripts/oci-migration/auth-api-shadow-gateway.py
+      - scripts/oci-migration/test_auth_gateway.py
+      - lib/backend/adapters/oracle/marketplace-read-adapter.ts
+      - scripts/test-oracle-marketplace-read-adapter.cjs
       - scripts/oci-migration/test_oracle_domain_read.py
       - .github/workflows/oracle-domain-read-contract.yml
   workflow_dispatch:
@@ -23,3 +29,14 @@ jobs:
         run: |
           python -m py_compile scripts/oci-migration/oracle_domain_read.py
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_read.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify Oracle marketplace adapter and application types
+        run: |
+          node scripts/test-oracle-marketplace-read-adapter.cjs
+          npm run typecheck:app
