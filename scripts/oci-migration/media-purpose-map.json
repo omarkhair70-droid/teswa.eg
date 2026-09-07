@@ -1,0 +1,81 @@
+{
+  "format_version": 1,
+  "captured_contract_date": "2026-09-03",
+  "lane2_contract": "lib/backend/contracts/media.ts",
+  "mappings": [
+    {
+      "source_bucket": "profile-images",
+      "media_purpose": "profile_image",
+      "source_access": "public",
+      "audit_object_count": 40,
+      "audit_total_bytes": 19771910
+    },
+    {
+      "source_bucket": "item-images",
+      "media_purpose": "item_image",
+      "source_access": "public",
+      "audit_object_count": 56,
+      "audit_total_bytes": 26864064
+    },
+    {
+      "source_bucket": "item-videos",
+      "media_purpose": "item_video",
+      "source_access": "private",
+      "audit_object_count": 5,
+      "audit_total_bytes": 13403518
+    },
+    {
+      "source_bucket": "story-media",
+      "media_purpose": "story_media",
+      "source_access": "private",
+      "audit_object_count": 23,
+      "audit_total_bytes": 60230849
+    },
+    {
+      "source_bucket": "direct-chat-media",
+      "media_purpose": "direct_chat_media",
+      "source_access": "private",
+      "audit_object_count": 11,
+      "audit_total_bytes": 4575396
+    },
+    {
+      "source_bucket": "direct-voice-messages",
+      "media_purpose": "direct_voice",
+      "source_access": "private",
+      "audit_object_count": 1,
+      "audit_total_bytes": 29850
+    },
+    {
+      "source_bucket": "deal-voice-messages",
+      "media_purpose": "deal_voice",
+      "source_access": "private",
+      "audit_object_count": 11,
+      "audit_total_bytes": 565788
+    },
+    {
+      "source_bucket": "contextual-voice-messages",
+      "media_purpose": "contextual_voice",
+      "source_access": "private",
+      "audit_object_count": 6,
+      "audit_total_bytes": 478375
+    },
+    {
+      "source_bucket": "dolab-media",
+      "media_purpose": "dolab_media",
+      "source_access": "private",
+      "audit_object_count": 1,
+      "audit_total_bytes": 599569
+    }
+  ],
+  "audit_totals": {
+    "buckets": 9,
+    "objects": 154,
+    "bytes": 126519319
+  },
+  "rules": {
+    "preserve_object_keys": true,
+    "physical_oci_bucket_name_is_not_defined_here": true,
+    "source_access_is_behavioral_input_not_required_physical_acl": true,
+    "public_url_fields_may_only_be_rewritten_on_target_after_object_parity": true
+  }
+}
