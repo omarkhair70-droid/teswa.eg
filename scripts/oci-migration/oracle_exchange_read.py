@@ -23,9 +23,11 @@ def offer_sql(user_id, offer_id=None, direction=None, limit=50, offset=0):
         AND (d.requester_id='%s'::uuid OR d.offerer_id='%s'::uuid)
         ORDER BY d.created_at DESC,d.id DESC LIMIT 1
     ) latest ON true""" % (user_id, user_id)
-    columns = """o.id,o.sender_id AS \"senderId\",o.receiver_id AS \"receiverId\",
-        o.requested_item_id AS \"requestedItemId\",o.offered_item_id AS \"offeredItemId\",
-        o.status,o.message,latest.id AS \"dealId\",o.created_at AS \"createdAt\"""
+    columns = (
+        'o.id,o.sender_id AS "senderId",o.receiver_id AS "receiverId",'
+        'o.requested_item_id AS "requestedItemId",o.offered_item_id AS "offeredItemId",'
+        'o.status,o.message,latest.id AS "dealId",o.created_at AS "createdAt"'
+    )
     if offer_id:
         return "SELECT row_to_json(x) FROM (SELECT %s FROM %s WHERE %s) x" % (columns, source, ' AND '.join(where))
     return """SELECT json_build_object('items',coalesce(json_agg(row_to_json(x)),'[]'::json),
@@ -36,9 +38,9 @@ def offer_sql(user_id, offer_id=None, direction=None, limit=50, offset=0):
 
 def deal_sql(user_id, deal_id):
     return """SELECT row_to_json(x) FROM (
-      SELECT d.id,d.status,d.accepted_at AS \"acceptedAt\",d.created_at AS \"createdAt\",
-        d.requested_item_id AS \"requestedItemId\",d.offered_item_id AS \"offeredItemId\",
-        d.requester_id AS \"requesterId\",d.offerer_id AS \"offererId\"
+      SELECT d.id,d.status,d.accepted_at AS "acceptedAt",d.created_at AS "createdAt",
+        d.requested_item_id AS "requestedItemId",d.offered_item_id AS "offeredItemId",
+        d.requester_id AS "requesterId",d.offerer_id AS "offererId"
       FROM public.swap_deals d WHERE d.id='%s'::uuid
       AND (d.requester_id='%s'::uuid OR d.offerer_id='%s'::uuid)) x""" % (deal_id, user_id, user_id)
 
@@ -48,11 +50,11 @@ def messages_sql(user_id, deal_id, limit, offset, order='desc'):
         raise ApiError(400, 'invalid_order')
     direction = 'ASC' if order == 'asc' else 'DESC'
     return """SELECT json_build_object('items',coalesce(json_agg(row_to_json(x)),'[]'::json),
-      'hasMore',count(*)>%d) FROM (SELECT m.id,m.deal_id AS \"dealId\",
-      m.sender_id AS \"senderId\",m.body,m.message_type AS \"messageType\",
-      m.audio_storage_path AS \"audioStoragePath\",m.audio_duration_ms AS \"audioDurationMs\",
-      m.audio_mime_type AS \"audioMimeType\",m.audio_size_bytes AS \"audioSizeBytes\",
-      m.created_at AS \"createdAt\" FROM public.deal_messages m
+      'hasMore',count(*)>%d) FROM (SELECT m.id,m.deal_id AS "dealId",
+      m.sender_id AS "senderId",m.body,m.message_type AS "messageType",
+      m.audio_storage_path AS "audioStoragePath",m.audio_duration_ms AS "audioDurationMs",
+      m.audio_mime_type AS "audioMimeType",m.audio_size_bytes AS "audioSizeBytes",
+      m.created_at AS "createdAt" FROM public.deal_messages m
       WHERE m.deal_id='%s'::uuid AND EXISTS (
         SELECT 1 FROM public.swap_deals d WHERE d.id=m.deal_id
         AND (d.requester_id='%s'::uuid OR d.offerer_id='%s'::uuid))
