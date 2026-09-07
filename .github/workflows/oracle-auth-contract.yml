@@ -1,0 +1,25 @@
+name: Oracle Auth Contract
+on:
+  push:
+    branches:
+      - integration/oracle-auth-contract-20260907
+    paths:
+      - 'lib/backend/adapters/oracle/auth-adapter.ts'
+      - 'lib/backend/adapters/oracle/auth-storage.ts'
+      - 'scripts/test-oracle-auth-contract.cjs'
+      - '.github/workflows/oracle-auth-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node scripts/test-oracle-auth-contract.cjs
