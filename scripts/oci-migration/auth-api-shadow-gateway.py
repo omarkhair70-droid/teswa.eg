@@ -48,6 +48,7 @@ DOMAIN_GET = (
     re.compile(r'^/v1/reviews/deals/[0-9a-fA-F-]{36}$'),
 )
 DOMAIN_MUTATIONS = {
+    ('POST', '/v1/discovery/city-pulse'),
     ('POST', '/v1/stories'),
     ('POST', '/v1/marketplace/items'),
     ('POST', '/v1/marketplace/likes'),

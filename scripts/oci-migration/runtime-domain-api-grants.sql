@@ -45,6 +45,7 @@ BEGIN
     ,'public.create_story_reply_thread(uuid,text)','public.ensure_story_reply_conversation(uuid)',
     'public.get_unread_contextual_messages_count()','public.mark_contextual_thread_read(uuid)',
     'public.create_contextual_message_notification(uuid,uuid,text)'
+    ,'public.get_public_city_pulse_moving_items(text[],integer)'
   ] LOOP
     IF to_regprocedure(signature) IS NOT NULL THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO teswa_app_authenticated',signature);
