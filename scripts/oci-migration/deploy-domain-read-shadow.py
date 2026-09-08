@@ -23,7 +23,7 @@ def main():
         (out/'execution.json').write_text(json.dumps(result,indent=2)+'\n')
         data=result['data']; print('state='+data['lifecycle-state']); print('delivery_state='+str(data.get('delivery-state')))
         if data['lifecycle-state'] in ('SUCCEEDED','FAILED','TIMED_OUT','CANCELED'):
-            content=data.get('content') or {}; print(content.get('text','')); print('exit_code='+str(content.get('exit-code')))
+            content=data.get('content') or {}; print(content.get('text') or content.get('message','')); print('exit_code='+str(content.get('exit-code')))
             raise SystemExit(0 if data['lifecycle-state']=='SUCCEEDED' and content.get('exit-code')==0 else 2)
         raise SystemExit(3)
     os.umask(0o077); root=Path(__file__).resolve().parent
@@ -35,7 +35,7 @@ def main():
     names=('oracle_domain_read.py','oracle_marketplace_write.py','oracle_marketplace_lifecycle.py','oracle_marketplace_edit.py',
            'oracle_marketplace_image_plan.py','oracle_exchange.py','oracle_exchange_read.py','oracle_exchange_read_extra.py','oracle_media.py',
            'oracle_domain_service.py','auth-api-shadow-gateway.py','oracle_profiles.py','oracle_notifications.py',
-           'oracle_reviews.py','runtime-domain-api-grants.sql','runtime-marketplace-edit.sql','runtime-marketplace-image-plan.sql',
+           'oracle_reviews.py','diagnose_oracle_profile.py','runtime-domain-api-grants.sql','runtime-marketplace-edit.sql','runtime-marketplace-image-plan.sql',
            'domain-read-shadow-guest-deploy.sh','domain-read-edit-guest-deploy.sh','domain_exchange_e2e.py')
     archive=out/'bundle.tar.gz'
     with tarfile.open(archive,'w:gz') as tar:

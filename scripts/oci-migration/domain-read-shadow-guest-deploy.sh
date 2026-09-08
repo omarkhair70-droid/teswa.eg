@@ -53,7 +53,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql domain_exchange_e2e.py; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py diagnose_oracle_profile.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql domain_exchange_e2e.py; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -90,6 +90,7 @@ sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_media.py" "$APP/oracle_m
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_profiles.py" "$APP/oracle_profiles.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_notifications.py" "$APP/oracle_notifications.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_reviews.py" "$APP/oracle_reviews.py"
+sudo install -o root -g teswaapi -m 0640 "$STAGE/diagnose_oracle_profile.py" "$APP/diagnose_oracle_profile.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_service.py" "$APP/server.py"
 sudo install -o root -g root -m 0644 "$STAGE/auth-api-shadow-gateway.py" "$GATEWAY"
 cat > "$TMP/unit" <<EOF
@@ -163,6 +164,16 @@ import json,sys
 print(json.load(open(sys.argv[1]))['access_token'])
 PY
 )"
+PROFILE_DIAGNOSTIC="$(sudo -u teswaapi env TESWA_DOMAIN_DATABASE_URL="dbname=$DB" \
+  python3 "$APP/diagnose_oracle_profile.py" --user-id "$TEST_UID")"
+echo "profile_diagnostic=$PROFILE_DIAGNOSTIC"
+python3 - "$PROFILE_DIAGNOSTIC" <<'PY'
+import json,sys
+result=json.loads(sys.argv[1])
+assert result.get('ok') is True, result
+assert result.get('profileFound') is True, result
+assert result.get('missingColumns') == [], result
+PY
 CODE="$(curl --noproxy '*' --max-time 8 -sS -o "$TMP/feed.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" http://127.0.0.1:3130/v1/marketplace/feed?limit=1)"
 [ "$CODE" = 200 ] || { echo "domain_read_deploy=FAIL direct_feed_http_$CODE"; cat "$TMP/feed.json" || true; exit 18; }
 python3 - "$TMP/feed.json" <<'PY'
