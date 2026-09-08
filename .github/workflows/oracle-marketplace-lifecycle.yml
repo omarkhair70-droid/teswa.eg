@@ -1,0 +1,47 @@
+name: Oracle Marketplace Lifecycle
+on:
+  push:
+    branches:
+      - feat/oracle-marketplace-lifecycle-20260908
+      - integration/oracle-domain-closure-20260907
+    paths:
+      - scripts/oci-migration/oracle_marketplace_lifecycle.py
+      - scripts/oci-migration/oracle_domain_service.py
+      - scripts/oci-migration/auth-api-shadow-gateway.py
+      - scripts/oci-migration/runtime-domain-api-grants.sql
+      - scripts/oci-migration/deploy-domain-read-shadow.py
+      - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
+      - scripts/oci-migration/test_oracle_marketplace_lifecycle.py
+      - scripts/test-oracle-marketplace-lifecycle-adapter.cjs
+      - lib/backend/adapters/oracle/marketplace-write-adapter.ts
+      - .github/workflows/oracle-marketplace-lifecycle.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify lifecycle service and gateway
+        run: |
+          python -m py_compile scripts/oci-migration/oracle_marketplace_lifecycle.py scripts/oci-migration/oracle_domain_service.py scripts/oci-migration/auth-api-shadow-gateway.py scripts/oci-migration/deploy-domain-read-shadow.py
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_marketplace_lifecycle.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_marketplace_write.py -v
+          bash -n scripts/oci-migration/domain-read-shadow-guest-deploy.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify marketplace adapters and types
+        run: |
+          node scripts/test-oracle-marketplace-write-adapter.cjs
+          node scripts/test-oracle-marketplace-lifecycle-adapter.cjs
+          npx tsc --noEmit
