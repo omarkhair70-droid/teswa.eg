@@ -21,6 +21,7 @@ ROUTES = {
     )},
 }
 DOMAIN_GET = (
+    re.compile(r'^/v1/policies/acceptances\?userId=[0-9a-fA-F-]{36}&keys=[a-z_,]+$'),
     re.compile(r'^/v1/dolab/(?:items|media|notes)\?userId=[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/publish-source\?userId=[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/direct/conversations(?:/[0-9a-fA-F-]{36}(?:/(?:messages|native|typing))?)?(?:\?[^#]*)?$'),
@@ -50,6 +51,8 @@ DOMAIN_GET = (
     re.compile(r'^/v1/reviews/deals/[0-9a-fA-F-]{36}$'),
 )
 DOMAIN_MUTATIONS = {
+    ('POST', '/v1/policies/acceptances'),
+    ('POST', '/v1/analytics/events'),
     ('POST', '/v1/dolab/items'),
     ('POST', '/v1/dolab/notes'),
     ('POST', '/v1/dolab/media'),

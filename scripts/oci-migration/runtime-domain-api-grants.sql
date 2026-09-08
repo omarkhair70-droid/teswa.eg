@@ -9,6 +9,7 @@ GRANT SELECT ON public.direct_conversations,public.direct_messages,public.direct
 GRANT SELECT ON public.stories,public.contextual_conversations,public.contextual_messages,
   public.contextual_message_reads TO teswa_app_authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.dolab_items,public.dolab_media,public.dolab_notes TO teswa_app_authenticated;
+GRANT SELECT,INSERT ON public.user_policy_acceptances TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.stories,public.story_likes TO teswa_app_authenticated;
 GRANT SELECT ON public.story_likes,public.story_views TO teswa_app_authenticated;
 GRANT INSERT ON public.story_views TO teswa_app_authenticated;
@@ -47,6 +48,7 @@ BEGIN
     'public.get_unread_contextual_messages_count()','public.mark_contextual_thread_read(uuid)',
     'public.create_contextual_message_notification(uuid,uuid,text)'
     ,'public.get_public_city_pulse_moving_items(text[],integer)'
+    ,'public.track_analytics_event(text,text,text,text,uuid,jsonb,text,text)'
   ] LOOP
     IF to_regprocedure(signature) IS NOT NULL THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO teswa_app_authenticated',signature);

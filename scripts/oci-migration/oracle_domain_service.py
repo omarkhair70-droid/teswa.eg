@@ -23,6 +23,7 @@ from oracle_contextual_messaging import ContextualMessagingApi
 from oracle_stories import StoriesApi
 from oracle_discovery import DiscoveryApi
 from oracle_dolab import DolabApi
+from oracle_policies_analytics import PoliciesAnalyticsApi
 
 MAX_RESPONSE = 1024 * 1024
 MAX_BODY = 128 * 1024
@@ -96,6 +97,8 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = self.server.discovery.handle(self.command, self.path, values[0], body)
             elif self.path.startswith('/v1/dolab/'):
                 status, body = self.server.dolab.handle(self.command, self.path, values[0], body)
+            elif self.path.startswith('/v1/policies/') or self.path.startswith('/v1/analytics/'):
+                status, body = self.server.policies_analytics.handle(self.command, self.path, values[0], body)
             elif self.path == '/v1/offers' or self.path.startswith('/v1/offers/') or self.path.startswith('/v1/deals/'):
                 if self.command == 'GET':
                     status, body = self.server.exchange_read.handle(self.command, self.path, values[0])
@@ -126,7 +129,7 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None, reviews=None, marketplace_lifecycle=None, marketplace_edit=None, direct_messaging=None, contextual_messaging=None, stories=None, discovery=None, dolab=None):
+    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None, reviews=None, marketplace_lifecycle=None, marketplace_edit=None, direct_messaging=None, contextual_messaging=None, stories=None, discovery=None, dolab=None, policies_analytics=None):
         super().__init__(address, Handler)
         self.api = api or MarketplaceReadApi()
         self.media = media or MediaApi()
@@ -143,6 +146,7 @@ class Server(ThreadingHTTPServer):
         self.stories = stories or StoriesApi()
         self.discovery = discovery or DiscoveryApi()
         self.dolab = dolab or DolabApi()
+        self.policies_analytics = policies_analytics or PoliciesAnalyticsApi()
         self.slots = threading.BoundedSemaphore(24)
 
     def process_request(self, request, address):
