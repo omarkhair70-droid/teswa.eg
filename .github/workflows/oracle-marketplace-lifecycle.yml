@@ -4,17 +4,9 @@ on:
     branches:
       - feat/oracle-marketplace-lifecycle-20260908
       - integration/oracle-domain-closure-20260907
-    paths:
-      - scripts/oci-migration/oracle_marketplace_lifecycle.py
-      - scripts/oci-migration/oracle_domain_service.py
-      - scripts/oci-migration/auth-api-shadow-gateway.py
-      - scripts/oci-migration/runtime-domain-api-grants.sql
-      - scripts/oci-migration/deploy-domain-read-shadow.py
-      - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
-      - scripts/oci-migration/test_oracle_marketplace_lifecycle.py
-      - scripts/test-oracle-marketplace-lifecycle-adapter.cjs
-      - lib/backend/adapters/oracle/marketplace-write-adapter.ts
-      - .github/workflows/oracle-marketplace-lifecycle.yml
+  pull_request:
+    branches:
+      - integration/oracle-domain-closure-20260907
   workflow_dispatch:
 permissions:
   contents: read
