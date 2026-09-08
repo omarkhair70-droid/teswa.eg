@@ -33,9 +33,9 @@ def main():
     assert len(matches)==1; info=cli('compute','instance','get','--instance-id',matches[0]['identifier'])['data']
     assert info['lifecycle-state']=='RUNNING'; compartment=info['compartment-id']
     names=('oracle_domain_read.py','oracle_marketplace_write.py','oracle_marketplace_lifecycle.py','oracle_marketplace_edit.py',
-           'oracle_exchange.py','oracle_exchange_read.py','oracle_exchange_read_extra.py','oracle_media.py',
+           'oracle_marketplace_image_plan.py','oracle_exchange.py','oracle_exchange_read.py','oracle_exchange_read_extra.py','oracle_media.py',
            'oracle_domain_service.py','auth-api-shadow-gateway.py','oracle_profiles.py','oracle_notifications.py',
-           'oracle_reviews.py','runtime-domain-api-grants.sql','runtime-marketplace-edit.sql',
+           'oracle_reviews.py','runtime-domain-api-grants.sql','runtime-marketplace-edit.sql','runtime-marketplace-image-plan.sql',
            'domain-read-shadow-guest-deploy.sh','domain-read-edit-guest-deploy.sh','domain_exchange_e2e.py')
     archive=out/'bundle.tar.gz'
     with tarfile.open(archive,'w:gz') as tar:
