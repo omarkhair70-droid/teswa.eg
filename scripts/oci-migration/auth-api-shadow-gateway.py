@@ -21,6 +21,8 @@ ROUTES = {
     )},
 }
 DOMAIN_GET = (
+    re.compile(r'^/v1/moderation/(?:admin|profiles/[0-9a-fA-F-]{36}|items/[0-9a-fA-F-]{36}/context)$'),
+    re.compile(r'^/v1/moderation/admin/reports\?status=(?:all|open|reviewing|actioned|dismissed)&type=(?:all|user|item|story|deal|direct_message|deal_message)$'),
     re.compile(r'^/v1/policies/acceptances\?userId=[0-9a-fA-F-]{36}&keys=[a-z_,]+$'),
     re.compile(r'^/v1/dolab/(?:items|media|notes)\?userId=[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/publish-source\?userId=[0-9a-fA-F-]{36}$'),
@@ -51,6 +53,18 @@ DOMAIN_GET = (
     re.compile(r'^/v1/reviews/deals/[0-9a-fA-F-]{36}$'),
 )
 DOMAIN_MUTATIONS = {
+    ('POST', '/v1/account/deletion-request'),
+    ('POST', '/v1/moderation/reports/user'),
+    ('POST', '/v1/moderation/reports/item'),
+    ('POST', '/v1/moderation/reports/direct-message'),
+    ('POST', '/v1/moderation/reports/deal'),
+    ('POST', '/v1/moderation/reports/story'),
+    ('POST', '/v1/moderation/reports/deal-message'),
+    ('POST', '/v1/moderation/direct-context'),
+    ('POST', '/v1/moderation/deal-context'),
+    ('POST', '/v1/moderation/story-context'),
+    ('POST', '/v1/moderation/admin/review'),
+    ('POST', '/v1/moderation/admin/hide-item'),
     ('POST', '/v1/policies/acceptances'),
     ('POST', '/v1/analytics/events'),
     ('POST', '/v1/dolab/items'),

@@ -10,6 +10,8 @@ GRANT SELECT ON public.stories,public.contextual_conversations,public.contextual
   public.contextual_message_reads TO teswa_app_authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.dolab_items,public.dolab_media,public.dolab_notes TO teswa_app_authenticated;
 GRANT SELECT,INSERT ON public.user_policy_acceptances TO teswa_app_authenticated;
+GRANT SELECT ON public.reports,public.admin_users TO teswa_app_authenticated;
+GRANT INSERT ON public.account_deletion_requests TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.stories,public.story_likes TO teswa_app_authenticated;
 GRANT SELECT ON public.story_likes,public.story_views TO teswa_app_authenticated;
 GRANT INSERT ON public.story_views TO teswa_app_authenticated;
@@ -49,6 +51,10 @@ BEGIN
     'public.create_contextual_message_notification(uuid,uuid,text)'
     ,'public.get_public_city_pulse_moving_items(text[],integer)'
     ,'public.track_analytics_event(text,text,text,text,uuid,jsonb,text,text)'
+    ,'public.report_user(uuid,text,text)','public.report_item(uuid,text,text)','public.report_deal(uuid,text,text)'
+    ,'public.report_story(uuid,text,text)','public.report_deal_message(uuid,uuid,text,text)'
+    ,'public.report_direct_message(uuid,text,uuid,text,text)','public.is_admin_user()'
+    ,'public.review_report(uuid,text,text,text)','public.hide_item_for_moderation(uuid,uuid)'
   ] LOOP
     IF to_regprocedure(signature) IS NOT NULL THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO teswa_app_authenticated',signature);
