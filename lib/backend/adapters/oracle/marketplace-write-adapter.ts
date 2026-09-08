@@ -1,9 +1,14 @@
-import type { MarketplaceCoreContract, PublishBaseFailure } from '@/lib/backend/contracts/marketplace';
+import type { MarketplaceCoreContract, PublishBaseFailure, ListingLifecycleCode } from '@/lib/backend/contracts/marketplace';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
 export type OracleMarketplaceWriteAdapter = Pick<MarketplaceCoreContract,
   'createPublishedListingBase'|'setLiked'|'markPublishFailed'|'attachPublishedVideo'|
-  'addPublishedWantedTags'|'deletePublishedImageMetadata'>;
+  'addPublishedWantedTags'|'deletePublishedImageMetadata'|'archiveOwned'|'reactivateOwned'|
+  'deleteOwnedArchived'|'getImageUrls'>;
+
+const LIFECYCLE_FAILURES = new Set<string>([
+  'not_found_or_unauthorized', 'not_active', 'not_archived', 'has_open_offers', 'has_deal_history',
+]);
 
 export function createOracleMarketplaceWriteAdapter(transport: OracleHttpTransport): OracleMarketplaceWriteAdapter {
   return {
@@ -31,7 +36,36 @@ export function createOracleMarketplaceWriteAdapter(transport: OracleHttpTranspo
     async deletePublishedImageMetadata(itemId) {
       return voidWrite(transport,`/v1/marketplace/items/${itemId}/images/delete`,{});
     },
+    async archiveOwned(itemId) {
+      return lifecycleWrite(transport,itemId,'archive','archived');
+    },
+    async reactivateOwned(itemId) {
+      return lifecycleWrite(transport,itemId,'reactivate','reactivated');
+    },
+    async deleteOwnedArchived(itemId) {
+      return lifecycleWrite(transport,itemId,'delete-archived','deleted');
+    },
+    async getImageUrls(itemId) {
+      const result=await transport.request<{items:unknown}>({method:'GET',path:`/v1/marketplace/items/${itemId}/images/urls`});
+      if (!result.ok) throw new Error('Oracle listing image read failed.');
+      if (!Array.isArray(result.data.items) || !result.data.items.every((url:unknown)=>typeof url==='string')) {
+        throw new Error('Invalid Oracle listing image response.');
+      }
+      return result.data.items as string[];
+    },
   };
+}
+
+async function lifecycleWrite(
+  transport:OracleHttpTransport,itemId:string,action:string,success:ListingLifecycleCode,
+):Promise<ListingLifecycleCode> {
+  const result=await transport.request<{code:unknown}>({method:'POST',path:`/v1/marketplace/items/${itemId}/${action}`,body:{}});
+  if (!result.ok) throw new Error('Oracle listing lifecycle failed.');
+  const code=result.data.code;
+  if (code!==success && (typeof code!=='string' || !LIFECYCLE_FAILURES.has(code))) {
+    throw new Error('Invalid Oracle listing lifecycle response.');
+  }
+  return code as ListingLifecycleCode;
 }
 
 async function voidWrite(transport:OracleHttpTransport,path:string,body:unknown) {
