@@ -1,0 +1,76 @@
+name: Oracle Marketplace Image Plan
+on:
+  push:
+    branches:
+      - feat/oracle-marketplace-image-plan-20260908
+      - integration/oracle-domain-closure-20260907
+    paths:
+      - scripts/oci-migration/oracle_marketplace_image_plan.py
+      - scripts/oci-migration/runtime-marketplace-image-plan.sql
+      - scripts/oci-migration/oracle_marketplace_edit.py
+      - scripts/oci-migration/oracle_domain_service.py
+      - scripts/oci-migration/auth-api-shadow-gateway.py
+      - scripts/oci-migration/deploy-domain-read-shadow.py
+      - scripts/oci-migration/domain-read-edit-guest-deploy.sh
+      - scripts/oci-migration/test_oracle_marketplace_image_plan.py
+      - scripts/oci-migration/test_marketplace_image_plan_postgres.sql
+      - scripts/test-oracle-marketplace-image-plan-adapter.cjs
+      - lib/backend/adapters/oracle/marketplace-write-adapter.ts
+      - .github/workflows/oracle-marketplace-image-plan.yml
+  pull_request:
+    branches:
+      - integration/oracle-domain-closure-20260907
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify image-plan API and existing domain routes
+        run: |
+          python -m py_compile scripts/oci-migration/oracle_marketplace_image_plan.py scripts/oci-migration/oracle_marketplace_edit.py scripts/oci-migration/oracle_domain_service.py scripts/oci-migration/auth-api-shadow-gateway.py scripts/oci-migration/deploy-domain-read-shadow.py
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_marketplace_image_plan.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_marketplace_edit.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_marketplace_lifecycle.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
+          bash -n scripts/oci-migration/domain-read-edit-guest-deploy.sh
+          bash -n scripts/oci-migration/domain-read-shadow-guest-deploy.sh
+      - name: Verify atomic image updates under PostgreSQL 17 RLS
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          createdb -h 127.0.0.1 -U postgres teswa_image_plan_ci
+          psql -h 127.0.0.1 -U postgres -d teswa_image_plan_ci -v ON_ERROR_STOP=1 -f scripts/oci-migration/test_marketplace_image_plan_postgres.sql
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify Marketplace contracts and types
+        run: |
+          node scripts/test-oracle-marketplace-write-adapter.cjs
+          node scripts/test-oracle-marketplace-lifecycle-adapter.cjs
+          node scripts/test-oracle-marketplace-edit-adapter.cjs
+          node scripts/test-oracle-marketplace-image-plan-adapter.cjs
+          npx tsc --noEmit
