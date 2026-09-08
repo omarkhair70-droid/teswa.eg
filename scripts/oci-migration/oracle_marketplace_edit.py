@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from oracle_domain_read import ApiError, AuthResolver, PgReadRunner, valid_uuid
 from oracle_marketplace_write import PgWriteRunner, json_expr, text
+from oracle_marketplace_image_plan import MarketplaceImagePlanApi
 
 FIELDS = {'itemId','ownerId','title','categoryId','city','area','condition',
           'conditionNotes','description','itemStory','swapReason','goodFor',
@@ -54,18 +55,21 @@ def owned_sql(item_id,user_id,images=False):
 
 
 class MarketplaceEditApi:
-    def __init__(self,auth=None,reads=None,writes=None):
+    def __init__(self,auth=None,reads=None,writes=None,image_plan=None):
         self.auth=auth or AuthResolver()
         self.reads=reads or PgReadRunner()
         self.writes=writes or PgWriteRunner()
+        self.image_plan=image_plan or MarketplaceImagePlanApi(self.auth,self.reads,self.writes)
 
     def handle(self,method,target,authorization,body=None):
         parsed=urlsplit(target)
         if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
             raise ApiError(400,'invalid_path')
-        match=re.fullmatch(r'/v1/marketplace/items/([0-9a-fA-F-]{36})/(edit|edit/images)',parsed.path)
+        match=re.fullmatch(r'/v1/marketplace/items/([0-9a-fA-F-]{36})/(edit|edit/images|edit/images/plan)',parsed.path)
         if not match: raise ApiError(404,'not_found')
         item_id=valid_uuid(match.group(1)); action=match.group(2)
+        if action=='edit/images/plan':
+            return self.image_plan.handle(method,target,authorization,body)
         if method=='GET':
             if body is not None: raise ApiError(400,'invalid_body')
         elif method=='POST' and action=='edit':
