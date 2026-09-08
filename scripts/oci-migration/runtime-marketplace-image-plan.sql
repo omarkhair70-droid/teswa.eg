@@ -13,12 +13,17 @@ DECLARE
   v_rows jsonb;
   v_row jsonb;
   v_existing uuid[] := ARRAY[]::uuid[];
+  v_final uuid[] := ARRAY[]::uuid[];
   v_urls text[] := ARRAY[]::text[];
+  v_keys text[] := ARRAY[]::text[];
   v_removed text[] := ARRAY[]::text[];
   v_image_id uuid;
   v_url text;
+  v_key text;
   v_kind text;
   v_order integer := 0;
+  v_offset integer;
+  v_count integer;
 BEGIN
   IF jsonb_typeof(p_payload) IS DISTINCT FROM 'object' THEN
     RAISE EXCEPTION 'invalid_image_plan' USING ERRCODE='22023';
@@ -28,7 +33,10 @@ BEGIN
     RAISE EXCEPTION 'invalid_image_plan_actor' USING ERRCODE='42501';
   END IF;
   v_rows := p_payload->'orderedRows';
-  IF jsonb_typeof(v_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(v_rows) NOT BETWEEN 1 AND 8 THEN
+  IF jsonb_typeof(v_rows) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'invalid_image_plan' USING ERRCODE='22023';
+  END IF;
+  IF jsonb_array_length(v_rows) NOT BETWEEN 1 AND 8 THEN
     RAISE EXCEPTION 'invalid_image_plan' USING ERRCODE='22023';
   END IF;
   -- Serialize edits to the same listing, including metadata edits and lifecycle changes.
@@ -48,6 +56,11 @@ BEGIN
       RAISE EXCEPTION 'invalid_image_plan' USING ERRCODE='22023';
     END IF;
     v_urls := array_append(v_urls,v_url);
+    v_key := nullif(split_part(v_url,'#teswa-object=item_image:',2),'');
+    IF v_key IS NOT NULL THEN
+      IF v_key=ANY(v_keys) THEN RETURN jsonb_build_object('code','invalid_input'); END IF;
+      v_keys := array_append(v_keys,v_key);
+    END IF;
     IF v_kind='existing' THEN
       IF (SELECT count(*) FROM jsonb_object_keys(v_row)) <> 3
          OR NOT (v_row ?& ARRAY['kind','imageId','imageUrl'])
@@ -58,7 +71,7 @@ BEGIN
       IF v_image_id IS NULL OR v_image_id = ANY(v_existing)
          OR NOT EXISTS(SELECT 1 FROM public.item_images
                        WHERE id=v_image_id AND item_id=v_id AND btrim(image_url)=v_url) THEN
-        RAISE EXCEPTION 'stale_image_plan' USING ERRCODE='22023';
+        RETURN jsonb_build_object('code','invalid_input');
       END IF;
       v_existing := array_append(v_existing,v_image_id);
     ELSIF v_kind='new' THEN
@@ -70,24 +83,45 @@ BEGIN
       RAISE EXCEPTION 'invalid_image_plan' USING ERRCODE='22023';
     END IF;
   END LOOP;
-  -- The caller receives only URLs of rows actually removed. Object cleanup is separate.
-  SELECT coalesce(array_agg(btrim(image_url) ORDER BY id),ARRAY[]::text[]) INTO v_removed
-  FROM public.item_images WHERE item_id=v_id AND NOT (id=ANY(v_existing))
-    AND NOT (btrim(image_url)=ANY(v_urls));
+  -- Collect removed metadata before deleting it. No object is deleted here.
+  SELECT coalesce(array_agg(DISTINCT btrim(image_url) ORDER BY btrim(image_url)),ARRAY[]::text[]) INTO v_removed
+  FROM public.item_images WHERE item_id=v_id AND NOT (id=ANY(v_existing));
   DELETE FROM public.item_images WHERE item_id=v_id AND NOT (id=ANY(v_existing));
-  -- Clear the old primary before choosing the new one; retain existing row IDs.
-  UPDATE public.item_images SET is_primary=false WHERE item_id=v_id;
+  -- Stage all retained rows outside the final order range. This also supports
+  -- an immediate UNIQUE(item_id,sort_order) constraint and a unique primary.
+  SELECT greatest(coalesce(max(sort_order),0),8)+8,count(*)::integer INTO v_offset,v_count
+  FROM public.item_images WHERE item_id=v_id;
+  UPDATE public.item_images m SET is_primary=false,sort_order=v_offset+x.rn
+  FROM (SELECT id,row_number() OVER (ORDER BY id)::integer AS rn FROM public.item_images WHERE item_id=v_id) x
+  WHERE m.id=x.id AND m.item_id=v_id;
   FOR v_row IN SELECT value FROM jsonb_array_elements(v_rows) LOOP
     v_url := v_row->>'imageUrl';
     IF v_row->>'kind'='existing' THEN
-      UPDATE public.item_images SET sort_order=v_order, is_primary=(v_order=0)
-      WHERE id=(v_row->>'imageId')::uuid AND item_id=v_id;
+      v_image_id := (v_row->>'imageId')::uuid;
     ELSE
       INSERT INTO public.item_images(item_id,image_url,is_primary,sort_order)
-      VALUES(v_id,v_url,v_order=0,v_order);
+      VALUES(v_id,v_url,false,v_offset+v_count+v_order+1) RETURNING id INTO v_image_id;
     END IF;
+    v_final := array_append(v_final,v_image_id);
     v_order := v_order+1;
   END LOOP;
+  FOR v_order IN 1..array_length(v_final,1) LOOP
+    UPDATE public.item_images SET sort_order=v_order-1,is_primary=(v_order=1)
+    WHERE id=v_final[v_order] AND item_id=v_id;
+  END LOOP;
+  UPDATE public.items SET updated_at=now() WHERE id=v_id AND owner_id=v_actor;
+  -- Never tell the client to delete an object still referenced by another
+  -- listing of this owner, even if the new URL has a different OCI read token.
+  SELECT coalesce(array_agg(u.url ORDER BY u.url),ARRAY[]::text[]) INTO v_removed
+  FROM unnest(v_removed) AS u(url)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.item_images m JOIN public.items i ON i.id=m.item_id
+    WHERE i.owner_id=v_actor AND (
+      btrim(m.image_url)=u.url OR
+      (nullif(split_part(u.url,'#teswa-object=item_image:',2),'') IS NOT NULL
+       AND split_part(m.image_url,'#teswa-object=item_image:',2)=split_part(u.url,'#teswa-object=item_image:',2))
+    )
+  );
   RETURN jsonb_build_object('code','updated','removedImageUrls',to_jsonb(v_removed));
 END;
 $function$;
