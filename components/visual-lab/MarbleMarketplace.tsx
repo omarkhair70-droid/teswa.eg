@@ -1,0 +1,75 @@
+import { useMemo, useState } from 'react';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ImageSourcePropType } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+/** Visual experiment only. No production API, auth, persistence or navigation. */
+export type MarbleDemoItem = {
+  id: string;
+  title: string;
+  category: string;
+  distance: string;
+  wanted: string;
+  condition: string;
+  image: ImageSourcePropType;
+};
+
+type Props = {
+  artwork: ImageSourcePropType;
+  items: MarbleDemoItem[];
+};
+
+const palette = { canvas: '#F8F6F2', paper: '#FFFEFA', ink: '#29241F', muted: '#776D63', line: '#E5DCD2', soft: '#F0EBE5', gold: '#A18A6E' } as const;
+const categories = ['الكل', 'إلكترونيات', 'ملابس', 'المنزل', 'كتب'];
+type Page = 'home' | 'discover' | 'detail';
+
+function Label({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <Text style={[styles.body, style]}>{children}</Text>;
+}
+
+function IconButton({ icon, label, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.iconButton}><Ionicons name={icon} size={20} color={palette.ink} /></Pressable>;
+}
+
+export function MarbleMarketplace({ artwork, items }: Props) {
+  const [page, setPage] = useState<Page>('home');
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('الكل');
+  const [selected, setSelected] = useState<MarbleDemoItem | null>(null);
+  const [saved, setSaved] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const visibleItems = useMemo(() => items.filter(item => (category === 'الكل' || item.category === category) && `${item.title} ${item.category} ${item.wanted}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [items, category, query]);
+  const openItem = (item: MarbleDemoItem) => { setSelected(item); setPage('detail'); setNotice(null); };
+  const openDiscover = (nextCategory = category) => { setCategory(nextCategory); setPage('discover'); setNotice(null); };
+  const toggleSaved = (id: string) => setSaved(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+  const showNotice = (message: string) => setNotice(message);
+  const renderCard = (item: MarbleDemoItem) => <View key={item.id} style={styles.card}>
+    <Pressable onPress={() => openItem(item)} accessibilityRole="button" accessibilityLabel={`تفاصيل ${item.title}`}><Image source={item.image} style={styles.itemImage} resizeMode="cover" /></Pressable>
+    <Pressable style={styles.saveButton} onPress={() => toggleSaved(item.id)} accessibilityRole="button" accessibilityLabel={saved.includes(item.id) ? 'إزالة من المحفوظات' : 'حفظ المنتج'} accessibilityState={{ selected: saved.includes(item.id) }}><Ionicons name={saved.includes(item.id) ? 'heart' : 'heart-outline'} size={19} color={palette.ink} /></Pressable>
+    <View style={styles.cardBody}><Label style={styles.itemTitle}>{item.title}</Label><Label style={styles.meta}>{item.distance} · {item.category}</Label><View style={styles.cardFooter}><Label style={styles.wanted} numberOfLines={2}>{item.wanted}</Label><IconButton icon="swap-horizontal" label={`افتح ${item.title}`} onPress={() => openItem(item)} /></View></View>
+  </View>;
+  const renderGrid = (list: MarbleDemoItem[]) => <View style={styles.grid}>{list.map(renderCard)}</View>;
+  const renderCategories = () => <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>{categories.map(value => <Pressable key={value} onPress={() => openDiscover(value)} style={[styles.category, category === value && styles.categorySelected]} accessibilityRole="button" accessibilityState={{ selected: category === value }}><Label style={styles.categoryText}>{value}</Label></Pressable>)}</ScrollView>;
+  const renderHeader = () => <View style={styles.header}><View><Label style={styles.brand}>تسوى</Label><Label style={styles.brandRoman}>T E S W A</Label></View><View style={styles.headerActions}><IconButton icon="notifications-outline" label="الإشعارات التجريبية" onPress={() => showNotice('الإشعارات الحقيقية غير متصلة بالمعاينة.')} /><IconButton icon="person-outline" label="الحساب التجريبي" onPress={() => showNotice('البروفايل خارج نطاق هذه التجربة.')} /></View></View>;
+  const renderSearch = () => <View style={styles.search}><Ionicons name="search-outline" size={21} color={palette.muted} /><TextInput value={query} onChangeText={text => { setQuery(text); setPage('discover'); }} placeholder="بتدور على إيه؟" placeholderTextColor={palette.muted} style={styles.searchInput} accessibilityLabel="ابحث عن حاجة للتبادل" textAlign="right" /><IconButton icon="options-outline" label="افتح الفلاتر" onPress={() => openDiscover()} /></View>;
+  return <SafeAreaView style={styles.screen}>
+    <ScrollView key={page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {page === 'detail' && selected ? <>
+        <View style={styles.detailImageWrap}><Image source={selected.image} style={styles.detailImage} resizeMode="cover" /><View style={styles.backButton}><IconButton icon="arrow-forward" label="رجوع" onPress={() => setPage('discover')} /></View></View>
+        <View style={styles.detailBody}><Label style={styles.pageTitle}>{selected.title}</Label><Label style={styles.meta}>{selected.distance} · بني سويف</Label><View style={styles.rule} /><Label style={styles.sectionTitle}>بيدوّر على إيه؟</Label><Label style={styles.description}>{selected.wanted}</Label><View style={styles.rule} /><Label style={styles.sectionTitle}>تفاصيل الحاجة</Label><Label style={styles.description}>الحالة: {selected.condition}</Label><Label style={styles.description}>التصنيف: {selected.category}</Label><View style={styles.rule} /><Label style={styles.description}>بيانات توضيحية للمعاينة فقط. التفاصيل الحقيقية تأتي من تسوى عند ربط التصميم بالـdomain الحالي.</Label><View style={styles.actions}><Pressable style={styles.outlineButton} onPress={() => showNotice('المحادثات الحقيقية غير متصلة بالمعاينة.')}><Label>رسالة</Label></Pressable><Pressable style={styles.primaryButton} onPress={() => showNotice('مفيش عرض حقيقي اتبعت.')}><Label style={styles.primaryText}>قدّم عرض ↔</Label></Pressable></View></View>
+      </> : <>
+        {renderHeader()}
+        {page === 'home' ? <>
+          <ImageBackground source={artwork} style={styles.hero} imageStyle={styles.heroImage} resizeMode="cover"><View style={styles.heroScrim} /><View style={styles.heroCopy}><Label style={styles.eyebrow}>EXCHANGE A BETTER TOMORROW</Label><Label style={styles.heroTitle}>حاجتك لسه\nلها قيمة.</Label><Label style={styles.heroSubtitle}>بدّل ببساطة، واختار اللي يستاهل.</Label></View></ImageBackground>
+          {renderSearch()}<View style={styles.section}><Label style={styles.sectionTitle}>اكتشف اللي يهمك</Label>{renderCategories()}</View><View style={styles.section}><View style={styles.sectionHeader}><Label style={styles.sectionTitle}>حاجات قريبة منك</Label><Pressable onPress={() => openDiscover()}><Label style={styles.seeAll}>عرض الكل ←</Label></Pressable></View>{renderGrid(items.slice(0, 4))}</View><ImageBackground source={artwork} style={styles.banner} imageStyle={styles.bannerImage}><View style={styles.bannerScrim} /><View style={styles.bannerCopy}><Label style={styles.bannerTitle}>كل حاجة ليها\nفرصة تانية.</Label><Pressable style={styles.primaryButton} onPress={() => showNotice('النشر الحقيقي غير متصل بالمعاينة.')}><Label style={styles.primaryText}>اعرض حاجة +</Label></Pressable></View></ImageBackground>
+        </> : <><View style={styles.pageHeading}><Label style={styles.pageTitle}>اكتشف فرصتك\nالجاية.</Label><Label style={styles.meta}>ناس وحاجات قريبة منك.</Label></View>{renderSearch()}{renderCategories()}<View style={styles.section}><Label style={styles.sectionTitle}>حاجات للتبادل</Label>{visibleItems.length ? renderGrid(visibleItems) : <View style={styles.empty}><Label style={styles.sectionTitle}>مفيش نتائج دلوقتي</Label><Label style={styles.meta}>جرّب كلمة أو تصنيف تاني.</Label><Pressable onPress={() => { setQuery(''); setCategory('الكل'); }} style={styles.outlineButton}><Label>امسح الفلاتر</Label></Pressable></View>}</View></>}
+      </>}
+    </ScrollView>
+    {notice ? <Pressable style={styles.notice} onPress={() => setNotice(null)} accessibilityRole="button" accessibilityLabel="إغلاق التنبيه"><Label style={styles.noticeText}>{notice}</Label></Pressable> : null}
+    <View style={styles.bottom}><Pressable onPress={() => setPage('home')} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: page === 'home' }}><Ionicons name={page === 'home' ? 'home' : 'home-outline'} size={22} color={palette.ink} /><Label style={styles.tabText}>الرئيسية</Label></Pressable><Pressable onPress={() => openDiscover()} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: page === 'discover' }}><Ionicons name="compass-outline" size={22} color={palette.ink} /><Label style={styles.tabText}>اكتشف</Label></Pressable><Pressable onPress={() => showNotice('النشر الحقيقي غير متصل بالمعاينة.')} style={styles.tab} accessibilityRole="button"><Ionicons name="add-circle-outline" size={27} color={palette.ink} /><Label style={styles.tabText}>أضف</Label></Pressable><Pressable onPress={() => showNotice('الرسائل الحقيقية غير متصلة بالمعاينة.')} style={styles.tab} accessibilityRole="button"><Ionicons name="chatbubble-outline" size={22} color={palette.ink} /><Label style={styles.tabText}>الرسائل</Label></Pressable><Pressable onPress={() => showNotice('البروفايل خارج نطاق التجربة.')} style={styles.tab} accessibilityRole="button"><Ionicons name="person-outline" size={22} color={palette.ink} /><Label style={styles.tabText}>حسابي</Label></Pressable></View>
+  </SafeAreaView>;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: palette.canvas }, content: { paddingBottom: 28 }, body: { color: palette.ink, fontSize: 14, lineHeight: 23, textAlign: 'right', writingDirection: 'rtl' }, header: { paddingHorizontal: 22, paddingVertical: 15, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, brand: { fontSize: 27, fontWeight: '700', lineHeight: 34 }, brandRoman: { fontFamily: 'serif', fontSize: 9, letterSpacing: 3, textAlign: 'center' }, headerActions: { flexDirection: 'row-reverse', gap: 8 }, iconButton: { minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line }, hero: { height: 315, borderRadius: 26, overflow: 'hidden', marginHorizontal: 14, marginBottom: 21, justifyContent: 'flex-end' }, heroImage: { borderRadius: 26 }, heroScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(248,246,242,0.30)' }, heroCopy: { padding: 23, backgroundColor: 'rgba(248,246,242,0.78)' }, eyebrow: { fontFamily: 'serif', fontSize: 10, letterSpacing: 1.5, color: palette.gold }, heroTitle: { fontSize: 28, lineHeight: 40, marginTop: 5, fontWeight: '500' }, heroSubtitle: { fontSize: 13, color: palette.muted }, search: { flexDirection: 'row-reverse', alignItems: 'center', marginHorizontal: 15, marginBottom: 20, borderRadius: 18, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, paddingHorizontal: 13, minHeight: 54, gap: 10 }, searchInput: { flex: 1, minWidth: 0, color: palette.ink, fontSize: 14, paddingVertical: 8 }, section: { marginHorizontal: 19, marginBottom: 24, gap: 13 }, sectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, sectionTitle: { fontSize: 21, lineHeight: 31, fontWeight: '500' }, seeAll: { color: palette.muted, fontSize: 12 }, categories: { flexDirection: 'row-reverse', gap: 9, paddingBottom: 4 }, category: { borderRadius: 18, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, minHeight: 48, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center' }, categorySelected: { backgroundColor: '#EAE2D7', borderColor: '#BCA78E' }, categoryText: { fontSize: 12 }, grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 13 }, card: { width: '48%', backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 19, overflow: 'hidden' }, itemImage: { width: '100%', height: 143, backgroundColor: palette.soft }, saveButton: { position: 'absolute', left: 8, top: 8, width: 36, height: 36, borderRadius: 18, backgroundColor: palette.paper, alignItems: 'center', justifyContent: 'center' }, cardBody: { padding: 11, gap: 4 }, itemTitle: { fontSize: 13, fontWeight: '700' }, meta: { color: palette.muted, fontSize: 12 }, cardFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: 4 }, wanted: { flex: 1, fontSize: 11, color: palette.muted, lineHeight: 17 }, banner: { marginHorizontal: 15, height: 148, borderRadius: 22, overflow: 'hidden', justifyContent: 'center' }, bannerImage: { borderRadius: 22 }, bannerScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(248,246,242,0.70)' }, bannerCopy: { padding: 24, alignItems: 'flex-start', gap: 8 }, bannerTitle: { fontSize: 21, lineHeight: 30 }, primaryButton: { minHeight: 44, borderRadius: 24, paddingHorizontal: 18, backgroundColor: '#302B26', alignItems: 'center', justifyContent: 'center' }, primaryText: { color: '#FFFFFF', fontSize: 13 }, outlineButton: { minHeight: 44, borderRadius: 24, paddingHorizontal: 18, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, alignItems: 'center', justifyContent: 'center' }, pageHeading: { paddingHorizontal: 22, paddingBottom: 18 }, pageTitle: { fontSize: 29, lineHeight: 42 }, empty: { padding: 26, gap: 12, alignItems: 'center' }, detailImageWrap: { height: 295 }, detailImage: { width: '100%', height: '100%' }, backButton: { position: 'absolute', right: 17, top: 15 }, detailBody: { padding: 22, gap: 8 }, description: { color: palette.muted, lineHeight: 24 }, rule: { height: 1, backgroundColor: palette.line, marginVertical: 16 }, actions: { flexDirection: 'row-reverse', gap: 9, marginTop: 14 }, bottom: { height: 74, backgroundColor: palette.paper, borderTopWidth: 1, borderTopColor: palette.line, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-around' }, tab: { flex: 1, minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 4 }, tabText: { fontSize: 10 }, notice: { marginHorizontal: 15, marginVertical: 8, padding: 12, backgroundColor: '#302B26', borderRadius: 12 }, noticeText: { color: '#FFFFFF', fontSize: 12 }
+});
