@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
                     status, body = self.server.exchange_read.handle(self.command, self.path, values[0])
                 else:
                     status, body = self.server.exchange.handle(self.command, self.path, values[0], body)
-            elif urlsplit(self.path).path.endswith(('/edit', '/edit/images')) and self.path.startswith('/v1/marketplace/items/'):
+            elif urlsplit(self.path).path.endswith(('/edit', '/edit/images', '/edit/images/plan')) and self.path.startswith('/v1/marketplace/items/'):
                 status, body = self.server.marketplace_edit.handle(self.command, self.path, values[0], body)
             elif urlsplit(self.path).path.endswith(('/archive', '/reactivate', '/delete-archived', '/images/urls')) and self.path.startswith('/v1/marketplace/items/'):
                 status, body = self.server.marketplace_lifecycle.handle(self.command, self.path, values[0], body)

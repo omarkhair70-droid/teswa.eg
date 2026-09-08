@@ -64,7 +64,7 @@ DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
     re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
-    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/(?:publish-failed|video|wanted-tags|images/delete|archive|reactivate|delete-archived|edit)$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/(?:publish-failed|video|wanted-tags|images/delete|archive|reactivate|delete-archived|edit|edit/images/plan)$'),
 )
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.
