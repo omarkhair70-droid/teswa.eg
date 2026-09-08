@@ -32,7 +32,7 @@ def main():
     matches=cli('search','resource','structured-search','--query-text',"query instance resources where displayName = 'teswa-core-01'")['data']['items']
     assert len(matches)==1; info=cli('compute','instance','get','--instance-id',matches[0]['identifier'])['data']
     assert info['lifecycle-state']=='RUNNING'; compartment=info['compartment-id']
-    names=('oracle_domain_read.py','oracle_marketplace_write.py','oracle_exchange.py','oracle_exchange_read.py',
+    names=('oracle_domain_read.py','oracle_marketplace_write.py','oracle_marketplace_lifecycle.py','oracle_exchange.py','oracle_exchange_read.py',
            'oracle_exchange_read_extra.py','oracle_media.py','oracle_domain_service.py','auth-api-shadow-gateway.py',
            'oracle_profiles.py','oracle_notifications.py','oracle_reviews.py','runtime-domain-api-grants.sql','domain-read-shadow-guest-deploy.sh')
     names=names+('domain_exchange_e2e.py',)
