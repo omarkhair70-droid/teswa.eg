@@ -28,6 +28,7 @@ DOMAIN_GET = (
 )
 DOMAIN_MUTATIONS = {
     ('POST', '/v1/marketplace/items'),
+    ('POST', '/v1/offers'),
     ('POST', '/v1/media/uploads'),
     ('POST', '/v1/media/uploads/complete'),
     ('POST', '/v1/media/signed-url'),
