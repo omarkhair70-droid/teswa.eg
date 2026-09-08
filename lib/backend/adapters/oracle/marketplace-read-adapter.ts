@@ -4,13 +4,20 @@ import type {
   MarketplaceOwnerListingRecord,
   MarketplaceReadContract,
   MarketplaceReadPage,
+  ActiveMarketplaceCategory,
+  ExchangeItemSummaryRecord,
+  ItemLikeSummary,
+  MyListingRecord,
 } from '@/lib/backend/contracts/marketplace';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
-export type OracleMarketplaceReadAdapter = Pick<
-  MarketplaceReadContract,
-  'listFeed' | 'getFeedItem' | 'getDetail' | 'listActiveByOwner'
->;
+export type OracleMarketplaceReadAdapter = Pick<MarketplaceReadContract,
+  'listFeed' | 'getFeedItem' | 'getDetail' | 'listActiveByOwner'> & {
+  getLikeSummaries(itemIds:string[],viewerId?:string|null):Promise<Map<string,ItemLikeSummary>>;
+  listMine(userId:string):Promise<MyListingRecord[]>;
+  listActiveCategories():Promise<ActiveMarketplaceCategory[]>;
+  getExchangeItemSummaries(itemIds:string[]):Promise<ExchangeItemSummaryRecord[]>;
+};
 
 function configuredFailure(): never {
   throw new Error('Oracle marketplace request failed.');
@@ -74,6 +81,30 @@ export function createOracleMarketplaceReadAdapter(
         path: `/v1/marketplace/owners/${normalized}/active`,
         query: { limit },
       });
+      if (!result.ok || !Array.isArray(result.data.items)) return configuredFailure();
+      return result.data.items;
+    },
+    async getLikeSummaries(itemIds) {
+      const ids=[...new Set(itemIds.map(id=>id.trim()).filter(Boolean))];
+      if (!ids.length) return new Map();
+      const result=await transport.request<{items:Array<{itemId:string;likeCount:number;likedByMe:boolean}>}>({path:'/v1/marketplace/likes',query:{ids:ids.join(',')}});
+      if (!result.ok || !Array.isArray(result.data.items)) return configuredFailure();
+      return new Map(result.data.items.map(row=>[row.itemId,{likeCount:row.likeCount,likedByMe:row.likedByMe}]));
+    },
+    async listMine(_userId) {
+      const result=await transport.request<{items:MyListingRecord[]}>({path:'/v1/marketplace/mine'});
+      if (!result.ok || !Array.isArray(result.data.items)) return configuredFailure();
+      return result.data.items;
+    },
+    async listActiveCategories() {
+      const result=await transport.request<{items:ActiveMarketplaceCategory[]}>({path:'/v1/marketplace/categories'});
+      if (!result.ok || !Array.isArray(result.data.items)) return configuredFailure();
+      return result.data.items;
+    },
+    async getExchangeItemSummaries(itemIds) {
+      const ids=[...new Set(itemIds.map(id=>id.trim()).filter(Boolean))];
+      if (!ids.length) return [];
+      const result=await transport.request<{items:ExchangeItemSummaryRecord[]}>({path:'/v1/marketplace/exchange-items',query:{ids:ids.join(',')}});
       if (!result.ok || !Array.isArray(result.data.items)) return configuredFailure();
       return result.data.items;
     },

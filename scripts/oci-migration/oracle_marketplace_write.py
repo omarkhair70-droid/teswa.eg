@@ -10,7 +10,7 @@ import re
 import subprocess
 from urllib.parse import urlsplit
 
-from oracle_domain_read import ApiError, AuthResolver, valid_uuid
+from oracle_domain_read import ApiError, AuthResolver, sql_text, valid_uuid
 
 
 def text(value, name, maximum, required=False):
@@ -139,9 +139,60 @@ class PgWriteRunner:
 class MarketplaceWriteApi:
     def __init__(self,auth=None,db=None): self.auth=auth or AuthResolver(); self.db=db or PgWriteRunner()
     def handle(self,method,target,authorization,body):
-        if method!='POST' or target!='/v1/marketplace/items': raise ApiError(404,'not_found')
-        user_id=self.auth.resolve(authorization); value=publish_input(body,user_id)
-        result=self.db.query(user_id,publish_sql(value))
-        if result.get('itemId')!=value['itemId'] or result.get('imagesInserted')!=len(value['images']):
-            raise ApiError(503,'domain_write_failed')
-        return 201, {'itemId':value['itemId']}
+        if method!='POST' or not isinstance(body,dict): raise ApiError(404,'not_found')
+        parsed=urlsplit(target)
+        if parsed.query or parsed.fragment or parsed.netloc or parsed.scheme: raise ApiError(400,'invalid_path')
+        user_id=self.auth.resolve(authorization)
+        if parsed.path=='/v1/marketplace/items':
+            value=publish_input(body,user_id); result=self.db.query(user_id,publish_sql(value))
+            if result.get('itemId')!=value['itemId'] or result.get('imagesInserted')!=len(value['images']):
+                raise ApiError(503,'domain_write_failed')
+            return 201, {'itemId':value['itemId']}
+        if parsed.path=='/v1/marketplace/likes':
+            if set(body)!={'itemId','userId','liked'} or valid_uuid(body['userId'])!=user_id or not isinstance(body['liked'],bool):
+                raise ApiError(403,'actor_mismatch')
+            item_id=valid_uuid(body['itemId'])
+            if body['liked']:
+                statement="""INSERT INTO public.item_likes(item_id,user_id) VALUES('%s'::uuid,'%s'::uuid)
+                  ON CONFLICT DO NOTHING; SELECT json_build_object('liked',true)""" % (item_id,user_id)
+            else:
+                statement="""DELETE FROM public.item_likes WHERE item_id='%s'::uuid AND user_id='%s'::uuid;
+                  SELECT json_build_object('liked',false)""" % (item_id,user_id)
+            return 200,self.db.query(user_id,statement)
+        match=re.fullmatch(r'/v1/marketplace/items/([0-9a-fA-F-]{36})/(publish-failed|video|wanted-tags|images/delete)',parsed.path)
+        if not match: raise ApiError(404,'not_found')
+        item_id=valid_uuid(match.group(1)); action=match.group(2)
+        if action=='publish-failed':
+            if set(body)!={'ownerId'} or valid_uuid(body['ownerId'])!=user_id: raise ApiError(403,'owner_mismatch')
+            statement="""WITH x AS (UPDATE public.items SET status='archived' WHERE id='%s'::uuid
+              AND owner_id='%s'::uuid RETURNING 1) SELECT json_build_object('ok',EXISTS(SELECT 1 FROM x))""" % (item_id,user_id)
+        elif action=='video':
+            if set(body)!={'itemId','videoStoragePath','durationMs','width','height'} or valid_uuid(body['itemId'])!=item_id:
+                raise ApiError(400,'invalid_video')
+            path=body['videoStoragePath']; prefix='%s/%s/'%(user_id,item_id)
+            if not isinstance(path,str) or not path.startswith(prefix) or len(path)>1024 or '/' in path[len(prefix):]: raise ApiError(403,'video_not_owned')
+            def number(value):
+                if value is None:return 'NULL'
+                if not isinstance(value,int) or isinstance(value,bool) or value<1:return 'NULL'
+                return str(value)
+            statement="""WITH x AS (INSERT INTO public.item_videos(item_id,video_storage_path,duration_ms,width,height)
+              VALUES('%s'::uuid,%s,%s,%s,%s) RETURNING 1) SELECT json_build_object('ok',EXISTS(SELECT 1 FROM x))""" % (
+                item_id,sql_text(path),number(body['durationMs']),number(body['width']),number(body['height']))
+        elif action=='wanted-tags':
+            if set(body)!={'tags'} or not isinstance(body['tags'],list) or len(body['tags'])>12: raise ApiError(400,'invalid_tags')
+            tags=[]
+            for tag in body['tags']:
+                value=text(tag,'tag',50,True)
+                if value not in tags: tags.append(value)
+            if not tags:return 200,{'ok':True}
+            values=','.join("('%s'::uuid,%s)"%(item_id,sql_text(tag)) for tag in tags)
+            statement="""WITH x AS (INSERT INTO public.item_wanted_tags(item_id,tag) VALUES %s
+              ON CONFLICT DO NOTHING RETURNING 1) SELECT json_build_object('ok',true,'inserted',(SELECT count(*) FROM x))"""%values
+        else:
+            if body: raise ApiError(400,'invalid_delete')
+            statement="""WITH x AS (DELETE FROM public.item_images m WHERE m.item_id='%s'::uuid
+              AND EXISTS(SELECT 1 FROM public.items i WHERE i.id=m.item_id AND i.owner_id='%s'::uuid) RETURNING 1)
+              SELECT json_build_object('ok',true,'deleted',(SELECT count(*) FROM x))"""%(item_id,user_id)
+        result=self.db.query(user_id,statement)
+        if result.get('ok') is not True: raise ApiError(409,'domain_write_rejected')
+        return 200,{'ok':True}

@@ -58,6 +58,19 @@ class DomainReadTests(unittest.TestCase):
             'GET','/v1/marketplace/owners/'+UID+'/active?limit=24','Bearer valid')
         self.assertEqual((status,body),(200,{'items':[]}))
         self.assertIn('LIMIT 24',db.calls[0][1])
+    def test_categories_mine_likes_and_exchange_use_rls_queries(self):
+        api = domain.MarketplaceReadApi(Auth(), DB([]))
+        for target,needle in (
+            ('/v1/marketplace/categories','public.categories'),
+            ('/v1/marketplace/mine','openIncomingOffersCount'),
+            ('/v1/marketplace/likes?ids='+IID,'public.item_likes'),
+            ('/v1/marketplace/exchange-items?ids='+IID,'ownerDisplayName'),
+        ):
+            db=DB([]); status,body=domain.MarketplaceReadApi(Auth(),db).handle('GET',target,'Bearer valid')
+            self.assertEqual((status,body),(200,{'items':[]})); self.assertIn(needle,db.calls[0][1])
+    def test_batch_ids_are_uuid_validated_and_bounded(self):
+        with self.assertRaises(domain.ApiError):
+            domain.MarketplaceReadApi(Auth(),DB([])).handle('GET','/v1/marketplace/likes?ids=bad','Bearer valid')
     def test_query_is_encoded_not_interpolated(self):
         value="x'); DROP TABLE public.items; --"
         sql = domain.feed_sql(20,0,{'query':value})

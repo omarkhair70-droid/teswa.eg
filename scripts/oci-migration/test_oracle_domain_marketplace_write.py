@@ -12,8 +12,8 @@ class Auth:
         if value!='Bearer valid': raise write.ApiError(401,'invalid_session')
         return UID
 class DB:
-    def __init__(self): self.calls=[]
-    def query(self,user,sql): self.calls.append((user,sql)); return {'itemId':IID,'imagesInserted':1}
+    def __init__(self,result=None): self.calls=[]; self.result=result or {'itemId':IID,'imagesInserted':1}
+    def query(self,user,sql): self.calls.append((user,sql)); return self.result
 
 def body():
     return {'itemId':IID,'ownerId':UID,'title':'كتاب','categoryId':CID,'description':None,
@@ -56,4 +56,17 @@ class WriteTests(unittest.TestCase):
         sql=run.call_args.kwargs['input']; self.assertIn('BEGIN;',sql); self.assertNotIn('READ ONLY',sql)
         self.assertIn('SET LOCAL ROLE teswa_app_authenticated',sql); self.assertIn("set_config('teswa.user_id'",sql)
         self.assertEqual(out['imagesInserted'],1)
+    def test_publish_completion_writes_are_owner_bound(self):
+        api=write.MarketplaceWriteApi(Auth(),DB({'ok':True}))
+        for path,payload,needle in (
+          (f'/v1/marketplace/items/{IID}/publish-failed',{'ownerId':UID},'UPDATE public.items'),
+          (f'/v1/marketplace/items/{IID}/video',{'itemId':IID,'videoStoragePath':f'{UID}/{IID}/video.mp4','durationMs':1000,'width':720,'height':1280},'item_videos'),
+          (f'/v1/marketplace/items/{IID}/wanted-tags',{'tags':['book']},'item_wanted_tags'),
+          (f'/v1/marketplace/items/{IID}/images/delete',{},'DELETE FROM public.item_images'),
+        ):
+          db=DB({'ok':True}); status,_=write.MarketplaceWriteApi(Auth(),db).handle('POST',path,'Bearer valid',payload)
+          self.assertEqual(status,200); self.assertIn(needle,db.calls[0][1])
+    def test_like_actor_is_identity_bound(self):
+        db=DB({'liked':True}); out=write.MarketplaceWriteApi(Auth(),db).handle('POST','/v1/marketplace/likes','Bearer valid',{'itemId':IID,'userId':UID,'liked':True})
+        self.assertEqual(out,(200,{'liked':True})); self.assertIn('item_likes',db.calls[0][1])
 if __name__=='__main__': unittest.main()

@@ -25,6 +25,8 @@ DOMAIN_GET = (
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
     re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/marketplace/(?:categories|mine)$'),
+    re.compile(r'^/v1/marketplace/(?:likes|exchange-items)\?[^#]+$'),
     re.compile(r'^/v1/profiles/(?:me|privacy|[0-9a-fA-F-]{36})$'),
     re.compile(r'^/v1/people(?:\?[^#]*)?$'),
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow-state|block-state|trust|badges)$'),
@@ -35,6 +37,7 @@ DOMAIN_GET = (
 )
 DOMAIN_MUTATIONS = {
     ('POST', '/v1/marketplace/items'),
+    ('POST', '/v1/marketplace/likes'),
     ('POST', '/v1/offers'),
     ('POST', '/v1/media/uploads'),
     ('POST', '/v1/media/uploads/complete'),
@@ -57,6 +60,7 @@ DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
     re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/(?:publish-failed|video|wanted-tags|images/delete)$'),
 )
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.

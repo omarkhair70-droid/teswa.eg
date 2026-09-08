@@ -3,9 +3,10 @@ BEGIN;
 GRANT SELECT ON public.categories,public.profiles,public.items,public.item_images,public.item_videos,
   public.item_wanted_tags,public.offers,public.offer_events,public.swap_deals,public.deal_messages,
   public.deal_message_reads,public.deal_confirmations,public.reviews,public.user_blocks,
-  public.notifications TO teswa_app_authenticated;
+  public.notifications,public.item_likes TO teswa_app_authenticated;
 GRANT INSERT,UPDATE ON public.items,public.profiles TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.user_blocks TO teswa_app_authenticated;
+GRANT INSERT,DELETE ON public.item_likes TO teswa_app_authenticated;
 GRANT UPDATE ON public.notifications TO teswa_app_authenticated;
 GRANT INSERT,UPDATE,DELETE ON public.item_images,public.item_videos,public.item_wanted_tags TO teswa_app_authenticated;
 GRANT INSERT ON public.offers,public.offer_events,public.deal_messages,public.deal_confirmations TO teswa_app_authenticated;

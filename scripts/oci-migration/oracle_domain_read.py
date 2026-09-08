@@ -37,6 +37,12 @@ def integer(value, default, maximum):
         raise ApiError(400, 'invalid_pagination')
     return number
 
+def uuid_list(value, maximum=50):
+    if not isinstance(value,str): raise ApiError(400,'invalid_ids')
+    values=value.split(',')
+    if not 1<=len(values)<=maximum: raise ApiError(400,'invalid_ids')
+    return list(dict.fromkeys(valid_uuid(item) for item in values))
+
 def sql_text(value):
     """Encode a value as a SQL expression, never an SQL identifier."""
     if not isinstance(value, str) or len(value) > 1024:
@@ -174,6 +180,39 @@ class MarketplaceReadApi:
         if parsed.fragment or parsed.netloc or parsed.scheme:
             raise ApiError(400, 'invalid_path')
         user_id = self.auth.resolve(authorization)
+        if parsed.path == '/v1/marketplace/categories':
+            if parsed.query: raise ApiError(400,'invalid_query')
+            sql="""SELECT coalesce(json_agg(json_build_object('id',c.id,'nameAr',c.name_ar)
+              ORDER BY c.sort_order NULLS LAST,c.name_ar),'[]'::json) FROM public.categories c WHERE c.is_active IS TRUE"""
+            return 200,{'items':self.db.query(user_id,sql)}
+        if parsed.path in ('/v1/marketplace/exchange-items','/v1/marketplace/likes'):
+            args=parse_qs(parsed.query,keep_blank_values=True)
+            if set(args)!={'ids'} or len(args['ids'])!=1: raise ApiError(400,'invalid_query')
+            ids=uuid_list(args['ids'][0]); values=','.join("'%s'::uuid"%item for item in ids)
+            if parsed.path.endswith('/likes'):
+                sql="""SELECT coalesce(json_agg(json_build_object('itemId',x.item_id,'likeCount',x.like_count,
+                  'likedByMe',x.liked_by_me)),'[]'::json) FROM (SELECT l.item_id,count(*) AS like_count,
+                  bool_or(l.user_id='%s'::uuid) AS liked_by_me FROM public.item_likes l
+                  WHERE l.item_id IN (%s) GROUP BY l.item_id) x""" % (user_id,values)
+            else:
+                sql="""SELECT coalesce(json_agg(json_build_object('id',i.id,'title',i.title,
+                  'imageUrl',(SELECT m.image_url FROM public.item_images m WHERE m.item_id=i.id ORDER BY m.is_primary DESC,m.sort_order NULLS LAST,m.id LIMIT 1),
+                  'category',c.name_ar,'condition',i.condition,'location',i.city,
+                  'ownerDisplayName',p.display_name,'status',i.status) ORDER BY array_position(ARRAY[%s],i.id)),'[]'::json)
+                  FROM public.items i LEFT JOIN public.categories c ON c.id=i.category_id
+                  LEFT JOIN public.profiles p ON p.id=i.owner_id WHERE i.id IN (%s)
+                  AND i.status::text IN ('active','reserved','swapped')""" % (values,values)
+            return 200,{'items':self.db.query(user_id,sql)}
+        if parsed.path == '/v1/marketplace/mine':
+            if parsed.query: raise ApiError(400,'invalid_query')
+            sql="""SELECT coalesce(json_agg(json_build_object('id',i.id,'title',i.title,
+              'imageUrl',(SELECT m.image_url FROM public.item_images m WHERE m.item_id=i.id ORDER BY m.is_primary DESC,m.sort_order NULLS LAST,m.id LIMIT 1),
+              'category',c.name_ar,'condition',i.condition,'city',i.city,'area',i.area,'status',i.status,
+              'createdAt',i.created_at,'openIncomingOffersCount',(SELECT count(*) FROM public.offers o
+                WHERE o.requested_item_id=i.id AND o.receiver_id='%s'::uuid AND o.status::text IN ('pending','thinking')))
+              ORDER BY i.created_at DESC),'[]'::json) FROM public.items i LEFT JOIN public.categories c ON c.id=i.category_id
+              WHERE i.owner_id='%s'::uuid AND i.status::text IN ('active','reserved','swapped','archived')""" % (user_id,user_id)
+            return 200,{'items':self.db.query(user_id,sql)}
         if parsed.path == '/v1/marketplace/feed':
             args = parse_qs(parsed.query, keep_blank_values=True)
             if any(len(v) != 1 for v in args.values()) or set(args)-{'limit','offset','category','condition','city','query'}:
