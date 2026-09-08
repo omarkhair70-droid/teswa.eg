@@ -25,6 +25,11 @@ DOMAIN_GET = (
     re.compile(r'^/v1/contextual/(?:unread|conversations(?:\?[^#]+)?)$'),
     re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/owner$'),
     re.compile(r'^/v1/contextual/conversations/[0-9a-fA-F-]{36}(?:/(?:other|messages/[0-9a-fA-F-]{36}))?$'),
+    re.compile(r'^/v1/stories/(?:home|video-drops)(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/stories/(?:likes|likes/counts|views/counts)\?[^#]+$'),
+    re.compile(r'^/v1/stories/users/[0-9a-fA-F-]{36}/active$'),
+    re.compile(r'^/v1/stories/authors/[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/stories/[0-9a-fA-F-]{36}/viewers\?[^#]+$'),
     re.compile(r'^/v1/marketplace/feed(?:\?[^#]*)?$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
@@ -43,6 +48,7 @@ DOMAIN_GET = (
     re.compile(r'^/v1/reviews/deals/[0-9a-fA-F-]{36}$'),
 )
 DOMAIN_MUTATIONS = {
+    ('POST', '/v1/stories'),
     ('POST', '/v1/marketplace/items'),
     ('POST', '/v1/marketplace/likes'),
     ('POST', '/v1/offers'),
@@ -71,6 +77,7 @@ DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/contextual/(?:notifications|read)$'),
     re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/(?:reply|ensure)$'),
     re.compile(r'^/v1/contextual/conversations/[0-9a-fA-F-]{36}/(?:messages|voice)$'),
+    re.compile(r'^/v1/stories/[0-9a-fA-F-]{36}/(?:delete|like|view)$'),
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
     re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
