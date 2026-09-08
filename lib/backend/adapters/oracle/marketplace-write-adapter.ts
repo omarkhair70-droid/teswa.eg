@@ -1,7 +1,7 @@
 import type {
   MarketplaceCoreContract, PublishBaseFailure, ListingLifecycleCode,
   EditableListingRecord, EditableListingImagesContextRecord,
-  ListingCoreUpdateFailure,
+  ListingCoreUpdateFailure, ListingImagePlanFailure,
 } from '@/lib/backend/contracts/marketplace';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
@@ -9,12 +9,13 @@ export type OracleMarketplaceWriteAdapter = Pick<MarketplaceCoreContract,
   'createPublishedListingBase'|'setLiked'|'markPublishFailed'|'attachPublishedVideo'|
   'addPublishedWantedTags'|'deletePublishedImageMetadata'|'archiveOwned'|'reactivateOwned'|
   'deleteOwnedArchived'|'getImageUrls'|'getEditableListing'|'updateListingCore'|
-  'getEditableListingImagesContext'>;
+  'getEditableListingImagesContext'|'applyListingImagePlan'>;
 
 const LIFECYCLE_FAILURES = new Set<string>([
   'not_found_or_unauthorized', 'not_active', 'not_archived', 'has_open_offers', 'has_deal_history',
 ]);
 const EDIT_FAILURES = new Set<ListingCoreUpdateFailure>(['not_found_or_unauthorized','not_editable']);
+const IMAGE_FAILURES = new Set<ListingImagePlanFailure>(['not_found_or_unauthorized','not_editable','invalid_input']);
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -112,6 +113,24 @@ export function createOracleMarketplaceWriteAdapter(transport: OracleHttpTranspo
         return {ok:false,reason:code as ListingCoreUpdateFailure,message:'Listing cannot be edited.'};
       }
       return {ok:false,reason:'unknown',message:'Invalid Oracle listing update response.'};
+    },
+    async applyListingImagePlan(input) {
+      const result=await transport.request<unknown>({method:'POST',path:`/v1/marketplace/items/${input.itemId}/edit/images/plan`,body:input});
+      if (!result.ok) {
+        const reason:ListingImagePlanFailure = result.status===400 || result.status===404 ? 'invalid_input' : 'unknown';
+        return {ok:false,reason,message:'Oracle image update failed.'};
+      }
+      const data=result.data;
+      if (record(data) && data.ok===true && data.code==='updated'
+        && Array.isArray(data.removedImageUrls)
+        && data.removedImageUrls.every((url:unknown)=>typeof url==='string')) {
+        return {ok:true,data:{removedImageUrls:data.removedImageUrls as string[]}};
+      }
+      if (record(data) && data.ok===false && typeof data.code==='string'
+        && IMAGE_FAILURES.has(data.code as ListingImagePlanFailure)) {
+        return {ok:false,reason:data.code as ListingImagePlanFailure,message:'Listing image plan was rejected.'};
+      }
+      return {ok:false,reason:'unknown',message:'Invalid Oracle image update response.'};
     },
   };
 }
