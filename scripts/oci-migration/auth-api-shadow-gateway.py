@@ -26,6 +26,10 @@ DOMAIN_GET = (
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
     re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
     re.compile(r'^/v1/profiles/(?:me|privacy|[0-9a-fA-F-]{36})$'),
+    re.compile(r'^/v1/people(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow-state|block-state|trust|badges)$'),
+    re.compile(r'^/v1/profiles/(?:me/(?:trust|badges)|blocked)$'),
+    re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/connections(?:\?[^#]*)?$'),
 )
 DOMAIN_MUTATIONS = {
     ('POST', '/v1/marketplace/items'),
@@ -38,10 +42,12 @@ DOMAIN_MUTATIONS = {
     ('POST', '/v1/profiles/privacy'),
     ('POST', '/v1/profiles/image'),
     ('POST', '/v1/profiles/update'),
+    ('POST', '/v1/profiles/badges/refresh'),
 }
 DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
     re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
+    re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
 )
 # The current Auth service discards confirmation delivery tokens. Do not let the
 # ingress claim a signup/resend succeeded until real delivery is implemented.

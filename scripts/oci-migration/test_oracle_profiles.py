@@ -46,4 +46,28 @@ class ProfileTests(unittest.TestCase):
         with self.assertRaises(profiles.ApiError):
             api.handle('POST','/v1/profiles/privacy','x',{'userId':UID,'value':'public'})
 
+    def test_social_reads_call_existing_rls_functions(self):
+        reads=DB({'followingByMe':False,'followsMe':True,'mutual':False,'followerCount':1,'followingCount':0})
+        api=profiles.ProfilesApi(Auth(),reads,DB({}))
+        result=api.handle('GET','/v1/profiles/'+OTHER+'/follow-state','x')[1]
+        self.assertEqual(result['followerCount'],1)
+        self.assertIn('public.get_user_follow_state',reads.calls[-1][1])
+        api.handle('GET','/v1/profiles/'+OTHER+'/block-state','x')
+        self.assertIn('public.get_user_block_state',reads.calls[-1][1])
+
+    def test_social_actions_bind_authenticated_actor(self):
+        writes=DB({'ok':True,'code':'followed','message':'Followed.'})
+        api=profiles.ProfilesApi(Auth(),DB({}),writes)
+        result=api.handle('POST','/v1/profiles/'+OTHER+'/follow','x',{'userId':UID})[1]
+        self.assertTrue(result['ok']); self.assertIn('public.follow_user',writes.calls[-1][1])
+        with self.assertRaises(profiles.ApiError) as error:
+            api.handle('POST','/v1/profiles/'+OTHER+'/block','x',{'userId':OTHER})
+        self.assertEqual(error.exception.status,403)
+
+    def test_people_query_is_encoded_and_paginated(self):
+        reads=DB({'entries':[{'id':OTHER}],'hasMore':False})
+        result=profiles.ProfilesApi(Auth(),reads,DB({})).handle('GET','/v1/people?query=omar&page=1&pageSize=10','x')[1]
+        self.assertEqual(result,{'entries':[{'id':OTHER}],'hasMore':False})
+        self.assertIn("decode('",reads.calls[-1][1]); self.assertIn('LIMIT 11 OFFSET 0',reads.calls[-1][1])
+
 if __name__=='__main__': unittest.main()

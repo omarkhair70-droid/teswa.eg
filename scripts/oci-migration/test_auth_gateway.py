@@ -113,6 +113,27 @@ class GatewayTests(unittest.TestCase):
             server.shutdown(); server.server_close(); domain.shutdown(); domain.server_close()
             gateway_thread.join(2); thread.join(2)
 
+    def test_profile_routes_are_strictly_forwarded_to_domain(self):
+        domain = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
+        thread = threading.Thread(target=domain.serve_forever, daemon=True); thread.start()
+        server = gateway.Server(('127.0.0.1', 0), self.upstream.server_port, domain.server_port)
+        gateway_thread = threading.Thread(target=server.serve_forever, daemon=True); gateway_thread.start()
+        try:
+            for method,path,body in (
+                ('GET','/v1/profiles/me',None),('GET','/v1/people?page=1&pageSize=20',None),
+                ('POST','/v1/profiles/22222222-2222-4222-8222-222222222222/follow','{}'),
+            ):
+                conn=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3)
+                headers={'Authorization':'Bearer test'}
+                if body is not None: headers['Content-Type']='application/json'
+                conn.request(method,path,body,headers); response=conn.getresponse()
+                self.assertEqual(response.status,401); response.read(); conn.close()
+                self.assertEqual(Upstream.seen[-1][0],path)
+            self.assertEqual(self.request('GET','/v1/profiles/not-a-user')[0],404)
+        finally:
+            server.shutdown(); server.server_close(); domain.shutdown(); domain.server_close()
+            gateway_thread.join(2); thread.join(2)
+
     def test_unauthorized_status_preserved(self):
         self.assertEqual(self.request('GET', '/v1/auth/session')[0], 401)
 

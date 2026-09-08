@@ -70,7 +70,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path.startswith('/v1/media/'):
                 status, body = self.server.media.handle(self.command, self.path, values[0], body)
-            elif self.path.startswith('/v1/profiles/'):
+            elif self.path.startswith('/v1/profiles/') or self.path.startswith('/v1/people'):
                 status, body = self.server.profiles.handle(self.command, self.path, values[0], body)
             elif self.path == '/v1/offers' or self.path.startswith('/v1/offers/') or self.path.startswith('/v1/deals/'):
                 if self.command == 'GET':

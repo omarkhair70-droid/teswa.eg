@@ -68,6 +68,24 @@ def main():
             raise RuntimeError('confirmation_failed')
         sender_token = request('POST', auth + '/v1/auth/sign-in/password', {'email': email, 'password': PASSWORD})['access_token']
 
+        mine = request('GET', api + '/v1/profiles/me', token=sender_token)
+        if mine.get('id') != sender_id:
+            raise RuntimeError('profile_identity_mismatch')
+        handle = 'oracle_e2e_%s' % str(int(time.time() * 1000))[-12:]
+        updated = request('POST', api + '/v1/profiles/update', {
+            'userId': sender_id, 'displayName': 'Oracle E2E', 'username': handle,
+            'profileTagline': 'OCI rehearsal', 'bio': None, 'city': 'Cairo', 'area': None,
+        }, sender_token)
+        if updated.get('username') != handle:
+            raise RuntimeError('profile_update_failed')
+        request('POST', api + '/v1/profiles/privacy', {
+            'userId': sender_id, 'value': 'followers_only',
+        }, sender_token)
+        privacy = request('GET', api + '/v1/profiles/privacy', token=sender_token)
+        public_profile = request('GET', api + '/v1/profiles/' + sender_id, token=receiver_token)
+        if privacy.get('value') != 'followers_only' or public_profile.get('displayName') != 'Oracle E2E':
+            raise RuntimeError('profile_readback_failed')
+
         sender_item_id = str(uuid.uuid4())
         category_id = psql(database, 'SELECT id FROM public.categories WHERE is_active IS TRUE ORDER BY sort_order NULLS LAST,id LIMIT 1')
         uuid.UUID(category_id)
@@ -109,6 +127,7 @@ def main():
                 raise RuntimeError('voice_playback_bytes_mismatch')
         print('domain_exchange_offer_deal_text=PASS')
         print('domain_exchange_voice_storage_insert_playback=PASS')
+        print('domain_profile_core_rls=PASS')
     finally:
         if sender_token and voice_key:
             try:
