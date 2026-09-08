@@ -21,6 +21,8 @@ ROUTES = {
     )},
 }
 DOMAIN_GET = (
+    re.compile(r'^/v1/dolab/(?:items|media|notes)\?userId=[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/publish-source\?userId=[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/direct/conversations(?:/[0-9a-fA-F-]{36}(?:/(?:messages|native|typing))?)?(?:\?[^#]*)?$'),
     re.compile(r'^/v1/contextual/(?:unread|conversations(?:\?[^#]+)?)$'),
     re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/owner$'),
@@ -48,6 +50,9 @@ DOMAIN_GET = (
     re.compile(r'^/v1/reviews/deals/[0-9a-fA-F-]{36}$'),
 )
 DOMAIN_MUTATIONS = {
+    ('POST', '/v1/dolab/items'),
+    ('POST', '/v1/dolab/notes'),
+    ('POST', '/v1/dolab/media'),
     ('POST', '/v1/discovery/city-pulse'),
     ('POST', '/v1/stories'),
     ('POST', '/v1/marketplace/items'),
@@ -72,6 +77,9 @@ DOMAIN_MUTATIONS = {
     ('POST', '/v1/reviews'),
 }
 DOMAIN_MUTATION_PATTERNS = (
+    re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/(?:update|delete|published)$'),
+    re.compile(r'^/v1/dolab/notes/[0-9a-fA-F-]{36}/(?:delete|shared|media)$'),
+    re.compile(r'^/v1/dolab/media/[0-9a-fA-F-]{36}/(?:delete|attach)$'),
     re.compile(r'^/v1/direct/conversations/(?:start|start-with-message)$'),
     re.compile(r'^/v1/direct/conversations/[0-9a-fA-F-]{36}/(?:messages|voice|native|accept|ignore|read|typing)$'),
     re.compile(r'^/v1/direct/messages/[0-9a-fA-F-]{36}/(?:reaction|delete)$'),

@@ -23,6 +23,7 @@ on:
       - scripts/oci-migration/oracle_contextual_messaging.py
       - scripts/oci-migration/oracle_stories.py
       - scripts/oci-migration/oracle_discovery.py
+      - scripts/oci-migration/oracle_dolab.py
       - scripts/oci-migration/deploy-domain-read-shadow.py
       - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
       - scripts/oci-migration/domain_exchange_e2e.py
@@ -35,6 +36,7 @@ on:
       - scripts/oci-migration/test_oracle_contextual_messaging.py
       - scripts/oci-migration/test_oracle_stories.py
       - scripts/oci-migration/test_oracle_discovery.py
+      - scripts/oci-migration/test_oracle_dolab.py
       - scripts/oci-migration/realtime-shadow-transport.py
       - scripts/oci-migration/test_realtime_shadow_transport.py
       - scripts/oci-migration/runtime-realtime-outbox.sql
@@ -73,6 +75,8 @@ on:
       - scripts/test-oracle-stories-adapter.cjs
       - lib/backend/adapters/oracle/discovery-adapter.ts
       - scripts/test-oracle-discovery-adapter.cjs
+      - lib/backend/adapters/oracle/dolab-adapter.ts
+      - scripts/test-oracle-dolab-adapter.cjs
       - lib/backend/adapters/oracle/messaging-realtime-adapter.ts
       - scripts/test-oracle-messaging-realtime-adapter.cjs
       - scripts/test-oracle-profile-core-adapter.cjs
@@ -111,6 +115,7 @@ jobs:
           python -m py_compile scripts/oci-migration/oracle_contextual_messaging.py
           python -m py_compile scripts/oci-migration/oracle_stories.py
           python -m py_compile scripts/oci-migration/oracle_discovery.py
+          python -m py_compile scripts/oci-migration/oracle_dolab.py
           python -m py_compile scripts/oci-migration/realtime-shadow-transport.py
           python -m py_compile scripts/oci-migration/deploy-domain-read-shadow.py
           python -m py_compile scripts/oci-migration/domain_exchange_e2e.py
@@ -133,6 +138,7 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_contextual_messaging.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_stories.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_discovery.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_dolab.py -v
           python -m unittest discover -s scripts/oci-migration -p test_realtime_shadow_transport.py -v
           python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
       - uses: actions/setup-node@v4
@@ -158,5 +164,6 @@ jobs:
           node scripts/test-oracle-contextual-messaging-adapter.cjs
           node scripts/test-oracle-stories-adapter.cjs
           node scripts/test-oracle-discovery-adapter.cjs
+          node scripts/test-oracle-dolab-adapter.cjs
           node scripts/test-oracle-messaging-realtime-adapter.cjs
           npm run typecheck:app

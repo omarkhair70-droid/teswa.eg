@@ -8,6 +8,7 @@ GRANT SELECT ON public.direct_conversations,public.direct_messages,public.direct
   public.direct_message_reactions,public.direct_typing_state TO teswa_app_authenticated;
 GRANT SELECT ON public.stories,public.contextual_conversations,public.contextual_messages,
   public.contextual_message_reads TO teswa_app_authenticated;
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.dolab_items,public.dolab_media,public.dolab_notes TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.stories,public.story_likes TO teswa_app_authenticated;
 GRANT SELECT ON public.story_likes,public.story_views TO teswa_app_authenticated;
 GRANT INSERT ON public.story_views TO teswa_app_authenticated;
