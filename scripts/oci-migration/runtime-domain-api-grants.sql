@@ -4,6 +4,8 @@ GRANT SELECT ON public.categories,public.profiles,public.items,public.item_image
   public.item_wanted_tags,public.offers,public.offer_events,public.swap_deals,public.deal_messages,
   public.deal_message_reads,public.deal_confirmations,public.reviews,public.user_blocks,
   public.notifications,public.item_likes TO teswa_app_authenticated;
+GRANT SELECT ON public.direct_conversations,public.direct_messages,public.direct_message_attachments,
+  public.direct_message_reactions,public.direct_typing_state TO teswa_app_authenticated;
 GRANT INSERT,UPDATE ON public.items,public.profiles TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.user_blocks TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.item_likes TO teswa_app_authenticated;
@@ -25,7 +27,15 @@ BEGIN
     'public.get_my_notification_preferences()',
     'public.update_my_notification_preferences(boolean,boolean,boolean,boolean,boolean,boolean,boolean,text,text)',
     'public.set_my_notification_timezone(text)','public.register_push_device(text,text)',
-    'public.disable_my_push_device(text)','public.create_notification(uuid,text,text,text,uuid,uuid,uuid,uuid)'
+    'public.disable_my_push_device(text)','public.create_notification(uuid,text,text,text,uuid,uuid,uuid,uuid)',
+    'public.get_direct_conversation(uuid)','public.get_my_direct_conversations()',
+    'public.get_direct_conversation_messages(uuid)','public.get_direct_native_messages(uuid,integer,timestamptz)',
+    'public.start_or_get_direct_conversation(uuid)','public.start_direct_conversation_with_message(uuid,text)',
+    'public.send_direct_message(uuid,text)','public.send_direct_voice_message(uuid,text,text,integer,text,bigint)',
+    'public.send_direct_native_message(uuid,text,uuid,jsonb,jsonb)',
+    'public.accept_direct_message_request(uuid)','public.ignore_direct_message_request(uuid)',
+    'public.mark_direct_conversation_read_v2(uuid)','public.toggle_direct_message_reaction_v2(uuid,text)',
+    'public.set_direct_typing_state_v2(uuid,boolean)','public.delete_direct_message_v2(uuid)'
   ] LOOP
     IF to_regprocedure(signature) IS NOT NULL THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO teswa_app_authenticated',signature);
