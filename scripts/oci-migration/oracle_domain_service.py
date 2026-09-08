@@ -12,6 +12,7 @@ from oracle_domain_read import ApiError, MarketplaceReadApi
 from oracle_media import MediaApi
 from oracle_marketplace_write import MarketplaceWriteApi
 from oracle_marketplace_lifecycle import MarketplaceLifecycleApi
+from oracle_marketplace_edit import MarketplaceEditApi
 from oracle_exchange import ExchangeApi
 from oracle_exchange_read import ExchangeReadApi
 from oracle_profiles import ProfilesApi
@@ -85,6 +86,8 @@ class Handler(BaseHTTPRequestHandler):
                     status, body = self.server.exchange_read.handle(self.command, self.path, values[0])
                 else:
                     status, body = self.server.exchange.handle(self.command, self.path, values[0], body)
+            elif urlsplit(self.path).path.endswith(('/edit', '/edit/images')) and self.path.startswith('/v1/marketplace/items/'):
+                status, body = self.server.marketplace_edit.handle(self.command, self.path, values[0], body)
             elif urlsplit(self.path).path.endswith(('/archive', '/reactivate', '/delete-archived', '/images/urls')) and self.path.startswith('/v1/marketplace/items/'):
                 status, body = self.server.marketplace_lifecycle.handle(self.command, self.path, values[0], body)
             elif self.command != 'GET':
@@ -108,12 +111,13 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None, reviews=None, marketplace_lifecycle=None):
+    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None, reviews=None, marketplace_lifecycle=None, marketplace_edit=None):
         super().__init__(address, Handler)
         self.api = api or MarketplaceReadApi()
         self.media = media or MediaApi()
         self.marketplace_write = marketplace_write or MarketplaceWriteApi()
         self.marketplace_lifecycle = marketplace_lifecycle or MarketplaceLifecycleApi()
+        self.marketplace_edit = marketplace_edit or MarketplaceEditApi()
         self.exchange = exchange or ExchangeApi()
         self.exchange_read = exchange_read or ExchangeReadApi()
         self.profiles = profiles or ProfilesApi()

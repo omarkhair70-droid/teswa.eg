@@ -1,14 +1,42 @@
-import type { MarketplaceCoreContract, PublishBaseFailure, ListingLifecycleCode } from '@/lib/backend/contracts/marketplace';
+import type {
+  MarketplaceCoreContract, PublishBaseFailure, ListingLifecycleCode,
+  EditableListingRecord, EditableListingImagesContextRecord,
+  ListingCoreUpdateFailure,
+} from '@/lib/backend/contracts/marketplace';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
 export type OracleMarketplaceWriteAdapter = Pick<MarketplaceCoreContract,
   'createPublishedListingBase'|'setLiked'|'markPublishFailed'|'attachPublishedVideo'|
   'addPublishedWantedTags'|'deletePublishedImageMetadata'|'archiveOwned'|'reactivateOwned'|
-  'deleteOwnedArchived'|'getImageUrls'>;
+  'deleteOwnedArchived'|'getImageUrls'|'getEditableListing'|'updateListingCore'|
+  'getEditableListingImagesContext'>;
 
 const LIFECYCLE_FAILURES = new Set<string>([
   'not_found_or_unauthorized', 'not_active', 'not_archived', 'has_open_offers', 'has_deal_history',
 ]);
+const EDIT_FAILURES = new Set<ListingCoreUpdateFailure>(['not_found_or_unauthorized','not_editable']);
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+function nullableString(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}
+function validEditable(value: unknown, id: string): value is EditableListingRecord {
+  if (!record(value) || value.id !== id || !['active','archived'].includes(String(value.status))
+    || typeof value.title !== 'string' || typeof value.condition !== 'string'
+    || !['specific','flexible','surprise'].includes(String(value.desireMode))
+    || !Array.isArray(value.wantedTags) || !value.wantedTags.every((tag:unknown)=>typeof tag==='string')) return false;
+  return ['categoryId','city','area','conditionNotes','description','itemStory','swapReason','goodFor','desireText']
+    .every(key=>nullableString(value[key]));
+}
+function validEditImages(value: unknown, id: string): value is EditableListingImagesContextRecord {
+  if (!record(value) || value.itemId !== id || typeof value.title !== 'string'
+    || !['active','archived'].includes(String(value.status)) || !Array.isArray(value.images)) return false;
+  return value.images.every((image:unknown)=>record(image) && typeof image.id==='string'
+    && typeof image.imageUrl==='string' && typeof image.isPrimary==='boolean'
+    && (image.sortOrder===null || Number.isInteger(image.sortOrder)) && nullableString(image.createdAt));
+}
 
 export function createOracleMarketplaceWriteAdapter(transport: OracleHttpTransport): OracleMarketplaceWriteAdapter {
   return {
@@ -52,6 +80,38 @@ export function createOracleMarketplaceWriteAdapter(transport: OracleHttpTranspo
         throw new Error('Invalid Oracle listing image response.');
       }
       return result.data.items as string[];
+    },
+    async getEditableListing(itemId,_ownerId) {
+      const id=itemId.trim();
+      if (!id) return null;
+      const result=await transport.request<unknown>({path:`/v1/marketplace/items/${id}/edit`});
+      if (!result.ok) {
+        if (result.reason==='not_found') return null;
+        throw new Error('Oracle listing editor read failed.');
+      }
+      if (!validEditable(result.data,id)) throw new Error('Invalid Oracle listing editor response.');
+      return result.data;
+    },
+    async getEditableListingImagesContext(itemId,_ownerId) {
+      const id=itemId.trim();
+      if (!id) return null;
+      const result=await transport.request<unknown>({path:`/v1/marketplace/items/${id}/edit/images`});
+      if (!result.ok) {
+        if (result.reason==='not_found') return null;
+        throw new Error('Oracle listing image editor read failed.');
+      }
+      if (!validEditImages(result.data,id)) throw new Error('Invalid Oracle listing image editor response.');
+      return result.data;
+    },
+    async updateListingCore(input) {
+      const result=await transport.request<{ok:unknown;code:unknown}>({method:'POST',path:`/v1/marketplace/items/${input.itemId}/edit`,body:input});
+      if (!result.ok) return {ok:false,reason:'unknown',message:'Oracle listing update failed.'};
+      if (result.data.ok===true && result.data.code==='updated') return {ok:true,data:undefined};
+      const code=result.data.code;
+      if (result.data.ok===false && typeof code==='string' && EDIT_FAILURES.has(code as ListingCoreUpdateFailure)) {
+        return {ok:false,reason:code as ListingCoreUpdateFailure,message:'Listing cannot be edited.'};
+      }
+      return {ok:false,reason:'unknown',message:'Invalid Oracle listing update response.'};
     },
   };
 }
