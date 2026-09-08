@@ -1,0 +1,20 @@
+const fs=require('fs'),ts=require('typescript'),vm=require('vm');
+let src=fs.readFileSync('lib/backend/adapters/oracle/profile-core-adapter.ts','utf8').replace(/^import type .*;$/gm,'');
+const js=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const mod={exports:{}}; vm.runInNewContext(js,{module:mod,exports:mod.exports,require,Error});
+(async()=>{const calls=[]; const adapter=mod.exports.createOracleProfileCoreAdapter({request:async(input)=>{
+  calls.push(input);
+  if(input.path==='/v1/profiles/privacy'&&input.method!=='POST') return {ok:true,status:200,data:{value:'followers_only'}};
+  if(input.path.endsWith('/missing')) return {ok:false,status:404,reason:'not_found',retryable:false};
+  if(input.path==='/v1/profiles/update') return {ok:true,status:200,data:{id:input.body.userId,displayName:input.body.displayName}};
+  if(input.path.startsWith('/v1/profiles/')&&input.method!=='POST') return {ok:true,status:200,data:{id:'user',displayName:'Omar'}};
+  return {ok:true,status:200,data:{ok:true}};
+}});
+if((await adapter.getMine('ignored')).displayName!=='Omar') throw new Error('mine failed');
+if(await adapter.getPublic('missing')!==null) throw new Error('missing failed');
+if(await adapter.getDirectMessagePrivacy('ignored')!=='followers_only') throw new Error('privacy failed');
+if(!(await adapter.setupMine({userId:'user',displayName:'Omar',username:'omar'})).ok) throw new Error('setup failed');
+if(!(await adapter.updateMine({userId:'user',displayName:'Omar',username:'omar'})).ok) throw new Error('update failed');
+if(calls.some(c=>c.path.includes('ignored'))) throw new Error('caller identity leaked into path');
+process.stdout.write('oracle_profile_core_adapter=PASS\n');
+})().catch(e=>{console.error(e);process.exit(1)});

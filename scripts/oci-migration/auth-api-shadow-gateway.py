@@ -25,6 +25,7 @@ DOMAIN_GET = (
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
     re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/profiles/(?:me|privacy|[0-9a-fA-F-]{36})$'),
 )
 DOMAIN_MUTATIONS = {
     ('POST', '/v1/marketplace/items'),
@@ -33,6 +34,10 @@ DOMAIN_MUTATIONS = {
     ('POST', '/v1/media/uploads/complete'),
     ('POST', '/v1/media/signed-url'),
     ('DELETE', '/v1/media/objects'),
+    ('POST', '/v1/profiles/setup'),
+    ('POST', '/v1/profiles/privacy'),
+    ('POST', '/v1/profiles/image'),
+    ('POST', '/v1/profiles/update'),
 }
 DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
