@@ -20,6 +20,7 @@ on:
       - scripts/oci-migration/oracle_notifications.py
       - scripts/oci-migration/oracle_reviews.py
       - scripts/oci-migration/oracle_direct_messaging.py
+      - scripts/oci-migration/oracle_contextual_messaging.py
       - scripts/oci-migration/deploy-domain-read-shadow.py
       - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
       - scripts/oci-migration/domain_exchange_e2e.py
@@ -29,6 +30,11 @@ on:
       - scripts/oci-migration/test_oracle_notifications.py
       - scripts/oci-migration/test_oracle_reviews.py
       - scripts/oci-migration/test_oracle_direct_messaging.py
+      - scripts/oci-migration/test_oracle_contextual_messaging.py
+      - scripts/oci-migration/realtime-shadow-transport.py
+      - scripts/oci-migration/test_realtime_shadow_transport.py
+      - scripts/oci-migration/runtime-realtime-outbox.sql
+      - scripts/oci-migration/verify-runtime-realtime-outbox.sql
       - scripts/oci-migration/test_oracle_exchange_lifecycle.py
       - scripts/oci-migration/test_oracle_exchange_read.py
       - scripts/oci-migration/test_oracle_exchange_read_order.py
@@ -57,6 +63,10 @@ on:
       - lib/backend/adapters/oracle/reviews-adapter.ts
       - lib/backend/adapters/oracle/direct-messaging-adapter.ts
       - scripts/test-oracle-direct-messaging-adapter.cjs
+      - lib/backend/adapters/oracle/contextual-messaging-adapter.ts
+      - scripts/test-oracle-contextual-messaging-adapter.cjs
+      - lib/backend/adapters/oracle/messaging-realtime-adapter.ts
+      - scripts/test-oracle-messaging-realtime-adapter.cjs
       - scripts/test-oracle-profile-core-adapter.cjs
       - scripts/test-oracle-notifications-adapter.cjs
       - scripts/test-oracle-reviews-adapter.cjs
@@ -90,6 +100,8 @@ jobs:
           python -m py_compile scripts/oci-migration/oracle_notifications.py
           python -m py_compile scripts/oci-migration/oracle_reviews.py
           python -m py_compile scripts/oci-migration/oracle_direct_messaging.py
+          python -m py_compile scripts/oci-migration/oracle_contextual_messaging.py
+          python -m py_compile scripts/oci-migration/realtime-shadow-transport.py
           python -m py_compile scripts/oci-migration/deploy-domain-read-shadow.py
           python -m py_compile scripts/oci-migration/domain_exchange_e2e.py
           bash -n scripts/oci-migration/domain-read-shadow-guest-deploy.sh
@@ -108,6 +120,8 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_notifications.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_reviews.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_direct_messaging.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_contextual_messaging.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_realtime_shadow_transport.py -v
           python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
       - uses: actions/setup-node@v4
         with:
@@ -129,4 +143,6 @@ jobs:
           node scripts/test-oracle-notifications-adapter.cjs
           node scripts/test-oracle-reviews-adapter.cjs
           node scripts/test-oracle-direct-messaging-adapter.cjs
+          node scripts/test-oracle-contextual-messaging-adapter.cjs
+          node scripts/test-oracle-messaging-realtime-adapter.cjs
           npm run typecheck:app

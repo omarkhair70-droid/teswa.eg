@@ -49,18 +49,19 @@ def verify_shadow_session(auth_header: str) -> str:
     return user_id
 
 
-def read_events(user_id: str, after_id: int, limit: int):
+def read_events(user_id: str, after_id: int, limit: int, bootstrap: bool = False):
     sql = r"""
 \set ON_ERROR_STOP on
 BEGIN;
 SET LOCAL ROLE teswa_app_authenticated;
 SELECT set_config('teswa.user_id', :'uid', true);
-SELECT COALESCE(json_agg(row_to_json(x)),'[]'::json)
+SELECT CASE WHEN :'bootstrap'::boolean THEN teswa_realtime.latest_event_id() ELSE :after_id::bigint END;
+SELECT CASE WHEN :'bootstrap'::boolean THEN '[]'::json ELSE COALESCE(json_agg(row_to_json(x)),'[]'::json) END
 FROM teswa_realtime.read_events(:after_id::bigint,:limit::integer) x;
 ROLLBACK;
 """
     proc = subprocess.run(
-        [PSQL, "-X", "-qAt", "-d", "teswa_rehearsal", "-v", f"uid={user_id}", "-v", f"after_id={after_id}", "-v", f"limit={limit}"],
+        [PSQL, "-X", "-qAt", "-d", "teswa_rehearsal", "-v", f"uid={user_id}", "-v", f"after_id={after_id}", "-v", f"limit={limit}", "-v", f"bootstrap={'true' if bootstrap else 'false'}"],
         input=sql.encode("utf-8"),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -70,15 +71,16 @@ ROLLBACK;
     if proc.returncode != 0:
         raise RuntimeError("database_read_failed")
     lines = [line for line in proc.stdout.decode("utf-8").splitlines() if line.strip()]
-    if not lines:
-        return []
+    if len(lines) < 3:
+        raise RuntimeError("database_json_shape_failed")
     try:
+        cursor = int(lines[-2])
         value = json.loads(lines[-1])
     except Exception as exc:
         raise RuntimeError("database_json_failed") from exc
     if not isinstance(value, list):
         raise RuntimeError("database_json_shape_failed")
-    return value
+    return cursor, value
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -120,7 +122,11 @@ class Handler(BaseHTTPRequestHandler):
             after_id = int((qs.get("after") or ["0"])[0])
             limit = int((qs.get("limit") or ["100"])[0])
             wait_ms = int((qs.get("wait_ms") or ["0"])[0])
-            if after_id < 0 or limit < 1 or limit > MAX_LIMIT or wait_ms < 0 or wait_ms > MAX_WAIT_MS:
+            bootstrap_values = qs.get("bootstrap") or ["false"]
+            if len(bootstrap_values) != 1 or bootstrap_values[0] not in ("true", "false"):
+                raise ValueError("invalid_query")
+            bootstrap = bootstrap_values[0] == "true"
+            if set(qs) - {"after", "limit", "wait_ms", "bootstrap"} or after_id < 0 or limit < 1 or limit > MAX_LIMIT or wait_ms < 0 or wait_ms > MAX_WAIT_MS or (bootstrap and wait_ms):
                 raise ValueError("invalid_query")
         except ValueError as exc:
             code = str(exc)
@@ -131,9 +137,9 @@ class Handler(BaseHTTPRequestHandler):
         deadline = time.monotonic() + (wait_ms / 1000.0)
         try:
             while True:
-                events = read_events(user_id, after_id, limit)
+                cursor, events = read_events(user_id, after_id, limit, bootstrap)
                 if events or time.monotonic() >= deadline:
-                    next_after = after_id if not events else int(events[-1]["event_id"])
+                    next_after = cursor if not events else int(events[-1]["event_id"])
                     self._json(200, {
                         "events": events,
                         "after": after_id,

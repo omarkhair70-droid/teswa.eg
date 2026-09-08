@@ -113,6 +113,32 @@ class GatewayTests(unittest.TestCase):
             server.shutdown(); server.server_close(); domain.shutdown(); domain.server_close()
             gateway_thread.join(2); thread.join(2)
 
+    def test_direct_and_realtime_routes_are_strictly_forwarded(self):
+        domain = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
+        realtime = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
+        threads = [threading.Thread(target=x.serve_forever, daemon=True) for x in (domain, realtime)]
+        for thread in threads: thread.start()
+        server = gateway.Server(('127.0.0.1', 0), self.upstream.server_port,
+                                domain.server_port, realtime.server_port)
+        gateway_thread = threading.Thread(target=server.serve_forever, daemon=True); gateway_thread.start()
+        try:
+            for method,path,body in (
+                ('GET','/v1/direct/conversations',None),
+                ('POST','/v1/direct/conversations/start','{}'),
+                ('GET','/v1/realtime/events?after=0&limit=1&wait_ms=0&bootstrap=false',None),
+            ):
+                conn=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3)
+                headers={'Authorization':'Bearer test'}
+                if body is not None: headers['Content-Type']='application/json'
+                conn.request(method,path,body,headers); response=conn.getresponse()
+                self.assertEqual(response.status,401); response.read(); conn.close()
+                self.assertEqual(Upstream.seen[-1][0],path)
+            self.assertEqual(self.request('GET','/v1/realtime/events')[0],404)
+        finally:
+            server.shutdown(); server.server_close(); domain.shutdown(); domain.server_close(); realtime.shutdown(); realtime.server_close()
+            gateway_thread.join(2)
+            for thread in threads: thread.join(2)
+
     def test_profile_routes_are_strictly_forwarded_to_domain(self):
         domain = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
         thread = threading.Thread(target=domain.serve_forever, daemon=True); thread.start()

@@ -6,6 +6,9 @@ GRANT SELECT ON public.categories,public.profiles,public.items,public.item_image
   public.notifications,public.item_likes TO teswa_app_authenticated;
 GRANT SELECT ON public.direct_conversations,public.direct_messages,public.direct_message_attachments,
   public.direct_message_reactions,public.direct_typing_state TO teswa_app_authenticated;
+GRANT SELECT ON public.stories,public.contextual_conversations,public.contextual_messages,
+  public.contextual_message_reads TO teswa_app_authenticated;
+GRANT INSERT ON public.contextual_messages TO teswa_app_authenticated;
 GRANT INSERT,UPDATE ON public.items,public.profiles TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.user_blocks TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.item_likes TO teswa_app_authenticated;
@@ -36,6 +39,9 @@ BEGIN
     'public.accept_direct_message_request(uuid)','public.ignore_direct_message_request(uuid)',
     'public.mark_direct_conversation_read_v2(uuid)','public.toggle_direct_message_reaction_v2(uuid,text)',
     'public.set_direct_typing_state_v2(uuid,boolean)','public.delete_direct_message_v2(uuid)'
+    ,'public.create_story_reply_thread(uuid,text)','public.ensure_story_reply_conversation(uuid)',
+    'public.get_unread_contextual_messages_count()','public.mark_contextual_thread_read(uuid)',
+    'public.create_contextual_message_notification(uuid,uuid,text)'
   ] LOOP
     IF to_regprocedure(signature) IS NOT NULL THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO teswa_app_authenticated',signature);

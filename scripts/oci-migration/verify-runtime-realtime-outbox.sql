@@ -13,13 +13,18 @@ BEGIN
     AND n.nspname='public'
     AND t.tgname='teswa_realtime_capture_change'
     AND c.relname IN (
-      'deal_message_reads','deal_messages','direct_message_attachments',
-      'direct_message_reactions','direct_messages','direct_typing_state'
+      'deal_message_reads','deal_messages','deal_confirmations','swap_deals',
+      'direct_conversations','direct_message_attachments','direct_message_reactions',
+      'direct_messages','direct_typing_state','contextual_conversations',
+      'contextual_messages','contextual_message_reads'
     );
-  IF trigger_count <> 6 THEN RAISE EXCEPTION 'realtime trigger count mismatch: %', trigger_count; END IF;
+  IF trigger_count <> 12 THEN RAISE EXCEPTION 'realtime trigger count mismatch: %', trigger_count; END IF;
 
   IF to_regprocedure('teswa_realtime.read_events(bigint,integer)') IS NULL THEN
     RAISE EXCEPTION 'realtime read_events function missing';
+  END IF;
+  IF to_regprocedure('teswa_realtime.latest_event_id()') IS NULL THEN
+    RAISE EXCEPTION 'realtime latest_event_id function missing';
   END IF;
   SELECT has_function_privilege('public','teswa_realtime.read_events(bigint,integer)','EXECUTE') INTO public_exec;
   IF public_exec THEN RAISE EXCEPTION 'public execute must be revoked from realtime read_events'; END IF;
@@ -88,6 +93,6 @@ SELECT 1 / ((:'outsider_visible'::int = 0)::int);
 ROLLBACK;
 
 SELECT 'teswa_realtime_outbox=PASS' AS result;
-SELECT 'realtime_triggers=6' AS result;
+SELECT 'realtime_triggers=12' AS result;
 SELECT 'realtime_catchup_ordering=PASS' AS result;
 SELECT 'realtime_unauthorized_filter=PASS' AS result;

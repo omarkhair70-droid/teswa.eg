@@ -21,6 +21,10 @@ ROUTES = {
     )},
 }
 DOMAIN_GET = (
+    re.compile(r'^/v1/direct/conversations(?:/[0-9a-fA-F-]{36}(?:/(?:messages|native|typing))?)?(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/contextual/(?:unread|conversations(?:\?[^#]+)?)$'),
+    re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/owner$'),
+    re.compile(r'^/v1/contextual/conversations/[0-9a-fA-F-]{36}(?:/(?:other|messages/[0-9a-fA-F-]{36}))?$'),
     re.compile(r'^/v1/marketplace/feed(?:\?[^#]*)?$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
@@ -61,6 +65,12 @@ DOMAIN_MUTATIONS = {
     ('POST', '/v1/reviews'),
 }
 DOMAIN_MUTATION_PATTERNS = (
+    re.compile(r'^/v1/direct/conversations/(?:start|start-with-message)$'),
+    re.compile(r'^/v1/direct/conversations/[0-9a-fA-F-]{36}/(?:messages|voice|native|accept|ignore|read|typing)$'),
+    re.compile(r'^/v1/direct/messages/[0-9a-fA-F-]{36}/(?:reaction|delete)$'),
+    re.compile(r'^/v1/contextual/(?:notifications|read)$'),
+    re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/(?:reply|ensure)$'),
+    re.compile(r'^/v1/contextual/conversations/[0-9a-fA-F-]{36}/(?:messages|voice)$'),
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
     re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
@@ -107,6 +117,10 @@ class Handler(BaseHTTPRequestHandler):
         path = ROUTES.get((self.command, self.path))
         upstream_port = self.server.auth_port
         upstream_name = 'auth'
+        if path is None and self.command == 'GET' and re.fullmatch(r'/v1/realtime/events\?[^#]+', self.path):
+            path = self.path
+            upstream_port = self.server.realtime_port
+            upstream_name = 'realtime'
         if path is None and self.command == 'GET' and any(rule.fullmatch(self.path) for rule in DOMAIN_GET):
             path = self.path
             upstream_port = self.server.domain_port
@@ -178,10 +192,11 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, auth_port=3110, domain_port=3130):
+    def __init__(self, address, auth_port=3110, domain_port=3130, realtime_port=3120):
         super().__init__(address, Handler)
         self.auth_port = auth_port
         self.domain_port = domain_port
+        self.realtime_port = realtime_port
         self.slots = threading.BoundedSemaphore(16)
 
     def process_request(self, request, address):

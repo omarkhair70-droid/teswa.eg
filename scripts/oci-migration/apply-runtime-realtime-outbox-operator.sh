@@ -13,7 +13,7 @@ INSTANCE_ID="$(oci search resource structured-search --query-text "query instanc
 COMPARTMENT="$(oci compute instance get --instance-id "$INSTANCE_ID" --query 'data."compartment-id"' --raw-output)"; STATE="$(oci compute instance get --instance-id "$INSTANCE_ID" --query 'data."lifecycle-state"' --raw-output)"
 [ "$STATE" = RUNNING ] || { echo 'realtime_operator=FAIL reason=target_not_running'; exit 4; }
 oci os object put --bucket-name "$BUCKET" --name "$OBJECT" --file "$ARCHIVE" --force >/dev/null; UPLOADED=true
-echo 'TESWA LANE 4 REALTIME OUTBOX OPERATOR'; echo 'target=teswa-core-01'; echo 'database=teswa_rehearsal'; echo 'source_realtime_tables=6'; echo 'supabase_mutation=none'; echo 'production_cutover=none'; echo "artifact_sha256=$SHA"
+echo 'TESWA LANE 4 REALTIME OUTBOX OPERATOR'; echo 'target=teswa-core-01'; echo 'database=teswa_rehearsal'; echo 'source_realtime_tables=12'; echo 'supabase_mutation=none'; echo 'production_cutover=none'; echo "artifact_sha256=$SHA"
 SCRIPT_TEXT="$(cat <<'GUEST'
 set -Eeuo pipefail
 OBJ='__OBJECT__'; SHA='__SHA__'; DB=teswa_rehearsal; P=/usr/pgsql-17/bin/psql; D="$(mktemp -d /var/tmp/teswa-realtime-XXXXXX)"; trap 'rm -rf "$D"' EXIT
@@ -28,7 +28,7 @@ PY
 printf '%s  %s\n' "$SHA" "$D/a.tgz"|sha256sum -c - >/dev/null; tar -xzf "$D/a.tgz" -C "$D"
 sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$D/runtime-realtime-outbox.sql"; echo 'realtime_outbox_apply=PASS'
 sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$D/verify-runtime-realtime-outbox.sql"
-triggers="$(sudo -u postgres "$P" -d "$DB" -Atqc "select count(*) from pg_trigger where not tgisinternal and tgname='teswa_realtime_capture_change'")"; [ "$triggers" = 6 ] || { echo "realtime_operator=FAIL reason=trigger_count count=$triggers"; exit 14; }
+triggers="$(sudo -u postgres "$P" -d "$DB" -Atqc "select count(*) from pg_trigger where not tgisinternal and tgname='teswa_realtime_capture_change'")"; [ "$triggers" = 12 ] || { echo "realtime_operator=FAIL reason=trigger_count count=$triggers"; exit 14; }
 pub="$(sudo -u postgres "$P" -d "$DB" -Atqc "select has_function_privilege('public','teswa_realtime.read_events(bigint,integer)','EXECUTE')")"; [ "$pub" = f ] || { echo 'realtime_operator=FAIL reason=public_realtime_execute'; exit 15; }
 echo 'realtime_semantic_rehearsal=PASS'; echo 'realtime_operator=PASS'
 GUEST

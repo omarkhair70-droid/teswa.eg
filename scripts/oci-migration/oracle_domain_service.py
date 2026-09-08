@@ -19,6 +19,7 @@ from oracle_profiles import ProfilesApi
 from oracle_notifications import NotificationsApi
 from oracle_reviews import ReviewsApi
 from oracle_direct_messaging import DirectMessagingApi
+from oracle_contextual_messaging import ContextualMessagingApi
 
 MAX_RESPONSE = 1024 * 1024
 MAX_BODY = 128 * 1024
@@ -84,6 +85,8 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = self.server.reviews.handle(self.command, self.path, values[0], body)
             elif self.path.startswith('/v1/direct/'):
                 status, body = self.server.direct_messaging.handle(self.command, self.path, values[0], body)
+            elif self.path.startswith('/v1/contextual/'):
+                status, body = self.server.contextual_messaging.handle(self.command, self.path, values[0], body)
             elif self.path == '/v1/offers' or self.path.startswith('/v1/offers/') or self.path.startswith('/v1/deals/'):
                 if self.command == 'GET':
                     status, body = self.server.exchange_read.handle(self.command, self.path, values[0])
@@ -114,7 +117,7 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None, reviews=None, marketplace_lifecycle=None, marketplace_edit=None, direct_messaging=None):
+    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None, reviews=None, marketplace_lifecycle=None, marketplace_edit=None, direct_messaging=None, contextual_messaging=None):
         super().__init__(address, Handler)
         self.api = api or MarketplaceReadApi()
         self.media = media or MediaApi()
@@ -127,6 +130,7 @@ class Server(ThreadingHTTPServer):
         self.notifications = notifications or NotificationsApi()
         self.reviews = reviews or ReviewsApi()
         self.direct_messaging = direct_messaging or DirectMessagingApi()
+        self.contextual_messaging = contextual_messaging or ContextualMessagingApi()
         self.slots = threading.BoundedSemaphore(24)
 
     def process_request(self, request, address):
