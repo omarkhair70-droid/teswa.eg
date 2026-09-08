@@ -13,6 +13,7 @@ from oracle_marketplace_write import MarketplaceWriteApi
 from oracle_exchange import ExchangeApi
 from oracle_exchange_read import ExchangeReadApi
 from oracle_profiles import ProfilesApi
+from oracle_notifications import NotificationsApi
 
 MAX_RESPONSE = 1024 * 1024
 MAX_BODY = 128 * 1024
@@ -72,6 +73,8 @@ class Handler(BaseHTTPRequestHandler):
                 status, body = self.server.media.handle(self.command, self.path, values[0], body)
             elif self.path.startswith('/v1/profiles/') or self.path.startswith('/v1/people'):
                 status, body = self.server.profiles.handle(self.command, self.path, values[0], body)
+            elif self.path.startswith('/v1/notifications'):
+                status, body = self.server.notifications.handle(self.command, self.path, values[0], body)
             elif self.path == '/v1/offers' or self.path.startswith('/v1/offers/') or self.path.startswith('/v1/deals/'):
                 if self.command == 'GET':
                     status, body = self.server.exchange_read.handle(self.command, self.path, values[0])
@@ -98,7 +101,7 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None):
+    def __init__(self, address, api=None, media=None, marketplace_write=None, exchange=None, exchange_read=None, profiles=None, notifications=None):
         super().__init__(address, Handler)
         self.api = api or MarketplaceReadApi()
         self.media = media or MediaApi()
@@ -106,6 +109,7 @@ class Server(ThreadingHTTPServer):
         self.exchange = exchange or ExchangeApi()
         self.exchange_read = exchange_read or ExchangeReadApi()
         self.profiles = profiles or ProfilesApi()
+        self.notifications = notifications or NotificationsApi()
         self.slots = threading.BoundedSemaphore(24)
 
     def process_request(self, request, address):

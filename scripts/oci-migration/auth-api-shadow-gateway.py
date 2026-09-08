@@ -30,6 +30,8 @@ DOMAIN_GET = (
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow-state|block-state|trust|badges)$'),
     re.compile(r'^/v1/profiles/(?:me/(?:trust|badges)|blocked)$'),
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/connections(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/notifications(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/notifications/(?:unread|preferences)$'),
 )
 DOMAIN_MUTATIONS = {
     ('POST', '/v1/marketplace/items'),
@@ -43,6 +45,13 @@ DOMAIN_MUTATIONS = {
     ('POST', '/v1/profiles/image'),
     ('POST', '/v1/profiles/update'),
     ('POST', '/v1/profiles/badges/refresh'),
+    ('POST', '/v1/notifications/read'),
+    ('POST', '/v1/notifications/read-all'),
+    ('POST', '/v1/notifications/preferences'),
+    ('POST', '/v1/notifications/timezone'),
+    ('POST', '/v1/notifications/push/register'),
+    ('POST', '/v1/notifications/push/disable'),
+    ('POST', '/v1/notifications/dispatch'),
 }
 DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
