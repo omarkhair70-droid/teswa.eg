@@ -1,7 +1,6 @@
 \set ON_ERROR_STOP on
 -- Disposable CI database only. No Teswa rehearsal or production data.
 DO $$ BEGIN IF current_database() <> 'teswa_image_plan_ci' THEN RAISE EXCEPTION 'disposable_database_required'; END IF; END $$;
-BEGIN;
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='teswa_app_authenticated') THEN CREATE ROLE teswa_app_authenticated NOLOGIN NOBYPASSRLS; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='teswa_image_unauthorized') THEN CREATE ROLE teswa_image_unauthorized NOLOGIN NOBYPASSRLS; END IF;
@@ -39,6 +38,8 @@ DO $$ BEGIN
   IF (SELECT rolbypassrls FROM pg_roles WHERE rolname='teswa_app_authenticated') THEN RAISE EXCEPTION 'bypass role'; END IF;
   IF has_function_privilege('teswa_image_unauthorized','teswa_runtime.apply_owned_listing_image_plan(jsonb)','EXECUTE') THEN RAISE EXCEPTION 'public execution grant'; END IF;
 END $$;
+-- The module above commits its DDL. Start a new transaction for the actual RLS tests.
+BEGIN;
 SET LOCAL ROLE teswa_app_authenticated;
 SELECT set_config('teswa.user_id','11111111-1111-4111-8111-111111111111',true);
 DO $test$
@@ -52,6 +53,7 @@ DECLARE
   r jsonb;
   v_new_id uuid;
 BEGIN
+  IF current_user <> 'teswa_app_authenticated' THEN RAISE EXCEPTION 'restricted role not active'; END IF;
   p := jsonb_build_object('itemId',v_item,'ownerId',v_owner,'orderedRows',jsonb_build_array(
     jsonb_build_object('kind','existing','imageId',v_b,'imageUrl',v_b_url),
     jsonb_build_object('kind','new','imageUrl',v_new_url)));
