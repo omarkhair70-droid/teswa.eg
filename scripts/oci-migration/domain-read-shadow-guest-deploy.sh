@@ -53,7 +53,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_marketplace_write.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql domain_exchange_e2e.py; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -232,6 +232,7 @@ import json,sys
 x=json.load(open(sys.argv[1])); assert x['id']==sys.argv[2] and x['title']=='Oracle rehearsal item'
 assert len(x['images'])==1 and x['images'][0]['imageUrl']==sys.argv[3]
 PY
+python3 "$STAGE/domain_exchange_e2e.py" "$BIND" "$DB" "$TEST_UID" "$ACCESS" "$TEST_ITEM_ID"
 echo 'domain_media_object_bytes=PASS'
 echo 'domain_listing_publish_rls=PASS'
 echo 'domain_published_detail_rls=PASS'
