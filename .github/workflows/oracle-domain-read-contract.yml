@@ -39,8 +39,10 @@ on:
       - lib/backend/adapters/oracle/marketplace-write-adapter.ts
       - scripts/test-oracle-marketplace-write-adapter.cjs
       - lib/backend/adapters/oracle/exchange-adapter.ts
+      - lib/backend/adapters/oracle/exchange-lifecycle-adapter.ts
       - scripts/test-oracle-exchange-adapter.cjs
       - scripts/test-oracle-exchange-lifecycle-adapter.cjs
+      - scripts/test-oracle-exchange-composition.cjs
       - lib/backend/adapters/oracle/exchange-read-adapter.ts
       - scripts/test-oracle-exchange-read-adapter.cjs
       - scripts/test-oracle-exchange-read-extra-adapter.cjs
@@ -96,6 +98,7 @@ jobs:
           node scripts/test-oracle-exchange-adapter.cjs
           node scripts/test-oracle-exchange-read-adapter.cjs
           node scripts/test-oracle-exchange-lifecycle-adapter.cjs
+          node scripts/test-oracle-exchange-composition.cjs
           node scripts/test-oracle-exchange-read-extra-adapter.cjs
           node scripts/test-oracle-exchange-offer-read-adapter.cjs
           npm run typecheck:app
