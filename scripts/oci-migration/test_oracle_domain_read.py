@@ -68,6 +68,19 @@ class DomainReadTests(unittest.TestCase):
         ):
             db=DB([]); status,body=domain.MarketplaceReadApi(Auth(),db).handle('GET',target,'Bearer valid')
             self.assertEqual((status,body),(200,{'items':[]})); self.assertIn(needle,db.calls[0][1])
+    def test_remaining_marketplace_reads_are_bounded(self):
+        row={'id':IID,'title':'كتاب','description':None,'cover_image_url':None,'category':None,'item_condition':None,'city':None,'owner_display_name':None,'created_at':'2026-09-08T00:00:00Z'}
+        db=DB([row,row]);status,body=domain.MarketplaceReadApi(Auth(),db).handle('GET','/v1/marketplace/nearby?latitude=30&longitude=31&radiusKm=3&limit=1&offset=0','Bearer valid')
+        self.assertEqual(status,200);self.assertTrue(body['hasMore']);self.assertIn('get_nearby_marketplace_items',db.calls[0][1])
+        for target,needle in (
+            ('/v1/marketplace/video-discovery?limit=5','item_videos'),('/v1/marketplace/moving?limit=5','get_public_moving_items'),
+            ('/v1/marketplace/pulse-teasers?limit=5','videoStoragePath'),('/v1/marketplace/story-discovery?limit=5','storySnippet'),
+        ):
+            db=DB([]);self.assertEqual(domain.MarketplaceReadApi(Auth(),db).handle('GET',target,'Bearer valid')[1],{'items':[]});self.assertIn(needle,db.calls[0][1])
+    def test_video_presence_metadata_and_count(self):
+        db=DB({IID:True});body=domain.MarketplaceReadApi(Auth(),db).handle('GET','/v1/marketplace/video-presence?ids='+IID,'Bearer valid')[1];self.assertTrue(body['values'][IID])
+        db=DB(None);body=domain.MarketplaceReadApi(Auth(),db).handle('GET','/v1/marketplace/items/'+IID+'/video','Bearer valid')[1];self.assertIsNone(body['item'])
+        db=DB(7);body=domain.MarketplaceReadApi(Auth(),db).handle('GET','/v1/marketplace/count-since?since=2026-09-08T00%3A00%3A00Z','Bearer valid')[1];self.assertEqual(body['count'],7)
     def test_batch_ids_are_uuid_validated_and_bounded(self):
         with self.assertRaises(domain.ApiError):
             domain.MarketplaceReadApi(Auth(),DB([])).handle('GET','/v1/marketplace/likes?ids=bad','Bearer valid')

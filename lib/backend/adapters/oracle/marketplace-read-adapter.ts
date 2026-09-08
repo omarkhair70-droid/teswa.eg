@@ -8,15 +8,27 @@ import type {
   ExchangeItemSummaryRecord,
   ItemLikeSummary,
   MyListingRecord,
+  ItemVideoMetadataRecord,
+  ItemVideoDiscoveryRecord,
+  MovingItemRecord,
+  PulseItemTeaserMetadataRecord,
+  ItemStoryDiscoveryRecord,
 } from '@/lib/backend/contracts/marketplace';
 import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
 
 export type OracleMarketplaceReadAdapter = Pick<MarketplaceReadContract,
-  'listFeed' | 'getFeedItem' | 'getDetail' | 'listActiveByOwner'> & {
+  'listFeed' | 'listNearbyFeed' | 'getFeedItem' | 'getDetail' | 'listActiveByOwner'> & {
   getLikeSummaries(itemIds:string[],viewerId?:string|null):Promise<Map<string,ItemLikeSummary>>;
   listMine(userId:string):Promise<MyListingRecord[]>;
   listActiveCategories():Promise<ActiveMarketplaceCategory[]>;
   getExchangeItemSummaries(itemIds:string[]):Promise<ExchangeItemSummaryRecord[]>;
+  getItemVideoMetadata(itemId:string):Promise<ItemVideoMetadataRecord|null>;
+  getItemVideoPresence(itemIds:string[]):Promise<Map<string,boolean>>;
+  listRecentItemVideoDiscovery(limit:number):Promise<ItemVideoDiscoveryRecord[]>;
+  listMovingItems(limit:number):Promise<MovingItemRecord[]>;
+  listPulseItemTeasers(limit:number):Promise<PulseItemTeaserMetadataRecord[]>;
+  countMarketplaceItemsSince(sinceIso:string):Promise<number>;
+  listItemStoryDiscovery(limit:number):Promise<ItemStoryDiscoveryRecord[]>;
 };
 
 function configuredFailure(): never {
@@ -43,6 +55,10 @@ export function createOracleMarketplaceReadAdapter(
         return configuredFailure();
       }
       return result.data;
+    },
+    async listNearbyFeed(input): Promise<MarketplaceReadPage> {
+      const result=await transport.request<MarketplaceReadPage>({path:'/v1/marketplace/nearby',query:{latitude:input.latitude,longitude:input.longitude,radiusKm:input.radiusKm??3,offset:input.offset??0,limit:input.limit??20}});
+      if(!result.ok||!Array.isArray(result.data.items)||typeof result.data.hasMore!=='boolean')return configuredFailure();return result.data;
     },
 
     async getFeedItem(itemId: string): Promise<MarketplaceFeedRecord | null> {
@@ -108,5 +124,20 @@ export function createOracleMarketplaceReadAdapter(
       if (!result.ok || !Array.isArray(result.data.items)) return configuredFailure();
       return result.data.items;
     },
+    async getItemVideoMetadata(itemId){const result=await transport.request<unknown>({path:`/v1/marketplace/items/${itemId}/video`});
+      if(!result.ok||!result.data||typeof result.data!=='object')return configuredFailure();const value=(result.data as {item?:unknown}).item;
+      if(value===null)return null;if(!value||typeof value!=='object'||typeof (value as ItemVideoMetadataRecord).id!=='string')return configuredFailure();return value as ItemVideoMetadataRecord;},
+    async getItemVideoPresence(itemIds){const ids=[...new Set(itemIds.map(id=>id.trim()).filter(Boolean))];if(!ids.length)return new Map();const result=await transport.request<unknown>({path:'/v1/marketplace/video-presence',query:{ids:ids.join(',')}});
+      if(!result.ok||!result.data||typeof result.data!=='object')return configuredFailure();const values=(result.data as {values?:unknown}).values;if(!values||typeof values!=='object'||Array.isArray(values)||Object.values(values).some(v=>v!==true))return configuredFailure();return new Map(Object.keys(values).map(id=>[id,true]));},
+    async listRecentItemVideoDiscovery(limit){return readItems<ItemVideoDiscoveryRecord>(transport,'/v1/marketplace/video-discovery',limit);},
+    async listMovingItems(limit){return readItems<MovingItemRecord>(transport,'/v1/marketplace/moving',limit);},
+    async listPulseItemTeasers(limit){return readItems<PulseItemTeaserMetadataRecord>(transport,'/v1/marketplace/pulse-teasers',limit);},
+    async countMarketplaceItemsSince(sinceIso){const result=await transport.request<{count:unknown}>({path:'/v1/marketplace/count-since',query:{since:sinceIso}});if(!result.ok||!Number.isSafeInteger(result.data.count)||Number(result.data.count)<0)return configuredFailure();return Number(result.data.count);},
+    async listItemStoryDiscovery(limit){return readItems<ItemStoryDiscoveryRecord>(transport,'/v1/marketplace/story-discovery',limit);},
   };
+}
+
+async function readItems<T>(transport:OracleHttpTransport,path:string,limit:number):Promise<T[]> {
+  const result=await transport.request<{items:unknown}>({path,query:{limit}});
+  if(!result.ok||!Array.isArray(result.data.items))return configuredFailure();return result.data.items as T[];
 }

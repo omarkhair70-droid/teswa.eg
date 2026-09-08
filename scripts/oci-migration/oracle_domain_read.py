@@ -12,6 +12,8 @@ import os
 import re
 import subprocess
 import uuid
+import math
+from datetime import datetime
 from urllib.parse import parse_qs, urlsplit
 
 MAX_ROWS = 50
@@ -180,6 +182,69 @@ class MarketplaceReadApi:
         if parsed.fragment or parsed.netloc or parsed.scheme:
             raise ApiError(400, 'invalid_path')
         user_id = self.auth.resolve(authorization)
+        if parsed.path == '/v1/marketplace/nearby':
+            args=parse_qs(parsed.query,keep_blank_values=True)
+            if set(args)!={'latitude','longitude','radiusKm','limit','offset'} or any(len(v)!=1 for v in args.values()):raise ApiError(400,'invalid_query')
+            try: lat=float(args['latitude'][0]);lon=float(args['longitude'][0]);radius=float(args['radiusKm'][0])
+            except ValueError:raise ApiError(400,'invalid_location')
+            if not all(math.isfinite(v) for v in (lat,lon,radius)) or not -90<=lat<=90 or not -180<=lon<=180 or not 0<radius<=100:raise ApiError(400,'invalid_location')
+            limit=integer(args['limit'][0],20,MAX_ROWS);offset=integer(args['offset'][0],0,10000)
+            if limit<1:raise ApiError(400,'invalid_pagination')
+            sql="""SELECT coalesce(json_agg(row_to_json(x)),'[]'::json) FROM public.get_nearby_marketplace_items(%s,%s,%s,%d,%d)x"""%(lat,lon,radius,limit+1,offset)
+            rows=self.db.query(user_id,sql);return 200,{'items':[map_feed(r) for r in rows[:limit]],'hasMore':len(rows)>limit}
+        if parsed.path == '/v1/marketplace/video-presence':
+            args=parse_qs(parsed.query,keep_blank_values=True)
+            if set(args)!={'ids'} or len(args['ids'])!=1:raise ApiError(400,'invalid_query')
+            ids=uuid_list(args['ids'][0]);values=','.join("'%s'::uuid"%item for item in ids)
+            result=self.db.query(user_id,"SELECT coalesce(json_object_agg(item_id,true),'{}'::json) FROM (SELECT DISTINCT item_id FROM public.item_videos WHERE item_id IN(%s))x"%values)
+            return 200,{'values':result if isinstance(result,dict) else {}}
+        if parsed.path in ('/v1/marketplace/video-discovery','/v1/marketplace/moving','/v1/marketplace/pulse-teasers','/v1/marketplace/story-discovery'):
+            args=parse_qs(parsed.query,keep_blank_values=True)
+            if set(args)!={'limit'} or len(args['limit'])!=1:raise ApiError(400,'invalid_query')
+            maximum=24 if parsed.path.endswith('story-discovery') else 100;limit=integer(args['limit'][0],20,maximum)
+            if limit<1:raise ApiError(400,'invalid_pagination')
+            base="""public.items i LEFT JOIN public.categories c ON c.id=i.category_id LEFT JOIN public.profiles p ON p.id=i.owner_id"""
+            if parsed.path.endswith('video-discovery'):
+                sql="""SELECT coalesce(json_agg(json_build_object('id',i.id,'title',coalesce(nullif(btrim(i.title),''),'عنصر بدون عنوان'),'description',i.description,
+                  'imageUrl',(SELECT image_url FROM public.item_images im WHERE im.item_id=i.id ORDER BY im.is_primary DESC,im.sort_order NULLS LAST,im.id LIMIT 1),
+                  'category',c.name_ar,'condition',i.condition,'location',i.city,'ownerDisplayName',p.display_name,'videoDurationMs',v.duration_ms,'videoCreatedAt',v.created_at)
+                  ORDER BY v.created_at DESC,v.id),'[]'::json) FROM (SELECT * FROM public.item_videos ORDER BY created_at DESC,id LIMIT %d)v
+                  JOIN public.items i ON i.id=v.item_id LEFT JOIN public.categories c ON c.id=i.category_id LEFT JOIN public.profiles p ON p.id=i.owner_id
+                  WHERE i.status='active'::public.item_status AND (p.id IS NULL OR coalesce(p.is_banned,false)=false)"""%limit
+            elif parsed.path.endswith('moving'):
+                sql="""SELECT coalesce(json_agg(json_build_object('id',i.id,'title',coalesce(nullif(btrim(i.title),''),'عنصر بدون عنوان'),
+                  'imageUrl',(SELECT image_url FROM public.item_images im WHERE im.item_id=i.id ORDER BY im.is_primary DESC,im.sort_order NULLS LAST,im.id LIMIT 1),
+                  'category',c.name_ar,'condition',i.condition,'location',i.city,'ownerDisplayName',p.display_name,'openInterestCount',m.open_interest_count,
+                  'latestInterestAt',m.latest_interest_at,'hasVideoTeaser',EXISTS(SELECT 1 FROM public.item_videos v WHERE v.item_id=i.id)) ORDER BY m.latest_interest_at DESC,i.id),'[]'::json)
+                  FROM public.get_public_moving_items(%d)m JOIN public.items i ON i.id=m.item_id LEFT JOIN public.categories c ON c.id=i.category_id
+                  LEFT JOIN public.profiles p ON p.id=i.owner_id WHERE p.id IS NULL OR coalesce(p.is_banned,false)=false"""%limit
+            elif parsed.path.endswith('pulse-teasers'):
+                sql="""SELECT coalesce(json_agg(json_build_object('id',v.id,'createdAt',v.created_at,'videoStoragePath',v.video_storage_path,'durationMs',v.duration_ms,
+                  'itemId',i.id,'title',coalesce(nullif(btrim(i.title),''),'عنصر بدون عنوان'),'description',i.description,
+                  'imageUrl',(SELECT image_url FROM public.item_images im WHERE im.item_id=i.id ORDER BY im.is_primary DESC,im.sort_order NULLS LAST,im.id LIMIT 1),
+                  'category',c.name_ar,'condition',i.condition,'location',i.city,'ownerDisplayName',p.display_name) ORDER BY v.created_at DESC,v.id),'[]'::json)
+                  FROM (SELECT * FROM public.item_videos WHERE nullif(btrim(video_storage_path),'') IS NOT NULL ORDER BY created_at DESC,id LIMIT %d)v
+                  JOIN public.items i ON i.id=v.item_id LEFT JOIN public.categories c ON c.id=i.category_id LEFT JOIN public.profiles p ON p.id=i.owner_id
+                  WHERE i.status='active'::public.item_status AND (p.id IS NULL OR coalesce(p.is_banned,false)=false)"""%limit
+            else:
+                raw=limit*2
+                sql="""SELECT coalesce(json_agg(row_to_json(x) ORDER BY x."createdAt" DESC,x.id),'[]'::json) FROM(SELECT i.id,coalesce(nullif(btrim(i.title),''),'عنصر بدون عنوان') title,
+                  (SELECT image_url FROM public.item_images im WHERE im.item_id=i.id ORDER BY im.is_primary DESC,im.sort_order NULLS LAST,im.id LIMIT 1) "imageUrl",
+                  c.name_ar category,i.city,i.area,i.owner_id "ownerId",p.display_name "ownerDisplayName",
+                  CASE WHEN nullif(btrim(i.item_story),'') IS NOT NULL THEN 'حكاية العنصر' WHEN nullif(btrim(i.swap_reason),'') IS NOT NULL THEN 'ليه صاحبه بيبدله' ELSE 'مفيد لمين' END "storyLabel",
+                  coalesce(nullif(btrim(i.item_story),''),nullif(btrim(i.swap_reason),''),nullif(btrim(i.good_for),'')) "storySnippet",i.created_at "createdAt",
+                  EXISTS(SELECT 1 FROM public.item_videos v WHERE v.item_id=i.id) "hasVideoTeaser" FROM %s WHERE i.status='active'::public.item_status
+                  AND coalesce(nullif(btrim(i.item_story),''),nullif(btrim(i.swap_reason),''),nullif(btrim(i.good_for),'')) IS NOT NULL
+                  AND (p.id IS NULL OR coalesce(p.is_banned,false)=false) ORDER BY i.created_at DESC,i.id LIMIT %d)x"""%(base,limit)
+            result=self.db.query(user_id,sql);return 200,{'items':result if isinstance(result,list) else []}
+        if parsed.path == '/v1/marketplace/count-since':
+            args=parse_qs(parsed.query,keep_blank_values=True)
+            if set(args)!={'since'} or len(args['since'])!=1:raise ApiError(400,'invalid_query')
+            since=args['since'][0]
+            try:datetime.fromisoformat(since.replace('Z','+00:00'))
+            except ValueError:raise ApiError(400,'invalid_since')
+            result=self.db.query(user_id,"SELECT count(*)::integer FROM public.items i WHERE i.status='active'::public.item_status AND i.created_at>%s::timestamptz"%sql_text(since))
+            return 200,{'count':result if isinstance(result,int) and result>=0 else 0}
         if parsed.path == '/v1/marketplace/categories':
             if parsed.query: raise ApiError(400,'invalid_query')
             sql="""SELECT coalesce(json_agg(json_build_object('id',c.id,'nameAr',c.name_ar)
@@ -245,6 +310,11 @@ class MarketplaceReadApi:
             if row is None:
                 raise ApiError(404, 'not_found')
             return 200, row
+        match = re.fullmatch(r'/v1/marketplace/items/([0-9a-fA-F-]{36})/video', parsed.path)
+        if match and not parsed.query:
+            item_id=valid_uuid(match.group(1));sql="""SELECT json_build_object('id',v.id,'itemId',v.item_id,'videoStoragePath',v.video_storage_path,
+              'durationMs',v.duration_ms,'width',v.width,'height',v.height,'createdAt',v.created_at) FROM public.item_videos v WHERE v.item_id='%s'::uuid"""%item_id
+            return 200,{'item':self.db.query(user_id,sql)}
         match = re.fullmatch(r'/v1/marketplace/owners/([0-9a-fA-F-]{36})/active', parsed.path)
         if match:
             args = parse_qs(parsed.query, keep_blank_values=True)

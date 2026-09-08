@@ -50,6 +50,8 @@ BEGIN
     'public.get_unread_contextual_messages_count()','public.mark_contextual_thread_read(uuid)',
     'public.create_contextual_message_notification(uuid,uuid,text)'
     ,'public.get_public_city_pulse_moving_items(text[],integer)'
+    ,'public.get_nearby_marketplace_items(double precision,double precision,double precision,integer,integer)'
+    ,'public.get_public_moving_items(integer)'
     ,'public.track_analytics_event(text,text,text,text,uuid,jsonb,text,text)'
     ,'public.report_user(uuid,text,text)','public.report_item(uuid,text,text)','public.report_deal(uuid,text,text)'
     ,'public.report_story(uuid,text,text)','public.report_deal_message(uuid,uuid,text,text)'
