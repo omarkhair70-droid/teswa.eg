@@ -18,6 +18,7 @@ on:
       - scripts/oci-migration/oracle_exchange.py
       - scripts/oci-migration/oracle_profiles.py
       - scripts/oci-migration/oracle_notifications.py
+      - scripts/oci-migration/oracle_reviews.py
       - scripts/oci-migration/deploy-domain-read-shadow.py
       - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
       - scripts/oci-migration/domain_exchange_e2e.py
@@ -25,6 +26,7 @@ on:
       - scripts/oci-migration/test_oracle_domain_exchange.py
       - scripts/oci-migration/test_oracle_profiles.py
       - scripts/oci-migration/test_oracle_notifications.py
+      - scripts/oci-migration/test_oracle_reviews.py
       - scripts/oci-migration/test_oracle_exchange_lifecycle.py
       - scripts/oci-migration/test_oracle_exchange_read.py
       - scripts/oci-migration/test_oracle_exchange_read_order.py
@@ -50,8 +52,10 @@ on:
       - lib/backend/adapters/oracle/exchange-read-adapter.ts
       - lib/backend/adapters/oracle/profile-core-adapter.ts
       - lib/backend/adapters/oracle/notifications-adapter.ts
+      - lib/backend/adapters/oracle/reviews-adapter.ts
       - scripts/test-oracle-profile-core-adapter.cjs
       - scripts/test-oracle-notifications-adapter.cjs
+      - scripts/test-oracle-reviews-adapter.cjs
       - scripts/test-oracle-exchange-read-adapter.cjs
       - scripts/test-oracle-exchange-read-extra-adapter.cjs
       - scripts/test-oracle-exchange-offer-read-adapter.cjs
@@ -80,6 +84,7 @@ jobs:
           python -m py_compile scripts/oci-migration/oracle_exchange.py
           python -m py_compile scripts/oci-migration/oracle_profiles.py
           python -m py_compile scripts/oci-migration/oracle_notifications.py
+          python -m py_compile scripts/oci-migration/oracle_reviews.py
           python -m py_compile scripts/oci-migration/deploy-domain-read-shadow.py
           python -m py_compile scripts/oci-migration/domain_exchange_e2e.py
           bash -n scripts/oci-migration/domain-read-shadow-guest-deploy.sh
@@ -96,6 +101,7 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_exchange.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_profiles.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_notifications.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_reviews.py -v
           python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
       - uses: actions/setup-node@v4
         with:
@@ -115,4 +121,5 @@ jobs:
           node scripts/test-oracle-exchange-offer-read-adapter.cjs
           node scripts/test-oracle-profile-core-adapter.cjs
           node scripts/test-oracle-notifications-adapter.cjs
+          node scripts/test-oracle-reviews-adapter.cjs
           npm run typecheck:app

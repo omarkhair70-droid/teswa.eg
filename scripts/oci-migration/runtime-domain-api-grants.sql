@@ -10,6 +10,7 @@ GRANT INSERT,DELETE ON public.item_likes TO teswa_app_authenticated;
 GRANT UPDATE ON public.notifications TO teswa_app_authenticated;
 GRANT INSERT,UPDATE,DELETE ON public.item_images,public.item_videos,public.item_wanted_tags TO teswa_app_authenticated;
 GRANT INSERT ON public.offers,public.offer_events,public.deal_messages,public.deal_confirmations TO teswa_app_authenticated;
+GRANT INSERT ON public.reviews TO teswa_app_authenticated;
 GRANT EXECUTE ON FUNCTION public.follow_user(uuid),public.unfollow_user(uuid),
   public.get_user_follow_state(uuid),public.get_profile_followers(uuid,integer),
   public.get_profile_following(uuid,integer),public.get_user_block_state(uuid),
