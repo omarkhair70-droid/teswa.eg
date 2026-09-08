@@ -80,15 +80,17 @@ def publish_sql(value):
         'city',v->'city','area',v->'area','location_latitude',v->'locationLatitude',
         'location_longitude',v->'locationLongitude','desire_mode',v->'desireMode','desire_text',v->'desireText',
         'item_story',v->'itemStory','swap_reason',v->'swapReason','good_for',v->'goodFor',
-        'status','active','source','direct_listing')) r), inserted AS (
+        'status','active','source','direct_listing')) r)
       INSERT INTO public.items(id,owner_id,title,category_id,description,condition,condition_notes,city,area,
         location_latitude,location_longitude,desire_mode,desire_text,item_story,swap_reason,good_for,status,source)
       SELECT id,owner_id,title,category_id,description,condition,condition_notes,city,area,location_latitude,
-        location_longitude,desire_mode,desire_text,item_story,swap_reason,good_for,status,source FROM rowdata RETURNING id), images AS (
+        location_longitude,desire_mode,desire_text,item_story,swap_reason,good_for,status,source FROM rowdata;
+      WITH p AS (SELECT %s AS v)
       INSERT INTO public.item_images(item_id,image_url,is_primary,sort_order)
-      SELECT inserted.id,x."imageUrl",x."isPrimary",x."sortOrder" FROM inserted,p,LATERAL jsonb_to_recordset(p.v->'images')
-        AS x("imageUrl" text,"isPrimary" boolean,"sortOrder" integer) RETURNING item_id)
-      SELECT json_build_object('itemId',(SELECT id FROM inserted),'imagesInserted',(SELECT count(*) FROM images))""" % payload
+      SELECT (p.v->>'itemId')::uuid,x."imageUrl",x."isPrimary",x."sortOrder" FROM p,LATERAL jsonb_to_recordset(p.v->'images')
+        AS x("imageUrl" text,"isPrimary" boolean,"sortOrder" integer);
+      WITH p AS (SELECT %s AS v) SELECT json_build_object('itemId',p.v->>'itemId','imagesInserted',
+        (SELECT count(*) FROM public.item_images WHERE item_id=(p.v->>'itemId')::uuid)) FROM p""" % (payload,payload,payload)
 
 
 _SQLSTATE = re.compile(r'(?m)^(?:ERROR|FATAL|PANIC):\s*([0-9A-Z]{5})(?:\s|$)')

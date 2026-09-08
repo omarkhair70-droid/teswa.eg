@@ -27,6 +27,8 @@ class WriteTests(unittest.TestCase):
         db=DB(); status,out=write.MarketplaceWriteApi(Auth(),db).handle('POST','/v1/marketplace/items','Bearer valid',body())
         self.assertEqual((status,out),(201,{'itemId':IID})); self.assertEqual(db.calls[0][0],UID)
         self.assertIn('WITH p AS',db.calls[0][1]); self.assertIn('INSERT INTO public.items',db.calls[0][1]); self.assertIn('INSERT INTO public.item_images',db.calls[0][1])
+        self.assertLess(db.calls[0][1].index('INSERT INTO public.items'),db.calls[0][1].index('INSERT INTO public.item_images'))
+        self.assertIn(';\n      WITH p AS',db.calls[0][1])
     def test_owner_spoof_and_invalid_images_never_query(self):
         for mutate in ('owner','image'):
             value=body()
