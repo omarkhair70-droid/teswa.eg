@@ -12,7 +12,8 @@ class Tests(unittest.TestCase):
  def test_offer_create_is_atomic_and_identity_bound(self):
   db=DB({'offerId':O,'eventRecorded':True}); body={'requestedItemId':A,'offeredItemId':B,'senderId':UID,'receiverId':OTHER,'message':'swap'}
   self.assertEqual(exchange.ExchangeApi(Auth(),db).handle('POST','/v1/offers','x',body)[0],201)
-  self.assertIn('INSERT INTO public.offers',db.calls[0][1]); self.assertIn('INSERT INTO public.offer_events',db.calls[0][1])
+  self.assertIn('INSERT INTO public.offers',db.calls[0][1]); self.assertIn(';\n              INSERT INTO public.offer_events',db.calls[0][1])
+  self.assertIn('SELECT 1 FROM public.offer_events',db.calls[0][1])
   body['senderId']=OTHER
   with self.assertRaises(exchange.ApiError) as error: exchange.ExchangeApi(Auth(),DB({})).handle('POST','/v1/offers','x',body)
   self.assertEqual(error.exception.status,403)

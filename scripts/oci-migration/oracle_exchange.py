@@ -1,6 +1,7 @@
 """Authenticated offer, deal, and deal-message vertical slice."""
 from __future__ import annotations
 import re
+import uuid
 from urllib.parse import urlsplit
 from oracle_domain_read import ApiError, AuthResolver, sql_text, valid_uuid
 from oracle_marketplace_write import PgWriteRunner
@@ -71,13 +72,19 @@ class ExchangeApi:
             if sender!=user_id: raise ApiError(403,'sender_mismatch')
             if sender==receiver or requested==offered: raise ApiError(400,'invalid_offer')
             message=clean_message(body['message'],1000)
-            statement="""WITH inserted AS (
-              INSERT INTO public.offers(requested_item_id,offered_item_id,sender_id,receiver_id,status,message)
-              VALUES('%s'::uuid,'%s'::uuid,'%s'::uuid,'%s'::uuid,'pending',%s) RETURNING id,sender_id),
-              event AS (INSERT INTO public.offer_events(offer_id,actor_id,event_type,old_status,new_status,note)
-                SELECT id,sender_id,'created',NULL,'pending',NULL FROM inserted RETURNING offer_id)
-              SELECT json_build_object('offerId',(SELECT id FROM inserted),'eventRecorded',EXISTS(SELECT 1 FROM event))""" % (
-                requested,offered,sender,receiver,sql_text(message) if message else 'NULL')
+            offer_id=str(uuid.uuid4())
+            # Keep both writes in one PgWriteRunner transaction, but in separate
+            # statements. The offer-events RLS policy must see the committed
+            # statement snapshot containing the new offer.
+            statement="""INSERT INTO public.offers(id,requested_item_id,offered_item_id,sender_id,receiver_id,status,message)
+              VALUES('%s'::uuid,'%s'::uuid,'%s'::uuid,'%s'::uuid,'%s'::uuid,'pending',%s);
+              INSERT INTO public.offer_events(offer_id,actor_id,event_type,old_status,new_status,note)
+              VALUES('%s'::uuid,'%s'::uuid,'created',NULL,'pending',NULL);
+              SELECT json_build_object('offerId','%s'::uuid,'eventRecorded',EXISTS(
+                SELECT 1 FROM public.offer_events WHERE offer_id='%s'::uuid AND actor_id='%s'::uuid
+                  AND event_type::text='created'))""" % (
+                offer_id,requested,offered,sender,receiver,sql_text(message) if message else 'NULL',
+                offer_id,sender,offer_id,offer_id,sender)
             result=self.db.query(user_id,statement)
             if not result.get('offerId') or result.get('eventRecorded') is not True: raise ApiError(503,'offer_create_failed')
             return 201,result
