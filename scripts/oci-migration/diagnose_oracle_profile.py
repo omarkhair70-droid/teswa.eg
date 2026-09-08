@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Operator-only, read-only diagnosis for the Oracle profile rehearsal.
 
-Run on the private OCI host with TESWA_DOMAIN_DATABASE_URL configured. This
-script never changes schema, data, deployment, or production routing. It does
-not print profile contents, credentials, SQL text, or raw database errors.
+Run on the private OCI host with TESWA_DOMAIN_DATABASE_URL configured. The
+SQL refuses databases other than teswa_rehearsal before inspecting profiles.
+No profile contents, credentials, SQL text, or raw database errors are printed.
 """
 from __future__ import annotations
 
@@ -29,6 +29,11 @@ def diagnostic_sql(user_id):
     columns = ','.join("'%s'" % column for column in PROFILE_COLUMNS)
     return """BEGIN READ ONLY;
 SET LOCAL ROLE teswa_app_authenticated;
+DO $$ BEGIN
+  IF current_database() <> 'teswa_rehearsal' THEN
+    RAISE EXCEPTION 'rehearsal_database_required';
+  END IF;
+END $$;
 SELECT set_config('teswa.user_id','%s',true);
 SELECT json_build_object(
   'database',current_database(),
@@ -40,15 +45,16 @@ SELECT json_build_object(
     (SELECT 1 FROM pg_catalog.pg_attribute a
      WHERE a.attrelid='public.profiles'::regclass AND a.attname=c.name
        AND a.attnum>0 AND NOT a.attisdropped)))::text;
-SELECT (SELECT %s FROM public.profiles p WHERE p.id='%s'::uuid
-  AND (p.id='%s'::uuid OR coalesce(p.is_banned,false)=false))::text;
+SELECT CASE WHEN (SELECT %s FROM public.profiles p WHERE p.id='%s'::uuid
+  AND (p.id='%s'::uuid OR coalesce(p.is_banned,false)=false)) IS NULL
+  THEN 'false' ELSE 'true' END;
 ROLLBACK;""" % (user_id, columns, PROFILE_JSON, user_id, user_id)
 
 
 def run(user_id, database_url=None, psql='/usr/pgsql-17/bin/psql', execute=subprocess.run):
     database_url = database_url or os.environ.get('TESWA_DOMAIN_DATABASE_URL')
     if not database_url:
-        raise RuntimeError('domain_database_not_configured')
+        return {'ok': False, 'error': 'domain_database_not_configured'}
     sql = diagnostic_sql(user_id)
     env = {**os.environ, 'PGOPTIONS': '-c statement_timeout=5000 -c lock_timeout=1000 -c row_security=on'}
     try:
@@ -66,14 +72,18 @@ def run(user_id, database_url=None, psql='/usr/pgsql-17/bin/psql', execute=subpr
         return {'ok': False, 'error': 'unexpected_response'}
     try:
         metadata = json.loads(lines[1])
-        profile = json.loads(lines[2])
+        profile_found = lines[2] == 'true'
+        if not isinstance(metadata, dict) or lines[2] not in ('true', 'false'):
+            raise ValueError('invalid_response')
     except (ValueError, TypeError):
         return {'ok': False, 'error': 'invalid_response'}
+    if metadata.get('database') != 'teswa_rehearsal':
+        return {'ok': False, 'error': 'rehearsal_database_required'}
     return {'ok': True, 'database': metadata.get('database'),
             'role': metadata.get('role'), 'rlsActive': metadata.get('rlsActive'),
             'tableSelect': metadata.get('tableSelect'),
             'missingColumns': metadata.get('missingColumns'),
-            'profileFound': isinstance(profile, dict)}
+            'profileFound': profile_found}
 
 
 def main():
