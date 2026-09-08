@@ -54,7 +54,7 @@ def main():
     uuid.UUID(receiver_id); uuid.UUID(receiver_item_id)
     api = 'http://%s:3100' % bind
     auth = 'http://127.0.0.1:3110'
-    sender_id = sender_item_id = offer_id = deal_id = None
+    sender_id = sender_item_id = offer_id = deal_id = notification_id = None
     voice_key = None
     sender_token = None
     try:
@@ -96,6 +96,22 @@ def main():
             'senderId': sender_id, 'receiverId': receiver_id, 'message': 'Oracle E2E offer',
         }, sender_token)
         offer_id = created['offerId']; uuid.UUID(offer_id)
+        request('POST', api + '/v1/notifications/dispatch', {
+            'targetUserId': receiver_id, 'type': 'new_offer', 'title': 'Oracle E2E offer',
+            'body': 'Offer received', 'itemId': receiver_item_id, 'offerId': offer_id,
+            'dealId': None, 'messageId': None,
+        }, sender_token)
+        notifications = request('GET', api + '/v1/notifications?limit=20', token=receiver_token)['items']
+        notification = next((row for row in notifications if row.get('offerId') == offer_id), None)
+        if not notification:
+            raise RuntimeError('offer_notification_missing')
+        notification_id = notification['id']; uuid.UUID(notification_id)
+        unread = request('GET', api + '/v1/notifications/unread', token=receiver_token)['count']
+        if unread < 1:
+            raise RuntimeError('offer_notification_not_unread')
+        request('POST', api + '/v1/notifications/read', {
+            'userId': receiver_id, 'notificationId': notification['id'],
+        }, receiver_token)
         accepted = request('POST', api + '/v1/offers/' + offer_id + '/accept', {}, receiver_token)
         deal_id = accepted['dealId']; uuid.UUID(deal_id)
 
@@ -128,6 +144,7 @@ def main():
         print('domain_exchange_offer_deal_text=PASS')
         print('domain_exchange_voice_storage_insert_playback=PASS')
         print('domain_profile_core_rls=PASS')
+        print('domain_notifications_dispatch_read_rls=PASS')
     finally:
         if sender_token and voice_key:
             try:
@@ -137,6 +154,8 @@ def main():
             except Exception:
                 pass
         statements = []
+        if notification_id:
+            statements += ["DELETE FROM public.notifications WHERE id='%s'::uuid" % notification_id]
         if deal_id:
             statements += ["DELETE FROM public.deal_message_reads WHERE deal_id='%s'::uuid" % deal_id,
                            "DELETE FROM public.deal_confirmations WHERE deal_id='%s'::uuid" % deal_id,
