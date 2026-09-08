@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const source=fs.readFileSync('lib/backend/runtime.ts','utf8');
+const start=source.indexOf('export function createOracleBackendRuntime');
+const end=source.indexOf('// Production remains on Supabase',start);
+assert.ok(start>=0&&end>start,'Oracle runtime factory missing');
+const factory=source.slice(start,end);
+assert.doesNotMatch(factory,/createSupabase/,'Oracle factory must not use Supabase adapters');
+assert.match(factory,/const auth = createOracleAuthAdapter\(\)/);
+assert.match(factory,/createOracleHttpTransport\(\{ auth \}\)/,'All Oracle domain calls must share Oracle Auth');
+for(const capability of ['account','analytics','policies','media','marketplace','offers','deals','realtime','directMessaging','contextualMessaging','notifications','profiles','reviews','moderation','stories','discovery','dolab'])assert.match(factory,new RegExp(`\\b${capability}:`),`missing ${capability}`);
+assert.match(source,/oracle: createOracleBackendRuntime/);
+console.log('oracle_runtime_wiring=PASS');

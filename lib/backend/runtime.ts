@@ -5,6 +5,25 @@ import { createSupabaseAnalyticsAdapter } from '@/lib/backend/adapters/supabase/
 import { createSupabaseAccountLifecycleAdapter } from '@/lib/backend/adapters/supabase/account-adapter';
 import { createSupabaseMediaStorageAdapter } from '@/lib/backend/adapters/supabase/media-adapter';
 import { createSupabaseModerationAdapter } from '@/lib/backend/adapters/supabase/moderation-adapter';
+import { createOracleAuthAdapter } from '@/lib/backend/adapters/oracle/auth-adapter';
+import { createOracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
+import { createOracleAccountLifecycleAdapter } from '@/lib/backend/adapters/oracle/account-adapter';
+import { createOracleAnalyticsAdapter } from '@/lib/backend/adapters/oracle/analytics-adapter';
+import { createOraclePolicyAcceptanceAdapter } from '@/lib/backend/adapters/oracle/policies-adapter';
+import { createOracleMediaStorageAdapter } from '@/lib/backend/adapters/oracle/media-adapter';
+import { createOracleMarketplaceReadAdapter } from '@/lib/backend/adapters/oracle/marketplace-read-adapter';
+import { createOracleMarketplaceWriteAdapter } from '@/lib/backend/adapters/oracle/marketplace-write-adapter';
+import { createOracleOfferLifecycleAdapter, createOracleDealLifecycleAdapter } from '@/lib/backend/adapters/oracle/exchange-lifecycle-adapter';
+import { createOracleMessagingRealtimeAdapter } from '@/lib/backend/adapters/oracle/messaging-realtime-adapter';
+import { createOracleDirectMessagingAdapter } from '@/lib/backend/adapters/oracle/direct-messaging-adapter';
+import { createOracleContextualMessagingAdapter } from '@/lib/backend/adapters/oracle/contextual-messaging-adapter';
+import { createOracleNotificationsAdapter } from '@/lib/backend/adapters/oracle/notifications-adapter';
+import { createOracleProfileSocialAdapter } from '@/lib/backend/adapters/oracle/profile-core-adapter';
+import { createOracleReviewsAdapter } from '@/lib/backend/adapters/oracle/reviews-adapter';
+import { createOracleModerationAdapter } from '@/lib/backend/adapters/oracle/moderation-adapter';
+import { createOracleStoriesAdapter } from '@/lib/backend/adapters/oracle/stories-adapter';
+import { createOracleDiscoveryAdapter } from '@/lib/backend/adapters/oracle/discovery-adapter';
+import { createOracleDolabAdapter } from '@/lib/backend/adapters/oracle/dolab-adapter';
 import { createSupabaseMarketplaceReadAdapter } from '@/lib/backend/adapters/supabase/marketplace-adapter';
 import { createSupabaseDirectMessagingAdapter } from '@/lib/backend/adapters/supabase/messaging-adapter';
 import { createSupabaseContextualMessagingAdapter } from '@/lib/backend/adapters/supabase/contextual-messaging-adapter';
@@ -33,6 +52,34 @@ import type { ModerationContract } from '@/lib/backend/contracts/moderation';
 
 export type TeswaBackendRuntime = Pick<TeswaBackend, 'auth' | 'media'> & { profiles: ProfileSocialContract; marketplace: MarketplaceCoreContract; offers: OfferLifecycleContract; deals: DealLifecycleContract; realtime: MessagingRealtimeContract; directMessaging: DirectMessagingTransportContract; contextualMessaging: ContextualMessagingTransportContract; notifications: NotificationsContract; stories: StoriesContract; discovery: DiscoveryContract; dolab: DolabContract; analytics: AnalyticsContract; policies: PolicyAcceptanceContract; reviews: ReviewsContract; moderation: ModerationContract; account: AccountLifecycleContract };
 
+export function createOracleBackendRuntime(): TeswaBackendRuntime {
+  const auth = createOracleAuthAdapter();
+  const transport = createOracleHttpTransport({ auth });
+  return {
+    auth,
+    account: createOracleAccountLifecycleAdapter(transport),
+    analytics: createOracleAnalyticsAdapter(transport),
+    policies: createOraclePolicyAcceptanceAdapter(transport),
+    media: createOracleMediaStorageAdapter({ transport }),
+    marketplace: {
+      ...createOracleMarketplaceReadAdapter(transport),
+      ...createOracleMarketplaceWriteAdapter(transport),
+    },
+    offers: createOracleOfferLifecycleAdapter(transport),
+    deals: createOracleDealLifecycleAdapter(transport),
+    realtime: createOracleMessagingRealtimeAdapter(transport),
+    directMessaging: createOracleDirectMessagingAdapter(transport),
+    contextualMessaging: createOracleContextualMessagingAdapter(transport),
+    notifications: createOracleNotificationsAdapter(transport),
+    profiles: createOracleProfileSocialAdapter(transport),
+    reviews: createOracleReviewsAdapter(transport),
+    moderation: createOracleModerationAdapter(transport),
+    stories: createOracleStoriesAdapter(transport),
+    discovery: createOracleDiscoveryAdapter(transport),
+    dolab: createOracleDolabAdapter(transport),
+  };
+}
+
 // Production remains on Supabase. Oracle must supply a complete backend before
 // it can be selected; an Oracle Auth + Supabase data hybrid is not supported.
 export const teswaBackendRuntime: TeswaBackendRuntime = selectTeswaBackendRuntime(
@@ -58,5 +105,6 @@ export const teswaBackendRuntime: TeswaBackendRuntime = selectTeswaBackendRuntim
       discovery: createSupabaseDiscoveryAdapter(),
       dolab: createSupabaseDolabAdapter(),
     }),
+    oracle: createOracleBackendRuntime,
   },
 );
