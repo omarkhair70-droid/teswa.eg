@@ -53,7 +53,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_marketplace_write.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql domain_exchange_e2e.py; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql domain_exchange_e2e.py; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -82,6 +82,7 @@ sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1
 sudo install -d -o root -g teswaapi -m 0750 "$APP"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_domain_read.py" "$APP/oracle_domain_read.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_marketplace_write.py" "$APP/oracle_marketplace_write.py"
+sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_marketplace_lifecycle.py" "$APP/oracle_marketplace_lifecycle.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_exchange.py" "$APP/oracle_exchange.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_exchange_read.py" "$APP/oracle_exchange_read.py"
 sudo install -o root -g teswaapi -m 0640 "$STAGE/oracle_exchange_read_extra.py" "$APP/oracle_exchange_read_extra.py"
