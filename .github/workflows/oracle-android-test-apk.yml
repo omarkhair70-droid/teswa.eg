@@ -1,0 +1,108 @@
+name: Oracle Android Test APK
+
+on:
+  push:
+    branches: [build/oracle-android-20260909]
+    paths: ['.github/workflows/oracle-android-test-apk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      SENTRY_ALLOW_FAILURE: 'true'
+      GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8 -Dorg.gradle.workers.max=2'
+      EAS_LOCAL_BUILD_SKIP_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android API 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Install dependencies
+        run: npm ci
+      - name: Configure isolated Oracle preview
+        env:
+          APP_VARIANT: preview
+          EXPO_PUBLIC_TESWA_BACKEND_PROVIDER: oracle
+          EXPO_PUBLIC_TESWA_ORACLE_API_URL: https://130-110-122-142.sslip.io
+          EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: https://130-110-122-142.sslip.io
+          EXPO_PUBLIC_SUPABASE_URL: https://disabled.invalid
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: oracle-test-disabled
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const config = require('./app.config.js');
+          const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          const url = 'https://130-110-122-142.sslip.io';
+          if (process.env.EXPO_PUBLIC_TESWA_BACKEND_PROVIDER !== 'oracle') throw new Error('Oracle provider required');
+          if (config.expo.android.package !== 'com.teswa.mobile.preview') throw new Error('Production package forbidden');
+          config.expo.name = 'Teswa Oracle';
+          config.expo.updates = { ...config.expo.updates, enabled: false, checkAutomatically: 'NEVER' };
+          fs.writeFileSync('app.config.js', 'module.exports = ' + JSON.stringify(config, null, 2) + ';\n');
+          eas.build['oracle-preview'] = {
+            ...eas.build.preview,
+            env: {
+              ...eas.build.preview.env,
+              APP_VARIANT: 'preview',
+              EXPO_PUBLIC_TESWA_BACKEND_PROVIDER: 'oracle',
+              EXPO_PUBLIC_TESWA_ORACLE_API_URL: url,
+              EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: url,
+              EXPO_PUBLIC_SUPABASE_URL: 'https://disabled.invalid',
+              EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'oracle-test-disabled',
+            },
+          };
+          fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2) + '\n');
+          const actual = require('./app.config.js').expo;
+          if (actual.android.package !== 'com.teswa.mobile.preview' || actual.updates.enabled !== false) throw new Error('Oracle APK isolation failed');
+          console.log('oracle_preview_config=PASS');
+          JS
+      - name: Verify public Oracle API
+        shell: bash
+        run: |
+          set -euo pipefail
+          H=130-110-122-142.sslip.io
+          test "$(curl --noproxy '*' --connect-timeout 5 --max-time 20 -sS -o /dev/null -w '%{http_code}' "https://$H/v1/auth/healthz")" = 200
+          test "$(curl --noproxy '*' --connect-timeout 5 --max-time 20 -sS -o /dev/null -w '%{http_code}' "https://$H/v1/auth/session")" = 401
+          echo 'oracle_api_preflight=PASS'
+      - name: Build Oracle preview APK
+        env:
+          APP_VARIANT: preview
+          EXPO_PUBLIC_TESWA_BACKEND_PROVIDER: oracle
+          EXPO_PUBLIC_TESWA_ORACLE_API_URL: https://130-110-122-142.sslip.io
+          EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: https://130-110-122-142.sslip.io
+          EXPO_PUBLIC_SUPABASE_URL: https://disabled.invalid
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: oracle-test-disabled
+        run: npx eas-cli@latest build --platform android --profile oracle-preview --local --non-interactive
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find . -type f -name '*.apk' ! -path '*/node_modules/*' | head -n 1)"
+          test -n "$APK_PATH"
+          test -s "$APK_PATH"
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          sha256sum "$APK_PATH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teswa-oracle-preview-apk
+          path: ${{ steps.apk.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 7
