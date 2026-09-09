@@ -92,11 +92,13 @@ sudo -n cp -p "$N" "$L"; command -v restorecon >/dev/null 2>&1&&sudo -n restorec
 sudo -n systemctl restart caddy
 sudo -n systemctl is-active --quiet caddy
 sudo -n ss -H -ltn 'sport = :8080' | grep -q .
-R="--noproxy * --resolve $H:443:$P --connect-timeout 3 --max-time 10"
-for _ in $(seq 1 8);do A=$(curl $R -fsS "https://$H/v1/auth/healthz" 2>/dev/null||true);echo "$A"|grep -q '"status":"ok"'&&break;sleep 3;done
+R=(--noproxy "*" --resolve "$H:443:$P" --connect-timeout 3 --max-time 10)
+for _ in $(seq 1 8);do A=$(curl "${R[@]}" -fsS "https://$H/v1/auth/healthz" 2>/dev/null||true);echo "$A"|grep -q '"status":"ok"'&&break;sleep 3;done
 echo "$A"|grep -q '"supabaseRuntimeDependency":false' || exit 20
-[ "$(curl $R -sS -o "$D/session" -w '%{http_code}' "https://$H/v1/auth/session")" = 401 ] || exit 21
-[ "$(curl $R -sS -o "$D/signup" -w '%{http_code}' -H 'Content-Type: application/json' --data '{"email":"rehearsal@teswa.invalid","password":"not-used"}' "https://$H/v1/auth/sign-up")" = 503 ] || exit 22
+S=$(curl "${R[@]}" -sS -o "$D/session" -w '%{http_code}' "https://$H/v1/auth/session") || { echo session_transport_failed; exit 21; }
+echo "session_http=$S"; [ "$S" = 401 ] || exit 21
+S=$(curl "${R[@]}" -sS -o "$D/signup" -w '%{http_code}' -H 'Content-Type: application/json' --data '{"email":"rehearsal@teswa.invalid","password":"not-used"}' "https://$H/v1/auth/sign-up") || { echo signup_transport_failed; exit 22; }
+echo "signup_http=$S"; [ "$S" = 503 ] || exit 22
 OK=true; echo 'edge_public_api=PASS routes=/v1/* production_cutover=false'; echo "edge_backup=$B"
 '''
 
