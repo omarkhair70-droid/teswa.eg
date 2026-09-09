@@ -17,6 +17,9 @@ class Tests(unittest.TestCase):
         self.assertNotIn('handle {\n  reverse_proxy',MODULE.GUEST)
     def test_preserves_existing_8080_server_semantically(self):
         self.assertIn("canon(server(a,':8080'))!=canon(server(b,':8080'))",MODULE.GUEST)
+        self.assertNotIn('caddy reload',MODULE.GUEST)
+        self.assertGreaterEqual(MODULE.GUEST.count('systemctl restart caddy'),2)
+        self.assertIn("ss -H -ltn 'sport = :8080' | grep -q .",MODULE.GUEST)
     def test_keeps_pending_signup_blocked(self):
         self.assertIn('/v1/auth/sign-up',MODULE.GUEST)
         self.assertIn('= 503',MODULE.GUEST)

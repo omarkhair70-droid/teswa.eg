@@ -56,7 +56,7 @@ H=__HOST__; P=__PRIVATE__; U=http://__CORE__; L=/etc/caddy/Caddyfile
 sudo -n systemctl is-active --quiet caddy; sudo -n test -f "$L"
 D=$(sudo -n mktemp -d /var/lib/teswa/ingress-backups/api-XXXXXX); B="$D/Caddyfile.before"; N="$D/Caddyfile.next"
 sudo -n cp -p "$L" "$B"; OK=false
-rollback(){ if [ "$OK" != true ]; then sudo -n cp -p "$B" "$L"||true; sudo -n caddy reload --config "$L" --adapter caddyfile >/dev/null 2>&1||true; fi; }
+rollback(){ if [ "$OK" != true ]; then sudo -n cp -p "$B" "$L"||true; command -v restorecon >/dev/null 2>&1&&sudo -n restorecon "$L"||true; sudo -n systemctl restart caddy >/dev/null 2>&1||true; fi; }
 trap rollback EXIT
 sudo -n python3 - "$L" "$N" "$H" "$U" <<'PY'
 import json,os,stat,subprocess,sys
@@ -89,7 +89,9 @@ if p.count('reverse_proxy '+u)!=1:raise SystemExit('api_upstream_ambiguous')
 PY
 sudo -n caddy validate --config "$N" --adapter caddyfile >/dev/null
 sudo -n cp -p "$N" "$L"; command -v restorecon >/dev/null 2>&1&&sudo -n restorecon "$L"||true
-sudo -n caddy reload --config "$L" --adapter caddyfile >/dev/null
+sudo -n systemctl restart caddy
+sudo -n systemctl is-active --quiet caddy
+sudo -n ss -H -ltn 'sport = :8080' | grep -q .
 R="--noproxy * --resolve $H:443:$P --connect-timeout 3 --max-time 10"
 for _ in $(seq 1 8);do A=$(curl $R -fsS "https://$H/v1/auth/healthz" 2>/dev/null||true);echo "$A"|grep -q '"status":"ok"'&&break;sleep 3;done
 echo "$A"|grep -q '"supabaseRuntimeDependency":false' || exit 20
