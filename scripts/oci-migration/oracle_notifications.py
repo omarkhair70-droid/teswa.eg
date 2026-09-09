@@ -47,7 +47,7 @@ class NotificationsApi:
             sql="""SELECT coalesce(json_agg(json_build_object('id',n.id,'type',n.type,'title',n.title,
               'body',n.body,'route',n.route,'actorUserId',n.actor_user_id,'itemId',n.item_id,
               'offerId',n.offer_id,'dealId',n.deal_id,'conversationId',n.contextual_conversation_id,
-              'readAt',n.read_at,'createdAt',n.created_at) ORDER BY n.created_at DESC),'[]'::json)
+              'readAt',n.read_at,'createdAt) ORDER BY n.created_at DESC),'[]'::json)
               FROM (SELECT * FROM public.notifications WHERE user_id='%s'::uuid ORDER BY created_at DESC LIMIT %d) n""" % (user_id,limit)
             return 200,{'items':self.reads.query(user_id,sql)}
         if method=='GET' and parsed.path=='/v1/notifications/unread' and not parsed.query:
@@ -113,7 +113,8 @@ class NotificationsApi:
             expected={'targetUserId','type','title','body','itemId','offerId','dealId','messageId'}
             if set(body)!=expected: raise ApiError(400,'invalid_notification')
             target_user=valid_uuid(body['targetUserId'])
-            if body.get('type') not in DISPATCH_TYPES: raise ApiError(400,'unsupported_notification_type')
+            if not isinstance(body.get('type'),str) or body['type'] not in DISPATCH_TYPES:
+                raise ApiError(400,'unsupported_notification_type')
             kind=optional_text(body['type'],80); title=optional_text(body['title'],160)
             if kind=='NULL' or title=='NULL': raise ApiError(400,'invalid_notification')
             values=["'%s'::uuid"%target_user,kind,title,optional_text(body['body'],1000),optional_uuid(body['itemId']),optional_uuid(body['offerId']),optional_uuid(body['dealId']),optional_uuid(body['messageId'])]
@@ -121,5 +122,5 @@ class NotificationsApi:
             # without throwing. A successful call is acceptance, not proof of an
             # inserted notification. Do not fabricate a created/ok acknowledgment.
             self.writes.query(user_id,"SELECT json_build_object('accepted',true,'result',public.create_notification(%s))" % ','.join(values))
-            return 202,{'accepted':True}
+            return 200,{'accepted':True}
         raise ApiError(404,'not_found')
