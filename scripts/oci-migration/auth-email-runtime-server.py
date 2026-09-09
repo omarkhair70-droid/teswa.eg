@@ -10,7 +10,9 @@ import argparse
 import base64
 import hashlib
 import hmac
+import http.client
 import json
+import os
 import secrets
 import subprocess
 import tempfile
@@ -54,10 +56,35 @@ def pg_text(value: str) -> str:
 
 
 class ConfirmationDelivery:
-    """OCI HTTPS Email Delivery using the Core instance principal."""
+    """Explicit server-side provider; existing OCI configs remain compatible."""
     def __init__(self, config_path: str):
         config = json.loads(Path(config_path).read_text(encoding="utf-8"))
         value = config.get("email_delivery")
+        self.provider = value.get("provider", "oci") if isinstance(value, dict) else None
+        if self.provider == "resend":
+            if set(value) != {"provider", "sender", "public_base_url", "api_key_file"}:
+                raise SystemExit("email_delivery_config_invalid")
+            sender, base, key_file = (value[k] for k in ("sender", "public_base_url", "api_key_file"))
+            if not all(isinstance(v, str) for v in (sender, base, key_file)):
+                raise SystemExit("email_delivery_config_invalid")
+            parsed = urlsplit(base)
+            if ("@" not in sender or len(sender) > 254 or any(c in sender for c in "\r\n<>")
+                    or parsed.scheme != "https" or not parsed.hostname or parsed.username
+                    or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/")
+                    or not Path(key_file).is_absolute()):
+                raise SystemExit("email_delivery_config_invalid")
+            key_path = Path(key_file)
+            # A root-owned 0640 file, readable only by the Auth service group,
+            # is also valid. Never permit a world-readable API credential.
+            if key_path.stat().st_mode & 0o007 and os.name == "posix":
+                raise SystemExit("email_delivery_key_permissions_invalid")
+            self._api_key = key_path.read_text(encoding="utf-8").strip()
+            if not self._api_key.startswith("re_") or any(c.isspace() for c in self._api_key):
+                raise SystemExit("email_delivery_key_invalid")
+            self.sender, self.base = sender, base.rstrip("/")
+            return
+        if self.provider != "oci":
+            raise SystemExit("email_delivery_provider_invalid")
         if not isinstance(value, dict) or set(value) != {
             "sender", "compartment_id", "public_base_url", "region",
         }:
@@ -86,8 +113,31 @@ class ConfirmationDelivery:
         return self._client
 
     def send_confirmation(self, email: str, token: str) -> None:
-        oci, client = self._service()
         link = self.base + "/v1/auth/confirm?token=" + quote(token, safe="")
+        if self.provider == "resend":
+            # Fixed TLS destination, no redirects or raw provider errors in logs.
+            conn = http.client.HTTPSConnection("api.resend.com", timeout=20)
+            try:
+                conn.request("POST", "/emails", body=compact_json({
+                    "from": self.sender, "to": [email], "subject": "تأكيد حساب تِسوى",
+                    "text": "أكّد حسابك على تِسوى من الرابط التالي:\n" + link
+                        + "\n\nلو لم تطلب إنشاء الحساب، تجاهل الرسالة.",
+                }), headers={"Authorization": "Bearer " + self._api_key,
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": "teswa-confirm-" + refresh_hash(token)})
+                response = conn.getresponse()
+                payload = response.read(65537)
+                if response.status not in (200, 201) or len(payload) > 65536:
+                    raise ValueError("provider_rejected")
+                result = json.loads(payload)
+                if not isinstance(result, dict) or not isinstance(result.get("id"), str) or not result["id"]:
+                    raise ValueError("provider_receipt_missing")
+            except Exception:
+                raise RuntimeError("confirmation_delivery_failed") from None
+            finally:
+                conn.close()
+            return
+        oci, client = self._service()
         details = oci.email_data_plane.models.SubmitEmailDetails(
             sender=oci.email_data_plane.models.Sender(
                 sender_address=oci.email_data_plane.models.EmailAddress(
@@ -422,7 +472,7 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     self._json(503, {"error": "confirmation_delivery_failed"}); return
                 user = self.server.store.auth_user(user_id)
-                self._json(201, {"user": user, "session": None, "confirmation_required": True, "confirmation_delivery": "sent", "shadow": True})
+                self._json(201, {"user": user, "session": None, "confirmation_required": True, "confirmation_delivery": "submitted", "shadow": True})
             except Exception:
                 self._json(500, {"error": "auth_shadow_internal_error"})
             return
@@ -437,7 +487,9 @@ class Handler(BaseHTTPRequestHandler):
                 token = self.server.store.resend_confirmation(email)
                 if token:
                     self.server.delivery.send_confirmation(email, token)
-                self._json(202, {"accepted": True, "confirmation_delivery": "sent"})
+                # Same response for unknown/confirmed accounts: no enumeration
+                # and no claim that an email was sent when there was no token.
+                self._json(202, {"accepted": True})
             except Exception:
                 self._json(503, {"error": "confirmation_delivery_failed"})
             return
