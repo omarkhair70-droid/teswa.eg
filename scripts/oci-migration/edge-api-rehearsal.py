@@ -87,7 +87,7 @@ a,b=adapt(l),adapt(n)
 if canon(server(a,':8080'))!=canon(server(b,':8080')):raise SystemExit('existing_edge_routes_changed')
 if p.split(m,1)[1].count('reverse_proxy '+u)!=1:raise SystemExit('api_upstream_ambiguous')
 PY
-sudo -n caddy validate --config "$N" --adapter caddyfile >/dev/null
+V=$(sudo -n caddy validate --config "$N" --adapter caddyfile 2>&1) || { printf '%s\n' "$V" | tail -n 5; exit 14; }
 sudo -n cp -p "$N" "$L"; command -v restorecon >/dev/null 2>&1&&sudo -n restorecon "$L"||true
 sudo -n systemctl restart caddy
 sudo -n systemctl is-active --quiet caddy
@@ -95,9 +95,9 @@ sudo -n ss -H -ltn 'sport = :8080' | grep -q .
 R=(--noproxy "*" --resolve "$H:443:$P" --connect-timeout 3 --max-time 10)
 for _ in $(seq 1 8);do A=$(curl "${R[@]}" -fsS "https://$H/v1/auth/healthz" 2>/dev/null||true);echo "$A"|grep -q '"status":"ok"'&&break;sleep 3;done
 echo "$A"|grep -q '"supabaseRuntimeDependency":false' || exit 20
-S=$(curl "${R[@]}" -sS -o "$D/session" -w '%{http_code}' "https://$H/v1/auth/session") || { echo session_transport_failed; exit 21; }
+S=$(curl "${R[@]}" -sS -o /dev/null -w '%{http_code}' "https://$H/v1/auth/session") || { echo session_transport_failed; exit 21; }
 echo "session_http=$S"; [ "$S" = 401 ] || exit 21
-S=$(curl "${R[@]}" -sS -o "$D/signup" -w '%{http_code}' -H 'Content-Type: application/json' --data '{"email":"rehearsal@teswa.invalid","password":"not-used"}' "https://$H/v1/auth/sign-up") || { echo signup_transport_failed; exit 22; }
+S=$(curl "${R[@]}" -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data '{"email":"rehearsal@teswa.invalid","password":"not-used"}' "https://$H/v1/auth/sign-up") || { echo signup_transport_failed; exit 22; }
 echo "signup_http=$S"; [ "$S" = 503 ] || exit 22
 OK=true; echo 'edge_public_api=PASS routes=/v1/* production_cutover=false'; echo "edge_backup=$B"
 '''
