@@ -144,7 +144,6 @@ PRIVATE=__PRIVATE__
 LIVE=/etc/caddy/Caddyfile
 sudo -n systemctl is-active --quiet caddy
 sudo -n test -f "$LIVE"
-#Touch only the active Edge firewall zone; never disable the firewall.
 if command -v firewall-cmd >/dev/null 2>&1 && sudo -n firewall-cmd --state >/dev/null 2>&1; then
   IFACE=$(ip -o -4 addr show | awk -v ip="$PRIVATE" '$4 ~ "^"ip"/" {print $2; exit}')
   ZONE=$(sudo -n firewall-cmd --get-zone-of-interface="$IFACE" 2>/dev/null || true)
@@ -154,7 +153,6 @@ if command -v firewall-cmd >/dev/null 2>&1 && sudo -n firewall-cmd --state >/dev
     sudo -n firewall-cmd --permanent --zone="$ZONE" --add-port="$PORT/tcp" >/dev/null
   done
 fi
-sudo -n mkdir -p /var/lib/teswa/ingress-backups
 sudo -n install -d -o root -g root -m 0700 /var/lib/teswa/ingress-backups
 D=$(sudo -n mktemp -d /var/lib/teswa/ingress-backups/https-XXXXXX)
 BACKUP="$D/Caddyfile.before"
@@ -177,9 +175,10 @@ if marker not in s:
     if 'https://'+host in s: raise SystemExit('https_site_conflict')
     m=re.match(r'\A(\s*(?:#[^\n]*\n\s*)*\{\s*\n)(.*?)(^\}\s*$)',s,re.M|re.S)
     if not m: raise SystemExit('global_options_unexpected')
-    # Explicit site TLS provisions the certificate; retain the old global mode.
-    if len(re.findall(r'(?m)^[ \t]*auto_https[ \t]+off[ \t]*$',m.group(2))) != 1:
+    pat=r'(?m)^([ \t]*)auto_https[ \t]+off[ \t]*$'
+    if len(re.findall(pat,m.group(2))) != 1:
         raise SystemExit('auto_https_option_unexpected')
+    s=re.sub(pat,r'\1auto_https disable_redirects',s,count=1)
     s+='\n'+marker+'\nhttps://'+host+' {\n tls {\n  issuer acme https://acme-v02.api.letsencrypt.org/directory\n }\n handle /healthz {\n  respond "teswa-https-rehearsal" 200\n }\n handle {\n  respond "Not found" 404\n }\n}\n'
 st=live.stat(); candidate.write_text(s)
 os.chown(candidate,st.st_uid,st.st_gid); os.chmod(candidate,stat.S_IMODE(st.st_mode))
@@ -195,8 +194,9 @@ def canonical(x,g=None):
     if type(x)==dict: return {k:(g.setdefault(v,str(len(g))) if k=='group' else canonical(v,g)) for k,v in x.items()}
     if type(x)==list: return [canonical(v,g) for v in x]
     return x
-before=adapt(live); after=adapt(candidate)
-if canonical(server(before)) != canonical(server(after)):
+before=dict(server(adapt(live))); after=dict(server(adapt(candidate)))
+before.pop('automatic_https',None); after.pop('automatic_https',None)
+if canonical(before) != canonical(after):
     raise SystemExit('existing_edge_routes_changed')
 PY
 sudo -n caddy validate --config "$D/Caddyfile.next" --adapter caddyfile >/dev/null
