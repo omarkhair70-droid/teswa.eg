@@ -53,7 +53,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_direct_messaging.py oracle_contextual_messaging.py oracle_stories.py oracle_discovery.py oracle_dolab.py oracle_policies_analytics.py oracle_moderation.py oracle_account.py diagnose_oracle_profile.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql domain_exchange_e2e.py; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_direct_messaging.py oracle_contextual_messaging.py oracle_stories.py oracle_discovery.py oracle_dolab.py oracle_policies_analytics.py oracle_moderation.py oracle_account.py diagnose_oracle_profile.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql runtime-profile-column-security.sql domain_exchange_e2e.py; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -75,6 +75,30 @@ GRANT teswa_app_authenticated TO teswaapi;
 GRANT SELECT ON public.categories TO teswa_app_authenticated;
 SQL
 sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$STAGE/runtime-domain-api-grants.sql"
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$STAGE/runtime-profile-column-security.sql"
+PROFILE_SECURITY="$(sudo -u postgres "$P" -X -qAt -v ON_ERROR_STOP=1 -d "$DB" <<'SQL'
+WITH columns AS (
+  SELECT c.column_name FROM information_schema.columns c
+  WHERE c.table_schema='public' AND c.table_name='profiles'
+), allowed_select AS (
+  SELECT unnest(ARRAY['id','display_name','username','bio','avatar_url','cover_url','city','area','profile_tagline','successful_swaps_count','response_rate','created_at','is_banned']) name
+), allowed_insert AS (
+  SELECT unnest(ARRAY['id','display_name','username']) name
+), allowed_update AS (
+  SELECT unnest(ARRAY['display_name','username','bio','avatar_url','cover_url','city','area','profile_tagline','direct_message_privacy','updated_at']) name
+)
+SELECT concat_ws('|',
+  has_table_privilege('teswa_app_authenticated','public.profiles','SELECT'),
+  (SELECT count(*) FROM allowed_select a WHERE NOT has_column_privilege('teswa_app_authenticated','public.profiles',a.name,'SELECT')),
+  (SELECT count(*) FROM columns c WHERE NOT EXISTS(SELECT FROM allowed_select a WHERE a.name=c.column_name) AND has_column_privilege('teswa_app_authenticated','public.profiles',c.column_name,'SELECT')),
+  (SELECT count(*) FROM columns c WHERE NOT EXISTS(SELECT FROM allowed_insert a WHERE a.name=c.column_name) AND has_column_privilege('teswa_app_authenticated','public.profiles',c.column_name,'INSERT')),
+  (SELECT count(*) FROM columns c WHERE NOT EXISTS(SELECT FROM allowed_update a WHERE a.name=c.column_name) AND has_column_privilege('teswa_app_authenticated','public.profiles',c.column_name,'UPDATE')),
+  has_function_privilege('teswa_app_authenticated','teswa_runtime.get_my_direct_message_privacy()','EXECUTE'),
+  (SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND policyname='profiles_authenticated_visible_select'));
+SQL
+)"
+[ "$PROFILE_SECURITY" = 'f|0|0|0|0|t|1' ] || { echo "domain_read_deploy=FAIL profile_column_security=$PROFILE_SECURITY"; exit 18; }
+echo 'profile_column_security=PASS'
 ROLE_OK="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT count(*) FROM pg_roles WHERE rolname='teswaapi' AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls")"
 [ "$ROLE_OK" = 1 ] || { echo 'domain_read_deploy=FAIL unsafe_database_role'; exit 13; }
 sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1

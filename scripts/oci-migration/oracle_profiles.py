@@ -13,6 +13,8 @@ PROFILE_JSON = """json_build_object(
   'avatarUrl',p.avatar_url,'coverUrl',p.cover_url,'city',p.city,'area',p.area,
   'profileTagline',p.profile_tagline,'successfulSwapsCount',p.successful_swaps_count,
   'responseRate',p.response_rate,'createdAt',p.created_at)"""
+PROFILE_RETURNING = """id,display_name,username,bio,avatar_url,cover_url,city,area,
+  profile_tagline,successful_swaps_count,response_rate,created_at"""
 
 
 def clean(value, name, maximum, required=False):
@@ -73,7 +75,9 @@ class ProfilesApi:
             return 200, row
 
         if method == 'GET' and parsed.path == '/v1/profiles/privacy':
-            row = self.reads.query(user_id, "SELECT json_build_object('value',coalesce(p.direct_message_privacy::text,'everyone')) FROM public.profiles p WHERE p.id='%s'::uuid" % user_id)
+            row = self.reads.query(user_id, """SELECT json_build_object('value',x.value)
+              FROM (SELECT teswa_runtime.get_my_direct_message_privacy() value) x
+              WHERE x.value IS NOT NULL""")
             if row is None:
                 raise ApiError(404, 'not_found')
             return 200, row
@@ -220,7 +224,8 @@ class ProfilesApi:
             }
             assignments = ','.join("%s=%s" % (key, sql_text(value) if value is not None else 'NULL') for key, value in values.items())
             statement = """WITH x AS (UPDATE public.profiles p SET %s,updated_at=now()
-              WHERE p.id='%s'::uuid RETURNING *) SELECT %s FROM x p""" % (assignments, user_id, PROFILE_JSON)
+              WHERE p.id='%s'::uuid RETURNING %s) SELECT %s FROM x p""" % (
+                assignments, user_id, PROFILE_RETURNING, PROFILE_JSON)
             row = self.writes.query(user_id, statement)
             if row is None:
                 raise ApiError(404, 'not_found')

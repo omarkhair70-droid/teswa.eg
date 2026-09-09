@@ -8,6 +8,7 @@ on:
       - fix/oracle-exchange-read-closure-20260907
       - fix/oracle-exchange-lifecycle-20260907
       - fix/oracle-exchange-read-completion-20260907
+      - fix/oracle-profile-column-security-20260909
     paths:
       - scripts/oci-migration/oracle_domain_read.py
       - scripts/oci-migration/oracle_domain_service.py
@@ -31,8 +32,10 @@ on:
       - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
       - scripts/oci-migration/domain_exchange_e2e.py
       - scripts/oci-migration/runtime-domain-api-grants.sql
+      - scripts/oci-migration/runtime-profile-column-security.sql
       - scripts/oci-migration/test_oracle_domain_exchange.py
       - scripts/oci-migration/test_oracle_profiles.py
+      - scripts/oci-migration/test_profile_acl_contract.py
       - scripts/oci-migration/test_oracle_notifications.py
       - scripts/oci-migration/test_oracle_reviews.py
       - scripts/oci-migration/test_oracle_direct_messaging.py
@@ -147,6 +150,7 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_write_transaction.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_exchange.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_profiles.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_profile_acl_contract.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_notifications.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_reviews.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_direct_messaging.py -v
