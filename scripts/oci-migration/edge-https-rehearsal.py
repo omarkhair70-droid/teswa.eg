@@ -179,7 +179,7 @@ if marker not in s:
     if not m: raise SystemExit('global_options_unexpected')
     block=m.group(2)
     # Keep certificate automation, but do not add redirects to the old HTTP routes.
-    block,n=re.subn(r'(?m)^(\s*)auto_https\s+off\s*$',r'\1auto_https disable_redirects',block)
+    block,n=re.subn(r'(?m)^([ \t]*)auto_https[ \t]+off[ \t]*$',r'\1auto_https disable_redirects',block)
     if n != 1: raise SystemExit('auto_https_option_unexpected')
     s=s[:m.start(2)]+block+s[m.end(2):]
     s+='\n'+marker+'\nhttps://'+host+' {\n tls {\n  issuer acme https://acme-v02.api.letsencrypt.org/directory\n }\n handle /healthz {\n  respond "teswa-https-rehearsal" 200\n }\n handle {\n  respond "Not found" 404\n }\n}\n'
