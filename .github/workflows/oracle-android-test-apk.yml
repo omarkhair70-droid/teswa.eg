@@ -16,6 +16,7 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true'
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'
       SENTRY_ALLOW_FAILURE: 'true'
       GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8 -Dorg.gradle.workers.max=2'
@@ -51,7 +52,10 @@ jobs:
           const config = require('./app.config.js');
           const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
           const url = 'https://130-110-122-142.sslip.io';
+          const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
           if (process.env.EXPO_PUBLIC_TESWA_BACKEND_PROVIDER !== 'oracle') throw new Error('Oracle provider required');
+          if (process.env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED !== 'true') throw new Error('Native Google sign-in must be enabled');
+          if (!googleWebClientId || !/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(googleWebClientId)) throw new Error('Google web client ID is missing or invalid');
           if (config.expo.android.package !== 'com.teswa.mobile.preview') throw new Error('Production package forbidden');
           config.expo.name = 'Teswa Oracle';
           config.expo.updates = { ...config.expo.updates, enabled: false, checkAutomatically: 'NEVER' };
@@ -64,6 +68,7 @@ jobs:
               EXPO_PUBLIC_TESWA_BACKEND_PROVIDER: 'oracle',
               EXPO_PUBLIC_TESWA_ORACLE_API_URL: url,
               EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: url,
+              EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true',
               EXPO_PUBLIC_SUPABASE_URL: 'https://disabled.invalid',
               EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'oracle-test-disabled',
             },
@@ -71,6 +76,7 @@ jobs:
           fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2) + '\n');
           const actual = require('./app.config.js').expo;
           if (actual.android.package !== 'com.teswa.mobile.preview' || actual.updates.enabled !== false) throw new Error('Oracle APK isolation failed');
+          if (eas.build['oracle-preview'].env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED !== 'true') throw new Error('Native Google build flag missing');
           console.log('oracle_preview_config=PASS');
           JS
       - name: Verify public Oracle API
@@ -87,6 +93,7 @@ jobs:
           EXPO_PUBLIC_TESWA_BACKEND_PROVIDER: oracle
           EXPO_PUBLIC_TESWA_ORACLE_API_URL: https://130-110-122-142.sslip.io
           EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: https://130-110-122-142.sslip.io
+          EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true'
           EXPO_PUBLIC_SUPABASE_URL: https://disabled.invalid
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: oracle-test-disabled
         run: npx eas-cli@latest build --platform android --profile oracle-preview --local --non-interactive
