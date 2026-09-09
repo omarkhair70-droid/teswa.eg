@@ -47,7 +47,7 @@ class NotificationsApi:
             sql="""SELECT coalesce(json_agg(json_build_object('id',n.id,'type',n.type,'title',n.title,
               'body',n.body,'route',n.route,'actorUserId',n.actor_user_id,'itemId',n.item_id,
               'offerId',n.offer_id,'dealId',n.deal_id,'conversationId',n.contextual_conversation_id,
-              'readAt',n.read_at,'createdAt) ORDER BY n.created_at DESC),'[]'::json)
+              'readAt',n.read_at,'createdAt',n.created_at) ORDER BY n.created_at DESC),'[]'::json)
               FROM (SELECT * FROM public.notifications WHERE user_id='%s'::uuid ORDER BY created_at DESC LIMIT %d) n""" % (user_id,limit)
             return 200,{'items':self.reads.query(user_id,sql)}
         if method=='GET' and parsed.path=='/v1/notifications/unread' and not parsed.query:
