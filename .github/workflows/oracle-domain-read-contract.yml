@@ -8,6 +8,7 @@ on:
       - fix/oracle-exchange-read-closure-20260907
       - fix/oracle-exchange-lifecycle-20260907
       - fix/oracle-exchange-read-completion-20260907
+      - fix/oracle-account-deletion-parity-20260909
     paths:
       - scripts/oci-migration/oracle_domain_read.py
       - scripts/oci-migration/oracle_domain_service.py
@@ -27,6 +28,8 @@ on:
       - scripts/oci-migration/oracle_policies_analytics.py
       - scripts/oci-migration/oracle_moderation.py
       - scripts/oci-migration/oracle_account.py
+      - scripts/oci-migration/runtime-account-deletion.sql
+      - scripts/oci-migration/test_account_deletion_postgres.sql
       - scripts/oci-migration/deploy-domain-read-shadow.py
       - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
       - scripts/oci-migration/domain_exchange_e2e.py
