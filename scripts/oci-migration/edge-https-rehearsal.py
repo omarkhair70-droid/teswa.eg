@@ -177,20 +177,26 @@ if marker not in s:
     if 'https://'+host in s: raise SystemExit('https_site_conflict')
     m=re.match(r'\A(\s*(?:#[^\n]*\n\s*)*\{\s*\n)(.*?)(^\}\s*$)',s,re.M|re.S)
     if not m: raise SystemExit('global_options_unexpected')
-    block=m.group(2)
-    # Keep certificate automation, but do not add redirects to the old HTTP routes.
-    block,n=re.subn(r'(?m)^([ \t]*)auto_https[ \t]+off[ \t]*$',r'\1auto_https disable_redirects',block)
-    if n != 1: raise SystemExit('auto_https_option_unexpected')
-    s=s[:m.start(2)]+block+s[m.end(2):]
+    # Explicit site TLS provisions the certificate; retain the old global mode.
+    if len(re.findall(r'(?m)^[ \t]*auto_https[ \t]+off[ \t]*$',m.group(2))) != 1:
+        raise SystemExit('auto_https_option_unexpected')
     s+='\n'+marker+'\nhttps://'+host+' {\n tls {\n  issuer acme https://acme-v02.api.letsencrypt.org/directory\n }\n handle /healthz {\n  respond "teswa-https-rehearsal" 200\n }\n handle {\n  respond "Not found" 404\n }\n}\n'
 st=live.stat(); candidate.write_text(s)
 os.chown(candidate,st.st_uid,st.st_gid); os.chmod(candidate,stat.S_IMODE(st.st_mode))
 def adapt(path):
     p=subprocess.run(['/usr/bin/caddy','adapt','--config',str(path),'--adapter','caddyfile'],capture_output=True,text=True,check=True)
     return json.loads(p.stdout)
-def old_routes(config):
-    return [v.get('routes',[]) for v in config.get('apps',{}).get('http',{}).get('servers',{}).values() if ':8080' in v.get('listen',[])]
-if old_routes(adapt(live)) != old_routes(adapt(candidate)):
+def server(config):
+    found=[v for v in config.get('apps',{}).get('http',{}).get('servers',{}).values() if ':8080' in v.get('listen',[])]
+    if len(found)!=1: raise SystemExit('existing_edge_server_ambiguous')
+    return found[0]
+def canonical(x,g=None):
+    g={} if g is None else g
+    if type(x)==dict: return {k:(g.setdefault(v,str(len(g))) if k=='group' else canonical(v,g)) for k,v in x.items()}
+    if type(x)==list: return [canonical(v,g) for v in x]
+    return x
+before=adapt(live); after=adapt(candidate)
+if canonical(server(before)) != canonical(server(after)):
     raise SystemExit('existing_edge_routes_changed')
 PY
 sudo -n caddy validate --config "$D/Caddyfile.next" --adapter caddyfile >/dev/null
