@@ -125,22 +125,33 @@ TEST_EMAIL="lane4-auth-e2e-${STAMP}@teswa.invalid"
 TEST_PASS='Teswa-E2E-Rehearsal-Password-2026'
 TMP="$(mktemp -d)"
 
-code="$(curl -sS -o "$TMP/signup.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" http://127.0.0.1:3110/v1/auth/sign-up)"
-[ "$code" = 201 ] || { echo "auth_email_runtime=FAIL reason=signup_http_$code"; exit 19; }
-TEST_UID="$(python3 - "$TMP/signup.json" <<'PY'
+BEFORE_USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
+code="$(curl -sS -o "$TMP/signup-blocked.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" http://127.0.0.1:3110/v1/auth/sign-up)"
+[ "$code" = 503 ] || { echo "auth_email_runtime=FAIL reason=unconfigured_signup_http_$code"; exit 19; }
+AFTER_USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
+[ "$AFTER_USERS" = "$BEFORE_USERS" ] || { echo 'auth_email_runtime=FAIL reason=blocked_signup_mutated_identity'; exit 20; }
+
+# Bootstrap one synthetic account directly so auth/session semantics stay
+# testable while the public signup gate truthfully remains closed.
+TEST_UID="$(python3 -c 'import uuid;print(uuid.uuid4())')"
+TEST_TOKEN="lane4-confirmation-${STAMP}-synthetic-token"
+TOKEN_SHA="$(printf '%s' "$TEST_TOKEN" | sha256sum | awk '{print $1}')"
+BOOTSTRAPPED="$(sudo -u postgres "$P" -X -qAt -v ON_ERROR_STOP=1 -d "$DB" <<SQL
+SELECT teswa_auth.bootstrap_email_signup('$TEST_UID'::uuid,'$TEST_EMAIL','$TEST_PASS','Lane4 Auth Test','$TOKEN_SHA',now()+interval '20 minutes');
+SQL
+)"
+[ "$BOOTSTRAPPED" = t ] || { echo 'auth_email_runtime=FAIL reason=synthetic_signup_bootstrap'; exit 21; }
+
+code="$(curl -sS -o "$TMP/confirm.json" -w '%{http_code}' "http://127.0.0.1:3110/v1/auth/confirm?token=$TEST_TOKEN")"
+[ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=confirmation_http_$code"; exit 22; }
+CONFIRMED="$(python3 - "$TMP/confirm.json" <<'PY'
 import json,sys,uuid
-x=json.load(open(sys.argv[1])); assert x.get('session') is None and x.get('confirmation_required') is True
-u=x['user']['id']; uuid.UUID(u); print(u)
+x=json.load(open(sys.argv[1])); assert x.get('confirmed') is True
+u=x['user_id']; uuid.UUID(u); print(u)
 PY
 )"
-
-code="$(curl -sS -o "$TMP/resend.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\"}" http://127.0.0.1:3110/v1/auth/resend-confirmation)"
-[ "$code" = 202 ] || { echo "auth_email_runtime=FAIL reason=resend_http_$code"; exit 20; }
-TOKEN_SHA="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT t.token_sha256 FROM teswa_auth.email_confirmation_tokens t JOIN teswa_auth.email_accounts a ON a.user_id=t.user_id WHERE a.email='$TEST_EMAIL' AND t.consumed_at IS NULL ORDER BY t.created_at DESC LIMIT 1")"
-[ ${#TOKEN_SHA} -eq 64 ] || { echo 'auth_email_runtime=FAIL reason=confirmation_token_missing'; exit 21; }
-CONFIRMED="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT coalesce(teswa_auth.consume_email_confirmation('$TOKEN_SHA')::text,'')")"
-[ "$CONFIRMED" = "$TEST_UID" ] || { echo 'auth_email_runtime=FAIL reason=internal_confirmation'; exit 22; }
-unset TOKEN_SHA CONFIRMED
+[ "$CONFIRMED" = "$TEST_UID" ] || { echo 'auth_email_runtime=FAIL reason=confirmation_user_mismatch'; exit 23; }
+unset TEST_TOKEN TOKEN_SHA CONFIRMED BEFORE_USERS AFTER_USERS BOOTSTRAPPED
 
 code="$(curl -sS -o "$TMP/login.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" http://127.0.0.1:3110/v1/auth/sign-in/password)"
 [ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=password_signin_http_$code"; exit 23; }
@@ -196,8 +207,9 @@ if systemctl is-active --quiet firewalld && sudo firewall-cmd --quiet --query-po
 SERVER_SHA="$(sudo sha256sum "$APP/server.py" | awk '{print $1}')"
 printf '%s\n' \
   'password_signin_e2e=PASS' \
-  'signup_bootstrap_http_e2e=PASS' \
-  'resend_confirmation_endpoint=PASS' \
+  'unconfigured_signup_blocked_without_mutation=PASS' \
+  'synthetic_signup_bootstrap_db_e2e=PASS' \
+  'confirmation_endpoint_http_e2e=PASS' \
   'session_restore=PASS' \
   'refresh_rotation_http_e2e=PASS' \
   'refresh_replay_rejected=PASS' \
@@ -215,5 +227,5 @@ printf '%s\n' \
   'production_cutover=none' \
   'app_traffic_switch=none' \
   'google_positive_app_e2e=DEFERRED_TO_APP_ADAPTER' \
-  'signup_confirmation_delivery=DEFERRED_PROVIDER' \
+  'signup_confirmation_delivery=BLOCKED_UNTIL_CONFIGURED' \
   'auth_email_runtime_without_google=PASS'

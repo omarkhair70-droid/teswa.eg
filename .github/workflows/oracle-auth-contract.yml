@@ -5,6 +5,7 @@ on:
       - integration/oracle-domain-closure-20260907
       - integration/oracle-auth-contract-20260907
       - integration/oracle-runtime-composition-20260907
+      - feat/oracle-email-delivery-20260909
     paths:
       - 'lib/backend/adapters/oracle/auth-adapter.ts'
       - 'lib/backend/adapters/oracle/auth-storage.ts'
@@ -14,6 +15,10 @@ on:
       - 'lib/google-auth.ts'
       - 'lib/google-native-auth-v2.ts'
       - 'scripts/test-oracle-auth-contract.cjs'
+      - 'scripts/oci-migration/auth-email-runtime-server.py'
+      - 'scripts/oci-migration/auth-api-shadow-gateway.py'
+      - 'scripts/oci-migration/test_auth_email_delivery.py'
+      - 'scripts/oci-migration/test_auth_gateway.py'
       - 'scripts/test-oracle-http-transport.cjs'
       - 'scripts/test-backend-provider-composition.cjs'
       - 'scripts/test-oracle-google-provider.cjs'
@@ -33,6 +38,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: |
+          python -m py_compile scripts/oci-migration/auth-email-runtime-server.py scripts/oci-migration/auth-api-shadow-gateway.py
+          python -m unittest discover -s scripts/oci-migration -p test_auth_email_delivery.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
       - run: node scripts/test-oracle-auth-contract.cjs
       - run: node scripts/test-oracle-http-transport.cjs
       - run: node scripts/test-backend-provider-composition.cjs

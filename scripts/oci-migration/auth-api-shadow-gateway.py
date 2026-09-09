@@ -18,8 +18,10 @@ ROUTES = {
     ('GET', '/v1/auth/session'): '/v1/auth/session',
     **{('POST', '/v1/auth/' + name): '/v1/auth/' + name for name in (
         'google', 'password', 'sign-in/password', 'refresh', 'logout',
+        'sign-up', 'resend-confirmation',
     )},
 }
+DELIVERY_ROUTES = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
 DOMAIN_GET = (
     re.compile(r'^/v1/moderation/(?:admin|profiles/[0-9a-fA-F-]{36}|items/[0-9a-fA-F-]{36}/context)$'),
     re.compile(r'^/v1/moderation/admin/reports\?status=(?:all|open|reviewing|actioned|dismissed)&type=(?:all|user|item|story|deal|direct_message|deal_message)$'),
@@ -111,11 +113,6 @@ DOMAIN_MUTATION_PATTERNS = (
     re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
     re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/(?:publish-failed|video|wanted-tags|images/delete|archive|reactivate|delete-archived|edit|edit/images/plan)$'),
 )
-# The current Auth service discards confirmation delivery tokens. Do not let the
-# ingress claim a signup/resend succeeded until real delivery is implemented.
-PENDING_DELIVERY = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
-
-
 class Handler(BaseHTTPRequestHandler):
     server_version = 'TeswaPrivateGateway/1'
 
@@ -141,17 +138,33 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def confirmation_delivery_ready(self):
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.auth_port, timeout=3)
+        try:
+            conn.request('GET', '/healthz', headers={'Connection': 'close'})
+            response = conn.getresponse()
+            payload = response.read(MAX_BODY + 1)
+            if response.status != 200 or len(payload) > MAX_BODY:
+                return False
+            value = json.loads(payload)
+            return (isinstance(value, dict) and value.get('status') == 'ok' and
+                    value.get('confirmationDispatchConfigured') is True)
+        except (OSError, ValueError, http.client.HTTPException):
+            return False
+        finally:
+            conn.close()
+
     def dispatch(self):
         if self.command == 'GET' and self.path == '/healthz':
             self.send_json(200, {'status': 'ok', 'service': 'teswa-api-shadow',
                                 'productionTraffic': False, 'supabaseRuntimeDependency': False})
             return
-        if self.path in PENDING_DELIVERY:
-            self.send_json(503, {'error': 'confirmation_delivery_not_configured'})
-            return
         path = ROUTES.get((self.command, self.path))
         upstream_port = self.server.auth_port
         upstream_name = 'auth'
+        if path is None and self.command == 'GET' and re.fullmatch(
+                r'/v1/auth/confirm\?token=[A-Za-z0-9_-]{32,256}', self.path):
+            path = self.path
         if path is None and self.command == 'GET' and re.fullmatch(r'/v1/realtime/events\?[^#]+', self.path):
             path = self.path
             upstream_port = self.server.realtime_port
@@ -200,6 +213,9 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, UnicodeDecodeError):
                 self.send_json(400, {'error': 'invalid_json_object'})
                 return
+        if self.path in DELIVERY_ROUTES and not self.confirmation_delivery_ready():
+            self.send_json(503, {'error': 'confirmation_delivery_not_configured'})
+            return
         headers = {'Content-Type': 'application/json', 'Connection': 'close'}
         if auth_values:
             headers['Authorization'] = auth_values[0]
