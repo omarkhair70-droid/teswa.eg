@@ -26,7 +26,6 @@ import { queryClient } from '@/lib/query/query-client';
 import { getAdventureEntranceSeen } from '@/lib/adventure-entrance';
 import { isPushRegistrationEnabled } from '@/lib/feature-flags';
 import { initSentry, setSentryUser } from '@/lib/sentry';
-import { colors } from '@/constants/colors';
 import * as Sentry from '@sentry/react-native';
 
 
@@ -587,7 +586,7 @@ function RootLayout() {
     <ShareIntentProvider>
       <KeyboardProvider preload={false}>
         <GestureHandlerRootView style={styles.gestureRoot}>
-          <StatusBar style="dark" backgroundColor={colors.background} translucent={false} />
+          <StatusBar style="dark" />
           <BottomSheetModalProvider>
             <ThemePreferencesProvider>
               <AuthProvider>

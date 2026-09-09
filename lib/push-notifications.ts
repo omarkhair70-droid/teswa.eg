@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 const PUSH_TOKEN_KEY = 'teswa.push.expo_token';
 const ANDROID_CHANNEL_ID = 'teswa-activity';
@@ -68,12 +68,12 @@ export async function hasStoredPushToken() {
   return Boolean(token?.trim());
 }
 
-export async function requestAndRegisterPushDevice(_userId: string) {
+export async function requestAndRegisterPushDevice(userId: string) {
   const registration = await registerForPushNotifications();
   if (!registration.ok) {
     return { ok: false as const, reason: registration.reason ?? 'unknown' };
   }
-  const saved = await saveUserPushToken(registration.expoPushToken);
+  const saved = await saveUserPushToken(userId, registration.expoPushToken);
   if (!saved.ok) return { ok: false as const, reason: 'unknown' as const };
   return { ok: true as const, token: registration.expoPushToken };
 }
@@ -134,33 +134,46 @@ export async function registerForPushNotifications(): Promise<PushRegistrationRe
   }
 }
 
-export async function saveUserPushToken(expoPushToken: string): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function saveUserPushToken(
+  userId: string,
+  expoPushToken: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
-    const { error } = await supabase.rpc('register_push_device', {
-      p_expo_push_token: expoPushToken,
-      p_platform: Platform.OS,
+    const result = await teswaBackendRuntime.notifications.registerPushDevice({
+      userId,
+      expoPushToken,
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
     });
 
-    if (error) {
-      if (__DEV__) console.log('[Push] saveUserPushToken failed', { code: error.code, message: error.message });
+    if (!result.ok) {
+      if (__DEV__) {
+        console.log('[Push] saveUserPushToken failed', {
+          reason: result.reason,
+          message: result.message,
+        });
+      }
       return { ok: false, message: 'تعذر حفظ جهاز الإشعارات حالياً.' };
     }
 
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, expoPushToken);
     return { ok: true };
   } catch (error) {
-    if (__DEV__) console.log('[Push] saveUserPushToken crashed', { message: (error as Error)?.message });
+    if (__DEV__) {
+      console.log('[Push] saveUserPushToken crashed', {
+        message: (error as Error)?.message,
+      });
+    }
     return { ok: false, message: 'تعذر حفظ جهاز الإشعارات حالياً.' };
   }
 }
 
-export async function syncPushDeviceRegistrationIfPermitted(_userId: string) {
+export async function syncPushDeviceRegistrationIfPermitted(userId: string) {
   try {
     const registration = await getExpoPushTokenWithoutPrompt();
     if (!registration.ok) {
       return { ok: registration.reason === 'permission_denied' || registration.reason === 'unsupported', skipped: registration.reason };
     }
-    return saveUserPushToken(registration.expoPushToken);
+    return saveUserPushToken(userId, registration.expoPushToken);
   } catch {
     return { ok: false as const, skipped: 'unknown' as const };
   }
@@ -170,9 +183,17 @@ export async function disableRegisteredPushDeviceIfPossible() {
   try {
     const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
     if (!token) return { ok: true as const, skipped: 'no_token' as const };
-    const { data, error } = await supabase.rpc('disable_my_push_device', { p_expo_push_token: token });
-    if (error) return { ok: false as const };
-    if (data) await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+
+    const userId = (await teswaBackendRuntime.auth.getSession())?.user.id ?? null;
+    if (!userId) return { ok: false as const };
+
+    const result = await teswaBackendRuntime.notifications.disablePushDevice({
+      userId,
+      expoPushToken: token,
+    });
+    if (!result.ok) return { ok: false as const };
+
+    await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
     return { ok: true as const };
   } catch {
     return { ok: false as const };

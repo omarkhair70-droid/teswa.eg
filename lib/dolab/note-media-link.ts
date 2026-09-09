@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 
 export async function linkDolabNoteToMedia(
@@ -7,17 +7,30 @@ export async function linkDolabNoteToMedia(
   mediaId: string,
 ): Promise<{ ok: boolean; error: DolabPersistenceError | null }> {
   try {
-    const { error } = await supabase
-      .from('dolab_notes')
-      .update({ media_id: mediaId })
-      .eq('id', noteId)
-      .eq('user_id', userId);
+    const result = await teswaBackendRuntime.dolab.linkNoteToMedia(
+      userId,
+      noteId,
+      mediaId,
+    );
 
-    return { ok: !error, error: normalizeDolabPersistenceError(error) };
+    if (result.ok) return { ok: true, error: null };
+
+    return {
+      ok: false,
+      error:
+        normalizeDolabPersistenceError(result.cause as any)
+        ?? {
+          kind: 'unknown',
+          message: 'اتحفظ التسجيل، لكن تعذر ربطه بالملاحظة السحابية.',
+        },
+    };
   } catch {
     return {
       ok: false,
-      error: { kind: 'unknown', message: 'اتحفظ التسجيل، لكن تعذر ربطه بالملاحظة السحابية.' },
+      error: {
+        kind: 'unknown',
+        message: 'اتحفظ التسجيل، لكن تعذر ربطه بالملاحظة السحابية.',
+      },
     };
   }
 }

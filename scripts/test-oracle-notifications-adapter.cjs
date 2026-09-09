@@ -1,0 +1,17 @@
+const fs=require('fs'),ts=require('typescript'),vm=require('vm');
+let src=fs.readFileSync('lib/backend/adapters/oracle/notifications-adapter.ts','utf8').replace(/^import type .*;$/gm,'');
+const js=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const mod={exports:{}};vm.runInNewContext(js,{module:mod,exports:mod.exports,require,Error,Number,Array});
+(async()=>{const calls=[];const adapter=mod.exports.createOracleNotificationsAdapter({request:async(input)=>{calls.push(input);
+if(input.path==='/v1/notifications')return {ok:true,status:200,data:{items:[]}};
+if(input.path.endsWith('/unread'))return {ok:true,status:200,data:{count:2}};
+if(input.path.endsWith('/preferences'))return {ok:true,status:200,data:input.method==='POST'?{offersEnabled:false}:{offersEnabled:true}};
+if(input.path.endsWith('/dispatch'))return {ok:true,status:200,data:{accepted:true}};
+return {ok:true,status:200,data:{ok:true}};}});
+if((await adapter.list('ignored')).length)throw new Error('list failed');
+if(await adapter.getUnreadCount('ignored')!==2)throw new Error('unread failed');
+if(!(await adapter.markRead('user','notification')).ok)throw new Error('mark failed');
+if(!(await adapter.dispatch({targetUserId:'target',type:'offer_received',title:'Offer'})).ok)throw new Error('dispatch failed');
+const dispatch=calls.find(c=>c.path.endsWith('/dispatch'));if(dispatch.body.body!==null||dispatch.body.offerId!==null)throw new Error('dispatch normalization failed');
+const rejected=mod.exports.createOracleNotificationsAdapter({request:async()=>({ok:true,status:200,data:{ok:true}})});if((await rejected.dispatch({targetUserId:'target',type:'offer_received',title:'Offer'})).ok)throw new Error('legacy ok response must not prove acceptance');
+process.stdout.write('oracle_notifications_adapter=PASS\n');})().catch(e=>{console.error(e);process.exit(1)});

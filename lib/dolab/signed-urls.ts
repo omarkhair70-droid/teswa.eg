@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 import type { DolabMedia } from '@/lib/dolab/types';
 
@@ -13,8 +13,24 @@ export async function createDolabMediaSignedUrl(storagePath: string): Promise<Do
   }
 
   try {
-    const { data, error } = await supabase.storage.from('dolab-media').createSignedUrl(normalizedPath, DOLAB_MEDIA_SIGNED_URL_EXPIRES_IN);
-    return { data: data?.signedUrl ?? null, error: normalizeDolabPersistenceError(error) };
+    const result = await teswaBackendRuntime.media.getSignedUrl(
+      {
+        purpose: 'dolab_media',
+        objectKey: normalizedPath,
+        contentType: null,
+        sizeBytes: null,
+      },
+      DOLAB_MEDIA_SIGNED_URL_EXPIRES_IN,
+    );
+
+    if (!result.ok) {
+      return {
+        data: null,
+        error: normalizeDolabPersistenceError({ message: result.message }),
+      };
+    }
+
+    return { data: result.data, error: null };
   } catch {
     return {
       data: null,

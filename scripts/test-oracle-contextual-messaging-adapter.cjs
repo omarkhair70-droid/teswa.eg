@@ -1,0 +1,11 @@
+const fs=require('fs'),ts=require('typescript'),vm=require('vm');let src=fs.readFileSync('lib/backend/adapters/oracle/contextual-messaging-adapter.ts','utf8').replace(/^import type[\s\S]*?from '[^']+';\r?\n/gm,'');
+const js=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,mod={exports:{}};vm.runInNewContext(js,{module:mod,exports:mod.exports,require,Array,Math,Error,String});
+(async()=>{const calls=[];const msg={id:'message',conversationId:'conversation',senderId:'user',body:'hello',messageKind:'text',mediaStoragePath:null,mediaDurationMs:null,createdAt:'now'};
+ const t={request:async i=>{calls.push(i);if(i.path==='/v1/contextual/unread')return{ok:true,status:200,data:{count:2}};
+ if(i.path==='/v1/contextual/conversations')return{ok:true,status:200,data:{items:[]}};
+ if(i.path.endsWith('/messages'))return{ok:true,status:201,data:msg};
+ return{ok:true,status:200,data:{ok:true,conversationId:'conversation',messageId:'message',userId:'other'}};}};
+ const a=mod.exports.createOracleContextualMessagingAdapter(t);if(await a.getUnreadCount()!==2)throw Error('unread');
+ if((await a.listSummaries('user')).length)throw Error('summaries');if(!(await a.sendText({conversationId:'conversation',senderId:'user',body:'hello'})).ok)throw Error('send');
+ if(calls.find(c=>c.path==='/v1/contextual/conversations').query.userId!=='user')throw Error('actor query');
+ process.stdout.write('oracle_contextual_messaging_adapter=PASS\n');})().catch(e=>{console.error(e);process.exit(1)});

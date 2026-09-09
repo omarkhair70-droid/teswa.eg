@@ -1,5 +1,5 @@
 import { DesireMode, ItemCondition } from '@/lib/publish-item';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export type EditableListing = {
   id: string;
@@ -56,41 +56,29 @@ const normalizeNullableText = (value: string | null | undefined): string | null 
 
 const normalizeTags = (tags: string[]): string[] => tags.map((tag) => tag.trim()).filter(Boolean);
 
-export async function fetchEditableListingById(itemId: string, ownerId: string): Promise<EditableListing | null> {
-  const { data: item, error } = await supabase
-    .from('items')
-    .select('id,status,title,category_id,city,area,condition,condition_notes,description,item_story,swap_reason,good_for,desire_mode,desire_text')
-    .eq('id', itemId)
-    .eq('owner_id', ownerId)
-    .in('status', ['active', 'archived'])
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!item) return null;
-
-  const { data: tags, error: tagsError } = await supabase.from('item_wanted_tags').select('tag').eq('item_id', itemId);
-  if (tagsError) throw tagsError;
-
-  const wantedTags = (tags ?? [])
-    .map((entry) => entry.tag?.trim())
-    .filter((tag): tag is string => Boolean(tag));
+export async function fetchEditableListingById(
+  itemId: string,
+  ownerId: string,
+): Promise<EditableListing | null> {
+  const listing = await teswaBackendRuntime.marketplace.getEditableListing(itemId, ownerId);
+  if (!listing) return null;
 
   return {
-    id: item.id,
-    status: item.status,
-    title: item.title?.trim() || 'عنصر بدون عنوان',
-    categoryId: item.category_id,
-    city: normalizeNullableText(item.city),
-    area: normalizeNullableText(item.area),
-    condition: item.condition,
-    conditionNotes: normalizeNullableText(item.condition_notes),
-    description: normalizeNullableText(item.description),
-    itemStory: normalizeNullableText(item.item_story),
-    swapReason: normalizeNullableText(item.swap_reason),
-    goodFor: normalizeNullableText(item.good_for),
-    desireMode: item.desire_mode,
-    desireText: normalizeNullableText(item.desire_text),
-    wantedTags,
+    id: listing.id,
+    status: listing.status,
+    title: listing.title,
+    categoryId: listing.categoryId,
+    city: listing.city,
+    area: listing.area,
+    condition: listing.condition as ItemCondition,
+    conditionNotes: listing.conditionNotes,
+    description: listing.description,
+    itemStory: listing.itemStory,
+    swapReason: listing.swapReason,
+    goodFor: listing.goodFor,
+    desireMode: listing.desireMode as DesireMode,
+    desireText: listing.desireText,
+    wantedTags: listing.wantedTags,
   };
 }
 
@@ -110,68 +98,81 @@ export async function updateListingCoreFields(input: {
   const swapReason = normalizeNullableText(payload.swapReason);
   const goodFor = normalizeNullableText(payload.goodFor);
 
-  if (!title) return { ok: false, reason: 'invalid_input', message: 'عنوان العنصر مطلوب.' };
-  if ((itemStory?.length ?? 0) > 600) return { ok: false, reason: 'invalid_input', message: 'قصة العنصر يجب ألا تتجاوز 600 حرف.' };
-  if ((swapReason?.length ?? 0) > 240) return { ok: false, reason: 'invalid_input', message: 'سبب المبادلة يجب ألا يتجاوز 240 حرف.' };
-  if ((goodFor?.length ?? 0) > 240) return { ok: false, reason: 'invalid_input', message: 'مفيد لمن يجب ألا يتجاوز 240 حرف.' };
-
-  const { data: item, error: itemLookupError } = await supabase
-    .from('items')
-    .select('id,status,city,area')
-    .eq('id', itemId)
-    .eq('owner_id', ownerId)
-    .maybeSingle();
-
-  if (itemLookupError) return { ok: false, reason: 'unknown', message: 'تعذر التحقق من صلاحية التعديل حالياً.' };
-  if (!item) return { ok: false, reason: 'not_found_or_unauthorized', message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.' };
-  if (item.status !== 'active' && item.status !== 'archived') {
-    return { ok: false, reason: 'not_editable', message: 'لا يمكن تعديل هذا العنصر في حالته الحالية.' };
+  if (!title) {
+    return { ok: false, reason: 'invalid_input', message: 'عنوان العنصر مطلوب.' };
+  }
+  if ((itemStory?.length ?? 0) > 600) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      message: 'قصة العنصر يجب ألا تتجاوز 600 حرف.',
+    };
+  }
+  if ((swapReason?.length ?? 0) > 240) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      message: 'سبب المبادلة يجب ألا يتجاوز 240 حرف.',
+    };
+  }
+  if ((goodFor?.length ?? 0) > 240) {
+    return {
+      ok: false,
+      reason: 'invalid_input',
+      message: 'مفيد لمن يجب ألا يتجاوز 240 حرف.',
+    };
   }
 
-  const normalizedCity = normalizeNullableText(payload.city);
-  const normalizedArea = normalizeNullableText(payload.area);
-  const currentCity = normalizeNullableText(item.city);
-  const currentArea = normalizeNullableText(item.area);
-  const hasManualLocationTextChange = normalizedCity !== currentCity || normalizedArea !== currentArea;
+  const result = await teswaBackendRuntime.marketplace.updateListingCore({
+    itemId,
+    ownerId,
+    title,
+    categoryId: payload.categoryId,
+    city: normalizeNullableText(payload.city),
+    area: normalizeNullableText(payload.area),
+    condition: payload.condition,
+    conditionNotes: normalizeNullableText(payload.conditionNotes),
+    description: normalizeNullableText(payload.description),
+    itemStory,
+    swapReason,
+    goodFor,
+    desireMode: payload.desireMode,
+    desireText: normalizeNullableText(payload.desireText),
+    wantedTags: normalizeTags(payload.wantedTags),
+  });
 
-  const { error: updateError } = await supabase
-    .from('items')
-    .update({
-      title,
-      category_id: payload.categoryId,
-      city: normalizedCity,
-      area: normalizedArea,
-      condition: payload.condition,
-      condition_notes: normalizeNullableText(payload.conditionNotes),
-      description: normalizeNullableText(payload.description),
-      item_story: itemStory,
-      swap_reason: swapReason,
-      good_for: goodFor,
-      desire_mode: payload.desireMode,
-      desire_text: normalizeNullableText(payload.desireText),
-      ...(hasManualLocationTextChange ? { location_latitude: null, location_longitude: null } : {}),
-    })
-    .eq('id', itemId)
-    .eq('owner_id', ownerId);
+  if (result.ok) return { ok: true };
 
-  if (updateError) return { ok: false, reason: 'item_update_failed', message: 'تعذر حفظ بيانات العنصر. حاول مرة أخرى.' };
-
-  const normalizedTags = normalizeTags(payload.wantedTags);
-
-  const { error: deleteTagsError } = await supabase.from('item_wanted_tags').delete().eq('item_id', itemId);
-  if (deleteTagsError) {
-    return { ok: false, reason: 'tags_update_failed', message: 'تم حفظ بيانات العنصر الأساسية، لكن تعذر تحديث الوسوم المطلوبة بالكامل. يمكنك إعادة المحاولة.' };
+  switch (result.reason) {
+    case 'not_found_or_unauthorized':
+      return {
+        ok: false,
+        reason: 'not_found_or_unauthorized',
+        message: 'العنصر غير موجود أو لا تملك صلاحية تعديله.',
+      };
+    case 'not_editable':
+      return {
+        ok: false,
+        reason: 'not_editable',
+        message: 'لا يمكن تعديل هذا العنصر في حالته الحالية.',
+      };
+    case 'item_update_failed':
+      return {
+        ok: false,
+        reason: 'item_update_failed',
+        message: 'تعذر حفظ بيانات العنصر. حاول مرة أخرى.',
+      };
+    case 'tags_update_failed':
+      return {
+        ok: false,
+        reason: 'tags_update_failed',
+        message: 'تم حفظ بيانات العنصر الأساسية، لكن تعذر تحديث الوسوم المطلوبة بالكامل. يمكنك إعادة المحاولة.',
+      };
+    default:
+      return {
+        ok: false,
+        reason: 'unknown',
+        message: 'تعذر التحقق من صلاحية التعديل حالياً.',
+      };
   }
-
-  if (normalizedTags.length) {
-    const { error: insertTagsError } = await supabase
-      .from('item_wanted_tags')
-      .insert(normalizedTags.map((tag) => ({ item_id: itemId, tag })));
-
-    if (insertTagsError) {
-      return { ok: false, reason: 'tags_update_failed', message: 'تم حفظ بيانات العنصر الأساسية، لكن تعذر تحديث الوسوم المطلوبة بالكامل. يمكنك إعادة المحاولة.' };
-    }
-  }
-
-  return { ok: true };
 }

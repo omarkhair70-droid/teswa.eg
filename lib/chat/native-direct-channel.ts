@@ -14,7 +14,7 @@ import {
   type NativeDirectAttachment,
   type NativeDirectMessage,
 } from '@/lib/chat/supabase-direct-chat';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 const CHANNEL_PREFIX = 'teswa-direct-';
 const UPLOAD_MARKER_PREFIX = 'teswa-native-upload://';
@@ -115,9 +115,9 @@ export class NativeDirectCompatChannel {
   }
 
   private async resolveIdentity() {
-    const [conversation, auth] = await Promise.all([
+    const [conversation, currentUser] = await Promise.all([
       fetchDirectConversation(this.conversationId),
-      supabase.auth.getUser(),
+      teswaBackendRuntime.auth.getCurrentUser(),
     ]);
     if (!conversation) throw new Error('Direct Chat conversation not found.');
     if (conversation.status !== 'accepted') throw new Error('Direct Chat conversation is not accepted.');
@@ -126,12 +126,8 @@ export class NativeDirectCompatChannel {
     this.otherDisplayName = conversation.otherDisplayName ?? conversation.otherUsername ?? 'مستخدم تِسوى';
     this.otherAvatarUrl = conversation.otherAvatarUrl ?? '';
 
-    const metadata = (auth.data.user?.user_metadata ?? {}) as Record<string, unknown>;
-    this.currentDisplayName =
-      (typeof metadata.display_name === 'string' && metadata.display_name.trim()) ||
-      (typeof metadata.full_name === 'string' && metadata.full_name.trim()) ||
-      'أنت';
-    this.currentAvatarUrl = typeof metadata.avatar_url === 'string' ? metadata.avatar_url : '';
+    this.currentDisplayName = currentUser?.displayName?.trim() || 'أنت';
+    this.currentAvatarUrl = currentUser?.avatarUrl?.trim() || '';
   }
 
   private async mapAttachment(attachment: NativeDirectAttachment): Promise<CompatAttachment> {

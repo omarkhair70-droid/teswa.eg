@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { normalizeDolabPersistenceError, type DolabPersistenceError } from '@/lib/dolab/errors';
 
 export async function attachDolabMediaToItem(
@@ -7,22 +7,35 @@ export async function attachDolabMediaToItem(
   dolabItemId: string,
 ): Promise<{ ok: boolean; error: DolabPersistenceError | null }> {
   try {
-    const existingResult = await supabase
-      .from('dolab_media')
-      .select('id,dolab_item_id')
-      .eq('id', mediaId)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const result = await teswaBackendRuntime.dolab.attachMediaToItem(
+      userId,
+      mediaId,
+      dolabItemId,
+    );
 
-    const existingError = normalizeDolabPersistenceError(existingResult.error);
-    if (existingError) return { ok: false, error: existingError };
-    if (!existingResult.data?.id) {
-      return { ok: false, error: { kind: 'unknown', message: 'تعذر العثور على الميديا السحابية المرتبطة.' } };
+    if (!result.ok) {
+      if (result.reason === 'not_found') {
+        return {
+          ok: false,
+          error: {
+            kind: 'unknown',
+            message: 'تعذر العثور على الميديا السحابية المرتبطة.',
+          },
+        };
+      }
+
+      return {
+        ok: false,
+        error:
+          normalizeDolabPersistenceError(result.cause as any)
+          ?? {
+            kind: 'unknown',
+            message: 'تعذر ربط الميديا السحابية بالمسودة.',
+          },
+      };
     }
 
-    const currentItemId = existingResult.data.dolab_item_id as string | null;
-    if (currentItemId === dolabItemId) return { ok: true, error: null };
-    if (currentItemId) {
+    if (result.data.state === 'linked_elsewhere') {
       return {
         ok: false,
         error: {
@@ -32,22 +45,14 @@ export async function attachDolabMediaToItem(
       };
     }
 
-    const { data, error } = await supabase
-      .from('dolab_media')
-      .update({ dolab_item_id: dolabItemId })
-      .eq('id', mediaId)
-      .eq('user_id', userId)
-      .is('dolab_item_id', null)
-      .select('id')
-      .maybeSingle();
-
-    const normalized = normalizeDolabPersistenceError(error);
-    if (normalized) return { ok: false, error: normalized };
-    if (!data?.id) {
-      return { ok: false, error: { kind: 'unknown', message: 'الميديا موجودة في السحابة لكن تعذر ربطها بالمسودة.' } };
-    }
     return { ok: true, error: null };
   } catch {
-    return { ok: false, error: { kind: 'unknown', message: 'تعذر ربط الميديا السحابية بالمسودة.' } };
+    return {
+      ok: false,
+      error: {
+        kind: 'unknown',
+        message: 'تعذر ربط الميديا السحابية بالمسودة.',
+      },
+    };
   }
 }

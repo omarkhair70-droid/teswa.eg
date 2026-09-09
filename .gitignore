@@ -8,3 +8,6 @@ npm-debug.*
 
 # @generated expo-cli sync-6f4f90f9c7239a4f
 expo-env.d.ts
+# Python migration-tool bytecode
+__pycache__/
+*.py[cod]

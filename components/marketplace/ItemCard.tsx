@@ -13,6 +13,7 @@ import type { MarketplaceItem } from '@/lib/marketplace-items';
 import { useAuth } from '@/lib/auth';
 import { setItemLiked } from '@/lib/item-likes';
 import { getItemConditionLabel } from '@/lib/item-display';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 function ItemCardComponent({ item }: { item: MarketplaceItem }) {
   const { user } = useAuth();
@@ -131,9 +132,9 @@ const styles = StyleSheet.create({
   card: { borderRadius: radii.lg, borderWidth: 1, borderColor: 'rgba(184,98,63,0.14)', padding: 10, shadowColor: colors.primary, shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
   wrapper: { gap: 10 },
   imageFrame: { position: 'relative', borderRadius: radii.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: 'rgba(255,253,248,0.86)', overflow: 'hidden' },
-  imageLoadingBackdrop: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,216,203,0.5)' },
+  imageLoadingBackdrop: { ...ABSOLUTE_FILL, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,216,203,0.5)' },
   image: { width: '100%', height: 168, borderRadius: radii.lg, backgroundColor: colors.primarySoft },
-  imageShade: { ...StyleSheet.absoluteFillObject },
+  imageShade: { ...ABSOLUTE_FILL },
   likeChip: { position: 'absolute', top: spacing.sm, left: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs, borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: 5, backgroundColor: 'rgba(255,253,248,0.95)', borderWidth: 1, borderColor: 'rgba(184,98,63,0.2)' },
   likeChipText: { color: colors.primary, fontSize: 12 },
   placeholder: { justifyContent: 'center', alignItems: 'center', gap: spacing.sm },

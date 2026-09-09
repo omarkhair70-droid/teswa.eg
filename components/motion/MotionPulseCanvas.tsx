@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Fill, Group, LinearGradient, vec } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 export type MotionPulseCanvasProps = {
   storiesCount: number;
@@ -99,6 +100,6 @@ export function MotionPulseCanvas({ storiesCount, movingCount, storyItemsCount, 
 
 const styles = StyleSheet.create({
   fill: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
   },
 });

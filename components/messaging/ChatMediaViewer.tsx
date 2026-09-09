@@ -4,6 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '88%' },
   videoStage: { width: '100%', height: '88%', backgroundColor: '#000' },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,

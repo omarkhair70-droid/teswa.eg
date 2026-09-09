@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ElementRef } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import ViewShot from 'react-native-view-shot';
 import { AppButton } from '@/components/ui/AppButton';
@@ -17,7 +17,7 @@ export type MotionShareSheetProps = {
 };
 
 export function MotionShareSheet({ visible, moment, onClose }: MotionShareSheetProps) {
-  const viewShotRef = useRef<ViewShot | null>(null);
+  const viewShotRef = useRef<ElementRef<typeof ViewShot> | null>(null);
   const [busy, setBusy] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 

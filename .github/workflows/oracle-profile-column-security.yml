@@ -1,0 +1,39 @@
+name: Oracle Profile Column Security
+on:
+  push:
+    branches:
+      - fix/oracle-profile-column-security-20260909
+      - integration/oracle-domain-closure-20260907
+    paths:
+      - scripts/oci-migration/runtime-profile-column-security.sql
+      - scripts/oci-migration/test_profile_column_security_postgres.sql
+      - .github/workflows/oracle-profile-column-security.yml
+  pull_request:
+    branches:
+      - integration/oracle-domain-closure-20260907
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify profile RLS and column privileges on PostgreSQL 17
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/oci-migration/test_profile_column_security_postgres.sql

@@ -1,0 +1,50 @@
+name: Oracle Auth Contract
+on:
+  push:
+    branches:
+      - integration/oracle-domain-closure-20260907
+      - integration/oracle-auth-contract-20260907
+      - integration/oracle-runtime-composition-20260907
+      - feat/oracle-email-delivery-20260909
+    paths:
+      - 'lib/backend/adapters/oracle/auth-adapter.ts'
+      - 'lib/backend/adapters/oracle/auth-storage.ts'
+      - 'lib/backend/adapters/oracle/http-transport.ts'
+      - 'lib/backend/runtime.ts'
+      - 'lib/backend/runtime-composition.ts'
+      - 'lib/google-auth.ts'
+      - 'lib/google-native-auth-v2.ts'
+      - 'scripts/test-oracle-auth-contract.cjs'
+      - 'scripts/oci-migration/auth-email-runtime-server.py'
+      - 'scripts/oci-migration/auth-api-shadow-gateway.py'
+      - 'scripts/oci-migration/test_auth_email_delivery.py'
+      - 'scripts/oci-migration/test_auth_gateway.py'
+      - 'scripts/test-oracle-http-transport.cjs'
+      - 'scripts/test-backend-provider-composition.cjs'
+      - 'scripts/test-oracle-google-provider.cjs'
+      - 'scripts/test-oracle-runtime-wiring.cjs'
+      - '.github/workflows/oracle-auth-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: |
+          python -m py_compile scripts/oci-migration/auth-email-runtime-server.py scripts/oci-migration/auth-api-shadow-gateway.py
+          python -m unittest discover -s scripts/oci-migration -p test_auth_email_delivery.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
+      - run: node scripts/test-oracle-auth-contract.cjs
+      - run: node scripts/test-oracle-http-transport.cjs
+      - run: node scripts/test-backend-provider-composition.cjs
+      - run: node scripts/test-oracle-google-provider.cjs
+      - run: node scripts/test-oracle-runtime-wiring.cjs
+      - run: npm run typecheck:app

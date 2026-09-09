@@ -1,5 +1,5 @@
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { fetchItemVideoPresenceMap } from '@/lib/item-video-presence';
-import { supabase } from '@/lib/supabase/client';
 import { validateUsername } from '@/lib/username';
 const PROFILE_FETCH_TIMEOUT_MS = 12_000;
 export const PROFILE_FETCH_TIMEOUT_CODE = 'PROFILE_FETCH_TIMEOUT';
@@ -17,11 +17,7 @@ export function isProfileComplete(profile: Pick<AppProfile, 'display_name' | 'us
 }
 
 export async function fetchMyProfile(userId: string): Promise<AppProfile | null> {
-  const profileRequest = supabase
-    .from('profiles')
-    .select('id, display_name, username, bio, city')
-    .eq('id', userId)
-    .maybeSingle();
+  const profileRequest = teswaBackendRuntime.profiles.getMine(userId);
 
   const timeoutRequest = new Promise<never>((_, reject) => {
     setTimeout(() => {
@@ -31,10 +27,16 @@ export async function fetchMyProfile(userId: string): Promise<AppProfile | null>
     }, PROFILE_FETCH_TIMEOUT_MS);
   });
 
-  const { data, error } = await Promise.race([profileRequest, timeoutRequest]);
+  const profile = await Promise.race([profileRequest, timeoutRequest]);
+  if (!profile) return null;
 
-  if (error) throw error;
-  return data;
+  return {
+    id: profile.id,
+    display_name: profile.displayName,
+    username: profile.username,
+    bio: profile.bio,
+    city: profile.city,
+  };
 }
 
 export type AccountProfile = {
@@ -147,26 +149,27 @@ if (!usernameValidation.ok) {
     };
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({
-      display_name: normalizedDisplayName,
-      username: usernameValidation.normalized,
-      profile_tagline: normalizedTagline,
-      city: normalizedCity,
-      area: normalizedArea,
-      bio: normalizedBio,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', userId)
-    .select('id')
-    .maybeSingle();
+  const result = await teswaBackendRuntime.profiles.updateMine({
+    userId,
+    displayName: normalizedDisplayName,
+    username: usernameValidation.normalized,
+    profileTagline: normalizedTagline,
+    city: normalizedCity,
+    area: normalizedArea,
+    bio: normalizedBio,
+  });
 
-  if (error?.code === '23505') {
-    return { ok: false, reason: 'username_taken', message: 'اسم المستخدم ده مستخدم قبل كده.' };
-  }
-
-  if (error) {
+  if (!result.ok) {
+    if (result.reason === 'username_taken') {
+      return { ok: false, reason: 'username_taken', message: 'اسم المستخدم ده مستخدم قبل كده.' };
+    }
+    if (result.reason === 'not_found') {
+      return {
+        ok: false,
+        reason: 'not_found_or_unauthorized',
+        message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.',
+      };
+    }
     return {
       ok: false,
       reason: 'save_failed',
@@ -174,37 +177,45 @@ if (!usernameValidation.ok) {
     };
   }
 
-  if (!data?.id) {
-    return {
-      ok: false,
-      reason: 'not_found_or_unauthorized',
-      message: 'تعذر العثور على ملفك أو لا تملك صلاحية تعديله.',
-    };
-  }
-
   return { ok: true, message: 'تم حفظ تعديلات ملفك بنجاح.' };
 }
 
 export async function fetchMyAccountProfile(userId: string): Promise<AccountProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, username, avatar_url, cover_url, city, area, bio, successful_swaps_count, response_rate, profile_tagline, created_at')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  const profile = await teswaBackendRuntime.profiles.getMine(userId);
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.displayName,
+    username: profile.username,
+    avatar_url: profile.avatarUrl,
+    cover_url: profile.coverUrl,
+    city: profile.city,
+    area: profile.area,
+    bio: profile.bio,
+    successful_swaps_count: profile.successfulSwapsCount,
+    response_rate: profile.responseRate,
+    profile_tagline: profile.profileTagline,
+    created_at: profile.createdAt ?? '',
+  };
 }
 
 export async function fetchPublicProfileById(profileId: string): Promise<PublicProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, username, avatar_url, cover_url, city, area, bio, successful_swaps_count, response_rate, profile_tagline, created_at')
-    .eq('id', profileId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  const profile = await teswaBackendRuntime.profiles.getPublic(profileId);
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.displayName,
+    username: profile.username,
+    avatar_url: profile.avatarUrl,
+    cover_url: profile.coverUrl,
+    city: profile.city,
+    area: profile.area,
+    bio: profile.bio,
+    successful_swaps_count: profile.successfulSwapsCount,
+    response_rate: profile.responseRate,
+    profile_tagline: profile.profileTagline,
+    created_at: profile.createdAt ?? '',
+  };
 }
 
 export async function fetchPublicProfileActiveListings(
@@ -213,72 +224,19 @@ export async function fetchPublicProfileActiveListings(
 ): Promise<PublicProfileListing[]> {
   if (!profileId.trim()) return [];
 
-  const { data: items, error: itemsError } = await supabase
-    .from('items')
-    .select('id, title, category_id, city, area, created_at')
-    .eq('owner_id', profileId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const items = await teswaBackendRuntime.marketplace.listActiveByOwner(profileId, limit);
+  if (!items.length) return [];
 
-  if (itemsError) throw itemsError;
-  if (!items || items.length === 0) return [];
-
-  const itemIds = items.map((item) => item.id);
-  const categoryIds = Array.from(new Set(items.map((item) => item.category_id).filter(Boolean)));
-
-  const [imagesResult, categoriesResult, videoPresenceByItemId] = await Promise.all([
-    supabase
-      .from('item_images')
-      .select('item_id, image_url, is_primary, sort_order')
-      .in('item_id', itemIds),
-    categoryIds.length > 0
-      ? supabase.from('categories').select('id, name_ar').in('id', categoryIds)
-      : Promise.resolve({ data: [], error: null }),
-    fetchItemVideoPresenceMap(itemIds),
-  ]);
-
-  if (imagesResult.error) throw imagesResult.error;
-  if (categoriesResult.error) throw categoriesResult.error;
-
-  const imagesByItem = new Map<string, Array<{ image_url: string | null; is_primary: boolean | null; sort_order: number | null }>>();
-  for (const image of imagesResult.data ?? []) {
-    const list = imagesByItem.get(image.item_id) ?? [];
-    list.push({
-      image_url: image.image_url ?? null,
-      is_primary: image.is_primary ?? null,
-      sort_order: image.sort_order ?? null,
-    });
-    imagesByItem.set(image.item_id, list);
-  }
-
-  const categoriesById = new Map((categoriesResult.data ?? []).map((category) => [category.id, category.name_ar ?? null]));
-
-  const pickCover = (itemId: string): string | null => {
-    const images = imagesByItem.get(itemId);
-    if (!images || images.length === 0) return null;
-
-    const sorted = [...images].sort((a, b) => {
-      const aPrimary = a.is_primary ? 0 : 1;
-      const bPrimary = b.is_primary ? 0 : 1;
-      if (aPrimary !== bPrimary) return aPrimary - bPrimary;
-      const aSort = a.sort_order ?? Number.MAX_SAFE_INTEGER;
-      const bSort = b.sort_order ?? Number.MAX_SAFE_INTEGER;
-      if (aSort !== bSort) return aSort - bSort;
-      return (a.image_url ?? '').localeCompare(b.image_url ?? '');
-    });
-
-    return sorted[0]?.image_url ?? null;
-  };
+  const videoPresenceByItemId = await fetchItemVideoPresenceMap(items.map((item) => item.id));
 
   return items.map((item) => ({
     id: item.id,
     title: item.title?.trim() || 'عنصر بدون عنوان',
-    imageUrl: pickCover(item.id),
-    category: item.category_id ? categoriesById.get(item.category_id) ?? null : null,
+    imageUrl: item.imageUrl,
+    category: item.category,
     city: item.city?.trim() || null,
     area: item.area?.trim() || null,
-    createdAt: item.created_at ?? null,
+    createdAt: item.createdAt,
     hasVideoTeaser: videoPresenceByItemId.get(item.id) === true,
   }));
 }

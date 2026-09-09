@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth-v2.android.ts.v1';
 export type GoogleNativeAuthImplementation = 'android-native' | 'web-shim' | 'unknown';
@@ -119,9 +119,9 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     if (!idToken) return { status: 'error', error: 'تعذر الحصول على بيانات تسجيل الدخول من جوجل. حاول مرة تانية.', fallbackToBrowser: true, reason: 'missing_id_token', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-    const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
-    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_result', hasError: Boolean(error), implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-    if (error) return { status: 'error', error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.', fallbackToBrowser: true, reason: 'supabase_session_failed', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
+    const authResult = await teswaBackendRuntime.auth.signInWithExternalIdToken({ provider: 'google', idToken });
+    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_result', hasError: !authResult.ok, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
+    if (!authResult.ok) return { status: 'error', error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.', fallbackToBrowser: true, reason: 'supabase_session_failed', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_success', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     return { status: 'success', error: null, fallbackToBrowser: false, reason: 'native_success', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };

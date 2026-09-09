@@ -1,0 +1,14 @@
+name: Expo SDK 57 Modernization Checkpoint
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closed:
+    name: SDK 57 checkpoint closed
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SDK 57 checkpoint is closed; continue with the native dependency sweep."

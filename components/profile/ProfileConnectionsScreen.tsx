@@ -10,7 +10,7 @@ import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { fetchUserFollowState, followUserFromMobile, unfollowUserFromMobile } from '@/lib/user-follows';
 
 type ConnectionMode = 'followers' | 'following';
@@ -47,13 +47,25 @@ export function ProfileConnectionsScreen({ profileUserId, mode }: Props) {
     if (background) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    const rpcName = mode === 'followers' ? 'get_profile_followers' : 'get_profile_following';
-    const { data, error: rpcError } = await supabase.rpc(rpcName, { p_profile_user_id: id, p_limit: 50 });
-    if (rpcError) {
+    try {
+      const connections = await teswaBackendRuntime.profiles.listConnections(id, mode, 50);
+      setRows(
+        connections.map((profile) => ({
+          profile_id: profile.profileId,
+          display_name: profile.displayName,
+          username: profile.username,
+          avatar_url: profile.avatarUrl,
+          city: profile.city,
+          area: profile.area,
+        })),
+      );
+    } catch {
       setRows([]);
-      setError(mode === 'followers' ? 'تعذر تحميل قائمة المتابعين حالياً.' : 'تعذر تحميل قائمة المتابَعين حالياً.');
-    } else {
-      setRows((data ?? []) as FollowProfileRow[]);
+      setError(
+        mode === 'followers'
+          ? 'تعذر تحميل قائمة المتابعين حالياً.'
+          : 'تعذر تحميل قائمة المتابَعين حالياً.',
+      );
     }
     setLoading(false);
     setRefreshing(false);

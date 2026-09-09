@@ -1,0 +1,32 @@
+name: Oracle Edge API Rehearsal
+on:
+  push:
+    branches:
+      - integration/oracle-domain-closure-20260907
+      - infra/oracle-public-api-rehearsal-20260909
+    paths:
+      - scripts/oci-migration/edge-api-rehearsal.py
+      - scripts/oci-migration/test_edge_api_rehearsal.py
+      - .github/workflows/oracle-edge-api.yml
+  pull_request:
+    branches:
+      - integration/oracle-domain-closure-20260907
+    paths:
+      - scripts/oci-migration/edge-api-rehearsal.py
+      - scripts/oci-migration/test_edge_api_rehearsal.py
+      - .github/workflows/oracle-edge-api.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python -m py_compile scripts/oci-migration/edge-api-rehearsal.py scripts/oci-migration/test_edge_api_rehearsal.py
+          python -m unittest discover -s scripts/oci-migration -p test_edge_api_rehearsal.py -v

@@ -43,7 +43,7 @@ import {
   type DealRoomResult,
 } from '@/lib/deals';
 import { isSwapCeremonyEnabled } from '@/lib/feature-flags';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import { showToast } from '@/lib/toast';
 import { useUnreadBadges } from '@/lib/unread-badges';
 import {
@@ -189,44 +189,57 @@ export default function DealConversationScreen() {
 
   useEffect(() => {
     if (!dealId || !user?.id) return;
-    setRealtimeStatus('connecting');
-    const channel = supabase
-      .channel(`deal-room:${dealId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'deal_messages', filter: `deal_id=eq.${dealId}` }, (payload) => {
-        const row = payload.new as any;
+
+    const unsubscribe = teswaBackendRuntime.realtime.subscribeDeal(dealId, {
+      onMessage: (message) => {
         const incoming: UiDealMessage = {
-          id: row.id,
-          dealId: row.deal_id,
-          senderId: row.sender_id,
-          body: row.body ?? '',
-          messageType: row.message_type === 'voice' ? 'voice' : 'text',
-          audioStoragePath: row.audio_storage_path ?? null,
-          audioDurationMs: row.audio_duration_ms ?? null,
-          audioMimeType: row.audio_mime_type ?? null,
-          audioSizeBytes: row.audio_size_bytes ?? null,
-          createdAt: row.created_at ?? new Date().toISOString(),
+          id: message.id,
+          dealId: message.dealId,
+          senderId: message.senderId,
+          body: message.body,
+          messageType: message.messageType,
+          audioStoragePath: message.audioStoragePath,
+          audioDurationMs: message.audioDurationMs,
+          audioMimeType: message.audioMimeType,
+          audioSizeBytes: message.audioSizeBytes,
+          createdAt: message.createdAt,
         };
+
         setMessages((previous) => {
           let base = previous;
           if (incoming.senderId === user.id) {
-            const localIndex = base.findIndex((message) => message.localStatus === 'sending' && message.body === incoming.body && message.messageType === incoming.messageType);
-            if (localIndex >= 0) base = base.filter((_, index) => index !== localIndex);
+            const localIndex = base.findIndex(
+              (item) => item.localStatus === 'sending'
+                && item.body === incoming.body
+                && item.messageType === incoming.messageType,
+            );
+            if (localIndex >= 0) {
+              base = base.filter((_, index) => index !== localIndex);
+            }
           }
           return mergeDealMessages(base, [incoming]);
         });
+
         if (incoming.senderId !== user.id) {
-          void markDealThreadReadFromMobile(dealId).finally(() => { void refreshBadges(); });
+          void markDealThreadReadFromMobile(dealId).finally(() => {
+            void refreshBadges();
+          });
         }
-        if (isNearBottomRef.current) requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-        else setNewMessagesAvailable(true);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'swap_deals', filter: `id=eq.${dealId}` }, scheduleReload)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'deal_confirmations', filter: `deal_id=eq.${dealId}` }, scheduleReload)
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setRealtimeStatus('live');
-        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setRealtimeStatus('offline');
-      });
-    return () => { void supabase.removeChannel(channel); };
+
+        if (isNearBottomRef.current) {
+          requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+        } else {
+          setNewMessagesAvailable(true);
+        }
+      },
+      onDealChanged: scheduleReload,
+      onConfirmationChanged: scheduleReload,
+      onStatus: (status) => {
+        setRealtimeStatus(status);
+      },
+    });
+
+    return unsubscribe;
   }, [dealId, refreshBadges, scheduleReload, user?.id]);
 
   useEffect(() => () => {

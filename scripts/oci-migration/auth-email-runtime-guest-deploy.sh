@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+STAGE="${1:?stage directory required}"
+P=/usr/pgsql-17/bin/psql
+DB=teswa_rehearsal
+APP=/opt/teswa/auth-shadow
+UNIT=/etc/systemd/system/teswa-auth-shadow.service
+SECRET=/etc/teswa/auth-shadow-session.key
+IDENTITY="$APP/identity-map.json"
+CONFIG="$APP/config.json"
+SQL="$STAGE/runtime-auth-email-service.sql"
+SERVER="$STAGE/auth-email-runtime-server.py"
+CRED="$STAGE/legacy-email.json"
+TMP=""
+TEST_UID=""
+
+cleanup_guest() {
+  if [ -n "${TEST_UID:-}" ]; then
+    sudo -u postgres "$P" -X -q -v ON_ERROR_STOP=0 -d "$DB" <<SQL >/dev/null 2>&1 || true
+BEGIN;
+DELETE FROM teswa_auth.sessions WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_accounts WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM public.profiles WHERE id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.external_identities WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.users WHERE id='$TEST_UID'::uuid;
+COMMIT;
+SQL
+  fi
+  [ -z "${TMP:-}" ] || rm -rf "$TMP"
+}
+trap cleanup_guest EXIT
+
+sudo -n true || { echo 'auth_email_runtime=FAIL reason=no_passwordless_sudo'; exit 10; }
+[ "$(hostname -s)" = core01 ] || { echo 'auth_email_runtime=FAIL reason=unexpected_guest_hostname'; exit 11; }
+systemctl is-active --quiet postgresql-17 || { echo 'auth_email_runtime=FAIL reason=postgres_inactive'; exit 12; }
+for f in "$SQL" "$SERVER" "$CRED" "$IDENTITY" "$CONFIG" "$SECRET" "$UNIT"; do
+  sudo test -e "$f" || { echo "auth_email_runtime=FAIL reason=missing_asset path=$f"; exit 13; }
+done
+
+BASE_OK="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT (to_regclass('teswa_auth.email_accounts') IS NOT NULL AND to_regclass('teswa_auth.sessions') IS NOT NULL AND to_regclass('teswa_identity.users') IS NOT NULL)::text")"
+[ "$BASE_OK" = t ] || { echo 'auth_email_runtime=FAIL reason=auth_foundation_missing'; exit 14; }
+
+LEGACY_UID="$(python3 - "$CRED" <<'PY'
+import json,sys,uuid
+x=json.load(open(sys.argv[1]))
+u=str(uuid.UUID(x['user_id']))
+assert isinstance(x['email'],str) and '@' in x['email']
+assert isinstance(x['password_hash'],str) and x['password_hash'].startswith(('$2a$','$2b$','$2y$')) and len(x['password_hash']) >= 50
+print(u)
+PY
+)"
+echo 'legacy_email_credential_payload_validation=PASS'
+
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$SQL"
+echo 'auth_email_runtime_schema_apply=PASS'
+
+# Import the one real credential without ever placing the email/hash in argv or stdout.
+python3 - "$CRED" "$P" "$DB" <<'PY'
+import base64,json,subprocess,sys,uuid
+x=json.load(open(sys.argv[1])); psql=sys.argv[2]; db=sys.argv[3]
+def txt(v):
+    b=base64.b64encode(v.encode()).decode()
+    return f"convert_from(decode('{b}','base64'),'UTF8')"
+def ts(v):
+    return 'NULL' if v is None else f"{txt(v)}::timestamptz"
+uid=str(uuid.UUID(x['user_id']))
+sql=f"SELECT teswa_auth.import_legacy_email_account('{uid}'::uuid,{txt(x['email'])},{txt(x['password_hash'])},{ts(x.get('email_confirmed_at'))},{ts(x.get('created_at'))},{ts(x.get('updated_at'))});"
+proc=subprocess.run(['sudo','-u','postgres',psql,'-X','-qAt','-v','ON_ERROR_STOP=1','-d',db],input=sql.encode(),capture_output=True,check=False)
+if proc.returncode != 0 or proc.stdout.decode().strip() != 't':
+    raise SystemExit('auth_email_runtime=FAIL reason=legacy_import_failed')
+check=f"SELECT count(*)=1 AND bool_and(password_hash={txt(x['password_hash'])}) FROM teswa_auth.email_accounts WHERE user_id='{uid}'::uuid AND lower(email)=lower({txt(x['email'])}) AND source='supabase_migrated';"
+proc=subprocess.run(['sudo','-u','postgres',psql,'-X','-qAt','-v','ON_ERROR_STOP=1','-d',db],input=check.encode(),capture_output=True,check=False)
+if proc.returncode != 0 or proc.stdout.decode().strip() != 't':
+    raise SystemExit('auth_email_runtime=FAIL reason=legacy_hash_parity')
+PY
+
+echo 'legacy_email_identity_preserved=PASS'
+echo 'legacy_email_credential_migration=PASS'
+echo 'legacy_email_password_hash_exact_match=PASS'
+
+EMAIL_COUNT="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT count(*) FROM teswa_auth.email_accounts WHERE source='supabase_migrated'")"
+[ "$EMAIL_COUNT" = 1 ] || { echo "auth_email_runtime=FAIL reason=legacy_email_account_count_$EMAIL_COUNT"; exit 15; }
+EMAIL_IDENTITY_OK="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT (EXISTS(SELECT 1 FROM teswa_identity.users WHERE id='$LEGACY_UID'::uuid) AND EXISTS(SELECT 1 FROM teswa_identity.external_identities WHERE provider='email' AND user_id='$LEGACY_UID'::uuid))::text")"
+[ "$EMAIL_IDENTITY_OK" = t ] || { echo 'auth_email_runtime=FAIL reason=legacy_email_identity_mapping'; exit 16; }
+rm -f "$CRED"
+echo 'guest_legacy_credential_file_cleanup=PASS'
+
+CLIENT_ID="$(sudo -u teswaauth python3 - "$CONFIG" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); v=x.get('google_web_client_id')
+assert isinstance(v,str) and v.endswith('.apps.googleusercontent.com')
+print(v)
+PY
+)"
+[ -n "$CLIENT_ID" ] || { echo 'auth_email_runtime=FAIL reason=google_client_missing'; exit 17; }
+
+sudo systemctl stop teswa-auth-shadow
+sudo install -o root -g teswaauth -m 0640 "$SERVER" "$APP/server.py"
+sudo systemctl daemon-reload
+sudo systemctl enable --now teswa-auth-shadow >/dev/null
+
+BODY=''
+for _ in $(seq 1 20); do
+  BODY="$(curl -fsS http://127.0.0.1:3110/healthz 2>/dev/null || true)"
+  [ -n "$BODY" ] && break
+  sleep 1
+done
+[ -n "$BODY" ] || { echo 'auth_email_runtime=FAIL reason=health_timeout'; sudo journalctl -u teswa-auth-shadow -n 40 --no-pager || true; exit 18; }
+printf '%s' "$BODY" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["status"]=="ok" and x["mode"]=="teswa-auth-durable-shadow"
+assert x["passwordAuth"] is True and x["signupBootstrap"] is True
+assert x["durableSessions"] is True and x["refreshRotation"] is True
+assert x["productionTraffic"] is False and x["supabaseRuntimeDependency"] is False
+assert x["identityUsers"]==32 and x["identityMappings"]==32
+assert x["confirmationDispatchConfigured"] is False and x["googlePositiveDeferred"] is True
+'
+echo 'auth_email_runtime_service_health=PASS'
+
+STAMP="$(date +%s)"
+TEST_EMAIL="lane4-auth-e2e-${STAMP}@teswa.invalid"
+TEST_PASS='Teswa-E2E-Rehearsal-Password-2026'
+TMP="$(mktemp -d)"
+
+BEFORE_USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
+code="$(curl -sS -o "$TMP/signup-blocked.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" http://127.0.0.1:3110/v1/auth/sign-up)"
+[ "$code" = 503 ] || { echo "auth_email_runtime=FAIL reason=unconfigured_signup_http_$code"; exit 19; }
+AFTER_USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
+[ "$AFTER_USERS" = "$BEFORE_USERS" ] || { echo 'auth_email_runtime=FAIL reason=blocked_signup_mutated_identity'; exit 20; }
+
+# Bootstrap one synthetic account directly so auth/session semantics stay
+# testable while the public signup gate truthfully remains closed.
+TEST_UID="$(python3 -c 'import uuid;print(uuid.uuid4())')"
+TEST_TOKEN="lane4-confirmation-${STAMP}-synthetic-token"
+TOKEN_SHA="$(printf '%s' "$TEST_TOKEN" | sha256sum | awk '{print $1}')"
+BOOTSTRAPPED="$(sudo -u postgres "$P" -X -qAt -v ON_ERROR_STOP=1 -d "$DB" <<SQL
+SELECT teswa_auth.bootstrap_email_signup('$TEST_UID'::uuid,'$TEST_EMAIL','$TEST_PASS','Lane4 Auth Test','$TOKEN_SHA',now()+interval '20 minutes');
+SQL
+)"
+[ "$BOOTSTRAPPED" = t ] || { echo 'auth_email_runtime=FAIL reason=synthetic_signup_bootstrap'; exit 21; }
+
+code="$(curl -sS -o "$TMP/confirm.json" -w '%{http_code}' "http://127.0.0.1:3110/v1/auth/confirm?token=$TEST_TOKEN")"
+[ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=confirmation_http_$code"; exit 22; }
+CONFIRMED="$(python3 - "$TMP/confirm.json" <<'PY'
+import json,sys,uuid
+x=json.load(open(sys.argv[1])); assert x.get('confirmed') is True
+u=x['user_id']; uuid.UUID(u); print(u)
+PY
+)"
+[ "$CONFIRMED" = "$TEST_UID" ] || { echo 'auth_email_runtime=FAIL reason=confirmation_user_mismatch'; exit 23; }
+unset TEST_TOKEN TOKEN_SHA CONFIRMED BEFORE_USERS AFTER_USERS BOOTSTRAPPED
+
+code="$(curl -sS -o "$TMP/login.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" http://127.0.0.1:3110/v1/auth/sign-in/password)"
+[ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=password_signin_http_$code"; exit 23; }
+read -r ACCESS REFRESH < <(python3 - "$TMP/login.json" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); assert x['authenticated'] is True and x['provider']=='email'; print(x['access_token'],x['refresh_token'])
+PY
+)
+
+code="$(curl -sS -o "$TMP/session.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS" http://127.0.0.1:3110/v1/auth/session)"
+[ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=session_restore_http_$code"; exit 24; }
+
+code="$(curl -sS -o "$TMP/refresh.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"refresh_token\":\"$REFRESH\"}" http://127.0.0.1:3110/v1/auth/refresh)"
+[ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=refresh_http_$code"; exit 25; }
+read -r ACCESS2 REFRESH2 < <(python3 - "$TMP/refresh.json" <<'PY'
+import json,sys
+x=json.load(open(sys.argv[1])); assert x['authenticated'] is True; print(x['access_token'],x['refresh_token'])
+PY
+)
+
+replay="$(curl -sS -o "$TMP/replay.json" -w '%{http_code}' -H 'Content-Type: application/json' --data "{\"refresh_token\":\"$REFRESH\"}" http://127.0.0.1:3110/v1/auth/refresh)"
+[ "$replay" = 401 ] || { echo "auth_email_runtime=FAIL reason=refresh_replay_http_$replay"; exit 26; }
+
+code="$(curl -sS -o "$TMP/logout.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $ACCESS2" http://127.0.0.1:3110/v1/auth/logout)"
+[ "$code" = 200 ] || { echo "auth_email_runtime=FAIL reason=logout_http_$code"; exit 27; }
+revoked="$(curl -sS -o "$TMP/revoked.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS2" http://127.0.0.1:3110/v1/auth/session)"
+[ "$revoked" = 401 ] || { echo "auth_email_runtime=FAIL reason=revoked_session_http_$revoked"; exit 28; }
+unset ACCESS ACCESS2 REFRESH REFRESH2 TEST_PASS
+
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" <<SQL >/dev/null
+BEGIN;
+DELETE FROM teswa_auth.sessions WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_confirmation_tokens WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_auth.email_accounts WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM public.profiles WHERE id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.external_identities WHERE user_id='$TEST_UID'::uuid;
+DELETE FROM teswa_identity.users WHERE id='$TEST_UID'::uuid;
+COMMIT;
+SQL
+TEST_UID=""
+rm -rf "$TMP"; TMP=""
+
+USERS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_identity.users')"
+EMAILS="$(sudo -u postgres "$P" -d "$DB" -Atqc 'SELECT count(*) FROM teswa_auth.email_accounts')"
+[ "$USERS" = 32 ] && [ "$EMAILS" = 1 ] || { echo "auth_email_runtime=FAIL reason=e2e_cleanup users=$USERS email_accounts=$EMAILS"; exit 29; }
+
+systemctl is-active --quiet teswa-auth-shadow || { echo 'auth_email_runtime=FAIL reason=service_inactive'; exit 30; }
+systemctl is-enabled --quiet teswa-auth-shadow || { echo 'auth_email_runtime=FAIL reason=service_disabled'; exit 31; }
+ss -ltnH | grep -Eq '[[:space:]]127\.0\.0\.1:3110[[:space:]]' || { echo 'auth_email_runtime=FAIL reason=local_listener_missing'; exit 32; }
+if ss -ltnH | grep -Eq '[[:space:]](0\.0\.0\.0|\[::\]|\*):3110[[:space:]]'; then echo 'auth_email_runtime=FAIL reason=public_listener'; exit 33; fi
+if systemctl is-active --quiet firewalld && sudo firewall-cmd --quiet --query-port=3110/tcp; then echo 'auth_email_runtime=FAIL reason=firewall_open'; exit 34; fi
+
+SERVER_SHA="$(sudo sha256sum "$APP/server.py" | awk '{print $1}')"
+printf '%s\n' \
+  'password_signin_e2e=PASS' \
+  'unconfigured_signup_blocked_without_mutation=PASS' \
+  'synthetic_signup_bootstrap_db_e2e=PASS' \
+  'confirmation_endpoint_http_e2e=PASS' \
+  'session_restore=PASS' \
+  'refresh_rotation_http_e2e=PASS' \
+  'refresh_replay_rejected=PASS' \
+  'logout_revocation_http_e2e=PASS' \
+  'synthetic_auth_e2e_cleanup=PASS' \
+  'legacy_email_accounts=1' \
+  'identity_users=32' \
+  'service_active=true' \
+  'service_enabled=true' \
+  'listen_address=127.0.0.1' \
+  'firewall_3110_open=false' \
+  "server_sha256=$SERVER_SHA" \
+  'supabase_runtime_dependency=false' \
+  'supabase_mutation=none' \
+  'production_cutover=none' \
+  'app_traffic_switch=none' \
+  'google_positive_app_e2e=DEFERRED_TO_APP_ADAPTER' \
+  'signup_confirmation_delivery=BLOCKED_UNTIL_CONFIGURED' \
+  'auth_email_runtime_without_google=PASS'

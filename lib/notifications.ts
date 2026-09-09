@@ -1,5 +1,4 @@
-import { PostgrestError } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export type NotificationType =
   | 'offer_received'
@@ -46,94 +45,89 @@ export type AppNotification = {
 
 export type NotificationActionResult =
   | { ok: true }
-  | { ok: false; message: string; error?: PostgrestError | null };
+  | { ok: false; message: string; error?: unknown };
 
 const NOTIFICATION_ERROR_MESSAGE = 'تعذر تحميل الإشعارات حالياً. حاول مرة تانية.';
 const NOTIFICATION_UPDATE_ERROR_MESSAGE = 'تعذر تحديث حالة الإشعار حالياً.';
 
-function mapNotificationRow(row: {
-  id: string;
-  type: NotificationType;
-  title: string;
-  body: string | null;
-  item_id: string | null;
-  offer_id: string | null;
-  deal_id: string | null;
-  contextual_conversation_id: string | null;
-  actor_user_id: string | null;
-  route: string | null;
-  read_at: string | null;
-  created_at: string;
-}): AppNotification {
+function mapNotification(notification: Awaited<ReturnType<typeof teswaBackendRuntime.notifications.list>>[number]): AppNotification {
   return {
-    id: row.id,
-    type: row.type,
-    title: row.title,
-    body: row.body,
-    itemId: row.item_id,
-    offerId: row.offer_id,
-    dealId: row.deal_id,
-    contextualConversationId: row.contextual_conversation_id,
-    actorUserId: row.actor_user_id,
-    route: row.route ?? null,
-    readAt: row.read_at,
-    createdAt: row.created_at,
-    isRead: Boolean(row.read_at),
+    id: notification.id,
+    type: notification.type as NotificationType,
+    title: notification.title,
+    body: notification.body,
+    itemId: notification.itemId,
+    offerId: notification.offerId,
+    dealId: notification.dealId,
+    contextualConversationId: notification.conversationId,
+    actorUserId: notification.actorUserId,
+    route: notification.route,
+    readAt: notification.readAt,
+    createdAt: notification.createdAt,
+    isRead: Boolean(notification.readAt),
   };
 }
 
-export async function fetchMyNotifications(userId: string): Promise<{ ok: true; data: AppNotification[] } | { ok: false; message: string; error?: PostgrestError | null }> {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('id, type, title, body, item_id, offer_id, deal_id, contextual_conversation_id, actor_user_id, route, read_at, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  if (error) return { ok: false, message: NOTIFICATION_ERROR_MESSAGE, error };
-  return { ok: true, data: (data ?? []).map(mapNotificationRow) };
+export async function fetchMyNotifications(
+  userId: string,
+): Promise<
+  | { ok: true; data: AppNotification[] }
+  | { ok: false; message: string; error?: unknown }
+> {
+  try {
+    const data = await teswaBackendRuntime.notifications.list(userId, 50);
+    return { ok: true, data: data.map(mapNotification) };
+  } catch (error) {
+    return { ok: false, message: NOTIFICATION_ERROR_MESSAGE, error };
+  }
 }
 
-export async function fetchUnreadNotificationCount(userId: string): Promise<{ ok: true; count: number } | { ok: false; message: string; error?: PostgrestError | null }> {
-  const { count, error } = await supabase
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .is('read_at', null);
-
-  if (error) return { ok: false, message: NOTIFICATION_ERROR_MESSAGE, error };
-  return { ok: true, count: count ?? 0 };
+export async function fetchUnreadNotificationCount(
+  userId: string,
+): Promise<
+  | { ok: true; count: number }
+  | { ok: false; message: string; error?: unknown }
+> {
+  try {
+    const count = await teswaBackendRuntime.notifications.getUnreadCount(userId);
+    return { ok: true, count };
+  } catch (error) {
+    return { ok: false, message: NOTIFICATION_ERROR_MESSAGE, error };
+  }
 }
 
-export async function markNotificationRead(notificationId: string, userId: string): Promise<NotificationActionResult> {
-  const readAt = new Date().toISOString();
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read_at: readAt })
-    .eq('id', notificationId)
-    .eq('user_id', userId)
-    .is('read_at', null);
-
-  if (error) return { ok: false, message: NOTIFICATION_UPDATE_ERROR_MESSAGE, error };
-  return { ok: true };
+export async function markNotificationRead(
+  notificationId: string,
+  userId: string,
+): Promise<NotificationActionResult> {
+  const result = await teswaBackendRuntime.notifications.markRead(userId, notificationId);
+  return result.ok
+    ? { ok: true }
+    : { ok: false, message: NOTIFICATION_UPDATE_ERROR_MESSAGE, error: result.cause };
 }
 
-export async function markAllNotificationsRead(userId: string): Promise<NotificationActionResult> {
-  const readAt = new Date().toISOString();
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read_at: readAt })
-    .eq('user_id', userId)
-    .is('read_at', null);
-
-  if (error) return { ok: false, message: NOTIFICATION_UPDATE_ERROR_MESSAGE, error };
-  return { ok: true };
+export async function markAllNotificationsRead(
+  userId: string,
+): Promise<NotificationActionResult> {
+  const result = await teswaBackendRuntime.notifications.markAllRead(userId);
+  return result.ok
+    ? { ok: true }
+    : { ok: false, message: NOTIFICATION_UPDATE_ERROR_MESSAGE, error: result.cause };
 }
 
-export function resolveNotificationRoute(notification: Pick<AppNotification, 'type' | 'actorUserId' | 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId' | 'route'>): string | null {
+export function resolveNotificationRoute(
+  notification: Pick<
+    AppNotification,
+    'type' | 'actorUserId' | 'contextualConversationId' | 'dealId' | 'offerId' | 'itemId' | 'route'
+  >,
+): string | null {
   if (notification.route?.startsWith('/direct/')) return notification.route;
-  if (notification.type === 'user_followed_you' && notification.actorUserId) return `/profile/${notification.actorUserId}`;
-  if (notification.contextualConversationId) return `/contextual/${notification.contextualConversationId}`;
+  if (notification.type === 'user_followed_you' && notification.actorUserId) {
+    return `/profile/${notification.actorUserId}`;
+  }
+  if (notification.contextualConversationId) {
+    return `/contextual/${notification.contextualConversationId}`;
+  }
   if (notification.dealId) return `/deal/${notification.dealId}`;
   if (notification.offerId) return `/offer/${notification.offerId}`;
   if (notification.itemId) return `/item/${notification.itemId}`;
@@ -167,3 +161,4 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   user_followed_you: 'متابعة جديدة',
   direct_message_received: 'رسالة مباشرة',
 };
+

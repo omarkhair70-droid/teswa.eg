@@ -1,0 +1,14 @@
+name: Expo SDK 56 Modernization Checkpoint
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closed:
+    name: SDK 56 checkpoint closed
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SDK 56 checkpoint is closed; continue modernization on SDK 57."

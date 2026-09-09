@@ -8,6 +8,7 @@ import { radii } from "@/constants/radii";
 import { spacing } from "@/constants/spacing";
 import { MovingItemInterest } from "@/lib/motion-interest";
 import { StoryDiscoveryItem } from "@/lib/story-discovery";
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 type MotionMovingItemCardProps = {
   item: MovingItemInterest;
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   placeholderText: { color: "rgba(255,255,255,0.92)", fontSize: 12 },
-  imageShade: { ...StyleSheet.absoluteFillObject },
+  imageShade: { ...ABSOLUTE_FILL },
   imageGlow: {
     position: "absolute",
     left: spacing.md,

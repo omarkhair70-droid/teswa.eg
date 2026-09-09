@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/AppText';
 import { colors } from '@/constants/colors';
 import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 export type StoryCameraStudioProps = {
   visible: boolean;
@@ -191,7 +192,7 @@ export function StoryCameraStudio({ visible, onClose, onCaptured }: StoryCameraS
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0E0E10' },
   camera: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', paddingTop: spacing.xl, paddingBottom: spacing.xl, paddingHorizontal: spacing.md },
+  overlay: { ...ABSOLUTE_FILL, justifyContent: 'space-between', paddingTop: spacing.xl, paddingBottom: spacing.xl, paddingHorizontal: spacing.md },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   spacer: { width: 50 },
   lightText: { color: colors.white },

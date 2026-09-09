@@ -329,8 +329,7 @@ export default function DirectConversationScreen() {
       onReactionsChanged: scheduleRealtimeRefresh,
       onTypingChanged: () => { void refreshTyping(); },
       onStatus: (status) => {
-        if (status === 'SUBSCRIBED') setRealtimeStatus('live');
-        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setRealtimeStatus('offline');
+        setRealtimeStatus(status === 'live' ? 'live' : status === 'offline' ? 'offline' : 'connecting');
       },
     });
     if (accepted) void refreshTyping();

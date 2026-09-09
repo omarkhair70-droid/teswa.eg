@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 import ViewShot from 'react-native-view-shot';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
@@ -615,7 +616,7 @@ galleryCounterText: {
   videoDurationPill: { borderRadius: radii.round, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.border },
   videoDurationText: { color: colors.primary, fontSize: 12 },
   videoPreviewCard: { minHeight: 150, borderRadius: radii.lg, overflow: 'hidden', backgroundColor: colors.primary, justifyContent: 'center' },
-  videoPreviewGlow: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.accent, opacity: 0.32 },
+  videoPreviewGlow: { ...ABSOLUTE_FILL, backgroundColor: colors.accent, opacity: 0.32 },
   videoPreviewContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
   videoPlayButton: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   videoPreviewTextBlock: { flex: 1, gap: spacing.xs },

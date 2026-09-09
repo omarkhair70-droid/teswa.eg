@@ -1,0 +1,14 @@
+{
+  "lane2_provider_boundary_ready": false,
+  "oci_postgres_ready": false,
+  "auth_semantics_verified": false,
+  "rpc_authorization_verified": false,
+  "media_access_verified": false,
+  "realtime_verified": false,
+  "worker_notification_verified": false,
+  "rollback_drill_verified": false,
+  "source_write_freeze_active": false,
+  "final_source_bundle_captured": false,
+  "routing_switch_plan_approved": false,
+  "notes": "Template only. Never change a gate to true without linked validation evidence."
+}

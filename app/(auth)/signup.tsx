@@ -9,7 +9,7 @@ import { AppScreen } from '@/components/ui/AppScreen';
 import { AppText } from '@/components/ui/AppText';
 import { spacing } from '@/constants/spacing';
 import { signInWithGoogle } from '@/lib/google-auth';
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
@@ -31,10 +31,10 @@ export default function SignupScreen() {
     setLoading(true);
     setError('');
     setMessage('');
-    const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password });
+    const signUpResult = await teswaBackendRuntime.auth.signUp({ email: email.trim(), password });
     setLoading(false);
-    if (signUpError) return setError('تعذر إنشاء الحساب. حاول مرة تانية.');
-    if (!data.session) {
+    if (!signUpResult.ok) return setError('تعذر إنشاء الحساب. حاول مرة تانية.');
+    if (!signUpResult.data.session) {
       const normalizedEmail = email.trim().toLowerCase();
       setPendingConfirmationEmail(normalizedEmail);
       setMessage('تم إنشاء الحساب، لكن لا يمكننا تأكيد تسليم البريد من داخل التطبيق. راجع البريد الوارد وSpam/Junk ثم أكد الحساب.');
@@ -48,9 +48,9 @@ export default function SignupScreen() {
     if (!pendingConfirmationEmail || resendLoading) return;
     setResendLoading(true);
     setError('');
-    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: pendingConfirmationEmail });
+    const resendResult = await teswaBackendRuntime.auth.resendSignupConfirmation(pendingConfirmationEmail);
     setResendLoading(false);
-    if (resendError) {
+    if (!resendResult.ok) {
       setError('تعذر إعادة إرسال رسالة التأكيد الآن. حاول مرة أخرى بعد قليل.');
       return;
     }

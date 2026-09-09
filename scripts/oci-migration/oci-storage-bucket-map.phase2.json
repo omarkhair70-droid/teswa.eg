@@ -1,0 +1,11 @@
+{
+  "profile-images": {"bucket": "teswa-media", "prefix": "profile-images"},
+  "item-images": {"bucket": "teswa-media", "prefix": "item-images"},
+  "item-videos": {"bucket": "teswa-media", "prefix": "item-videos"},
+  "story-media": {"bucket": "teswa-media", "prefix": "story-media"},
+  "direct-chat-media": {"bucket": "teswa-media", "prefix": "direct-chat-media"},
+  "direct-voice-messages": {"bucket": "teswa-media", "prefix": "direct-voice-messages"},
+  "deal-voice-messages": {"bucket": "teswa-media", "prefix": "deal-voice-messages"},
+  "contextual-voice-messages": {"bucket": "teswa-media", "prefix": "contextual-voice-messages"},
+  "dolab-media": {"bucket": "teswa-media", "prefix": "dolab-media"}
+}

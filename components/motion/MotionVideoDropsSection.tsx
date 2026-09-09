@@ -13,6 +13,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { MotionVideoDrop } from '@/lib/motion-video-drops';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 export type MotionVideoDropsSectionProps = {
   drops: MotionVideoDrop[];
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
   softOrbPrimary: { position: 'absolute', width: 190, height: 190, borderRadius: 95, backgroundColor: 'rgba(238,216,203,0.32)', top: -54, right: -62 },
   softOrbAccent: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(62,124,115,0.34)', bottom: -42, left: -50 },
   previewTexture: {
-    ...StyleSheet.absoluteFillObject,
+    ...ABSOLUTE_FILL,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     backgroundColor: 'rgba(255,255,255,0.025)',

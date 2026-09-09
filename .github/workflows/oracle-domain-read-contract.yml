@@ -1,0 +1,199 @@
+name: Oracle Domain Read Contract
+on:
+  push:
+    branches:
+      - integration/oracle-domain-closure-20260907
+      - fix/oracle-publish-top-level-20260907
+      - fix/oracle-exchange-read-integration-20260907
+      - fix/oracle-exchange-read-closure-20260907
+      - fix/oracle-exchange-lifecycle-20260907
+      - fix/oracle-exchange-read-completion-20260907
+      - fix/oracle-account-deletion-parity-20260909
+      - fix/oracle-profile-column-security-20260909
+      - fix/oracle-rehearsal-closure-20260909
+    paths:
+      - scripts/oci-migration/oracle_domain_read.py
+      - scripts/oci-migration/oracle_domain_service.py
+      - scripts/oci-migration/oracle_exchange_read.py
+      - scripts/oci-migration/oracle_exchange_read_extra.py
+      - scripts/oci-migration/oracle_media.py
+      - scripts/oci-migration/oracle_marketplace_write.py
+      - scripts/oci-migration/oracle_exchange.py
+      - scripts/oci-migration/oracle_profiles.py
+      - scripts/oci-migration/oracle_notifications.py
+      - scripts/oci-migration/oracle_reviews.py
+      - scripts/oci-migration/oracle_direct_messaging.py
+      - scripts/oci-migration/oracle_contextual_messaging.py
+      - scripts/oci-migration/oracle_stories.py
+      - scripts/oci-migration/oracle_discovery.py
+      - scripts/oci-migration/oracle_dolab.py
+      - scripts/oci-migration/oracle_policies_analytics.py
+      - scripts/oci-migration/oracle_moderation.py
+      - scripts/oci-migration/oracle_account.py
+      - scripts/oci-migration/runtime-account-deletion.sql
+      - scripts/oci-migration/test_account_deletion_postgres.sql
+      - scripts/oci-migration/deploy-domain-read-shadow.py
+      - scripts/oci-migration/domain-read-shadow-guest-deploy.sh
+      - scripts/oci-migration/domain_exchange_e2e.py
+      - scripts/oci-migration/runtime-domain-api-grants.sql
+      - scripts/oci-migration/runtime-profile-column-security.sql
+      - scripts/oci-migration/test_oracle_domain_exchange.py
+      - scripts/oci-migration/test_oracle_profiles.py
+      - scripts/oci-migration/test_profile_acl_contract.py
+      - scripts/oci-migration/test_oracle_notifications.py
+      - scripts/oci-migration/test_oracle_notification_dispatch.py
+      - scripts/oci-migration/test_oracle_reviews.py
+      - scripts/oci-migration/test_oracle_direct_messaging.py
+      - scripts/oci-migration/test_oracle_contextual_messaging.py
+      - scripts/oci-migration/test_oracle_stories.py
+      - scripts/oci-migration/test_oracle_discovery.py
+      - scripts/oci-migration/test_oracle_dolab.py
+      - scripts/oci-migration/test_oracle_policies_analytics.py
+      - scripts/oci-migration/test_oracle_moderation.py
+      - scripts/oci-migration/test_oracle_account.py
+      - scripts/oci-migration/realtime-shadow-transport.py
+      - scripts/oci-migration/test_realtime_shadow_transport.py
+      - scripts/oci-migration/runtime-realtime-outbox.sql
+      - scripts/oci-migration/verify-runtime-realtime-outbox.sql
+      - scripts/oci-migration/test_oracle_exchange_lifecycle.py
+      - scripts/oci-migration/test_oracle_exchange_read.py
+      - scripts/oci-migration/test_oracle_exchange_read_order.py
+      - scripts/oci-migration/test_oracle_exchange_read_extra.py
+      - scripts/oci-migration/test_oracle_exchange_offer_reads.py
+      - scripts/oci-migration/test_oracle_domain_marketplace_write.py
+      - scripts/oci-migration/test_oracle_domain_write_transaction.py
+      - scripts/oci-migration/test_oracle_domain_media.py
+      - scripts/oci-migration/test_oracle_domain_service.py
+      - scripts/oci-migration/auth-api-shadow-gateway.py
+      - scripts/oci-migration/test_auth_gateway.py
+      - lib/backend/adapters/oracle/marketplace-read-adapter.ts
+      - scripts/test-oracle-marketplace-read-adapter.cjs
+      - lib/backend/adapters/oracle/media-adapter.ts
+      - scripts/test-oracle-media-adapter.cjs
+      - lib/backend/adapters/oracle/marketplace-write-adapter.ts
+      - scripts/test-oracle-marketplace-write-adapter.cjs
+      - lib/backend/adapters/oracle/exchange-adapter.ts
+      - lib/backend/adapters/oracle/exchange-lifecycle-adapter.ts
+      - scripts/test-oracle-exchange-adapter.cjs
+      - scripts/test-oracle-exchange-lifecycle-adapter.cjs
+      - scripts/test-oracle-exchange-composition.cjs
+      - lib/backend/adapters/oracle/exchange-read-adapter.ts
+      - lib/backend/adapters/oracle/profile-core-adapter.ts
+      - lib/backend/adapters/oracle/notifications-adapter.ts
+      - lib/backend/adapters/oracle/reviews-adapter.ts
+      - lib/backend/adapters/oracle/direct-messaging-adapter.ts
+      - scripts/test-oracle-direct-messaging-adapter.cjs
+      - lib/backend/adapters/oracle/contextual-messaging-adapter.ts
+      - scripts/test-oracle-contextual-messaging-adapter.cjs
+      - lib/backend/adapters/oracle/stories-adapter.ts
+      - scripts/test-oracle-stories-adapter.cjs
+      - lib/backend/adapters/oracle/discovery-adapter.ts
+      - scripts/test-oracle-discovery-adapter.cjs
+      - lib/backend/adapters/oracle/dolab-adapter.ts
+      - scripts/test-oracle-dolab-adapter.cjs
+      - lib/backend/adapters/oracle/policies-adapter.ts
+      - lib/backend/adapters/oracle/analytics-adapter.ts
+      - scripts/test-oracle-policies-analytics-adapters.cjs
+      - lib/backend/adapters/oracle/moderation-adapter.ts
+      - lib/backend/adapters/oracle/account-adapter.ts
+      - scripts/test-oracle-moderation-account-adapters.cjs
+      - lib/backend/adapters/oracle/messaging-realtime-adapter.ts
+      - scripts/test-oracle-messaging-realtime-adapter.cjs
+      - scripts/test-oracle-profile-core-adapter.cjs
+      - scripts/test-oracle-notifications-adapter.cjs
+      - scripts/test-oracle-reviews-adapter.cjs
+      - scripts/test-oracle-exchange-read-adapter.cjs
+      - scripts/test-oracle-exchange-read-extra-adapter.cjs
+      - scripts/test-oracle-exchange-offer-read-adapter.cjs
+      - scripts/oci-migration/test_oracle_domain_read.py
+      - .github/workflows/oracle-domain-read-contract.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify authenticated read contract
+        run: |
+          python -m py_compile scripts/oci-migration/oracle_domain_read.py
+          python -m py_compile scripts/oci-migration/oracle_domain_service.py
+          python -m py_compile scripts/oci-migration/oracle_exchange_read.py
+          python -m py_compile scripts/oci-migration/oracle_exchange_read_extra.py
+          python -m py_compile scripts/oci-migration/oracle_media.py
+          python -m py_compile scripts/oci-migration/oracle_marketplace_write.py
+          python -m py_compile scripts/oci-migration/oracle_exchange.py
+          python -m py_compile scripts/oci-migration/oracle_profiles.py
+          python -m py_compile scripts/oci-migration/oracle_notifications.py
+          python -m py_compile scripts/oci-migration/oracle_reviews.py
+          python -m py_compile scripts/oci-migration/oracle_direct_messaging.py
+          python -m py_compile scripts/oci-migration/oracle_contextual_messaging.py
+          python -m py_compile scripts/oci-migration/oracle_stories.py
+          python -m py_compile scripts/oci-migration/oracle_discovery.py
+          python -m py_compile scripts/oci-migration/oracle_dolab.py
+          python -m py_compile scripts/oci-migration/oracle_policies_analytics.py
+          python -m py_compile scripts/oci-migration/oracle_moderation.py
+          python -m py_compile scripts/oci-migration/oracle_account.py
+          python -m py_compile scripts/oci-migration/realtime-shadow-transport.py
+          python -m py_compile scripts/oci-migration/deploy-domain-read-shadow.py
+          python -m py_compile scripts/oci-migration/domain_exchange_e2e.py
+          bash -n scripts/oci-migration/domain-read-shadow-guest-deploy.sh
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_read.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_service.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read_order.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_read_extra.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_offer_reads.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_exchange_lifecycle.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_media.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_marketplace_write.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_write_transaction.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_exchange.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_profiles.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_profile_acl_contract.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_notifications.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_notification_dispatch.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_reviews.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_direct_messaging.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_contextual_messaging.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_stories.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_discovery.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_dolab.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_policies_analytics.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_moderation.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_account.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_realtime_shadow_transport.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_auth_gateway.py -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify Oracle domain adapters and application types
+        run: |
+          node scripts/test-oracle-marketplace-read-adapter.cjs
+          node scripts/test-oracle-media-adapter.cjs
+          node scripts/test-oracle-marketplace-write-adapter.cjs
+          node scripts/test-oracle-exchange-adapter.cjs
+          node scripts/test-oracle-exchange-read-adapter.cjs
+          node scripts/test-oracle-exchange-lifecycle-adapter.cjs
+          node scripts/test-oracle-exchange-composition.cjs
+          node scripts/test-oracle-exchange-read-extra-adapter.cjs
+          node scripts/test-oracle-exchange-offer-read-adapter.cjs
+          node scripts/test-oracle-profile-core-adapter.cjs
+          node scripts/test-oracle-notifications-adapter.cjs
+          node scripts/test-oracle-reviews-adapter.cjs
+          node scripts/test-oracle-direct-messaging-adapter.cjs
+          node scripts/test-oracle-contextual-messaging-adapter.cjs
+          node scripts/test-oracle-stories-adapter.cjs
+          node scripts/test-oracle-discovery-adapter.cjs
+          node scripts/test-oracle-dolab-adapter.cjs
+          node scripts/test-oracle-policies-analytics-adapters.cjs
+          node scripts/test-oracle-moderation-account-adapters.cjs
+          node scripts/test-oracle-messaging-realtime-adapter.cjs
+          npm run typecheck:app

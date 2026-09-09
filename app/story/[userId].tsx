@@ -19,6 +19,7 @@ import { fetchStoryLikeStateForViewer, setStoryLikedFromMobile } from '@/lib/sto
 import { sendStoryReplyFromMobile, sendStoryVoiceReplyFromMobile } from '@/lib/contextual-conversations';
 import { blockUserFromMobile, fetchUserBlockState, unblockUserFromMobile } from '@/lib/user-blocks';
 import { buildCachedVideoSource, getMediaNeighborIndexes, prefetchImagesMemoryDisk } from '@/lib/media/media-performance';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 const IMAGE_DURATION_MS = 5000;
 const VIDEO_FALLBACK_DURATION_MS = 8000;
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
   loadingText: { color: '#fff' },
   mediaFallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   mediaFallbackText: { color: '#fff' },
-  videoLoadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  videoLoadingOverlay: { ...ABSOLUTE_FILL, alignItems: 'center', justifyContent: 'center' },
   videoLoadingChip: { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   videoLoadingText: { color: '#fff', fontSize: 13 },
   stateActions: { width: '100%', gap: 10 },

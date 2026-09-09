@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const CURRENT_TERMS_POLICY_VERSION = '2026-05';
@@ -34,10 +34,10 @@ const policyLog = (event: string, data?: Record<string, unknown>) => {
 export type RequiredPolicyKey = typeof REQUIRED_POLICIES[number]['key'];
 
 type PolicyAcceptanceRow = {
-  user_id: string;
-  policy_key: RequiredPolicyKey;
-  policy_version: string;
-  accepted_at: string;
+  userId: string;
+  policyKey: RequiredPolicyKey;
+  policyVersion: string;
+  acceptedAt: string;
 };
 
 export type RequiredPolicyAcceptanceState = {
@@ -102,18 +102,27 @@ export async function fetchRequiredPolicyAcceptanceState(
   const fetchStart = Date.now();
   policyLog('server_fetch_start', { hasUserId: true });
   try {
-    const result = await withTimeout<{ data: PolicyAcceptanceRow[] | null; error: { message?: string } | null }>(
-      supabase
-        .from('user_policy_acceptances')
-        .select('user_id, policy_key, policy_version, accepted_at')
-        .eq('user_id', trimmedUserId)
-        .in('policy_key', REQUIRED_POLICIES.map((policy) => policy.key)),
+    const result = await withTimeout(
+      teswaBackendRuntime.policies.listAcceptances({
+        userId: trimmedUserId,
+        policyKeys: REQUIRED_POLICIES.map((policy) => policy.key),
+      }),
       POLICY_ACCEPTANCE_FETCH_TIMEOUT_MS,
       POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE,
     );
 
-    data = (result.data as PolicyAcceptanceRow[] | null) ?? null;
-    error = result.error;
+    if (result.ok) {
+      data = result.data.map((row) => ({
+        userId: row.userId,
+        policyKey: row.policyKey as RequiredPolicyKey,
+        policyVersion: row.policyVersion,
+        acceptedAt: row.acceptedAt,
+      }));
+      error = null;
+    } else {
+      data = null;
+      error = { message: result.message };
+    }
   } catch (requestError) {
     policyLog('server_fetch_end', { ok: false, dtMs: Date.now() - fetchStart });
     const timeoutMessage = requestError instanceof Error ? requestError.message : POLICY_ACCEPTANCE_FETCH_TIMEOUT_MESSAGE;
@@ -160,11 +169,11 @@ export async function fetchRequiredPolicyAcceptanceState(
   policyLog('server_fetch_end', { ok: true, dtMs: Date.now() - fetchStart, rowCount: data?.length ?? 0 });
 
   data?.forEach((row) => {
-    if (!(row.policy_key in acceptancesByKey)) return;
-    const requiredPolicy = REQUIRED_POLICIES.find((policy) => policy.key === row.policy_key);
+    if (!(row.policyKey in acceptancesByKey)) return;
+    const requiredPolicy = REQUIRED_POLICIES.find((policy) => policy.key === row.policyKey);
     if (!requiredPolicy) return;
-    if (row.policy_version !== requiredPolicy.version) return;
-    acceptancesByKey[row.policy_key] = true;
+    if (row.policyVersion !== requiredPolicy.version) return;
+    acceptancesByKey[row.policyKey] = true;
   });
 
   const missingKeys = REQUIRED_POLICIES
@@ -210,25 +219,38 @@ export async function recordRequiredPolicyAcceptances(userId: string): Promise<{
     return { ok: false, message: 'لا يمكن حفظ الموافقات بدون تسجيل الدخول.' };
   }
 
-  const payload = REQUIRED_POLICIES.map((policy) => ({
-    user_id: trimmedUserId,
-    policy_key: policy.key,
-    policy_version: policy.version,
-  }));
-
   policyLog('write_start', { hasAuthUser: Boolean(trimmedUserId), hasUserId: Boolean(trimmedUserId), policyVersionFingerprint: fingerprint });
-  const { error } = await supabase
-    .from('user_policy_acceptances')
-    .upsert(payload, {
-      onConflict: 'user_id,policy_key,policy_version',
-      ignoreDuplicates: true,
-    });
+  const result = await teswaBackendRuntime.policies.recordAcceptances({
+    userId: trimmedUserId,
+    policies: REQUIRED_POLICIES.map((policy) => ({
+      policyKey: policy.key,
+      policyVersion: policy.version,
+    })),
+  });
 
-  if (error) {
-    policyLog('write_end', { ok: false, code: error.code ?? null, message: error.message ?? null });
-    if (__DEV__) console.log('[Policy] record acceptance failed', { userId: trimmedUserId, code: error.code, message: error.message, details: error.details });
-    if (error.code === '42501') return { ok: false, message: 'ليس لديك صلاحية لحفظ الموافقات حالياً. حاول تسجيل الدخول مرة ثانية.' };
-    return { ok: false, message: 'تعذر حفظ موافقات السياسات حالياً. حاول مرة ثانية.' };
+  if (!result.ok) {
+    policyLog('write_end', {
+      ok: false,
+      code: result.reason,
+      message: result.message,
+    });
+    if (__DEV__) {
+      console.log('[Policy] record acceptance failed', {
+        userId: trimmedUserId,
+        reason: result.reason,
+        message: result.message,
+      });
+    }
+    if (result.reason === 'forbidden') {
+      return {
+        ok: false,
+        message: 'ليس لديك صلاحية لحفظ الموافقات حالياً. حاول تسجيل الدخول مرة ثانية.',
+      };
+    }
+    return {
+      ok: false,
+      message: 'تعذر حفظ موافقات السياسات حالياً. حاول مرة ثانية.',
+    };
   }
   try {
     await AsyncStorage.setItem(policyCacheKey(trimmedUserId, fingerprint), '1');

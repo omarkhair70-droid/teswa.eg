@@ -1,0 +1,27 @@
+import type { AdminReportRecord, ModerationContract, ModerationParticipantRecord, ReportFailureReason } from '@/lib/backend/contracts/moderation';
+import type { OracleHttpTransport } from '@/lib/backend/adapters/oracle/http-transport';
+
+const record=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const participant=(value:unknown):value is ModerationParticipantRecord=>record(value)&&typeof value.id==='string';
+const report=(value:unknown):value is AdminReportRecord=>record(value)&&typeof value.id==='string'&&typeof value.reporterId==='string'&&typeof value.reason==='string'&&typeof value.status==='string'&&typeof value.createdAt==='string';
+const failure=(message:string)=>({ok:false as const,reason:'unknown' as const,message});
+const contextFailure=(value:unknown,message:string)=>record(value)&&value.ok===false&&['not_found','unauthorized','invalid_target','self_target'].includes(String(value.reason))
+ ? {ok:false as const,reason:value.reason as 'not_found'|'unauthorized'|'invalid_target'|'self_target',message}:failure(message);
+
+export function createOracleModerationAdapter(transport:OracleHttpTransport):ModerationContract{
+ const submit=async(path:string,body:unknown)=>{const result=await transport.request<unknown>({method:'POST',path,body});if(result.ok)return{ok:true as const,data:undefined};
+  const reason:ReportFailureReason=result.reason==='rate_limited'?'rate_limited':result.reason==='forbidden'?'unauthorized':result.reason==='not_found'?'not_found':'unknown';return{ok:false as const,reason,message:'Oracle report submission failed.'};};
+ return{
+  async getProfile(userId){const result=await transport.request<unknown>({path:`/v1/moderation/profiles/${userId}`});if(!result.ok||!record(result.data)||(result.data.item!==null&&!participant(result.data.item)))throw new Error('Oracle moderation profile read failed.');return result.data.item as ModerationParticipantRecord|null;},
+  reportUser(input){return submit('/v1/moderation/reports/user',input);},reportItem(input){return submit('/v1/moderation/reports/item',input);},
+  reportDirectMessage(input){return submit('/v1/moderation/reports/direct-message',input);},reportDeal(input){return submit('/v1/moderation/reports/deal',input);},
+  reportStory(input){return submit('/v1/moderation/reports/story',input);},reportDealMessage(input){return submit('/v1/moderation/reports/deal-message',input);},
+  async getItemReportContext(itemId){const result=await transport.request<unknown>({path:`/v1/moderation/items/${itemId}/context`});if(!result.ok||!record(result.data)||(result.data.item!==null&&!record(result.data.item)))throw new Error('Oracle item report context failed.');return result.data.item as any;},
+  async getDirectMessageReportContext(input){const result=await transport.request<unknown>({method:'POST',path:'/v1/moderation/direct-context',body:input});if(!result.ok||!record(result.data))return failure('Oracle direct report context failed.');if(result.data.ok!==true)return contextFailure(result.data,'Oracle direct report context rejected.') as any;return record(result.data.item)&&participant(result.data.item.reportedUser)?{ok:true,data:result.data.item as any}:failure('Invalid Oracle direct report context.');},
+  async getDealReportContext(input){const result=await transport.request<unknown>({method:'POST',path:'/v1/moderation/deal-context',body:input});if(!result.ok||!record(result.data))return failure('Oracle deal report context failed.');if(result.data.ok!==true)return contextFailure(result.data,'Oracle deal report context rejected.') as any;return record(result.data.item)&&participant(result.data.item.reportedUser)?{ok:true,data:result.data.item as any}:failure('Invalid Oracle deal report context.');},
+  async getStoryReportContext(input){const result=await transport.request<unknown>({method:'POST',path:'/v1/moderation/story-context',body:input});if(!result.ok||!record(result.data))return failure('Oracle story report context failed.');if(result.data.ok!==true)return contextFailure(result.data,'Oracle story report context rejected.') as any;return record(result.data.item)&&participant(result.data.item.author)?{ok:true,data:result.data.item as any}:failure('Invalid Oracle story report context.');},
+  async isAdmin(){const result=await transport.request<unknown>({path:'/v1/moderation/admin'});return result.ok&&record(result.data)&&typeof result.data.admin==='boolean'?{ok:true,data:result.data.admin}:failure('Oracle admin state failed.');},
+  async listAdminReports(input){const result=await transport.request<unknown>({path:'/v1/moderation/admin/reports',query:input});if(!result.ok)return{ok:false,reason:result.reason==='forbidden'?'unauthorized':'unknown',message:'Oracle moderation queue failed.'};return record(result.data)&&Array.isArray(result.data.items)&&result.data.items.every(report)?{ok:true,data:result.data.items as AdminReportRecord[]}:failure('Invalid Oracle moderation queue.');},
+  async reviewReport(input){const result=await transport.request<unknown>({method:'POST',path:'/v1/moderation/admin/review',body:input});return result.ok?{ok:true,data:undefined}:failure('Oracle moderation review failed.');},
+  async hideItemForModeration(input){const result=await transport.request<unknown>({method:'POST',path:'/v1/moderation/admin/hide-item',body:input});return result.ok?{ok:true,data:undefined}:failure('Oracle moderation item action failed.');},
+ };}

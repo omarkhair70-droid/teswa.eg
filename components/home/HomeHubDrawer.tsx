@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 import { AppText } from '@/components/ui/AppText';
 import { radii } from '@/constants/radii';
@@ -14,7 +15,7 @@ type HubAction = { label: string; description: string; iconName: IoniconName; to
 
 const createStyles = (colors: TeswaThemeColors) => ({
   overlay: { flex: 1, justifyContent: 'flex-start' as const, paddingTop: spacing.lg },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.black },
+  backdrop: { ...ABSOLUTE_FILL, backgroundColor: colors.black },
   drawer: { marginRight: spacing.md, width: '88%' as const, maxWidth: 360, alignSelf: 'flex-end' as const, borderRadius: radii.xxl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.elevated, padding: spacing.lg, gap: spacing.md },
   header: { flexDirection: 'row-reverse' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: spacing.md },
   headerCopy: { flex: 1, gap: 2 },

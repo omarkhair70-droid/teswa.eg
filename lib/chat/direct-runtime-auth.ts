@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
 type DirectRuntimeAuthSuccess = { ok: true; userId: string };
 type DirectRuntimeAuthFailure = { ok: false; message: string };
@@ -12,12 +12,9 @@ export type DirectRuntimeAuthInput = {
 
 export async function fetchDirectRuntimeAuth(_input?: DirectRuntimeAuthInput): Promise<DirectRuntimeAuthSuccess | DirectRuntimeAuthFailure> {
   try {
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
+    const session = await teswaBackendRuntime.auth.getSession();
 
-    if (error || !session?.user?.id) {
+    if (!session?.user?.id) {
       return { ok: false, message: 'Missing authenticated session.' };
     }
 

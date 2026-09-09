@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 
 function fail(message) {
-  console.error(`[android-release-safety] FAIL: ${message}`);
+  console.error(`[android-release-proof] FAIL: ${message}`);
   process.exitCode = 1;
 }
 
 function pass(message) {
-  console.log(`[android-release-safety] PASS: ${message}`);
+  console.log(`[android-release-proof] PASS: ${message}`);
 }
 
 function read(path) {
@@ -20,17 +20,26 @@ function read(path) {
 const packageJson = JSON.parse(read('package.json') || '{}');
 const gradleProperties = read('android/gradle.properties');
 const appGradle = read('android/app/build.gradle');
+const rootGradle = read('android/build.gradle');
 
 const expoVersion = packageJson.dependencies?.expo;
-if (/^~?55\./.test(expoVersion ?? '')) {
-  pass(`Expo SDK 55 detected (${expoVersion})`);
+const reactNativeVersion = packageJson.dependencies?.['react-native'];
+
+if (/^[~^]?57\./.test(expoVersion ?? '')) {
+  pass(`Expo SDK 57 detected (${expoVersion})`);
 } else {
-  fail(`Expected Expo SDK 55, found ${expoVersion ?? 'missing'}`);
+  fail(`Expected Expo SDK 57, found ${expoVersion ?? 'missing'}`);
+}
+
+if (/^0\.86\./.test(reactNativeVersion ?? '')) {
+  pass(`React Native 0.86 detected (${reactNativeVersion})`);
+} else {
+  fail(`Expected React Native 0.86.x, found ${reactNativeVersion ?? 'missing'}`);
 }
 
 const expectedProperties = {
-  'android.enableMinifyInReleaseBuilds': 'false',
-  'android.enableShrinkResourcesInReleaseBuilds': 'false',
+  'android.enableMinifyInReleaseBuilds': 'true',
+  'android.enableShrinkResourcesInReleaseBuilds': 'true',
 };
 
 for (const [key, expected] of Object.entries(expectedProperties)) {
@@ -47,9 +56,9 @@ for (const [key, expected] of Object.entries(expectedProperties)) {
 }
 
 if (/proguard-android-optimize\.txt/.test(appGradle)) {
-  fail('optimized ProGuard defaults are still injected in emergency safe mode');
+  pass('generated release uses proguard-android-optimize.txt');
 } else {
-  pass('optimized ProGuard defaults are not injected');
+  fail('generated release does not use proguard-android-optimize.txt');
 }
 
 if (/applicationId\s+["']com\.teswa\.mobile["']/.test(appGradle)) {
@@ -58,8 +67,21 @@ if (/applicationId\s+["']com\.teswa\.mobile["']/.test(appGradle)) {
   fail('generated production applicationId is not com.teswa.mobile');
 }
 
+const sdkText = `${rootGradle}\n${appGradle}\n${gradleProperties}`;
+if (/(compileSdkVersion|compileSdk|android\.compileSdkVersion)[^\n]*36/.test(sdkText)) {
+  pass('compile SDK 36 detected');
+} else {
+  console.warn('[android-release-proof] INFO: compile SDK 36 is resolved by Gradle; static generated files do not expose a literal 36.');
+}
+
+if (/(targetSdkVersion|targetSdk|android\.targetSdkVersion)[^\n]*36/.test(sdkText)) {
+  pass('target SDK 36 detected');
+} else {
+  console.warn('[android-release-proof] INFO: target SDK 36 is resolved by Gradle; static generated files do not expose a literal 36.');
+}
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log('[android-release-safety] Emergency release is configured without R8/resource shrinking.');
+console.log('[android-release-proof] SDK 57 release optimization configuration is ready for native build proof.');

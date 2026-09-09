@@ -12,6 +12,7 @@ import { radii } from '@/constants/radii';
 import { spacing } from '@/constants/spacing';
 import type { PulseViewerEntry } from '@/lib/pulse-video-viewer';
 import { buildCachedVideoSource } from '@/lib/media/media-performance';
+import { ABSOLUTE_FILL } from '@/lib/styles/absolute-fill';
 
 function formatDuration(durationMs: number | null): string | null {
   if (!durationMs || durationMs <= 0) return null;
@@ -102,6 +103,6 @@ const styles = StyleSheet.create({
   pillText: { color: '#FFF', fontSize: 12 }, body: { gap: spacing.xs }, authorRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs }, avatar: { width: 34, height: 34, borderRadius: 17 }, avatarFallback: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, avatarText: { color: '#fff' },
   title: { color: '#fff', fontSize: 20 }, description: { color: 'rgba(255,255,255,0.9)' }, actions: { flexDirection: 'row-reverse', gap: spacing.sm, alignItems: 'center' },
   ctaBtn: { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.round }, ctaText: { color: '#fff' }, pauseBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.round }, pauseText: { color: '#fff' },
-  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  loadingOverlay: { ...ABSOLUTE_FILL, alignItems: 'center', justifyContent: 'center' },
   loadingText: { color: '#fff', backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: radii.round, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
 });
