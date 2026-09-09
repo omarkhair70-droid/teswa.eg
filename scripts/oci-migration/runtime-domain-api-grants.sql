@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 BEGIN;
-GRANT SELECT ON public.categories,public.profiles,public.items,public.item_images,public.item_videos,
+GRANT SELECT ON public.categories,public.items,public.item_images,public.item_videos,
   public.item_wanted_tags,public.offers,public.offer_events,public.swap_deals,public.deal_messages,
   public.deal_message_reads,public.deal_confirmations,public.reviews,public.user_blocks,
   public.notifications,public.item_likes TO teswa_app_authenticated;
@@ -16,13 +16,14 @@ GRANT INSERT,DELETE ON public.stories,public.story_likes TO teswa_app_authentica
 GRANT SELECT ON public.story_likes,public.story_views TO teswa_app_authenticated;
 GRANT INSERT ON public.story_views TO teswa_app_authenticated;
 GRANT INSERT ON public.contextual_messages TO teswa_app_authenticated;
-GRANT INSERT,UPDATE ON public.items,public.profiles TO teswa_app_authenticated;
+GRANT INSERT,UPDATE ON public.items TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.user_blocks TO teswa_app_authenticated;
 GRANT INSERT,DELETE ON public.item_likes TO teswa_app_authenticated;
 GRANT UPDATE ON public.notifications TO teswa_app_authenticated;
 GRANT INSERT,UPDATE,DELETE ON public.item_images,public.item_videos,public.item_wanted_tags TO teswa_app_authenticated;
 GRANT INSERT ON public.offers,public.offer_events,public.deal_messages,public.deal_confirmations TO teswa_app_authenticated;
 GRANT INSERT ON public.reviews TO teswa_app_authenticated;
+
 DO $$
 DECLARE signature text;
 BEGIN
