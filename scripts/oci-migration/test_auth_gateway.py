@@ -13,6 +13,7 @@ spec.loader.exec_module(gateway)
 
 class Upstream(BaseHTTPRequestHandler):
     seen = []
+    delivery_ready = False
 
     def log_message(self, *args): pass
 
@@ -29,13 +30,17 @@ class Upstream(BaseHTTPRequestHandler):
 
     def reply(self):
         self.seen.append((self.path, dict(self.headers)))
-        result = {'status': 'ok'} if self.path == '/healthz' else {'error': 'invalid_session'}
+        result = ({'status': 'ok', 'confirmationDispatchConfigured': self.delivery_ready}
+                  if self.path == '/healthz' else {'error': 'invalid_session'})
         self.send_response(200 if self.path == '/healthz' else 401)
         self.end_headers()
         self.wfile.write(json.dumps(result).encode())
 
 
 class GatewayTests(unittest.TestCase):
+    def setUp(self):
+        Upstream.delivery_ready = False
+
     @classmethod
     def setUpClass(cls):
         cls.upstream = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
@@ -176,8 +181,18 @@ class GatewayTests(unittest.TestCase):
             self.assertEqual(self.request('GET', path)[0], 404)
         self.assertEqual(len(Upstream.seen), count)
 
-    def test_signup_waits_for_actual_delivery(self):
-        self.assertEqual(self.request('POST', '/v1/auth/sign-up', '{}', {'Content-Type': 'application/json'})[0], 503)
+    def test_signup_and_confirmation_are_owned_by_auth_upstream(self):
+        status = self.request('POST', '/v1/auth/sign-up', '{}', {'Content-Type': 'application/json'})[0]
+        self.assertEqual(status, 503)
+        self.assertEqual(Upstream.seen[-1][0], '/healthz')
+        Upstream.delivery_ready = True
+        status = self.request('POST', '/v1/auth/sign-up', '{}', {'Content-Type': 'application/json'})[0]
+        self.assertEqual(status, 401)
+        self.assertEqual(Upstream.seen[-1][0], '/v1/auth/sign-up')
+        status = self.request('GET', '/v1/auth/confirm?token=' + 'a' * 40)[0]
+        self.assertEqual(status, 401)
+        self.assertEqual(Upstream.seen[-1][0], '/v1/auth/confirm?token=' + 'a' * 40)
+        self.assertEqual(self.request('GET', '/v1/auth/confirm?token=short')[0], 404)
 
     def test_json_object_required(self):
         for body in ('[]', 'null', '"password"', '{'):

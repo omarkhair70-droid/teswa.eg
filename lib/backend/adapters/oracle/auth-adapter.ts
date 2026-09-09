@@ -66,8 +66,8 @@ function mapUser(value: unknown): TeswaAuthUser | null {
     id: row.id,
     email: asNullableString(row.email),
     phone: asNullableString(row.phone),
-    displayName: asNullableString(row.display_name),
-    avatarUrl: asNullableString(row.avatar_url),
+    displayName: asNullableString(row.display_name ?? row.displayName),
+    avatarUrl: asNullableString(row.avatar_url ?? row.avatarUrl),
   };
 }
 
