@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,7 @@ class Tests(unittest.TestCase):
         value=MODULE.GUEST.replace('__HOST__',MODULE.HOST).replace('__PRIVATE__',MODULE.PRIVATE).replace('__CORE__',MODULE.CORE)
         self.assertLessEqual(len(value.encode()),4096)
         compile(value.split("<<'PY'\n",1)[1].split('\nPY\n',1)[0],'<guest>','exec')
+        subprocess.run(['bash','-n'],input=value,text=True,check=True)
     def test_route_is_bounded_to_v1_and_expected_core(self):
         self.assertIn('handle /v1/*',MODULE.GUEST)
         self.assertIn("reverse_proxy '+u",MODULE.GUEST)
@@ -64,5 +66,55 @@ https://130-110-122-142.sslip.io {
     def test_keeps_pending_signup_blocked(self):
         self.assertIn('/v1/auth/sign-up',MODULE.GUEST)
         self.assertIn('= 503',MODULE.GUEST)
+
+    def run_curl_checks(self, session_status='401', signup_status='503'):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); (root/'noise-a').touch(); (root/'noise-b').touch()
+            bin_dir=root/'bin'; bin_dir.mkdir()
+            fake=bin_dir/'curl'
+            fake.write_text('''#!/usr/bin/env python3
+import json,os,sys
+from pathlib import Path
+args=sys.argv[1:]
+with open(os.environ['CURL_LOG'],'a') as f:f.write(json.dumps(args)+'\\n')
+url=args[-1]
+if url.endswith('/v1/auth/healthz'):
+    print('{"status":"ok","supabaseRuntimeDependency":false}',end='')
+elif url.endswith('/v1/auth/session'):
+    Path(args[args.index('-o')+1]).write_text('{"error":"invalid_session"}')
+    print(os.environ['FAKE_SESSION_STATUS'],end='')
+else:
+    Path(args[args.index('-o')+1]).write_text('{"error":"confirmation_delivery_not_configured"}')
+    print(os.environ['FAKE_SIGNUP_STATUS'],end='')
+''')
+            fake.chmod(0o755)
+            tail=MODULE.GUEST.split('\nR=',1)[1]
+            script='set -Eeuo pipefail\nH='+MODULE.HOST+'; P='+MODULE.PRIVATE+'; D='+str(root)+'; B='+str(root/'before')+'\nR='+tail
+            env=dict(os.environ,PATH=str(bin_dir)+os.pathsep+os.environ['PATH'],CURL_LOG=str(root/'curl.jsonl'),FAKE_SESSION_STATUS=session_status,FAKE_SIGNUP_STATUS=signup_status)
+            result=subprocess.run(['bash','-c',script],cwd=root,env=env,text=True,capture_output=True,timeout=10)
+            calls=[json.loads(line) for line in (root/'curl.jsonl').read_text().splitlines()]
+            expected=['--noproxy','*','--resolve',MODULE.HOST+':443:'+MODULE.PRIVATE,'--connect-timeout','3','--max-time','10']
+            for args in calls:self.assertEqual(args[:8],expected)
+            return result,calls
+
+    def test_curl_argv_is_literal_with_files_present(self):
+        result,calls=self.run_curl_checks()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(len(calls),3)
+        self.assertIn('session_http=401',result.stdout)
+        self.assertIn('signup_http=503',result.stdout)
+        self.assertIn('edge_public_api=PASS',result.stdout)
+    def test_wrong_session_status_fails_closed(self):
+        result,calls=self.run_curl_checks(session_status='502')
+        self.assertEqual(result.returncode,21)
+        self.assertEqual(len(calls),2)
+        self.assertIn('session_http=502',result.stdout)
+        self.assertNotIn('edge_public_api=PASS',result.stdout)
+    def test_wrong_signup_status_fails_closed(self):
+        result,calls=self.run_curl_checks(signup_status='200')
+        self.assertEqual(result.returncode,22)
+        self.assertEqual(len(calls),3)
+        self.assertIn('signup_http=200',result.stdout)
+        self.assertNotIn('edge_public_api=PASS',result.stdout)
 
 if __name__=='__main__': unittest.main()
