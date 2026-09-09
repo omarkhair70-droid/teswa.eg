@@ -6,7 +6,6 @@ Run from Cloud Shell with --apply. Preserve the execution directory for recovery
 """
 import argparse
 import datetime
-import ipaddress
 import json
 import os
 import socket
@@ -34,9 +33,14 @@ def main():
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
     os.umask(0o077)
+    script = GUEST.replace('__HOST__', HOST).replace('__PRIVATE__', PRIVATE)
+    if len(script.encode()) > 4096:
+        raise SystemExit('run_command_text=TOO_LARGE')
+    subprocess.run(['bash', '-n'], input=script, text=True, check=True)
+    embedded = script.split("<<'PY'\n", 1)[1].split('\nPY\n', 1)[0]
+    compile(embedded, '<edge-caddy-config>', 'exec')
     cfg = json.loads((ROOT / 'lane4-target.json').read_text())
-    previous = ROOT / 'edge-version-ci29m6in' / 'target.json'
-    iid = json.loads(previous.read_text())['instanceId']
+    iid = json.loads((ROOT / 'edge-version-ci29m6in' / 'target.json').read_text())['instanceId']
     edge = cli('compute', 'instance', 'get', '--instance-id', iid)['data']
     if not (edge['display-name'] == 'teswa-edge-01' and
             edge['compartment-id'] == cfg['compartment'] and
@@ -63,9 +67,13 @@ def main():
     existing = cli('network', 'nsg', 'rules', 'list', '--nsg-id', nsg['id'],
                    '--direction', 'INGRESS', '--all')['data']
     def covers(rule, port):
-        if rule.get('protocol') != '6' or rule.get('source') != '0.0.0.0/0':
+        if (rule.get('protocol') != '6' or rule.get('source') != '0.0.0.0/0'
+                or rule.get('is-stateless', False)):
             return False
         opts = rule.get('tcp-options') or {}
+        source = opts.get('source-port-range')
+        if source and (source['min'] > 1 or source['max'] < 65535):
+            return False
         rng = opts.get('destination-port-range')
         return rng is None or rng['min'] <= port <= rng['max']
     missing = [p for p in (80, 443) if not any(covers(r, p) for r in existing)]
@@ -74,6 +82,9 @@ def main():
     receipt = {'instance': iid, 'compartment': cfg['compartment'], 'host': HOST,
                'nsg': nsg['id'], 'portsToAdd': missing, 'productionCutover': False}
     (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+    (out / 'content.json').write_text(json.dumps({'source': {'sourceType': 'TEXT', 'text': script},
+                                                   'output': {'outputType': 'TEXT'}}))
+    (out / 'target.json').write_text(json.dumps({'instanceId': iid}))
     print('run_dir=' + str(out), flush=True)
     print('temporary_dns=PASS', flush=True)
     print('edge_nsg=' + nsg['display-name'], flush=True)
@@ -90,12 +101,6 @@ def main():
         cli('network', 'nsg', 'rules', 'add', '--nsg-id', nsg['id'],
             '--security-rules', json.dumps(rules))
         print('edge_ingress_rules=ADDED', flush=True)
-    script = GUEST.replace('__HOST__', HOST).replace('__PRIVATE__', PRIVATE)
-    if len(script.encode()) > 4096:
-        raise SystemExit('run_command_text=TOO_LARGE')
-    (out / 'content.json').write_text(json.dumps({'source': {'sourceType': 'TEXT', 'text': script},
-                                                   'output': {'outputType': 'TEXT'}}))
-    (out / 'target.json').write_text(json.dumps({'instanceId': iid}))
     result = cli('instance-agent', 'command', 'create', '--compartment-id', cfg['compartment'],
                  '--content', 'file://' + str(out / 'content.json'), '--target', 'file://' + str(out / 'target.json'),
                  '--timeout-in-seconds', '480', '--display-name', 'teswa-edge-https-rehearsal')
@@ -119,11 +124,10 @@ def main():
     else:
         print('pending_run=' + str(out))
         return
-    expected = 'teswa-https-rehearsal'
     for _ in range(6):
         p = subprocess.run(['curl', '--noproxy', '*', '--connect-timeout', '5', '--max-time', '15',
                             '-fsS', 'https://' + HOST + '/healthz'], text=True, capture_output=True)
-        if p.returncode == 0 and p.stdout.strip() == expected:
+        if p.returncode == 0 and p.stdout.strip() == 'teswa-https-rehearsal':
             print('public_https_verified=true')
             print('https_url=https://' + HOST)
             return
@@ -165,9 +169,9 @@ cleanup() {
 }
 trap cleanup EXIT
 sudo -n python3 - "$LIVE" "$D/Caddyfile.next" "$HOST" <<'PY'
-import os,re,stat,subprocess,sys
+import json,os,re,stat,subprocess,sys
 from pathlib import Path
-live,candidate,host=map(Path,sys.argv[1:3])+[] if False else (Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3])
+live,candidate,host=Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3]
 s=live.read_text(); marker='# teswa-public-https-rehearsal'
 if marker not in s:
     if 'https://'+host in s: raise SystemExit('https_site_conflict')
@@ -179,6 +183,13 @@ if marker not in s:
     s+='\n'+marker+'\nhttps://'+host+' {\n tls {\n  issuer acme https://acme-v02.api.letsencrypt.org/directory\n }\n handle /healthz {\n  respond "teswa-https-rehearsal" 200\n }\n handle {\n  respond "Not found" 404\n }\n}\n'
 st=live.stat(); candidate.write_text(s)
 os.chown(candidate,st.st_uid,st.st_gid); os.chmod(candidate,stat.S_IMODE(st.st_mode))
+def adapt(path):
+    p=subprocess.run(['/usr/bin/caddy','adapt','--config',str(path),'--adapter','caddyfile'],capture_output=True,text=True,check=True)
+    return json.loads(p.stdout)
+def old_routes(config):
+    return [v.get('routes',[]) for v in config.get('apps',{}).get('http',{}).get('servers',{}).values() if ':8080' in v.get('listen',[])]
+if old_routes(adapt(live)) != old_routes(adapt(candidate)):
+    raise SystemExit('existing_edge_routes_changed')
 PY
 sudo -n caddy validate --config "$D/Caddyfile.next" --adapter caddyfile >/dev/null
 sudo -n cp -p "$D/Caddyfile.next" "$LIVE"
