@@ -109,7 +109,7 @@ def main():
     print('command_submitted=true', flush=True)
     for _ in range(90):
         result = cli('instance-agent', 'command-execution', 'get', '--command-id', cid, '--instance-id', iid)
-        (out / 'execution.json').write_text(json.dumps(result, indent=2) + '\n')
+        (out / 'execution.json').write_text(json.dumps(result, indent=2))
         data = result['data']
         state = data['lifecycle-state']
         if state in ('SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'):
@@ -176,10 +176,12 @@ s=live.read_text(); marker='# teswa-public-https-rehearsal'
 if marker not in s:
     if 'https://'+host in s: raise SystemExit('https_site_conflict')
     m=re.match(r'\A(\s*(?:#[^\n]*\n\s*)*\{\s*\n)(.*?)(^\}\s*$)',s,re.M|re.S)
-    if m:
-        block=m.group(2)
-        block,n=re.subn(r'(?m)^\s*auto_https\s+off\s*\n','',block)
-        s=s[:m.start(2)]+block+s[m.end(2):]
+    if not m: raise SystemExit('global_options_unexpected')
+    block=m.group(2)
+    # Keep certificate automation, but do not add redirects to the old HTTP routes.
+    block,n=re.subn(r'(?m)^(\s*)auto_https\s+off\s*$',r'\1auto_https disable_redirects',block)
+    if n != 1: raise SystemExit('auto_https_option_unexpected')
+    s=s[:m.start(2)]+block+s[m.end(2):]
     s+='\n'+marker+'\nhttps://'+host+' {\n tls {\n  issuer acme https://acme-v02.api.letsencrypt.org/directory\n }\n handle /healthz {\n  respond "teswa-https-rehearsal" 200\n }\n handle {\n  respond "Not found" 404\n }\n}\n'
 st=live.stat(); candidate.write_text(s)
 os.chown(candidate,st.st_uid,st.st_gid); os.chmod(candidate,stat.S_IMODE(st.st_mode))
