@@ -1,0 +1,33 @@
+name: Oracle Edge HTTPS
+on:
+  push:
+    branches:
+      - infra/oracle-public-https-20260909
+      - integration/oracle-domain-closure-20260907
+    paths:
+      - scripts/oci-migration/edge-https-rehearsal.py
+      - scripts/oci-migration/test_edge_https_rehearsal.py
+      - .github/workflows/oracle-edge-https.yml
+  pull_request:
+    branches:
+      - integration/oracle-domain-closure-20260907
+    paths:
+      - scripts/oci-migration/edge-https-rehearsal.py
+      - scripts/oci-migration/test_edge_https_rehearsal.py
+      - .github/workflows/oracle-edge-https.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify guarded Edge HTTPS operator
+        run: |
+          python -m py_compile scripts/oci-migration/edge-https-rehearsal.py scripts/oci-migration/test_edge_https_rehearsal.py
+          python -m unittest discover -s scripts/oci-migration -p test_edge_https_rehearsal.py -v
