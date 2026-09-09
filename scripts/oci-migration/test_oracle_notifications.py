@@ -26,7 +26,7 @@ class Tests(unittest.TestCase):
   with self.assertRaises(notifications.ApiError): api.handle('POST','/v1/notifications/preferences','x',{'quietHoursStart':'9pm'})
  def test_dispatch_uses_existing_guarded_rpc_and_encoded_copy(self):
   writes=DB({'ok':True}); api=notifications.NotificationsApi(Auth(),DB({}),writes)
-  body={'targetUserId':OTHER,'type':'new_offer','title':"x'); DROP TABLE notifications;--",'body':None,'itemId':NID,'offerId':None,'dealId':None,'messageId':None}
-  self.assertEqual(api.handle('POST','/v1/notifications/dispatch','x',body)[1],{'ok':True})
+  body={'targetUserId':OTHER,'type':'offer_received','title':"x'); DROP TABLE notifications;--",'body':None,'itemId':NID,'offerId':None,'dealId':None,'messageId':None}
+  self.assertEqual(api.handle('POST','/v1/notifications/dispatch','x',body)[1],{'accepted':True})
   self.assertIn('public.create_notification',writes.calls[-1][1]); self.assertNotIn('DROP TABLE',writes.calls[-1][1])
 if __name__=='__main__':unittest.main()
