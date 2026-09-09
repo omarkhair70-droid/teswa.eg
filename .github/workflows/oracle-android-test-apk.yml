@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 60
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
       EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true'
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'
       SENTRY_ALLOW_FAILURE: 'true'
@@ -38,6 +37,31 @@ jobs:
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Install dependencies
         run: npm ci
+      - name: Resolve preview Google OAuth config
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'JS'
+          const fs = require('fs');
+          const path = 'google-services.preview.json';
+          if (!fs.existsSync(path)) throw new Error('google-services.preview.json is required for Oracle preview Google sign-in');
+          const google = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const preview = (google.client || []).find(
+            (client) => client?.client_info?.android_client_info?.package_name === 'com.teswa.mobile.preview',
+          );
+          if (!preview) throw new Error('Preview Firebase Android client is missing');
+          const oauthClients = preview.oauth_client || [];
+          const androidClient = oauthClients.find(
+            (client) => client?.client_type === 1 && client?.android_info?.package_name === 'com.teswa.mobile.preview',
+          );
+          const webClientId = oauthClients.find((client) => client?.client_type === 3)?.client_id?.trim();
+          if (!androidClient?.android_info?.certificate_hash) throw new Error('Preview Android OAuth certificate registration is missing');
+          if (!webClientId || !/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(webClientId)) {
+            throw new Error('Preview Google web client ID is missing or invalid');
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=${webClientId}\n`);
+          console.log('google_preview_config=PASS package=com.teswa.mobile.preview');
+          JS
       - name: Configure isolated Oracle preview
         env:
           APP_VARIANT: preview
@@ -69,6 +93,7 @@ jobs:
               EXPO_PUBLIC_TESWA_ORACLE_API_URL: url,
               EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: url,
               EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true',
+              EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: googleWebClientId,
               EXPO_PUBLIC_SUPABASE_URL: 'https://disabled.invalid',
               EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'oracle-test-disabled',
             },
@@ -77,6 +102,7 @@ jobs:
           const actual = require('./app.config.js').expo;
           if (actual.android.package !== 'com.teswa.mobile.preview' || actual.updates.enabled !== false) throw new Error('Oracle APK isolation failed');
           if (eas.build['oracle-preview'].env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED !== 'true') throw new Error('Native Google build flag missing');
+          if (eas.build['oracle-preview'].env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID !== googleWebClientId) throw new Error('Google web client ID was not propagated into the EAS build profile');
           console.log('oracle_preview_config=PASS');
           JS
       - name: Verify public Oracle API
