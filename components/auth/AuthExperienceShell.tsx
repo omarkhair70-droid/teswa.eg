@@ -12,27 +12,30 @@ type AuthExperienceShellProps = PropsWithChildren<{
   title: string;
   body: string;
   icon: ComponentProps<typeof Ionicons>['name'];
+  compact?: boolean;
 }>;
 
-export function AuthExperienceShell({ eyebrow, title, body, icon, children }: AuthExperienceShellProps) {
+export function AuthExperienceShell({ eyebrow, title, body, icon, compact = false, children }: AuthExperienceShellProps) {
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={['#FFF6EC', '#FFE8D3', 'rgba(62,124,115,0.16)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+    <View style={[styles.container, compact && styles.compactContainer]}>
+      <LinearGradient colors={['#FFF6EC', '#FFE8D3', 'rgba(62,124,115,0.16)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, compact && styles.compactHero]}>
         <View style={styles.orbOne} />
         <View style={styles.orbTwo} />
         <View style={styles.brandRow}>
-          <View style={styles.iconShell}><Ionicons name={icon} size={23} color={colors.primary} /></View>
+          <View style={[styles.iconShell, compact && styles.compactIconShell]}><Ionicons name={icon} size={compact ? 20 : 23} color={colors.primary} /></View>
           <View style={styles.brandCopy}><AppText muted style={styles.brandLabel}>تِسوى</AppText><AppText weight="semibold" style={styles.brandLine}>بدّل حاجة بحاجه تستاهل</AppText></View>
         </View>
         <View style={styles.heroCopy}>
           {eyebrow ? <AppText style={styles.eyebrow}>{eyebrow}</AppText> : null}
-          <AppText weight="bold" style={styles.title}>{title}</AppText>
-          <AppText muted style={styles.body}>{body}</AppText>
+          <AppText weight="bold" style={[styles.title, compact && styles.compactTitle]}>{title}</AppText>
+          <AppText muted style={[styles.body, compact && styles.compactBody]}>{body}</AppText>
         </View>
-        <View style={styles.trustRow}>
-          <View style={styles.trustPill}><Ionicons name="shield-checkmark-outline" size={13} color={colors.accent} /><AppText style={styles.trustText}>حسابك محمي</AppText></View>
-          <View style={styles.trustPill}><Ionicons name="phone-portrait-outline" size={13} color={colors.textMuted} /><AppText style={styles.trustText}>مصمم للموبايل</AppText></View>
-        </View>
+        {!compact ? (
+          <View style={styles.trustRow}>
+            <View style={styles.trustPill}><Ionicons name="shield-checkmark-outline" size={13} color={colors.accent} /><AppText style={styles.trustText}>حسابك محمي</AppText></View>
+            <View style={styles.trustPill}><Ionicons name="phone-portrait-outline" size={13} color={colors.textMuted} /><AppText style={styles.trustText}>مصمم للموبايل</AppText></View>
+          </View>
+        ) : null}
       </LinearGradient>
       <View style={styles.content}>{children}</View>
     </View>
@@ -57,4 +60,9 @@ const styles = StyleSheet.create({
   trustPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: radii.round, backgroundColor: 'rgba(255,255,255,0.70)' },
   trustText: { fontSize: 10, color: colors.textMuted },
   content: { gap: spacing.md },
+  compactContainer: { gap: spacing.md },
+  compactHero: { padding: spacing.md, gap: spacing.sm },
+  compactIconShell: { width: 40, height: 40, borderRadius: radii.md },
+  compactTitle: { fontSize: 25, lineHeight: 32 },
+  compactBody: { fontSize: 14, lineHeight: 20 },
 });
