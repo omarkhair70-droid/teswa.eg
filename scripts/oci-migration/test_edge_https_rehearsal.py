@@ -24,10 +24,10 @@ class EdgeHttpsRouteGuardTests(unittest.TestCase):
         script = MODULE.GUEST.replace('__HOST__', MODULE.HOST).replace('__PRIVATE__', MODULE.PRIVATE)
         self.assertLessEqual(len(script.encode()), 4096)
 
-    def test_keeps_global_auto_https_off(self):
+    def test_enables_certificate_management_without_redirects(self):
         source, _ = embedded_functions()
         self.assertIn("auto_https[ \\t]+off", source)
-        self.assertNotIn('auto_https disable_redirects', MODULE.GUEST)
+        self.assertIn('auto_https disable_redirects', source)
 
     def test_restarts_systemd_when_caddy_admin_api_is_disabled(self):
         self.assertNotIn('caddy reload', MODULE.GUEST)
