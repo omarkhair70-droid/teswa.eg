@@ -23,6 +23,14 @@ PREFERENCES_JSON = """json_build_object('offersEnabled',x.offers_enabled,'dealsE
   'quietHoursEnabled',x.quiet_hours_enabled,'quietHoursStart',x.quiet_hours_start,
   'quietHoursEnd',x.quiet_hours_end,'updatedAt',x.updated_at)"""
 
+# The database RPC is intentionally a void, domain-state-validated operation.
+# These are its client-authorized event types, not an arbitrary notification API.
+DISPATCH_TYPES = frozenset({
+    'offer_received', 'offer_thinking', 'offer_soft_rejected', 'offer_accepted',
+    'deal_created', 'deal_message_received', 'deal_voice_message_received',
+    'deal_completed', 'deal_completion_confirmation_needed',
+})
+
 
 class NotificationsApi:
     def __init__(self,auth=None,reads=None,writes=None):
@@ -105,9 +113,13 @@ class NotificationsApi:
             expected={'targetUserId','type','title','body','itemId','offerId','dealId','messageId'}
             if set(body)!=expected: raise ApiError(400,'invalid_notification')
             target_user=valid_uuid(body['targetUserId'])
+            if body.get('type') not in DISPATCH_TYPES: raise ApiError(400,'unsupported_notification_type')
             kind=optional_text(body['type'],80); title=optional_text(body['title'],160)
             if kind=='NULL' or title=='NULL': raise ApiError(400,'invalid_notification')
             values=["'%s'::uuid"%target_user,kind,title,optional_text(body['body'],1000),optional_uuid(body['itemId']),optional_uuid(body['offerId']),optional_uuid(body['dealId']),optional_uuid(body['messageId'])]
-            self.writes.query(user_id,"SELECT json_build_object('ok',true,'result',public.create_notification(%s))" % ','.join(values))
-            return 200,{'ok':True}
+            # The existing RPC returns void and may reject an invalid domain state
+            # without throwing. A successful call is acceptance, not proof of an
+            # inserted notification. Do not fabricate a created/ok acknowledgment.
+            self.writes.query(user_id,"SELECT json_build_object('accepted',true,'result',public.create_notification(%s))" % ','.join(values))
+            return 202,{'accepted':True}
         raise ApiError(404,'not_found')
