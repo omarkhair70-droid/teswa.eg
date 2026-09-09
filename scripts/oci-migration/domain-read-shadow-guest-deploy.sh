@@ -53,7 +53,7 @@ sudo -n true
 systemctl is-active --quiet postgresql-17
 systemctl is-active --quiet teswa-auth-shadow
 systemctl is-active --quiet teswa-api
-for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_direct_messaging.py oracle_contextual_messaging.py oracle_stories.py oracle_discovery.py oracle_dolab.py oracle_policies_analytics.py oracle_moderation.py oracle_account.py diagnose_oracle_profile.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql runtime-profile-column-security.sql domain_exchange_e2e.py; do
+for file in oracle_domain_read.py oracle_marketplace_write.py oracle_marketplace_lifecycle.py oracle_exchange.py oracle_exchange_read.py oracle_exchange_read_extra.py oracle_media.py oracle_profiles.py oracle_notifications.py oracle_reviews.py oracle_direct_messaging.py oracle_contextual_messaging.py oracle_stories.py oracle_discovery.py oracle_dolab.py oracle_policies_analytics.py oracle_moderation.py oracle_account.py diagnose_oracle_profile.py oracle_domain_service.py auth-api-shadow-gateway.py runtime-domain-api-grants.sql runtime-profile-column-security.sql runtime-account-deletion.sql domain_exchange_e2e.py; do
   [ -f "$STAGE/$file" ] || { echo "domain_read_deploy=FAIL missing_$file"; exit 11; }
 done
 if sudo test -e "$UNIT" && ! sudo test -e "$MARK"; then
@@ -99,6 +99,7 @@ SQL
 )"
 [ "$PROFILE_SECURITY" = 'f|0|0|0|0|t|1' ] || { echo "domain_read_deploy=FAIL profile_column_security=$PROFILE_SECURITY"; exit 18; }
 echo 'profile_column_security=PASS'
+sudo -u postgres "$P" -X -v ON_ERROR_STOP=1 -d "$DB" < "$STAGE/runtime-account-deletion.sql"
 ROLE_OK="$(sudo -u postgres "$P" -X -qAt -d "$DB" -c "SELECT count(*) FROM pg_roles WHERE rolname='teswaapi' AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls")"
 [ "$ROLE_OK" = 1 ] || { echo 'domain_read_deploy=FAIL unsafe_database_role'; exit 13; }
 sudo -u teswaapi "$P" -X -qAt -d "$DB" -c 'SELECT 1' | grep -qx 1
