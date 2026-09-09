@@ -144,7 +144,7 @@ PRIVATE=__PRIVATE__
 LIVE=/etc/caddy/Caddyfile
 sudo -n systemctl is-active --quiet caddy
 sudo -n test -f "$LIVE"
-# Touch only the active Edge firewall zone; never disable the firewall.
+#Touch only the active Edge firewall zone; never disable the firewall.
 if command -v firewall-cmd >/dev/null 2>&1 && sudo -n firewall-cmd --state >/dev/null 2>&1; then
   IFACE=$(ip -o -4 addr show | awk -v ip="$PRIVATE" '$4 ~ "^"ip"/" {print $2; exit}')
   ZONE=$(sudo -n firewall-cmd --get-zone-of-interface="$IFACE" 2>/dev/null || true)
@@ -164,7 +164,7 @@ cleanup() {
   if [ "$DONE" != true ]; then
     sudo -n cp -p "$BACKUP" "$LIVE" || true
     if command -v restorecon >/dev/null 2>&1; then sudo -n restorecon "$LIVE" || true; fi
-    sudo -n caddy reload --config "$LIVE" --adapter caddyfile >/dev/null 2>&1 || true
+    sudo -n systemctl restart caddy >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -202,7 +202,9 @@ PY
 sudo -n caddy validate --config "$D/Caddyfile.next" --adapter caddyfile >/dev/null
 sudo -n cp -p "$D/Caddyfile.next" "$LIVE"
 if command -v restorecon >/dev/null 2>&1; then sudo -n restorecon "$LIVE"; fi
-sudo -n caddy reload --config "$LIVE" --adapter caddyfile >/dev/null
+sudo -n systemctl restart caddy
+sudo -n systemctl is-active --quiet caddy
+sudo -n ss -H -ltn 'sport = :8080' | grep -q .
 READY=false
 for _ in $(seq 1 24); do
   if BODY=$(curl --noproxy '*' --resolve "$HOST:443:$PRIVATE" --connect-timeout 3 --max-time 8 -fsS "https://$HOST/healthz" 2>/dev/null); then

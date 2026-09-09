@@ -29,6 +29,12 @@ class EdgeHttpsRouteGuardTests(unittest.TestCase):
         self.assertIn("auto_https[ \\t]+off", source)
         self.assertNotIn('auto_https disable_redirects', MODULE.GUEST)
 
+    def test_restarts_systemd_when_caddy_admin_api_is_disabled(self):
+        self.assertNotIn('caddy reload', MODULE.GUEST)
+        self.assertGreaterEqual(MODULE.GUEST.count('systemctl restart caddy'), 2)
+        self.assertIn("systemctl is-active --quiet caddy", MODULE.GUEST)
+        self.assertIn("ss -H -ltn 'sport = :8080' | grep -q .", MODULE.GUEST)
+
     def test_caddy_group_renumbering_is_semantically_equal(self):
         _, functions = embedded_functions()
         canonical = functions['canonical']
