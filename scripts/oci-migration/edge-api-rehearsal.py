@@ -85,7 +85,7 @@ def canon(x,g=None):
  return x
 a,b=adapt(l),adapt(n)
 if canon(server(a,':8080'))!=canon(server(b,':8080')):raise SystemExit('existing_edge_routes_changed')
-if p.count('reverse_proxy '+u)!=1:raise SystemExit('api_upstream_ambiguous')
+if p.split(m,1)[1].count('reverse_proxy '+u)!=1:raise SystemExit('api_upstream_ambiguous')
 PY
 sudo -n caddy validate --config "$N" --adapter caddyfile >/dev/null
 sudo -n cp -p "$N" "$L"; command -v restorecon >/dev/null 2>&1&&sudo -n restorecon "$L"||true
