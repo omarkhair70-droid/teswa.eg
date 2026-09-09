@@ -18,6 +18,6 @@ export function createOracleNotificationsAdapter(transport:OracleHttpTransport):
     syncTimezone:(timezone)=>ok('/v1/notifications/timezone',{timezone}),
     registerPushDevice:(input)=>ok('/v1/notifications/push/register',input),
     disablePushDevice:(input)=>ok('/v1/notifications/push/disable',input),
-    async dispatch(input){return ok('/v1/notifications/dispatch',{targetUserId:input.targetUserId,type:input.type,title:input.title,body:input.body??null,itemId:input.itemId??null,offerId:input.offerId??null,dealId:input.dealId??null,messageId:input.messageId??null});},
+    async dispatch(input){const result=await transport.request<{accepted:boolean}>({method:'POST',path:'/v1/notifications/dispatch',body:{targetUserId:input.targetUserId,type:input.type,title:input.title,body:input.body??null,itemId:input.itemId??null,offerId:input.offerId??null,dealId:input.dealId??null,messageId:input.messageId??null}});return result.ok&&result.data.accepted===true?{ok:true,data:undefined}:{ok:false,reason:'unknown',message:'Oracle notification dispatch was not accepted.'};},
   };
 }

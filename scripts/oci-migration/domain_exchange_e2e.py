@@ -96,11 +96,13 @@ def main():
             'senderId': sender_id, 'receiverId': receiver_id, 'message': 'Oracle E2E offer',
         }, sender_token)
         offer_id = created['offerId']; uuid.UUID(offer_id)
-        request('POST', api + '/v1/notifications/dispatch', {
-            'targetUserId': receiver_id, 'type': 'new_offer', 'title': 'Oracle E2E offer',
+        dispatch = request('POST', api + '/v1/notifications/dispatch', {
+            'targetUserId': receiver_id, 'type': 'offer_received', 'title': 'Oracle E2E offer',
             'body': 'Offer received', 'itemId': receiver_item_id, 'offerId': offer_id,
             'dealId': None, 'messageId': None,
         }, sender_token)
+        if dispatch != {'accepted': True}:
+            raise RuntimeError('offer_notification_not_accepted')
         notifications = request('GET', api + '/v1/notifications?limit=20', token=receiver_token)['items']
         notification = next((row for row in notifications if row.get('offerId') == offer_id), None)
         if not notification:

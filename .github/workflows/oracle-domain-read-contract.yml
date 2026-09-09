@@ -8,6 +8,7 @@ on:
       - fix/oracle-exchange-read-closure-20260907
       - fix/oracle-exchange-lifecycle-20260907
       - fix/oracle-exchange-read-completion-20260907
+      - fix/oracle-rehearsal-closure-20260909
     paths:
       - scripts/oci-migration/oracle_domain_read.py
       - scripts/oci-migration/oracle_domain_service.py
@@ -34,6 +35,7 @@ on:
       - scripts/oci-migration/test_oracle_domain_exchange.py
       - scripts/oci-migration/test_oracle_profiles.py
       - scripts/oci-migration/test_oracle_notifications.py
+      - scripts/oci-migration/test_oracle_notification_dispatch.py
       - scripts/oci-migration/test_oracle_reviews.py
       - scripts/oci-migration/test_oracle_direct_messaging.py
       - scripts/oci-migration/test_oracle_contextual_messaging.py
@@ -148,6 +150,7 @@ jobs:
           python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_exchange.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_profiles.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_notifications.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_notification_dispatch.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_reviews.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_direct_messaging.py -v
           python -m unittest discover -s scripts/oci-migration -p test_oracle_contextual_messaging.py -v
