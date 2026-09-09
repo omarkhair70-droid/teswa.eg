@@ -68,6 +68,14 @@ test('password login maps the response and stores an isolated session', async ()
   assert.equal(f.calls[0].body.password, 'test-password');
 });
 
+test('accepts the deployed auth runtime camel-case user during rolling updates', async () => {
+  const legacyUser = { id: user.id, email: user.email, phone: null, displayName: 'Legacy', avatarUrl: 'https://example.test/a.png' };
+  const f = fixture(() => reply(200, { ...payload(), user: legacyUser }));
+  const result = await f.auth.signInWithPassword({ email: user.email, password: 'test-password' });
+  assert.equal(result.ok, true); assert.equal(result.data.user.displayName, 'Legacy');
+  assert.equal(result.data.user.avatarUrl, legacyUser.avatarUrl);
+});
+
 test('restores a valid session through the server', async () => {
   const f = fixture(() => reply(200, { user }), session());
   assert.equal((await f.auth.getSession()).user.id, user.id);

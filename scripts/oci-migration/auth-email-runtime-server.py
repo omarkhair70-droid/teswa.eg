@@ -20,6 +20,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, quote, urlsplit
 
 GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v1/certs"
 GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
@@ -50,6 +51,61 @@ def refresh_hash(token: str) -> str:
 def pg_text(value: str) -> str:
     encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
     return f"convert_from(decode('{encoded}','base64'),'UTF8')"
+
+
+class ConfirmationDelivery:
+    """OCI HTTPS Email Delivery using the Core instance principal."""
+    def __init__(self, config_path: str):
+        config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        value = config.get("email_delivery")
+        if not isinstance(value, dict) or set(value) != {
+            "sender", "compartment_id", "public_base_url", "region",
+        }:
+            raise SystemExit("email_delivery_config_invalid")
+        sender = value["sender"]; compartment = value["compartment_id"]
+        base = value["public_base_url"].rstrip("/"); region = value["region"]
+        parsed = urlsplit(base)
+        if (not isinstance(sender, str) or "@" not in sender or len(sender) > 254
+                or not isinstance(compartment, str) or not compartment.startswith("ocid1.compartment.")
+                or not isinstance(region, str) or region != "me-jeddah-1"
+                or parsed.scheme != "https" or not parsed.netloc or parsed.username
+                or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/")):
+            raise SystemExit("email_delivery_config_invalid")
+        self.sender, self.compartment, self.base, self.region = sender, compartment, base, region
+        self._client = None
+
+    def _service(self):
+        if self._client is None:
+            try:
+                import oci
+                signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+                self._client = (oci, oci.email_data_plane.EmailDPClient(
+                    {"region": self.region}, signer=signer, timeout=(5, 20)))
+            except Exception as exc:
+                raise RuntimeError("confirmation_delivery_unavailable") from exc
+        return self._client
+
+    def send_confirmation(self, email: str, token: str) -> None:
+        oci, client = self._service()
+        link = self.base + "/v1/auth/confirm?token=" + quote(token, safe="")
+        details = oci.email_data_plane.models.SubmitEmailDetails(
+            sender=oci.email_data_plane.models.Sender(
+                sender_address=oci.email_data_plane.models.EmailAddress(
+                    email=self.sender, name="تِسوى"),
+                compartment_id=self.compartment),
+            recipients=oci.email_data_plane.models.Recipients(
+                to=[oci.email_data_plane.models.EmailAddress(email=email)]),
+            subject="تأكيد حساب تِسوى",
+            body_text="أكّد حسابك على تِسوى من الرابط التالي:\n" + link
+                + "\n\nلو لم تطلب إنشاء الحساب، تجاهل الرسالة.",
+            body_html='<div dir="rtl"><h2>تأكيد حساب تِسوى</h2>'
+                '<p><a href="' + link + '">اضغط هنا لتأكيد الحساب</a></p>'
+                '<p>لو لم تطلب إنشاء الحساب، تجاهل الرسالة.</p></div>',
+        )
+        try:
+            client.submit_email(details)
+        except Exception as exc:
+            raise RuntimeError("confirmation_delivery_failed") from exc
 
 
 class GoogleVerifier:
@@ -182,9 +238,11 @@ class PgStore:
     def auth_user(self, user_id: str) -> dict:
         out = self._run(f"SELECT id,coalesce(email,''),coalesce(phone,''),coalesce(display_name,''),coalesce(avatar_url,'') FROM teswa_auth.get_auth_user('{user_id}'::uuid);")
         if not out:
-            return {"id": user_id, "email": None, "phone": None, "displayName": None, "avatarUrl": None}
+            return {"id": user_id, "email": None, "phone": None,
+                    "display_name": None, "avatar_url": None}
         uid, email, phone, display_name, avatar_url = out.split("|", 4)
-        return {"id": uid, "email": email or None, "phone": phone or None, "displayName": display_name or None, "avatarUrl": avatar_url or None}
+        return {"id": uid, "email": email or None, "phone": phone or None,
+                "display_name": display_name or None, "avatar_url": avatar_url or None}
 
     def bootstrap_signup(self, email: str, password: str, display_name=None):
         user_id = str(uuid.uuid4())
@@ -197,14 +255,20 @@ class PgStore:
         )
         if out != "t":
             raise RuntimeError("signup_bootstrap_failed")
-        return user_id
+        return user_id, raw_token
 
-    def resend_confirmation(self, email: str) -> bool:
+    def resend_confirmation(self, email: str):
         raw_token = secrets.token_urlsafe(40)
         token_sha = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         exp = int(time.time()) + 20 * 60
         out = self._run(f"SELECT coalesce(teswa_auth.rotate_email_confirmation({pg_text(email)},{pg_text(token_sha)},to_timestamp({exp}))::text,'');")
-        return bool(out)
+        return raw_token if out else None
+
+    def confirm_email(self, raw_token: str):
+        token_sha = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        return self._run(
+            f"SELECT coalesce(teswa_auth.consume_email_confirmation({pg_text(token_sha)})::text,'');"
+        ) or None
 
 
 class SessionSigner:
@@ -249,8 +313,10 @@ class SessionSigner:
 class Handler(BaseHTTPRequestHandler):
     server_version = "TeswaAuthShadow/3"
 
-    def log_message(self, fmt, *args):
-        print(f"request method={self.command} path={self.path} status_hint={fmt % args}", flush=True)
+    def log_message(self, *_args):
+        # Confirmation URLs carry secrets in the query string. Never log paths,
+        # bodies, Authorization headers, tokens, or recipient addresses.
+        pass
 
     def _json(self, status: int, body: dict):
         raw = compact_json(body)
@@ -274,12 +340,28 @@ class Handler(BaseHTTPRequestHandler):
         return auth[7:].strip()
 
     def do_GET(self):
+        parsed = urlsplit(self.path)
         if self.path == "/healthz":
             try:
                 active = self.server.store.active_count()
             except Exception:
                 self._json(503, {"status": "error", "service": "teswa-auth-shadow", "sessionStore": False}); return
-            self._json(200, {"status": "ok", "service": "teswa-auth-shadow", "mode": "teswa-auth-durable-shadow", "productionTraffic": False, "supabaseRuntimeDependency": False, "identityUsers": len(self.server.identity.users), "identityMappings": len(self.server.identity.by_provider_hash), "accessTtlSeconds": ACCESS_TTL_SECONDS, "refreshTtlSeconds": REFRESH_TTL_SECONDS, "durableSessions": True, "refreshRotation": True, "passwordAuth": True, "signupBootstrap": True, "confirmationDispatchConfigured": False, "googlePositiveDeferred": True, "activeSessions": active}); return
+            self._json(200, {"status": "ok", "service": "teswa-auth-shadow", "mode": "teswa-auth-durable-shadow", "productionTraffic": False, "supabaseRuntimeDependency": False, "identityUsers": len(self.server.identity.users), "identityMappings": len(self.server.identity.by_provider_hash), "accessTtlSeconds": ACCESS_TTL_SECONDS, "refreshTtlSeconds": REFRESH_TTL_SECONDS, "durableSessions": True, "refreshRotation": True, "passwordAuth": True, "signupBootstrap": True, "confirmationDispatchConfigured": self.server.delivery is not None, "googlePositiveDeferred": True, "activeSessions": active}); return
+        if parsed.path == "/v1/auth/confirm":
+            try:
+                values = parse_qs(parsed.query, strict_parsing=True).get("token", [])
+            except ValueError:
+                values = []
+            if len(values) != 1 or not (32 <= len(values[0]) <= 256) or any(c.isspace() for c in values[0]):
+                self._json(400, {"error": "invalid_confirmation_token"}); return
+            try:
+                user_id = self.server.store.confirm_email(values[0])
+                if not user_id:
+                    self._json(400, {"error": "invalid_confirmation_token"}); return
+                self._json(200, {"confirmed": True, "user_id": user_id})
+            except Exception:
+                self._json(500, {"error": "auth_shadow_internal_error"})
+            return
         if self.path == "/v1/auth/session":
             try:
                 p = self.server.signer.verify_access(self._bearer()); user = self.server.store.auth_user(p["sub"])
@@ -332,9 +414,15 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(400, {"error": "invalid_signup_input"}); return
                 if self.server.store.email_state(email):
                     self._json(409, {"error": "email_already_registered"}); return
-                user_id = self.server.store.bootstrap_signup(email, password, display_name if isinstance(display_name, str) else None)
+                if self.server.delivery is None:
+                    self._json(503, {"error": "confirmation_delivery_not_configured"}); return
+                user_id, token = self.server.store.bootstrap_signup(email, password, display_name if isinstance(display_name, str) else None)
+                try:
+                    self.server.delivery.send_confirmation(email, token)
+                except Exception:
+                    self._json(503, {"error": "confirmation_delivery_failed"}); return
                 user = self.server.store.auth_user(user_id)
-                self._json(201, {"user": user, "session": None, "confirmation_required": True, "confirmation_delivery": "provider_pending", "shadow": True})
+                self._json(201, {"user": user, "session": None, "confirmation_required": True, "confirmation_delivery": "sent", "shadow": True})
             except Exception:
                 self._json(500, {"error": "auth_shadow_internal_error"})
             return
@@ -344,10 +432,14 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body(); email = body.get("email")
                 if not isinstance(email, str) or "@" not in email:
                     self._json(400, {"error": "invalid_email"}); return
-                self.server.store.resend_confirmation(email)
-                self._json(202, {"accepted": True, "confirmation_delivery": "provider_pending"})
+                if self.server.delivery is None:
+                    self._json(503, {"error": "confirmation_delivery_not_configured"}); return
+                token = self.server.store.resend_confirmation(email)
+                if token:
+                    self.server.delivery.send_confirmation(email, token)
+                self._json(202, {"accepted": True, "confirmation_delivery": "sent"})
             except Exception:
-                self._json(202, {"accepted": True, "confirmation_delivery": "provider_pending"})
+                self._json(503, {"error": "confirmation_delivery_failed"})
             return
 
         if self.path == "/v1/auth/refresh":
@@ -389,11 +481,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--bind", default="127.0.0.1"); p.add_argument("--port", type=int, default=3110)
     p.add_argument("--identity-map", required=True); p.add_argument("--google-client-id", required=True); p.add_argument("--session-secret", required=True)
+    p.add_argument("--email-config")
     a = p.parse_args()
     if a.bind != "127.0.0.1" or a.port != 3110:
         raise SystemExit("shadow_bind_guard_failed")
     identity = IdentityMap(a.identity_map); store = PgStore(); signer = SessionSigner(a.session_secret, store)
     server = Server((a.bind, a.port), Handler); server.identity = identity; server.store = store; server.signer = signer; server.google = GoogleVerifier(a.google_client_id)
+    server.delivery = ConfirmationDelivery(a.email_config) if a.email_config else None
     print("teswa_auth_shadow=START version=3 bind=127.0.0.1 port=3110 durable_sessions=true password_auth=true signup=true production_traffic=false supabase_dependency=false", flush=True)
     server.serve_forever()
 
