@@ -29,7 +29,7 @@ export async function shareMarketplaceItem({ id, title }: ShareMarketplaceItemIn
   const itemUrl = buildMarketplaceItemUrl(id);
   const hasPublicUrl = /^https?:\/\//i.test(itemUrl);
   const message = hasPublicUrl
-    ? `شوف العنصر ده على تِسوى: ${title}\n${itemUrl}`
+    ? `${title} على تِسوى\nشوف العنصر وابدأ عرضك من هنا:\n${itemUrl}`
     : `شوف العنصر ده على تِسوى: ${title}\nافتح تِسوى وابحث عن العنصر داخل السوق.\n${itemUrl}`;
 
   const result = await Share.share({
