@@ -54,7 +54,7 @@ export const persistAddItemDraftMediaAssets = async (
     try {
       const fileName = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExtensionFromAsset(asset)}`;
       const destination = new File(dir, fileName);
-      source.copy(destination);
+      await source.copy(destination);
       const copiedInfo = destination.info();
       if (!copiedInfo.exists) continue;
 
