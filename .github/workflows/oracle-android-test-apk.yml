@@ -16,6 +16,7 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true'
+      EXPO_PUBLIC_SHARE_BASE_URL: https://teswa-eg.vercel.app
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'
       SENTRY_ALLOW_FAILURE: 'true'
       GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8 -Dorg.gradle.workers.max=2'
@@ -77,9 +78,11 @@ jobs:
           const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
           const url = 'https://130-110-122-142.sslip.io';
           const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+          const shareBaseUrl = process.env.EXPO_PUBLIC_SHARE_BASE_URL?.trim();
           if (process.env.EXPO_PUBLIC_TESWA_BACKEND_PROVIDER !== 'oracle') throw new Error('Oracle provider required');
           if (process.env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED !== 'true') throw new Error('Native Google sign-in must be enabled');
           if (!googleWebClientId || !/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(googleWebClientId)) throw new Error('Google web client ID is missing or invalid');
+          if (!shareBaseUrl || !/^https:\/\//i.test(shareBaseUrl)) throw new Error('Public HTTPS share base URL is missing or invalid');
           if (config.expo.android.package !== 'com.teswa.mobile.preview') throw new Error('Production package forbidden');
           config.expo.name = 'Teswa Oracle';
           config.expo.updates = { ...config.expo.updates, enabled: false, checkAutomatically: 'NEVER' };
@@ -94,6 +97,7 @@ jobs:
               EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: url,
               EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true',
               EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: googleWebClientId,
+              EXPO_PUBLIC_SHARE_BASE_URL: shareBaseUrl,
               EXPO_PUBLIC_SUPABASE_URL: 'https://disabled.invalid',
               EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'oracle-test-disabled',
             },
@@ -103,6 +107,7 @@ jobs:
           if (actual.android.package !== 'com.teswa.mobile.preview' || actual.updates.enabled !== false) throw new Error('Oracle APK isolation failed');
           if (eas.build['oracle-preview'].env.EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED !== 'true') throw new Error('Native Google build flag missing');
           if (eas.build['oracle-preview'].env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID !== googleWebClientId) throw new Error('Google web client ID was not propagated into the EAS build profile');
+          if (eas.build['oracle-preview'].env.EXPO_PUBLIC_SHARE_BASE_URL !== shareBaseUrl) throw new Error('Public share base URL was not propagated into the EAS build profile');
           console.log('oracle_preview_config=PASS');
           JS
       - name: Verify public Oracle API
@@ -110,8 +115,25 @@ jobs:
         run: |
           set -euo pipefail
           H=130-110-122-142.sslip.io
-          test "$(curl --noproxy '*' --connect-timeout 5 --max-time 20 -sS -o /dev/null -w '%{http_code}' "https://$H/v1/auth/healthz")" = 200
-          test "$(curl --noproxy '*' --connect-timeout 5 --max-time 20 -sS -o /dev/null -w '%{http_code}' "https://$H/v1/auth/session")" = 401
+
+          probe_status() {
+            local path="$1"
+            local expected="$2"
+            local code=""
+            for attempt in 1 2 3 4 5; do
+              code="$(curl --noproxy '*' --connect-timeout 10 --max-time 30 -sS -o /dev/null -w '%{http_code}' "https://$H$path" || true)"
+              echo "preflight path=$path attempt=$attempt status=${code:-curl_error}"
+              if [ "$code" = "$expected" ]; then
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            echo "preflight failed path=$path expected=$expected last=${code:-curl_error}" >&2
+            return 1
+          }
+
+          probe_status /v1/auth/healthz 200
+          probe_status /v1/auth/session 401
           echo 'oracle_api_preflight=PASS'
       - name: Build Oracle preview APK
         env:
@@ -120,6 +142,7 @@ jobs:
           EXPO_PUBLIC_TESWA_ORACLE_API_URL: https://130-110-122-142.sslip.io
           EXPO_PUBLIC_TESWA_ORACLE_AUTH_URL: https://130-110-122-142.sslip.io
           EXPO_PUBLIC_GOOGLE_NATIVE_ENABLED: 'true'
+          EXPO_PUBLIC_SHARE_BASE_URL: https://teswa-eg.vercel.app
           EXPO_PUBLIC_SUPABASE_URL: https://disabled.invalid
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: oracle-test-disabled
         run: npx eas-cli@latest build --platform android --profile oracle-preview --local --non-interactive
