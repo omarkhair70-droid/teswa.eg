@@ -1,0 +1,58 @@
+name: SDK 57 Dependency Alignment
+
+on:
+  push:
+    branches:
+      - chore/oracle-runtime-cutover-prep-20260910
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sdk57-dependency-alignment
+  cancel-in-progress: false
+
+jobs:
+  align:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
+    steps:
+      - name: Checkout closure branch
+        uses: actions/checkout@v4
+        with:
+          ref: chore/oracle-runtime-cutover-prep-20260910
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Align dependencies to installed Expo SDK
+        run: npx expo install --fix
+
+      - name: Verify aligned Expo dependency set
+        run: npx expo-doctor@1.20.2
+
+      - name: Commit generated manifests if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package.json package-lock.json; then
+            echo 'sdk57_dependency_alignment=no_changes'
+            exit 0
+          fi
+          git diff --check -- package.json package-lock.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m 'fix(sdk57): align Expo package patch versions'
+          git push origin HEAD:chore/oracle-runtime-cutover-prep-20260910
