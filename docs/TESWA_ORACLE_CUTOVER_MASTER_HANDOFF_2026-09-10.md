@@ -6,22 +6,23 @@ Updated: 2026-09-12
 
 Repository: `omarkhair70-droid/teswa.eg`
 
-Closure branch:
+Canonical Android/Oracle closure branch:
 
-`chore/oracle-runtime-cutover-prep-20260910`
+`build/oracle-android-20260909`
 
-Current closure PR:
+PR `#503 — Oracle runtime canonicalization and guarded sync closure` has now been merged into that branch.
 
-`#503 — Oracle runtime canonicalization and guarded sync closure`
+Merge commit:
 
-The branch is based directly on `build/oracle-android-20260909`, so it already contains the Expo 57 picked-image persistence fix from PR #502. At the 2026-09-12 closure review it was ahead of that mobile branch and behind by zero commits.
+`ddd7488da71530fcb511e453ab04d1a84703b3d0`
 
-Important closure commits:
+Important closure commits include:
 
 - `5a1b83f369e960bd3cf04be58f9122aef0cbe99e` — canonical proven Oracle runtime source.
 - `bbf693c0e8046bb4882e9c0c26bc992117cfa208` — guarded canonical runtime sync operator.
+- `cd12f971a373be00520bedc5525e982b792c8530` — GitHub Actions canonical runtime plan proof.
 
-Earlier commits on the same continuation branch already contain the Oracle-specific discovery DB functions, verifier and guarded DB operator.
+Earlier commits in the closure history contain the Oracle-specific discovery DB functions, verifier and guarded DB operator, plus the Expo SDK 57 hardening work.
 
 ## What is already proven live
 
@@ -105,13 +106,11 @@ The static review found no obvious embedded private-key block, JWT, OCI OCID or 
 
 ## Canonical runtime — CLOSED IN GITHUB
 
-The previous persistence gap is now closed on the continuation branch.
-
 Canonical source path:
 
 `scripts/oci-migration/runtime-source/`
 
-It now contains the Domain runtime, API shell, `requirements.txt` and runtime documentation.
+It contains the Domain runtime, API shell, `requirements.txt` and runtime documentation.
 
 Critical source provenance:
 
@@ -127,7 +126,7 @@ Generated Coolify files under `/data/coolify/...` remain non-canonical and must 
 
 ## Oracle discovery DB functions — CLOSED IN GITHUB
 
-These functions are already proven live in `teswa_rehearsal` and now have Oracle-specific repository source/operator coverage:
+These functions are already proven live in `teswa_rehearsal` and have Oracle-specific repository source/operator coverage:
 
 1. `public.get_public_moving_items(integer)`
 2. `public.get_public_city_pulse_moving_items(text[],integer)`
@@ -142,7 +141,7 @@ Oracle policy remains:
 
 Do not create Supabase roles in Oracle merely to reuse historical Supabase migrations.
 
-## Guarded runtime deployment path — CLOSED IN GITHUB, NOT EXECUTED LIVE
+## Guarded runtime deployment path — PLAN GREEN, APPLY NOT YET EXECUTED
 
 Operator:
 
@@ -164,46 +163,92 @@ Safety properties:
 - Does **not** mutate Supabase.
 - Does **not** perform a production traffic cutover.
 
-As of this handoff update, this operator has been committed but has **not** been executed against Core. Therefore the currently healthy Oracle processes have not been disturbed by the 2026-09-12 Git closure work.
+A real GitHub Actions plan run completed successfully on 2026-09-12:
 
-## Mobile build state
+- workflow: `Oracle Runtime Sync Plan`
+- run id: `34698136242`
+- commit: `cd12f971a373be00520bedc5525e982b792c8530`
+- target: `teswa-core-01`
+- domain target: `/opt/teswa/domain-shadow`
+- API target: `/opt/teswa/api-shell`
+- artifact SHA-256: `1cc1d555afb21d76d4c005fef5a6b34200e5f767462f381c345b848d7c040312`
+- `restart=never_automatic`
+- `supabase_mutation=none`
+- `production_cutover=none`
+- `traffic_switch=none`
+- `oracle_runtime_sync_plan=PASS`
 
-Mobile base branch:
+The live `--apply` has still not been executed because the current chat runtime has GitHub/Supabase access but no Oracle Cloud/OCI execution connector. The historical OCI Run Command path itself is proven green and `ocarun` has the required passwordless sudo on Core; this is an access-channel limitation, not a repository/runtime blocker.
 
-`build/oracle-android-20260909`
+## SDK 57 mobile closure — GREEN
 
-Known accepted fix commit:
+The merged Android branch now contains the picked-image persistence fix and the SDK 57 hardening completed during PR #503 review.
 
-`170f8ed85b120fdf7416ac0b1d856b352eea03fa`
+Verified fixes include:
 
-This includes the Expo 57 picked-image persistence correction:
+- awaited durable `File.copy()` paths for picked/Dolab media;
+- Expo SDK 57 patch-set alignment;
+- Skia install-script allow-list alignment;
+- production HIGH `@xmldom/xmldom` advisory removed without `--force` downgrade;
+- Node `22.13.0` application/runtime baseline;
+- current Node-24 GitHub action runtimes for final Android workflows.
 
-`await source.copy(destination)`
+Final PR validation passed:
 
-The Oracle preview APK used for the earlier live acceptance predates that fix. Do not build repeated APKs. The intended sequence remains exactly one final Android release candidate after the server/runtime closure is accepted.
+- repository contracts ✅
+- production High/Critical audit ✅
+- Expo Doctor 21/21 ✅
+- clean native Android prebuild ✅
+- TypeScript ✅
+- Android production export ✅
 
-## Supabase / cutover state
+Do not build repeated APKs. The intended sequence remains exactly one final Android release candidate after the server/runtime operational closure is accepted.
 
-**Supabase is still the production authority.**
+## Supabase / current source drift — MEASURED 2026-09-12
 
-No 2026-09-12 repository closure action switched traffic or mutated Supabase.
+Supabase remains the production authority.
+
+The connected production source currently reports:
+
+- Auth users: `34`
+- Profiles: `34`
+- Items: `39`
+- Direct conversations: `22`
+- Direct messages: `38`
+- Storage objects: `157`
+- latest Auth user creation: `2026-09-09 18:19:39 UTC`
+- latest profile creation: `2026-09-09 18:19:39 UTC`
+- latest direct conversation creation: `2026-09-08 20:23:47 UTC`
+- latest direct message creation: `2026-09-09 06:04:01 UTC`
+- latest Storage object creation: `2026-09-09 18:21:52 UTC`
+
+This confirms the source has only a small amount of recent drift relative to the earlier Oracle rehearsal period.
+
+Do **not** invent a per-table delta/CDC patch just for the few recent users/messages. The approved cutover strategy remains a **fresh full final refresh under a controlled write freeze**. The final transaction-consistent snapshot will therefore naturally include the recent users, their profiles, conversations/messages, and any new media while preserving UUID/FK consistency.
+
+Production final-refresh rules remain:
+
+1. controlled write freeze / maintenance boundary;
+2. capture a final deep source cutover bundle;
+3. use a fresh empty OCI cutover database rather than destructively clearing the working rehearsal DB;
+4. restore the full final public-data snapshot;
+5. preserve and verify identity UUID continuity;
+6. perform final Storage drift sync and exact byte-hash parity;
+7. verify deep source/target manifests and FK orphans;
+8. run semantic smoke and production readiness gates;
+9. only then switch production authority from Supabase to Oracle;
+10. keep Supabase intact as cold/manual rollback during the acceptance window.
 
 Target architecture is not automatic Oracle -> Supabase fallback. Do not introduce dual-active fallback because it can create split-brain writes.
 
-At explicit cutover:
-
-- Oracle becomes the sole active backend authority for application traffic.
-- Supabase may remain temporarily only as a cold/manual rollback source.
-- Supabase can be retired after Oracle stability plus backup/restore acceptance.
-
 ## Remaining true gates
 
-Repository canonicalization is no longer the blocker. The finite remaining sequence is:
+Repository and SDK 57 closure are no longer blockers. The finite remaining sequence is:
 
-1. Let PR #503 finish its repository/deployment checks and review any real failure.
-2. Execute the guarded canonical runtime sync to Core.
-3. Review the resulting live diff/receipt and perform a controlled Domain/API restart or recreate only when explicitly intended; then verify the public Oracle preview again. Do not restart Auth casually.
-4. Build exactly one final Android APK/release candidate from the branch that contains the Expo 57 image-copy fix plus the accepted Oracle closure.
+1. Execute guarded canonical runtime sync `--apply` to Core through an authenticated OCI CLI/Run Command channel.
+2. Review the resulting live receipt/rollback path and perform a controlled Domain/API restart or recreate only when explicitly intended; verify the public Oracle preview again. Do not restart Auth casually.
+3. Perform the fresh full final data refresh under write freeze into a fresh empty OCI cutover DB, including final Storage drift sync and identity/data parity gates.
+4. Build exactly one final Android APK/release candidate from `build/oracle-android-20260909` after server/data acceptance.
 5. Run one final device smoke against Oracle: session, Home, item/media flow, Nearby/Motion/City Pulse, Offers/Deals, Messages, and app reopen.
 6. If email/password recovery is part of launch acceptance, prove real delivery/recovery. Google/session is already accepted and should not be reopened as a generic auth investigation.
 7. Make the explicit production-authority cutover decision. Only that step changes Supabase from production authority to cold rollback.
@@ -222,8 +267,8 @@ Repository canonicalization is no longer the blocker. The finite remaining seque
 
 ## Finish line
 
-The repository-side closure is now:
+Repository-side closure is now:
 
-**canonical Oracle runtime ✅ + durable Oracle DB functions ✅ + pinned OCI dependency ✅ + guarded runtime sync path ✅ + Expo 57 mobile fix already in branch ancestry ✅**
+**canonical Oracle runtime ✅ + durable Oracle DB functions ✅ + pinned OCI dependency ✅ + guarded runtime sync plan PASS ✅ + Expo 57 mobile closure GREEN ✅ + current Supabase source drift measured ✅**
 
-What remains is operational acceptance, one final APK/device smoke, and the explicit traffic-authority cutover.
+What remains is the authenticated OCI apply/restart, fresh final data refresh, one final APK/device smoke, and the explicit traffic-authority cutover.
