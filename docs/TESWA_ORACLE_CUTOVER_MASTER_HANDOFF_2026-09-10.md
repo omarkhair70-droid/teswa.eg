@@ -1,149 +1,33 @@
 # Teswa Oracle Cutover — Master Continuation Handoff
 
-Date: 2026-09-10
+Updated: 2026-09-12
 
-## Purpose
-
-This file is the continuation source of truth for the current Teswa Oracle migration/cutover work. A new chat should read this file first, then inspect the referenced branches/files before making any live change.
-
-## Repository / working branches
+## Current source of truth
 
 Repository: `omarkhair70-droid/teswa.eg`
 
-### Mobile branch
-
-`build/oracle-android-20260909`
-
-Known head from this work: `170f8ed85b120fdf7416ac0b1d856b352eea03fa`
-
-This branch contains the final mobile-side picked-image persistence fix merged from PR #502:
-
-- Expo SDK 57 file copy changed from `source.copy(destination)` to `await source.copy(destination)`.
-- The currently installed Oracle preview APK predates this fix, so one final APK still needs to be built after server persistence/canonicalization is closed.
-
-### Canonical runtime capture branch
-
-`chore/oracle-live-runtime-canonical-20260910`
-
-This branch was used to begin capturing the proven live Oracle runtime. It is **not** based on the current mobile branch and currently diverges from it; do not merge it blindly.
-
-Files already captured there include:
-
-- `scripts/oci-migration/runtime-source/README.md`
-- `scripts/oci-migration/runtime-source/domain-shadow/server.py`
-- `scripts/oci-migration/runtime-source/domain-shadow/oracle_media.py`
-- `scripts/oci-migration/runtime-source/domain-shadow/requirements.txt`
-
-`requirements.txt` pins the proven live OCI SDK version:
-
-`oci==2.185.2`
-
-### Final continuation branch
+Closure branch:
 
 `chore/oracle-runtime-cutover-prep-20260910`
 
-This branch was created from `build/oracle-android-20260909` and is the recommended branch for the next chat to continue on. It starts from the branch that already contains the mobile image persistence fix. Port/copy the intended canonical runtime changes onto this branch instead of merging the divergent canonical branch wholesale.
+Current closure PR:
 
-## Live infrastructure state
+`#503 — Oracle runtime canonicalization and guarded sync closure`
 
-### Core
+The branch is based directly on `build/oracle-android-20260909`, so it already contains the Expo 57 picked-image persistence fix from PR #502. At the 2026-09-12 closure review it was ahead of that mobile branch and behind by zero commits.
 
-Hostname: `core01`
+Important closure commits:
 
-Private OCI address: `10.20.10.176`
+- `5a1b83f369e960bd3cf04be58f9122aef0cbe99e` — canonical proven Oracle runtime source.
+- `bbf693c0e8046bb4882e9c0c26bc992117cfa208` — guarded canonical runtime sync operator.
 
-The instance metadata reported **no public IP**.
+Earlier commits on the same continuation branch already contain the Oracle-specific discovery DB functions, verifier and guarded DB operator.
 
-An overlay/private address `100.78.2.83` also exists, but the user's laptop could not reach port 22 on it.
+## What is already proven live
 
-Do not expose Core SSH publicly just to move files.
+The Oracle backend is not an untested future backend. It was exercised from the Teswa application on the Oracle preview and the failures encountered during that work were fixed on the live Oracle runtime before canonicalization.
 
-### Edge / public API
-
-Current Oracle preview API/Auth public base:
-
-`https://130-110-122-142.sslip.io`
-
-### Runtime topology
-
-- Auth internal service -> host/socat `4110`
-- Domain -> `127.0.0.1:4130`
-- Realtime -> `127.0.0.1:4120`
-- API -> `10.20.10.176:4100`
-- Edge -> public HTTPS endpoint above
-
-Current Domain and API use host bind-mounted source directories:
-
-- `/opt/teswa/domain-shadow -> /app`
-- `/opt/teswa/api-shell -> /app`
-
-Therefore the current hotfixes survive ordinary container restart/recreate as long as those host directories remain intact. The risk is host rebuild or any future script/operator that overwrites those directories.
-
-A server search did not find another updater/bootstrap script for these directories in `/opt/teswa`, `/home/opc`, or `/data/coolify` apart from the runtime files/history. Generated Coolify compose files must not be treated as canonical source.
-
-## Live runtime snapshot
-
-Snapshot archive on Core:
-
-`/home/opc/teswa-runtime-source-20260910.tar.gz`
-
-Archive SHA-256:
-
-`2f1e75447b302b093a7050ca8c5aab9e31b3ac4db7e9919db79ea8c852af84d2`
-
-Decoded archive size: `44,162 bytes`
-
-Tar members: `27`
-
-Python source files: `23`
-
-All 23 Python files parsed successfully during review.
-
-The archive intentionally excluded:
-
-- `domain-shadow/vendor`
-- `*.bak-*`
-- `__pycache__`
-- `*.pyc`
-- environment files
-
-A static review found no obvious embedded private-key block, JWT, OCI OCID, or hard-coded password/secret/API-key assignment. Temporary `MEDIA_TRACE` markers are not present in the captured runtime.
-
-The full snapshot contains these live source files:
-
-### domain-shadow
-
-- `oracle_marketplace_edit.py`
-- `oracle_marketplace_image_plan.py`
-- `oracle_domain_read.py`
-- `oracle_marketplace_write.py`
-- `oracle_marketplace_lifecycle.py`
-- `oracle_exchange.py`
-- `oracle_exchange_read.py`
-- `oracle_exchange_read_extra.py`
-- `oracle_media.py`
-- `oracle_profiles.py`
-- `oracle_notifications.py`
-- `oracle_reviews.py`
-- `oracle_direct_messaging.py`
-- `oracle_contextual_messaging.py`
-- `oracle_stories.py`
-- `oracle_discovery.py`
-- `oracle_dolab.py`
-- `oracle_policies_analytics.py`
-- `oracle_moderation.py`
-- `oracle_account.py`
-- `diagnose_oracle_profile.py`
-- `server.py`
-
-### api-shell
-
-- `healthz`
-- `shadow_gateway.py`
-
-## Mobile runtime acceptance already verified on the current Oracle preview APK
-
-Do not re-diagnose these unless a new failure is reported:
+Already accepted on the Oracle preview APK:
 
 - Home ✅
 - Messages ✅
@@ -152,155 +36,194 @@ Do not re-diagnose these unless a new failure is reported:
 - City Pulse ✅
 - Motion / animation ✅
 - Nearby ✅
-- Auth/session currently stable ✅
+- Auth/session stable ✅
 
-Repeated `/v1/auth/session` requests were returning 200 after reopening the app.
+Repeated `/v1/auth/session` requests returned HTTP 200 after reopening the app.
 
-## Proven live runtime fixes
+Proven live runtime fixes include:
 
-### Auth resolver
+- Domain Auth resolver -> Auth on host port `4110`.
+- `/v1/offers?...` dispatch uses the URL path, so query strings do not miss the Offers handler.
+- API gateway policy keys accept encoded comma `%2C` as well as literal comma.
+- API gateway allows the required authenticated Offers/Deals GET routes: incoming/sent offers, owned-active-items, offer/item detail, deals inbox/unread count/detail/confirmations/messages/reviews/message count.
+- OCI media loads `/app/vendor`.
+- OCI SDK proven at `oci==2.185.2`.
+- Object Storage uses the explicit regional Oracle endpoint.
+- Intended `item_video` signed-read behavior and `deal_voice` authorization are retained while upload/delete ownership checks remain separate.
+- Temporary media trace instrumentation was removed after verification.
 
-Domain AuthResolver live default was corrected to host Auth port `4110`.
+Do not re-diagnose these areas unless a new regression appears.
 
-### Offers dispatcher
+## Live Oracle topology
 
-Domain dispatcher was corrected so `/v1/offers?...` is matched by URL path rather than missing because of the query string.
+Core hostname: `core01`
 
-Equivalent behavior:
+Private OCI address: `10.20.10.176`
 
-`urlsplit(self.path).path == '/v1/offers'`
+Public Oracle preview base:
 
-### API gateway policies
+`https://130-110-122-142.sslip.io`
 
-The policies key matcher was fixed to accept encoded commas `%2C` in addition to literal commas.
+Runtime topology:
 
-### Exchange GET gateway allow-list
+- Auth -> host/socat `4110`
+- Domain -> `127.0.0.1:4130`
+- Realtime -> `127.0.0.1:4120`
+- API -> `10.20.10.176:4100`
+- Edge -> public HTTPS preview base
 
-Required Offers/Deals GET routes were added to the gateway allow-list, including incoming/sent offers, owned-active-items, offer detail/item detail, deals inbox/unread count/detail/confirmations/messages/reviews/message count.
+Host bind-mounted source:
 
-### OCI media
+- `/opt/teswa/domain-shadow -> /app`
+- `/opt/teswa/api-shell -> /app`
 
-Live `oracle_media.py` includes:
+Native PostgreSQL 17 on Core is intentional. Do not introduce a second PostgreSQL container.
 
-- `/app/vendor` in `sys.path`
-- OCI SDK dependency proven with `oci==2.185.2`
-- explicit Object Storage endpoint:
-  `https://objectstorage.{region}.oraclecloud.com`
-- signed-url read allowance for `item_video`
-- `deal_voice` authorization retained
-- upload/delete ownership checks remain separate and enforced
+## Proven live snapshot
 
-The temporary trace code was removed after verification.
+Snapshot archive on Core:
 
-## Oracle database functions added live and already proven by the app
+`/home/opc/teswa-runtime-source-20260910.tar.gz`
 
-These functions exist in `teswa_rehearsal` live now but still need Oracle-specific canonical migration/operator source in GitHub:
+SHA-256:
+
+`2f1e75447b302b093a7050ca8c5aab9e31b3ac4db7e9919db79ea8c852af84d2`
+
+Decoded size: 44,162 bytes.
+
+The archive had 27 members including 23 Python files; all 23 Python files parsed successfully during the original review.
+
+Excluded intentionally:
+
+- `domain-shadow/vendor`
+- backups
+- `__pycache__`
+- `*.pyc`
+- environment files
+
+The static review found no obvious embedded private-key block, JWT, OCI OCID or hard-coded password/secret/API-key assignment. Temporary `MEDIA_TRACE` code was absent.
+
+## Canonical runtime — CLOSED IN GITHUB
+
+The previous persistence gap is now closed on the continuation branch.
+
+Canonical source path:
+
+`scripts/oci-migration/runtime-source/`
+
+It now contains the Domain runtime, API shell, `requirements.txt` and runtime documentation.
+
+Critical source provenance:
+
+- `oracle_domain_read.py` uses the exact reviewed live blob `171f88a6a65b92be277bc8adaac214eb9ffd9898`.
+- `server.py` contains the proven query-safe Offers dispatch behavior.
+- `oracle_media.py` comes from the proven OCI media runtime capture.
+- `requirements.txt` pins `oci==2.185.2`.
+- API gateway canonicalization carries the proven Core ports, encoded-policy-key support, and Offers/Deals GET surface.
+
+The API gateway keeps the previously reviewed implementation as `api-shell/shadow_gateway_base.py` and a small `api-shell/shadow_gateway.py` canonical entrypoint applies only the proven live routing deltas. The static `api-shell/healthz` is a compatibility marker; the gateway serves `/healthz` dynamically.
+
+Generated Coolify files under `/data/coolify/...` remain non-canonical and must not become source of truth.
+
+## Oracle discovery DB functions — CLOSED IN GITHUB
+
+These functions are already proven live in `teswa_rehearsal` and now have Oracle-specific repository source/operator coverage:
 
 1. `public.get_public_moving_items(integer)`
 2. `public.get_public_city_pulse_moving_items(text[],integer)`
 3. `public.get_nearby_marketplace_items(double precision,double precision,double precision,integer,integer)`
 
-For Oracle, use:
+Oracle policy remains:
 
 - `SECURITY DEFINER`
 - `SET search_path=public`
 - `REVOKE ALL ... FROM PUBLIC`
 - `GRANT EXECUTE ... TO teswa_app_authenticated`
 
-Do **not** create Supabase roles (`anon`, `authenticated`, `service_role`) in Oracle merely to reuse old Supabase migrations.
+Do not create Supabase roles in Oracle merely to reuse historical Supabase migrations.
 
-The original Supabase migrations can be used as logic references only:
+## Guarded runtime deployment path — CLOSED IN GITHUB, NOT EXECUTED LIVE
 
-- `supabase/migrations/20260518083000_public_motion_interest_and_offers_privacy.sql`
-- `supabase/migrations/20260518170000_add_public_city_pulse_moving_items.sql`
-- `supabase/migrations/20260520170000_m48_1_true_nearby_radius_discovery.sql`
+Operator:
 
-## Important runtime persistence issue still open
+`scripts/oci-migration/deploy-canonical-runtime-source.sh`
 
-The live runtime works, but most of the captured 23 Python files are not yet committed as a complete canonical runtime tree on the final continuation branch.
+Safety properties:
 
-The next chat should:
+- Defaults to `--plan`.
+- `--apply` additionally requires `TESWA_ALLOW_ORACLE_RUNTIME_SYNC=YES`.
+- Targets the expected `teswa-core-01` instance only.
+- Uses the existing private/versioned `teswa-backups` Object Storage bucket and OCI Instance Agent instead of exposing SSH.
+- Checks the canonical artifact SHA.
+- Rejects source-side env/private-key/bytecode/backup/vendor artifacts.
+- Verifies the proven OCI SDK version before changing source.
+- Creates a host-local rollback copy before synchronization.
+- Copies only repository-owned runtime source and preserves environment/vendor/unrelated host files.
+- Compiles Python source after synchronization.
+- Does **not** restart/recreate services automatically.
+- Does **not** mutate Supabase.
+- Does **not** perform a production traffic cutover.
 
-1. Continue on `chore/oracle-runtime-cutover-prep-20260910`.
-2. Bring the proven runtime source under a stable repository path such as `scripts/oci-migration/runtime-source/`.
-3. Preserve the proven live behavior while cleaning any rehearsal-only defaults.
-4. Add a guarded deployment/operator mechanism that installs/syncs this repository runtime to `/opt/teswa/domain-shadow` and `/opt/teswa/api-shell`.
-5. Never make generated Coolify `/data/coolify/.../docker-compose.yml` the source of truth.
+As of this handoff update, this operator has been committed but has **not** been executed against Core. Therefore the currently healthy Oracle processes have not been disturbed by the 2026-09-12 Git closure work.
 
-## Port/default cleanup note
+## Mobile build state
 
-The live service is healthy because Coolify explicitly starts Domain/API with the correct ports, but captured source still contains some old rehearsal defaults.
+Mobile base branch:
 
-Example: `domain-shadow/server.py` still defaults CLI `--port` to `3130`, while the actual live Domain service is started explicitly on `4130`.
+`build/oracle-android-20260909`
 
-Treat this as a cleanup/footgun issue, not a current live outage. Do not restart healthy services merely to test default-port cleanup.
+Known accepted fix commit:
 
-## Supabase state / cutover policy
+`170f8ed85b120fdf7416ac0b1d856b352eea03fa`
 
-Supabase remains the production authority until the explicit final cutover decision.
+This includes the Expo 57 picked-image persistence correction:
 
-The target architecture is **not** automatic fallback from Oracle to Supabase. Automatic dual-backend fallback risks split-brain data and must not be introduced.
+`await source.copy(destination)`
 
-At cutover:
+The Oracle preview APK used for the earlier live acceptance predates that fix. Do not build repeated APKs. The intended sequence remains exactly one final Android release candidate after the server/runtime closure is accepted.
 
-- Oracle becomes the sole active backend authority for app traffic.
+## Supabase / cutover state
+
+**Supabase is still the production authority.**
+
+No 2026-09-12 repository closure action switched traffic or mutated Supabase.
+
+Target architecture is not automatic Oracle -> Supabase fallback. Do not introduce dual-active fallback because it can create split-brain writes.
+
+At explicit cutover:
+
+- Oracle becomes the sole active backend authority for application traffic.
 - Supabase may remain temporarily only as a cold/manual rollback source.
-- After Oracle backup/restore and stability acceptance are proven, Supabase can be retired completely.
+- Supabase can be retired after Oracle stability plus backup/restore acceptance.
 
-Recent Supabase usage observed from the dashboard was small relative to the Free plan quota:
+## Remaining true gates
 
-- Database: ~42 MB / 500 MB
-- File Storage: ~0.13 GB / 1 GB
-- Egress: ~0.20 GB / 5 GB
-- MAU: 5 / 50,000
+Repository canonicalization is no longer the blocker. The finite remaining sequence is:
 
-So the current Teswa load is very small compared with available capacity. The reason to retain Supabase temporarily is rollback safety, not resource need.
+1. Let PR #503 finish its repository/deployment checks and review any real failure.
+2. Execute the guarded canonical runtime sync to Core.
+3. Review the resulting live diff/receipt and perform a controlled Domain/API restart or recreate only when explicitly intended; then verify the public Oracle preview again. Do not restart Auth casually.
+4. Build exactly one final Android APK/release candidate from the branch that contains the Expo 57 image-copy fix plus the accepted Oracle closure.
+5. Run one final device smoke against Oracle: session, Home, item/media flow, Nearby/Motion/City Pulse, Offers/Deals, Messages, and app reopen.
+6. If email/password recovery is part of launch acceptance, prove real delivery/recovery. Google/session is already accepted and should not be reopened as a generic auth investigation.
+7. Make the explicit production-authority cutover decision. Only that step changes Supabase from production authority to cold rollback.
+8. After the chosen stability/backup-restore acceptance window, remove the Supabase dependency completely.
 
-## Remaining blockers before final Oracle cutover
+## Operational rules
 
-The main remaining work is closure/persistence, not rebuilding the backend:
+- No public SSH exposure just for deployment.
+- No second PostgreSQL container.
+- No generated Coolify compose as canonical source.
+- No reintroduction of diagnostic traces without a new regression.
+- No casual Auth/API restart while healthy.
+- No secrets, env values, private keys, tokens or credentials in Git.
+- No automatic Supabase fallback.
+- No Supabase production cutover without an explicit cutover decision.
 
-1. Canonicalize the full proven live runtime source on the continuation branch.
-2. Canonicalize the three live Oracle DB functions with Oracle role grants.
-3. Make OCI SDK installation/deployment durable rather than relying on the live `/app/vendor` workaround alone.
-4. Add guarded runtime deployment/sync behavior for the host bind-mounted sources.
-5. Build exactly one final Android APK containing the Expo 57 picked-image persistence fix.
-6. Run final device smoke once on that APK.
-7. If email/password-recovery flows are in production acceptance scope, prove their live delivery/recovery path before declaring total auth closure.
-8. Only then perform the explicit app traffic authority cutover to Oracle.
+## Finish line
 
-Do not build repeated APKs during server canonicalization.
+The repository-side closure is now:
 
-## Email/password note
+**canonical Oracle runtime ✅ + durable Oracle DB functions ✅ + pinned OCI dependency ✅ + guarded runtime sync path ✅ + Expo 57 mobile fix already in branch ancestry ✅**
 
-Google/session auth is currently working. However, previous repository work indicated real email delivery/password recovery/device verification still needed live acceptance if those flows are considered part of launch scope. Do not confuse this with the already-stable Google/session path.
-
-## Operational cautions
-
-- Do not install a second PostgreSQL inside Docker. Native PostgreSQL 17 on Core is the intentional current architecture.
-- Do not casually restart Auth/API while they are healthy; earlier repeated restarts correlated with a temporary app logout event.
-- Do not re-add diagnostic traces after a feature has already been proven unless a new regression appears.
-- Do not expose Core SSH publicly just for file transfer.
-- Do not cut over Supabase without explicit user approval.
-- Do not put secrets, env values, private keys, tokens, or credentials into GitHub.
-
-## Recommended first action for the next chat
-
-Read this file, inspect these two branches:
-
-- `build/oracle-android-20260909`
-- `chore/oracle-live-runtime-canonical-20260910`
-
-Then continue implementation on:
-
-`chore/oracle-runtime-cutover-prep-20260910`
-
-First close the canonical runtime + Oracle DB migration/operator source. Do not touch the live traffic switch yet.
-
-## Desired end state
-
-The finish line is:
-
-**Canonical Oracle runtime + durable DB functions + durable OCI dependency/deploy path + one final fixed APK + final smoke = explicit Oracle production cutover.**
-
-After cutover, Supabase is cold rollback only, then removed after stability/restore acceptance.
+What remains is operational acceptance, one final APK/device smoke, and the explicit traffic-authority cutover.
