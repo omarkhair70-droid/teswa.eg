@@ -1,6 +1,9 @@
 name: Mobile PR Validation
 
 on:
+  push:
+    branches:
+      - chore/oracle-runtime-cutover-prep-20260910
   pull_request:
     branches:
       - main
