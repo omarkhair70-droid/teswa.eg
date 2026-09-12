@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - build/oracle-android-20260909
   workflow_dispatch:
 
 permissions:
