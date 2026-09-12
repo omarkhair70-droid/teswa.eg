@@ -1,0 +1,31 @@
+name: Oracle Runtime Sync Plan
+
+on:
+  push:
+    branches:
+      - build/oracle-android-20260909
+    paths:
+      - '.github/workflows/oracle-runtime-plan.yml'
+      - 'scripts/oci-migration/deploy-canonical-runtime-source.sh'
+      - 'scripts/oci-migration/runtime-source/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teswa-oracle-runtime-plan
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Canonical runtime plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Oracle Android closure branch
+        uses: actions/checkout@v7
+
+      - name: Verify canonical Oracle runtime package
+        shell: bash
+        run: bash scripts/oci-migration/deploy-canonical-runtime-source.sh --plan
