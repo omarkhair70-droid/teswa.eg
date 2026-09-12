@@ -1,9 +1,6 @@
 name: Mobile PR Validation
 
 on:
-  push:
-    branches:
-      - chore/oracle-runtime-cutover-prep-20260910
   pull_request:
     branches:
       - main
@@ -56,6 +53,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Production dependency security audit
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Expo Doctor
         run: npx expo-doctor@1.20.2
