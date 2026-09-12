@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - build/oracle-android-20260909
   workflow_dispatch:
 
 permissions:
@@ -21,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22.13.0'
 
@@ -35,17 +36,17 @@ jobs:
     name: Mobile validation
     needs: validate-repository
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22.13.0'
           cache: npm
@@ -53,8 +54,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Production dependency security audit
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Expo Doctor
         run: npx expo-doctor@1.20.2
+
+      - name: Native Android prebuild
+        run: npx expo prebuild --platform android --clean --no-install
 
       - name: TypeScript
         run: npm run typecheck
@@ -72,7 +79,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Database contract credential status
         if: env.SUPABASE_DB_URL == ''

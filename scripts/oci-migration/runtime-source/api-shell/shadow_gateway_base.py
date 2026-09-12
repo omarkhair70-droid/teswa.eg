@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Private rehearsal gateway from the existing Core API listener to Auth.
+
+Only explicitly supported routes are forwarded. No database credentials, client
+identity headers, arbitrary URLs, redirects, or production routing are involved.
+"""
+import argparse
+import http.client
+import ipaddress
+import json
+import re
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+MAX_BODY = 128 * 1024
+ROUTES = {
+    ('GET', '/v1/auth/healthz'): '/healthz',
+    ('GET', '/v1/auth/session'): '/v1/auth/session',
+    **{('POST', '/v1/auth/' + name): '/v1/auth/' + name for name in (
+        'google', 'password', 'sign-in/password', 'refresh', 'logout',
+        'sign-up', 'resend-confirmation',
+    )},
+}
+DELIVERY_ROUTES = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
+DOMAIN_GET = (
+    re.compile(r'^/v1/moderation/(?:admin|profiles/[0-9a-fA-F-]{36}|items/[0-9a-fA-F-]{36}/context)$'),
+    re.compile(r'^/v1/moderation/admin/reports\?status=(?:all|open|reviewing|actioned|dismissed)&type=(?:all|user|item|story|deal|direct_message|deal_message)$'),
+    re.compile(r'^/v1/policies/acceptances\?userId=[0-9a-fA-F-]{36}&keys=[a-z_,]+$'),
+    re.compile(r'^/v1/dolab/(?:items|media|notes)\?userId=[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/publish-source\?userId=[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/direct/conversations(?:/[0-9a-fA-F-]{36}(?:/(?:messages|native|typing))?)?(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/contextual/(?:unread|conversations(?:\?[^#]+)?)$'),
+    re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/owner$'),
+    re.compile(r'^/v1/contextual/conversations/[0-9a-fA-F-]{36}(?:/(?:other|messages/[0-9a-fA-F-]{36}))?$'),
+    re.compile(r'^/v1/stories/(?:home|video-drops)(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/stories/(?:likes|likes/counts|views/counts)\?[^#]+$'),
+    re.compile(r'^/v1/stories/users/[0-9a-fA-F-]{36}/active$'),
+    re.compile(r'^/v1/stories/authors/[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/stories/[0-9a-fA-F-]{36}/viewers\?[^#]+$'),
+    re.compile(r'^/v1/marketplace/feed(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/marketplace/(?:nearby|video-presence|video-discovery|moving|pulse-teasers|count-since|story-discovery)\?[^#]+$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/detail$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/video$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/images/urls$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/edit(?:/images)?$'),
+    re.compile(r'^/v1/marketplace/owners/[0-9a-fA-F-]{36}/active(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/marketplace/(?:categories|mine)$'),
+    re.compile(r'^/v1/marketplace/(?:likes|exchange-items)\?[^#]+$'),
+    re.compile(r'^/v1/profiles/(?:me|privacy|[0-9a-fA-F-]{36})$'),
+    re.compile(r'^/v1/people(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow-state|block-state|trust|badges)$'),
+    re.compile(r'^/v1/profiles/(?:me/(?:trust|badges)|blocked)$'),
+    re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/connections(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/notifications(?:\?[^#]*)?$'),
+    re.compile(r'^/v1/notifications/(?:unread|preferences)$'),
+    re.compile(r'^/v1/reviews/deals/[0-9a-fA-F-]{36}$'),
+)
+DOMAIN_MUTATIONS = {
+    ('POST', '/v1/account/deletion-request'),
+    ('POST', '/v1/moderation/reports/user'),
+    ('POST', '/v1/moderation/reports/item'),
+    ('POST', '/v1/moderation/reports/direct-message'),
+    ('POST', '/v1/moderation/reports/deal'),
+    ('POST', '/v1/moderation/reports/story'),
+    ('POST', '/v1/moderation/reports/deal-message'),
+    ('POST', '/v1/moderation/direct-context'),
+    ('POST', '/v1/moderation/deal-context'),
+    ('POST', '/v1/moderation/story-context'),
+    ('POST', '/v1/moderation/admin/review'),
+    ('POST', '/v1/moderation/admin/hide-item'),
+    ('POST', '/v1/policies/acceptances'),
+    ('POST', '/v1/analytics/events'),
+    ('POST', '/v1/dolab/items'),
+    ('POST', '/v1/dolab/notes'),
+    ('POST', '/v1/dolab/media'),
+    ('POST', '/v1/discovery/city-pulse'),
+    ('POST', '/v1/stories'),
+    ('POST', '/v1/marketplace/items'),
+    ('POST', '/v1/marketplace/likes'),
+    ('POST', '/v1/offers'),
+    ('POST', '/v1/media/uploads'),
+    ('POST', '/v1/media/uploads/complete'),
+    ('POST', '/v1/media/signed-url'),
+    ('DELETE', '/v1/media/objects'),
+    ('POST', '/v1/profiles/setup'),
+    ('POST', '/v1/profiles/privacy'),
+    ('POST', '/v1/profiles/image'),
+    ('POST', '/v1/profiles/update'),
+    ('POST', '/v1/profiles/badges/refresh'),
+    ('POST', '/v1/notifications/read'),
+    ('POST', '/v1/notifications/read-all'),
+    ('POST', '/v1/notifications/preferences'),
+    ('POST', '/v1/notifications/timezone'),
+    ('POST', '/v1/notifications/push/register'),
+    ('POST', '/v1/notifications/push/disable'),
+    ('POST', '/v1/notifications/dispatch'),
+    ('POST', '/v1/reviews'),
+}
+DOMAIN_MUTATION_PATTERNS = (
+    re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/(?:update|delete|published)$'),
+    re.compile(r'^/v1/dolab/notes/[0-9a-fA-F-]{36}/(?:delete|shared|media)$'),
+    re.compile(r'^/v1/dolab/media/[0-9a-fA-F-]{36}/(?:delete|attach)$'),
+    re.compile(r'^/v1/direct/conversations/(?:start|start-with-message)$'),
+    re.compile(r'^/v1/direct/conversations/[0-9a-fA-F-]{36}/(?:messages|voice|native|accept|ignore|read|typing)$'),
+    re.compile(r'^/v1/direct/messages/[0-9a-fA-F-]{36}/(?:reaction|delete)$'),
+    re.compile(r'^/v1/contextual/(?:notifications|read)$'),
+    re.compile(r'^/v1/contextual/stories/[0-9a-fA-F-]{36}/(?:reply|ensure)$'),
+    re.compile(r'^/v1/contextual/conversations/[0-9a-fA-F-]{36}/(?:messages|voice)$'),
+    re.compile(r'^/v1/stories/[0-9a-fA-F-]{36}/(?:delete|like|view)$'),
+    re.compile(r'^/v1/offers/[0-9a-fA-F-]{36}/accept$'),
+    re.compile(r'^/v1/deals/[0-9a-fA-F-]{36}/messages$'),
+    re.compile(r'^/v1/profiles/[0-9a-fA-F-]{36}/(?:follow|unfollow|block|unblock)$'),
+    re.compile(r'^/v1/marketplace/items/[0-9a-fA-F-]{36}/(?:publish-failed|video|wanted-tags|images/delete|archive|reactivate|delete-archived|edit|edit/images/plan)$'),
+)
+class Handler(BaseHTTPRequestHandler):
+    server_version = 'TeswaPrivateGateway/1'
+
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(10)
+
+    def log_message(self, fmt, *args):
+        # Paths may contain credentials in malformed requests; never log them.
+        pass
+
+    def send_json(self, status, value):
+        self.send_bytes(status, json.dumps(value, separators=(',', ':')).encode())
+
+    def send_bytes(self, status, body):
+        self.close_connection = True
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def confirmation_delivery_ready(self):
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.auth_port, timeout=3)
+        try:
+            conn.request('GET', '/healthz', headers={'Connection': 'close'})
+            response = conn.getresponse()
+            payload = response.read(MAX_BODY + 1)
+            if response.status != 200 or len(payload) > MAX_BODY:
+                return False
+            value = json.loads(payload)
+            return (isinstance(value, dict) and value.get('status') == 'ok' and
+                    value.get('confirmationDispatchConfigured') is True)
+        except (OSError, ValueError, http.client.HTTPException):
+            return False
+        finally:
+            conn.close()
+
+    def dispatch(self):
+        if self.command == 'GET' and self.path == '/healthz':
+            self.send_json(200, {'status': 'ok', 'service': 'teswa-api-shadow',
+                                'productionTraffic': False, 'supabaseRuntimeDependency': False})
+            return
+        path = ROUTES.get((self.command, self.path))
+        upstream_port = self.server.auth_port
+        upstream_name = 'auth'
+        if path is None and self.command == 'GET' and re.fullmatch(
+                r'/v1/auth/confirm\?token=[A-Za-z0-9_-]{32,256}', self.path):
+            path = self.path
+        if path is None and self.command == 'GET' and re.fullmatch(r'/v1/realtime/events\?[^#]+', self.path):
+            path = self.path
+            upstream_port = self.server.realtime_port
+            upstream_name = 'realtime'
+        if path is None and self.command == 'GET' and any(rule.fullmatch(self.path) for rule in DOMAIN_GET):
+            path = self.path
+            upstream_port = self.server.domain_port
+            upstream_name = 'domain'
+        if path is None and ((self.command, self.path) in DOMAIN_MUTATIONS or
+                             (self.command == 'POST' and any(rule.fullmatch(self.path) for rule in DOMAIN_MUTATION_PATTERNS))):
+            path = self.path
+            upstream_port = self.server.domain_port
+            upstream_name = 'domain'
+        if path is None:
+            self.send_json(404, {'error': 'not_found'})
+            return
+        if self.headers.get('Transfer-Encoding') is not None:
+            self.send_json(400, {'error': 'unsupported_transfer_encoding'})
+            return
+        lengths = self.headers.get_all('Content-Length') or []
+        if len(lengths) > 1:
+            self.send_json(400, {'error': 'invalid_content_length'})
+            return
+        try:
+            length = int(lengths[0]) if lengths else 0
+        except ValueError:
+            self.send_json(400, {'error': 'invalid_content_length'})
+            return
+        if length < 0 or length > MAX_BODY or (self.command == 'GET' and length):
+            self.send_json(413, {'error': 'invalid_body_size'})
+            return
+        if self.command in ('POST', 'DELETE') and (
+            not length or self.headers.get_content_type() != 'application/json'
+        ):
+            self.send_json(415, {'error': 'json_body_required'})
+            return
+        auth_values = self.headers.get_all('Authorization') or []
+        if len(auth_values) > 1:
+            self.send_json(400, {'error': 'ambiguous_authorization'})
+            return
+        body = self.rfile.read(length) if length else None
+        if length:
+            try:
+                if not isinstance(json.loads(body), dict):
+                    raise ValueError()
+            except (ValueError, UnicodeDecodeError):
+                self.send_json(400, {'error': 'invalid_json_object'})
+                return
+        if self.path in DELIVERY_ROUTES and not self.confirmation_delivery_ready():
+            self.send_json(503, {'error': 'confirmation_delivery_not_configured'})
+            return
+        headers = {'Content-Type': 'application/json', 'Connection': 'close'}
+        if auth_values:
+            headers['Authorization'] = auth_values[0]
+        conn = http.client.HTTPConnection('127.0.0.1', upstream_port, timeout=8)
+        try:
+            conn.request(self.command, path, body=body, headers=headers)
+            response = conn.getresponse()
+            payload = response.read(MAX_BODY + 1)
+            if len(payload) > MAX_BODY or response.status in range(300, 400):
+                raise ValueError('invalid_upstream_response')
+            if not isinstance(json.loads(payload), dict):
+                raise ValueError('invalid_upstream_json')
+            self.send_bytes(response.status, payload)
+        except (OSError, ValueError, http.client.HTTPException):
+            self.send_json(502, {'error': upstream_name + '_upstream_unavailable'})
+        finally:
+            conn.close()
+
+    do_GET = dispatch
+    do_POST = dispatch
+    do_DELETE = dispatch
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def __init__(self, address, auth_port=3110, domain_port=3130, realtime_port=3120):
+        super().__init__(address, Handler)
+        self.auth_port = auth_port
+        self.domain_port = domain_port
+        self.realtime_port = realtime_port
+        self.slots = threading.BoundedSemaphore(16)
+
+    def process_request(self, request, address):
+        if not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, address)
+        except Exception:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, address):
+        try:
+            super().process_request_thread(request, address)
+        finally:
+            self.slots.release()
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('port', type=int)
+    p.add_argument('--bind', required=True)
+    p.add_argument('--directory', default='/srv')  # existing service argument
+    a = p.parse_args()
+    ip = ipaddress.ip_address(a.bind)
+    if not ip.is_private or ip.is_unspecified or ip.is_multicast:
+        raise SystemExit('Requires a specific private or loopback bind address')
+    Server((a.bind, a.port)).serve_forever()
+
+
+if __name__ == '__main__':
+    main()

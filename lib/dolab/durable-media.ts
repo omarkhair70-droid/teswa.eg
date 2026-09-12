@@ -96,7 +96,11 @@ export async function copyDolabMediaToDurableUri(input: {
     const targetFileName = generateDurableFileName(input);
     const sourceFile = new File(input.uri);
     const targetFile = new File(directory, targetFileName);
-    sourceFile.copy(targetFile);
+    await sourceFile.copy(targetFile);
+    const copiedInfo = targetFile.info();
+    if (!copiedInfo.exists) {
+      return { uri: input.uri, fileName: input.fileName, wasCopied: false };
+    }
     return { uri: targetFile.uri, fileName: targetFileName, wasCopied: true };
   } catch {
     return { uri: input.uri, fileName: input.fileName, wasCopied: false };
@@ -117,7 +121,11 @@ export async function copyDolabInboxFileToDurableUri(input: {
     const targetFileName = generateInboxFileName(input);
     const sourceFile = new File(input.uri);
     const targetFile = new File(directory, targetFileName);
-    sourceFile.copy(targetFile);
+    await sourceFile.copy(targetFile);
+    const copiedInfo = targetFile.info();
+    if (!copiedInfo.exists) {
+      return { uri: input.uri, fileName: input.fileName, wasCopied: false };
+    }
     return { uri: targetFile.uri, fileName: targetFileName, wasCopied: true };
   } catch {
     return { uri: input.uri, fileName: input.fileName, wasCopied: false };
