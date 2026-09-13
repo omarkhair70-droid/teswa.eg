@@ -119,7 +119,8 @@ sudo find "$API" -maxdepth 1 -type f -exec cp -p {} "$BACKUP/api-shell/" \;
 for f in "$D/src"/domain-shadow/*.py; do sudo install -o root -g root -m 0644 "$f" "$DOMAIN/$(basename "$f")"; done
 sudo install -o root -g root -m 0644 "$D/src/requirements.txt" "$DOMAIN/requirements.txt"
 for f in shadow_gateway.py shadow_gateway_base.py healthz; do sudo install -o root -g root -m 0644 "$D/src/api-shell/$f" "$API/$f"; done
-sudo python3 -m py_compile "$DOMAIN"/*.py "$API"/*.py
+# Expand globs inside the privileged shell because the Instance Agent user cannot traverse the 0750 runtime mount.
+sudo bash -c 'python3 -m py_compile "$1"/*.py "$2"/*.py' _ "$DOMAIN" "$API"
 # This operator deliberately does not restart services. Current healthy processes remain untouched.
 echo "rollback_backup=$BACKUP"
 echo 'restart_performed=false'
