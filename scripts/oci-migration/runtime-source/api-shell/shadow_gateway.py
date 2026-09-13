@@ -33,8 +33,10 @@ class CanonicalServer(base.Server):
                          realtime_port=realtime_port)
 
 
-# base.main resolves Server from its module globals when invoked, so replacing
-# it here keeps the original bind validation and CLI surface intact.
+# The live container command imports shadow_gateway.Server directly, while
+# base.main resolves Server from shadow_gateway_base globals. Export and patch
+# both names so either supported startup path uses the canonical Core ports.
+Server = CanonicalServer
 base.Server = CanonicalServer
 
 if __name__ == '__main__':
