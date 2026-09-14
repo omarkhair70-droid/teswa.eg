@@ -7,11 +7,11 @@ BUCKET=teswa-backups
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 WORK="$(mktemp -d)"; ARCHIVE="$WORK/final-db-closure.tar.gz"; CONTENT="$WORK/content.json"; TARGET="$WORK/target.json"; UPLOADED=false
 cleanup(){ rm -rf "$WORK"; if [ "$UPLOADED" = true ]; then oci os object delete --bucket-name "$BUCKET" --object-name "$OBJECT" --force >/dev/null 2>&1 || true; fi; }; trap cleanup EXIT
-for f in runtime-final-db-closure.sql verify-runtime-final-db-closure.sql final-db-closure-guest-apply.sh; do [ -f "$ROOT/scripts/oci-migration/$f" ] || { echo "final_db_closure_operator=FAIL reason=missing_$f" >&2; exit 2; }; done
+for f in runtime-final-db-closure.sql verify-runtime-final-db-closure.sql runtime-profile-column-security.sql final-db-closure-guest-apply.sh; do [ -f "$ROOT/scripts/oci-migration/$f" ] || { echo "final_db_closure_operator=FAIL reason=missing_$f" >&2; exit 2; }; done
 mkdir -p "$WORK/stage"
-cp "$ROOT/scripts/oci-migration/runtime-final-db-closure.sql" "$ROOT/scripts/oci-migration/verify-runtime-final-db-closure.sql" "$ROOT/scripts/oci-migration/final-db-closure-guest-apply.sh" "$WORK/stage/"
+cp "$ROOT/scripts/oci-migration/runtime-final-db-closure.sql" "$ROOT/scripts/oci-migration/verify-runtime-final-db-closure.sql" "$ROOT/scripts/oci-migration/runtime-profile-column-security.sql" "$ROOT/scripts/oci-migration/final-db-closure-guest-apply.sh" "$WORK/stage/"
 chmod 700 "$WORK/stage/final-db-closure-guest-apply.sh"
-tar -C "$WORK/stage" -czf "$ARCHIVE" runtime-final-db-closure.sql verify-runtime-final-db-closure.sql final-db-closure-guest-apply.sh
+tar -C "$WORK/stage" -czf "$ARCHIVE" runtime-final-db-closure.sql verify-runtime-final-db-closure.sql runtime-profile-column-security.sql final-db-closure-guest-apply.sh
 SHA="$(sha256sum "$ARCHIVE"|awk '{print $1}')"; OBJECT="lane4-rehearsal/final-db-closure/$STAMP-$SHA.tar.gz"
 INSTANCE_ID="$(oci search resource structured-search --query-text "query instance resources where displayName = 'teswa-core-01'" --query 'data.items[0].identifier' --raw-output)"
 [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != null ] || { echo 'final_db_closure_operator=FAIL reason=core_instance_not_found'; exit 3; }
@@ -24,6 +24,7 @@ echo 'database=teswa_rehearsal'
 echo 'remaining_request_identity_functions=5'
 echo 'moderation_functions=2'
 echo 'remaining_auth_dependent_policies=30'
+echo 'profile_acl_contract=column_allowlist_plus_visible_self_rls'
 echo 'target_function_auth_dependency=0'
 echo 'target_policy_auth_dependency=0'
 echo 'supabase_mutation=none'
