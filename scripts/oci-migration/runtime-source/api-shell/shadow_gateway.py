@@ -37,5 +37,10 @@ class CanonicalServer(base.Server):
 # it here keeps the original bind validation and CLI surface intact.
 base.Server = CanonicalServer
 
+# Coolify's API Canary command imports this module and constructs
+# `shadow_gateway.Server(...)` directly instead of executing this file as a
+# script. Export the canonical class under the expected public name as well.
+Server = CanonicalServer
+
 if __name__ == '__main__':
     base.main()
