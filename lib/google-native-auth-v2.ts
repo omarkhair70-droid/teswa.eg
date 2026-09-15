@@ -3,7 +3,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 
 import { teswaBackendRuntime } from '@/lib/backend/runtime';
 
-export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth-v2.android.ts.v1';
+export const GOOGLE_NATIVE_AUTH_MODULE_VERSION = 'google-native-auth-v2.android.ts.v2';
 export type GoogleNativeAuthImplementation = 'android-native' | 'web-shim' | 'unknown';
 export const GOOGLE_NATIVE_AUTH_IMPLEMENTATION: GoogleNativeAuthImplementation = 'android-native';
 
@@ -78,6 +78,16 @@ function configureGoogleSignin() {
   configured = true;
 }
 
+function backendFailureMessage(reason?: string) {
+  if (reason === 'network') {
+    return 'تم تسجيل الدخول بجوجل، لكن الاتصال بسيرفر تِسوى تعطل. حاول مرة تانية.';
+  }
+  if (reason === 'provider_failed') {
+    return 'تم تسجيل الدخول بجوجل، لكن تعذر التحقق من الحساب. حاول مرة تانية.';
+  }
+  return 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.';
+}
+
 export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions): Promise<NativeGoogleSignInResult> {
   emitGoogleNativeStep({ flow: 'native_step', step: 'native_helper_entered', platform: Platform.OS, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION }, options);
   emitGoogleNativeStep({ flow: 'native_step', step: 'native_start', platform: Platform.OS, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION }, options);
@@ -99,10 +109,6 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
     emitGoogleNativeStep({ flow: 'native_step', step: 'play_services_check_done', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
 
-    emitGoogleNativeStep({ flow: 'native_step', step: 'native_signout_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-    await GoogleSignin.signOut().catch(() => undefined);
-    emitGoogleNativeStep({ flow: 'native_step', step: 'native_signout_done', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_signin_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     const userInfo = await GoogleSignin.signIn();
     if (!userInfo) return { status: 'empty', error: 'تعذر استلام نتيجة تسجيل الدخول من جوجل. حاول مرة تانية.', fallbackToBrowser: true, reason: 'empty_result', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
@@ -118,10 +124,26 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_result_success', hasIdToken: Boolean(idToken), hasUser: true, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     if (!idToken) return { status: 'error', error: 'تعذر الحصول على بيانات تسجيل الدخول من جوجل. حاول مرة تانية.', fallbackToBrowser: true, reason: 'missing_id_token', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
 
-    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
+    emitGoogleNativeStep({ flow: 'native_step', step: 'backend_id_token_exchange_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     const authResult = await teswaBackendRuntime.auth.signInWithExternalIdToken({ provider: 'google', idToken });
-    emitGoogleNativeStep({ flow: 'native_step', step: 'supabase_id_token_result', hasError: !authResult.ok, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
-    if (!authResult.ok) return { status: 'error', error: 'تم تسجيل الدخول بجوجل، لكن تعذر إكمال الجلسة. حاول مرة تانية.', fallbackToBrowser: true, reason: 'supabase_session_failed', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
+    emitGoogleNativeStep({
+      flow: 'native_step',
+      step: 'backend_id_token_exchange_result',
+      hasError: !authResult.ok,
+      reason: authResult.ok ? undefined : authResult.reason,
+      message: authResult.ok ? undefined : authResult.message,
+      implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
+    }, options);
+    if (!authResult.ok) {
+      return {
+        status: 'error',
+        error: backendFailureMessage(authResult.reason),
+        fallbackToBrowser: false,
+        reason: `backend_session_${authResult.reason}`,
+        implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION,
+        moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION,
+      };
+    }
 
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_success', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     return { status: 'success', error: null, fallbackToBrowser: false, reason: 'native_success', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
@@ -130,7 +152,7 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     const message = typeof err === 'object' && err !== null && 'message' in err ? String((err as { message?: unknown }).message) : undefined;
     if (code === statusCodes.SIGN_IN_CANCELLED) return { status: 'cancelled', error: GOOGLE_NATIVE_CANCELLED, fallbackToBrowser: false, reason: 'cancelled', code, message, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
     if (code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'play_services_unavailable', code, message, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
-    if (code === statusCodes.IN_PROGRESS) return { status: 'fallback', error: null, fallbackToBrowser: true, reason: 'in_progress', code, message, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
+    if (code === statusCodes.IN_PROGRESS) return { status: 'error', error: 'تسجيل الدخول بجوجل ما زال قيد التنفيذ.', fallbackToBrowser: false, reason: 'in_progress', code, message, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
     return { status: 'error', error: GOOGLE_NATIVE_GENERIC_ERROR, fallbackToBrowser: true, reason: 'native_exception', code, message, implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
   }
 }
