@@ -1,0 +1,56 @@
+name: Canonical Stabilization Validation
+
+on:
+  pull_request:
+    branches:
+      - chore/oracle-runtime-cutover-prep-20260910
+    paths:
+      - 'lib/google-native-auth-v2.ts'
+      - 'scripts/oci-migration/**'
+      - 'docs/TESWA_CANONICAL_STABILIZATION_2026-09-15.md'
+      - '.github/workflows/canonical-stabilization-validation.yml'
+  push:
+    branches:
+      - stabilize/canonical-runtime-20260915
+    paths:
+      - 'lib/google-native-auth-v2.ts'
+      - 'scripts/oci-migration/**'
+      - 'docs/TESWA_CANONICAL_STABILIZATION_2026-09-15.md'
+      - '.github/workflows/canonical-stabilization-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-contracts:
+    name: TypeScript contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  oracle-gateway:
+    name: Oracle gateway regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Policy allowlist regression
+        run: python3 scripts/oci-migration/test_oracle_gateway_policy_allowlist.py
+      - name: Policy domain regression
+        run: python3 scripts/oci-migration/test_oracle_policies_analytics.py
+      - name: Edge rehearsal regression
+        run: python3 scripts/oci-migration/test_edge_api_permissions.py
+      - name: Compile touched Python entrypoints
+        run: |
+          python3 -m py_compile \
+            scripts/oci-migration/auth-api-shadow-gateway.py \
+            scripts/oci-migration/runtime-source/api-shell/shadow_gateway.py \
+            scripts/oci-migration/runtime-source/api-shell/shadow_gateway_base.py \
+            scripts/oci-migration/edge-api-rehearsal.py
