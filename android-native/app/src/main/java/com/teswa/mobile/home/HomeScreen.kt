@@ -2,6 +2,7 @@ package com.teswa.mobile.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -42,21 +44,24 @@ fun HomeScreen(
     val client = remember { OracleHomeClient() }
     var session by remember(initialSession.accessToken) { mutableStateOf(initialSession) }
     var state by remember(initialSession.user.id) { mutableStateOf<HomeUiState>(HomeUiState.Loading) }
+    var selectedItemId by remember(initialSession.user.id) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    suspend fun validSession(forceRefresh: Boolean = false): AuthSession? {
+        return when (val auth = authRepository.ensureValid(session, forceRefresh = forceRefresh)) {
+            is AuthResult.Success -> auth.value.also { session = it }
+            is AuthResult.Failure -> {
+                state = HomeUiState.Error(auth.message)
+                null
+            }
+        }
+    }
 
     suspend fun load(forceSessionRefresh: Boolean = false) {
         state = HomeUiState.Loading
+        val valid = validSession(forceSessionRefresh) ?: return
 
-        val validSession = when (val auth = authRepository.ensureValid(session, forceRefresh = forceSessionRefresh)) {
-            is AuthResult.Success -> auth.value
-            is AuthResult.Failure -> {
-                state = HomeUiState.Error(auth.message)
-                return
-            }
-        }
-        session = validSession
-
-        when (val feed = client.fetchFeed(validSession)) {
+        when (val feed = client.fetchFeed(valid)) {
             is HomeFeedResult.Success -> {
                 state = if (feed.value.items.isEmpty()) {
                     HomeUiState.Empty("مفيش عناصر ظاهرة دلوقتي. أول عنصر جديد هتلاقيه هنا.")
@@ -74,8 +79,42 @@ fun HomeScreen(
         }
     }
 
+    suspend fun loadMore() {
+        val current = state as? HomeUiState.Content ?: return
+        if (!current.hasMore || current.loadingMore) return
+        state = current.copy(loadingMore = true)
+
+        var valid = validSession() ?: return
+        var feed = client.fetchFeed(valid, offset = current.items.size)
+        if (feed is HomeFeedResult.Failure && feed.unauthorized) {
+            valid = validSession(forceRefresh = true) ?: return
+            feed = client.fetchFeed(valid, offset = current.items.size)
+        }
+
+        state = when (feed) {
+            is HomeFeedResult.Success -> current.copy(
+                items = (current.items + feed.value.items).distinctBy { it.id },
+                hasMore = feed.value.hasMore,
+                loadingMore = false,
+            )
+            is HomeFeedResult.Failure -> HomeUiState.Error(feed.message)
+        }
+    }
+
     LaunchedEffect(initialSession.accessToken) {
         load()
+    }
+
+    val selected = selectedItemId
+    if (selected != null) {
+        ItemDetailScreen(
+            itemId = selected,
+            initialSession = session,
+            authRepository = authRepository,
+            onSessionUpdated = { session = it },
+            onBack = { selectedItemId = null },
+        )
+        return
     }
 
     when (val current = state) {
@@ -130,10 +169,7 @@ fun HomeScreen(
         is HomeUiState.Content -> {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 18.dp,
-                    vertical = 20.dp,
-                ),
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {
@@ -156,18 +192,22 @@ fun HomeScreen(
                 }
 
                 items(current.items, key = { it.id }) { item ->
-                    HomeFeedCard(item)
+                    HomeFeedCard(item = item, onOpen = { selectedItemId = item.id })
                 }
 
                 if (current.hasMore) {
                     item {
-                        Text(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            text = "في عناصر أكتر — تحميل الصفحات التالية هيتنقل في الخطوة الجاية.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !current.loadingMore,
+                            onClick = { scope.launch { loadMore() } },
+                        ) {
+                            if (current.loadingMore) {
+                                CircularProgressIndicator(modifier = Modifier.height(22.dp))
+                            } else {
+                                Text("تحميل عناصر أكتر")
+                            }
+                        }
                     }
                 }
 
@@ -185,33 +225,48 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeFeedCard(item: HomeFeedItem) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+private fun HomeFeedCard(
+    item: HomeFeedItem,
+    onOpen: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onOpen,
+    ) {
+        Column {
+            NetworkImage(
+                url = item.coverImageUrl,
+                contentDescription = item.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(210.dp),
             )
-            val meta = listOfNotNull(item.category, item.condition, item.city).joinToString(" • ")
-            if (meta.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(meta, style = MaterialTheme.typography.bodySmall)
-            }
-            item.description?.takeIf { it.isNotBlank() }?.let { description ->
-                Spacer(Modifier.height(8.dp))
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 3,
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-            item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { owner ->
-                Spacer(Modifier.height(10.dp))
-                Text("بواسطة $owner", style = MaterialTheme.typography.labelMedium)
+                val meta = listOfNotNull(item.category, item.condition, item.city).joinToString(" • ")
+                if (meta.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(meta, style = MaterialTheme.typography.bodySmall)
+                }
+                item.description?.takeIf { it.isNotBlank() }?.let { description ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { owner ->
+                    Spacer(Modifier.height(10.dp))
+                    Text("بواسطة $owner", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }
