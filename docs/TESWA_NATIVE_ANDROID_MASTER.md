@@ -26,6 +26,7 @@ The current package responsibilities are:
 - `home/`: marketplace feed, pagination, item detail models and UI.
 - `feature/additem/`: listing draft recovery, media selection/upload, publish orchestration, and native creation UI.
 - `feature/messages/`: deal inbox, chronological text conversation, read state, reconnect polling, and composer state.
+- `feature/direct/`: privacy-aware direct inbox, message requests, accept/ignore, read state, and text conversation.
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
 - `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
 - `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
@@ -111,7 +112,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Native visual-system foundation: calm Teswa color, type, shape, light, and dark tokens
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
-- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling/completion and complete offer flow implemented; direct/contextual and voice remain)
+- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal and offer flows plus direct text/request handling implemented; contextual, direct-compose entry, and voice remain)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
 - [ ] Stories required by the current product
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal dispatch, and routes to native item/deal/offer surfaces implemented; push and future direct/contextual/profile routes remain)

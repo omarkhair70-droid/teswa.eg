@@ -24,6 +24,7 @@ import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationDestination
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NotificationsScreen
+import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 
@@ -48,6 +49,7 @@ fun AppShell(
     publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
+    directRepository: DirectRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -102,6 +104,7 @@ fun AppShell(
                 initialSession = session,
                 repository = messagingRepository,
                 offersRepository = offersRepository,
+                directRepository = directRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
                 initialDealId = externalDealId,

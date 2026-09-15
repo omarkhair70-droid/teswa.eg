@@ -47,12 +47,16 @@ import com.teswa.mobile.feature.offers.OffersStateHolder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.teswa.mobile.feature.direct.DirectContent
+import com.teswa.mobile.feature.direct.DirectRepository
+import com.teswa.mobile.feature.direct.DirectStateHolder
 
 @Composable
 fun MessagingScreen(
     initialSession: AuthSession,
     repository: MessagingRepository,
     offersRepository: OffersRepository,
+    directRepository: DirectRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     initialDealId: String? = null,
@@ -62,19 +66,22 @@ fun MessagingScreen(
 ) {
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
     val offersHolder = remember(initialSession.user.id, offersRepository) { OffersStateHolder(initialSession, offersRepository) }
+    val directHolder = remember(initialSession.user.id, directRepository) { DirectStateHolder(initialSession, directRepository) }
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf(InboxMode.MESSAGES) }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
         offersHolder.updateSession(initialSession)
+        directHolder.updateSession(initialSession)
         holder.load()
         offersHolder.load()
     }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(offersHolder.session.accessToken) { onSessionUpdated(offersHolder.session) }
+    LaunchedEffect(directHolder.session.accessToken) { onSessionUpdated(directHolder.session) }
     LaunchedEffect(holder.sessionExpired, offersHolder.sessionExpired) {
-        if (holder.sessionExpired || offersHolder.sessionExpired) onSessionExpired()
+        if (holder.sessionExpired || offersHolder.sessionExpired || directHolder.sessionExpired) onSessionExpired()
     }
     LaunchedEffect(initialDealId, initialOffers) {
         when {
@@ -111,14 +118,22 @@ fun MessagingScreen(
             Column {
                 Text("الرسائل", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    if (mode == InboxMode.MESSAGES) unreadLabel(holder.inboxState) else offerLabel(offersHolder.state),
+                    when (mode) {
+                        InboxMode.MESSAGES -> unreadLabel(holder.inboxState)
+                        InboxMode.OFFERS -> offerLabel(offersHolder.state)
+                        InboxMode.DIRECT -> "طلبات ومحادثات خارج الصفقات"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             OutlinedButton(onClick = {
                 scope.launch {
-                    if (mode == InboxMode.MESSAGES) holder.load(silent = true) else offersHolder.load(silent = true)
+                    when (mode) {
+                        InboxMode.MESSAGES -> holder.load(silent = true)
+                        InboxMode.OFFERS -> offersHolder.load(silent = true)
+                        InboxMode.DIRECT -> directHolder.load()
+                    }
                 }
             }) { Text("تحديث") }
         }
@@ -135,6 +150,10 @@ fun MessagingScreen(
                 },
                 modifier = Modifier.weight(1f),
             )
+            return@Column
+        }
+        if (mode == InboxMode.DIRECT) {
+            DirectContent(directHolder, Modifier.weight(1f))
             return@Column
         }
         holder.banner?.let { OfflineBanner(it) { scope.launch { holder.load(silent = true) } } }
@@ -168,7 +187,7 @@ fun MessagingScreen(
     }
 }
 
-private enum class InboxMode { MESSAGES, OFFERS }
+private enum class InboxMode { MESSAGES, OFFERS, DIRECT }
 
 @Composable
 private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) {
@@ -178,6 +197,7 @@ private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) 
     ) {
         HubModeChip("محادثات الصفقات", selected == InboxMode.MESSAGES, Modifier.weight(1f)) { onSelect(InboxMode.MESSAGES) }
         HubModeChip("العروض", selected == InboxMode.OFFERS, Modifier.weight(1f)) { onSelect(InboxMode.OFFERS) }
+        HubModeChip("مباشر", selected == InboxMode.DIRECT, Modifier.weight(1f)) { onSelect(InboxMode.DIRECT) }
     }
 }
 
