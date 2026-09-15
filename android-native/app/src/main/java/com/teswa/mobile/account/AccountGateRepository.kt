@@ -5,8 +5,10 @@ import com.teswa.mobile.auth.AuthSession
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
-class AccountGateRepository(context: Context) {
-    private val client = OracleAccountGateClient()
+class AccountGateRepository(
+    context: Context,
+    private val client: OracleAccountGateClient,
+) {
     private val cache = AccountGateCache(context.applicationContext)
 
     suspend fun check(session: AuthSession): AccountGateState = coroutineScope {
@@ -14,36 +16,55 @@ class AccountGateRepository(context: Context) {
         val profileDeferred = async { client.fetchProfile(session) }
         val policiesDeferred = async { client.fetchPolicyAcceptances(session) }
 
-        val profile = when (val result = profileDeferred.await()) {
-            is AccountGateResult.Success -> result.value
+        val profileResult = profileDeferred.await()
+        val profile = when (profileResult) {
+            is AccountGateResult.Success -> profileResult.value
             is AccountGateResult.Failure -> {
-                if (result.network && cachedVerified) {
-                    return@coroutineScope AccountGateState.Ready(session, null)
+                if (profileResult.network && cachedVerified) {
+                    return@coroutineScope AccountGateState.Ready(profileResult.session ?: session, null)
                 }
-                return@coroutineScope AccountGateState.Error(session, result.message)
+                return@coroutineScope AccountGateState.Error(
+                    session = profileResult.session ?: session,
+                    message = profileResult.message,
+                    sessionExpired = profileResult.unauthorized,
+                )
             }
         }
 
-        val policies = when (val result = policiesDeferred.await()) {
-            is AccountGateResult.Success -> result.value
+        val policyResult = policiesDeferred.await()
+        val policies = when (policyResult) {
+            is AccountGateResult.Success -> policyResult.value
             is AccountGateResult.Failure -> {
-                if (result.network && cachedVerified) {
-                    return@coroutineScope AccountGateState.Ready(session, profile)
+                if (policyResult.network && cachedVerified) {
+                    return@coroutineScope AccountGateState.Ready(
+                        policyResult.session ?: profileResult.session,
+                        profile,
+                    )
                 }
-                return@coroutineScope AccountGateState.Error(session, result.message)
+                return@coroutineScope AccountGateState.Error(
+                    session = policyResult.session ?: profileResult.session,
+                    message = policyResult.message,
+                    sessionExpired = policyResult.unauthorized,
+                )
             }
+        }
+
+        val activeSession = if (policyResult.session.accessToken != session.accessToken) {
+            policyResult.session
+        } else {
+            profileResult.session
         }
 
         if (profile == null || !profile.isComplete) {
-            return@coroutineScope AccountGateState.NeedsProfile(session)
+            return@coroutineScope AccountGateState.NeedsProfile(activeSession)
         }
 
         if (!requiredPoliciesAccepted(policies)) {
-            return@coroutineScope AccountGateState.NeedsPolicies(session, profile)
+            return@coroutineScope AccountGateState.NeedsPolicies(activeSession, profile)
         }
 
-        cache.markVerified(session.user.id)
-        AccountGateState.Ready(session, profile)
+        cache.markVerified(activeSession.user.id)
+        AccountGateState.Ready(activeSession, profile)
     }
 
     suspend fun saveProfile(
@@ -59,15 +80,23 @@ class AccountGateRepository(context: Context) {
         }
 
         return when (val result = client.setupProfile(session, cleanName, cleanUsername)) {
-            is AccountGateResult.Success -> check(session)
-            is AccountGateResult.Failure -> AccountGateState.Error(session, result.message)
+            is AccountGateResult.Success -> check(result.session)
+            is AccountGateResult.Failure -> AccountGateState.Error(
+                session = result.session ?: session,
+                message = result.message,
+                sessionExpired = result.unauthorized,
+            )
         }
     }
 
     suspend fun acceptPolicies(session: AuthSession): AccountGateState {
         return when (val result = client.recordRequiredPolicies(session)) {
-            is AccountGateResult.Success -> check(session)
-            is AccountGateResult.Failure -> AccountGateState.Error(session, result.message)
+            is AccountGateResult.Success -> check(result.session)
+            is AccountGateResult.Failure -> AccountGateState.Error(
+                session = result.session ?: session,
+                message = result.message,
+                sessionExpired = result.unauthorized,
+            )
         }
     }
 

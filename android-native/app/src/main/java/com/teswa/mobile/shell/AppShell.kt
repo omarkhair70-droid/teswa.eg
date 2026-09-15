@@ -23,9 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.home.HomeScreen
+import com.teswa.mobile.home.OracleHomeClient
 import kotlinx.coroutines.launch
 
 private enum class AppTab(
@@ -40,7 +40,7 @@ private enum class AppTab(
 @Composable
 fun AppShell(
     initialSession: AuthSession,
-    authRepository: AuthRepository,
+    homeClient: OracleHomeClient,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -63,7 +63,7 @@ fun AppShell(
         when (selectedTab) {
             AppTab.HOME -> HomeScreen(
                 initialSession = session,
-                authRepository = authRepository,
+                client = homeClient,
                 onSessionUpdated = { session = it },
                 onSignOut = onSignOut,
                 modifier = Modifier.padding(padding),
@@ -71,14 +71,14 @@ fun AppShell(
 
             AppTab.ADD -> PendingNativeScreen(
                 modifier = Modifier.padding(padding),
-                title = "اعرض حاجة للتبادل",
-                description = "شاشة إضافة العنصر هي الـvertical slice الجاية في النقل للـNative.",
+                title = "اعرض حاجة تستاهل فرصة جديدة",
+                description = "قريبًا: صور واضحة، تفاصيل بسيطة، ونشر مطمئن خطوة بخطوة.",
             )
 
             AppTab.MESSAGES -> PendingNativeScreen(
                 modifier = Modifier.padding(padding),
                 title = "الرسائل والعروض",
-                description = "المحادثات والعروض لسه على قائمة النقل، لكن الـApp Shell نفسه بقى Native.",
+                description = "قريبًا: عروض التبادل ومحادثاتك في مكان واحد هادي وواضح.",
             )
 
             AppTab.PROFILE -> ProfilePlaceholder(
@@ -151,7 +151,7 @@ private fun ProfilePlaceholder(
         }
         Spacer(Modifier.height(18.dp))
         Text(
-            text = "تفاصيل الملف والإعدادات هتتنقل هنا تدريجيًا من نسخة Expo.",
+            text = "هنا هتلاقي عناصرِك وبيانات حسابك وإعدادات الخصوصية.",
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))

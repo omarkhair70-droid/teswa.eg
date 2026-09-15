@@ -1,5 +1,7 @@
 package com.teswa.mobile.home
 
+import com.teswa.mobile.auth.AuthSession
+
 data class HomeFeedItem(
     val id: String,
     val title: String,
@@ -36,11 +38,15 @@ data class ItemDetail(
 )
 
 sealed interface HomeFeedResult<out T> {
-    data class Success<T>(val value: T) : HomeFeedResult<T>
+    data class Success<T>(
+        val value: T,
+        val session: AuthSession,
+    ) : HomeFeedResult<T>
     data class Failure(
         val message: String,
         val network: Boolean = false,
         val unauthorized: Boolean = false,
+        val session: AuthSession? = null,
     ) : HomeFeedResult<Nothing>
 }
 

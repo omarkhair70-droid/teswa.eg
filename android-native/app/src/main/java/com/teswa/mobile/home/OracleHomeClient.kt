@@ -1,79 +1,96 @@
 package com.teswa.mobile.home
 
-import com.teswa.mobile.BuildConfig
+import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthSession
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.teswa.mobile.auth.SessionAuthenticator
+import com.teswa.mobile.core.network.AuthenticatedOracleExecutor
+import com.teswa.mobile.core.network.AuthenticatedOracleResult
+import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
+import com.teswa.mobile.core.network.OracleRequest
+import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 
 class OracleHomeClient(
-    private val baseUrl: String = BuildConfig.TESWA_API_BASE_URL.trimEnd('/'),
-) {
-    suspend fun fetchFeed(
+    authenticator: SessionAuthenticator,
+    transport: OracleTransport = HttpUrlConnectionOracleTransport(),
+) : HomeRepository {
+    private val executor = AuthenticatedOracleExecutor(authenticator, transport)
+
+    override suspend fun fetchFeed(
         session: AuthSession,
-        offset: Int = 0,
-        limit: Int = 20,
-    ): HomeFeedResult<HomeFeedPage> = withContext(Dispatchers.IO) {
+        offset: Int,
+        limit: Int,
+    ): HomeFeedResult<HomeFeedPage> {
         val safeOffset = offset.coerceAtLeast(0)
         val safeLimit = limit.coerceIn(1, 40)
-        when (val response = request(
-            path = "/v1/marketplace/feed?offset=$safeOffset&limit=$safeLimit",
-            accessToken = session.accessToken,
+        return when (val result = executor.execute(
+            session,
+            OracleRequest(path = "/v1/marketplace/feed?offset=$safeOffset&limit=$safeLimit"),
         )) {
-            is Transport.Failure -> HomeFeedResult.Failure(
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> parsePage(result.value.body, result.session)
+                401 -> expired("انتهت الجلسة أثناء تحميل الرئيسية.", result.session)
+                else -> HomeFeedResult.Failure(
+                    message = "تعذر تحميل الرئيسية (${result.value.status}).",
+                    session = result.session,
+                )
+            }
+            is AuthenticatedOracleResult.NetworkFailure -> HomeFeedResult.Failure(
                 message = "تعذر تحميل العناصر الآن. جرّب مرة تانية.",
                 network = true,
+                session = result.session,
             )
-            is Transport.Response -> when (response.status) {
-                200 -> parsePage(response.body)
-                401 -> HomeFeedResult.Failure(
-                    message = "انتهت الجلسة أثناء تحميل الرئيسية.",
-                    unauthorized = true,
-                )
-                else -> HomeFeedResult.Failure(
-                    message = "تعذر تحميل الرئيسية (${response.status}).",
-                )
-            }
+            is AuthenticatedOracleResult.InvalidResponse -> HomeFeedResult.Failure(
+                message = "استجابة الرئيسية من الخادم غير صالحة.",
+                session = result.session,
+            )
+            is AuthenticatedOracleResult.SessionFailure -> result.failure.toHomeFailure()
         }
     }
 
-    suspend fun fetchDetail(
+    override suspend fun fetchDetail(
         session: AuthSession,
         itemId: String,
-    ): HomeFeedResult<ItemDetail> = withContext(Dispatchers.IO) {
+    ): HomeFeedResult<ItemDetail> {
         val normalizedId = itemId.trim()
         if (!UUID_LIKE.matches(normalizedId)) {
-            return@withContext HomeFeedResult.Failure("معرّف العنصر غير صالح.")
+            return HomeFeedResult.Failure("معرّف العنصر غير صالح.", session = session)
         }
 
-        when (val response = request(
-            path = "/v1/marketplace/items/$normalizedId/detail",
-            accessToken = session.accessToken,
+        return when (val result = executor.execute(
+            session,
+            OracleRequest(path = "/v1/marketplace/items/$normalizedId/detail"),
         )) {
-            is Transport.Failure -> HomeFeedResult.Failure(
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> parseDetail(result.value.body, result.session)
+                401 -> expired("انتهت الجلسة أثناء تحميل العنصر.", result.session)
+                404 -> HomeFeedResult.Failure(
+                    message = "العنصر مش موجود أو لم يعد متاحًا.",
+                    session = result.session,
+                )
+                else -> HomeFeedResult.Failure(
+                    message = "تعذر تحميل تفاصيل العنصر (${result.value.status}).",
+                    session = result.session,
+                )
+            }
+            is AuthenticatedOracleResult.NetworkFailure -> HomeFeedResult.Failure(
                 message = "تعذر تحميل تفاصيل العنصر الآن.",
                 network = true,
+                session = result.session,
             )
-            is Transport.Response -> when (response.status) {
-                200 -> parseDetail(response.body)
-                401 -> HomeFeedResult.Failure(
-                    message = "انتهت الجلسة أثناء تحميل العنصر.",
-                    unauthorized = true,
-                )
-                404 -> HomeFeedResult.Failure("العنصر مش موجود أو لم يعد متاحًا.")
-                else -> HomeFeedResult.Failure("تعذر تحميل تفاصيل العنصر (${response.status}).")
-            }
+            is AuthenticatedOracleResult.InvalidResponse -> HomeFeedResult.Failure(
+                message = "استجابة تفاصيل العنصر من الخادم غير صالحة.",
+                session = result.session,
+            )
+            is AuthenticatedOracleResult.SessionFailure -> result.failure.toHomeFailure()
         }
     }
 
-    private fun parsePage(body: JSONObject): HomeFeedResult<HomeFeedPage> {
+    private fun parsePage(body: JSONObject, session: AuthSession): HomeFeedResult<HomeFeedPage> {
         val rawItems = body.optJSONArray("items")
-            ?: return HomeFeedResult.Failure("استجابة الرئيسية غير مكتملة.")
+            ?: return HomeFeedResult.Failure("استجابة الرئيسية غير مكتملة.", session = session)
         if (!body.has("hasMore")) {
-            return HomeFeedResult.Failure("استجابة الرئيسية غير مكتملة.")
+            return HomeFeedResult.Failure("استجابة الرئيسية غير مكتملة.", session = session)
         }
 
         val items = buildList {
@@ -98,16 +115,16 @@ class OracleHomeClient(
         }
 
         return HomeFeedResult.Success(
-            HomeFeedPage(
-                items = items,
-                hasMore = body.optBoolean("hasMore", false),
-            ),
+            value = HomeFeedPage(items = items, hasMore = body.optBoolean("hasMore", false)),
+            session = session,
         )
     }
 
-    private fun parseDetail(body: JSONObject): HomeFeedResult<ItemDetail> {
+    private fun parseDetail(body: JSONObject, session: AuthSession): HomeFeedResult<ItemDetail> {
         val id = body.optString("id").trim()
-        if (id.isBlank()) return HomeFeedResult.Failure("استجابة تفاصيل العنصر غير مكتملة.")
+        if (id.isBlank()) {
+            return HomeFeedResult.Failure("استجابة تفاصيل العنصر غير مكتملة.", session = session)
+        }
 
         val images = buildList {
             val raw = body.optJSONArray("images")
@@ -121,7 +138,7 @@ class OracleHomeClient(
         val owner = body.optJSONObject("ownerPresence")
 
         return HomeFeedResult.Success(
-            ItemDetail(
+            value = ItemDetail(
                 id = id,
                 title = nullable(body, "title") ?: "عنصر بدون عنوان",
                 description = nullable(body, "description"),
@@ -138,42 +155,27 @@ class OracleHomeClient(
                 swapReason = nullable(body, "swapReason"),
                 goodFor = nullable(body, "goodFor"),
             ),
+            session = session,
         )
     }
+
+    private fun AuthResult.Failure.toHomeFailure(): HomeFeedResult.Failure {
+        return HomeFeedResult.Failure(
+            message = message,
+            network = reason == AuthResult.Reason.NETWORK,
+            unauthorized = reason == AuthResult.Reason.SESSION_EXPIRED,
+        )
+    }
+
+    private fun expired(message: String, session: AuthSession) = HomeFeedResult.Failure(
+        message = message,
+        unauthorized = true,
+        session = session,
+    )
 
     private fun nullable(body: JSONObject, key: String): String? {
         if (!body.has(key) || body.isNull(key)) return null
         return body.optString(key).trim().takeIf { it.isNotEmpty() }
-    }
-
-    private fun request(path: String, accessToken: String): Transport {
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 8_000
-                readTimeout = 12_000
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("Authorization", "Bearer $accessToken")
-                setRequestProperty("User-Agent", "TeswaNative/${BuildConfig.VERSION_NAME} Android")
-            }
-            val status = connection.responseCode
-            val stream = if (status in 200..399) connection.inputStream else connection.errorStream
-            val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            val body = runCatching {
-                if (raw.isBlank()) JSONObject() else JSONObject(raw)
-            }.getOrElse { JSONObject() }
-            Transport.Response(status, body)
-        } catch (error: IOException) {
-            Transport.Failure(error)
-        } finally {
-            connection?.disconnect()
-        }
-    }
-
-    private sealed interface Transport {
-        data class Response(val status: Int, val body: JSONObject) : Transport
-        data class Failure(val error: IOException) : Transport
     }
 
     private companion object {

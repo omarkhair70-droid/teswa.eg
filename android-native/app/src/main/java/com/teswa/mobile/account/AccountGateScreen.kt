@@ -56,6 +56,20 @@ fun AccountGateScreen(
         return
     }
 
+    if (current is AccountGateState.Error && current.sessionExpired) {
+        LaunchedEffect(current.session.accessToken) { onSignOut() }
+        Column(
+            modifier = modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(14.dp))
+            Text("انتهت الجلسة. بنرجعك لتسجيل الدخول…")
+        }
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()

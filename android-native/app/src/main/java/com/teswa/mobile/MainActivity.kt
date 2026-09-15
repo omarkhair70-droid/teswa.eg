@@ -28,24 +28,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.account.AccountGateRepository
 import com.teswa.mobile.account.AccountGateScreen
+import com.teswa.mobile.app.AppContainer
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
+import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.shell.AppShell
+import com.teswa.mobile.ui.theme.TeswaTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val authRepository = AuthRepository(applicationContext)
-        val accountGateRepository = AccountGateRepository(applicationContext)
+        val container = AppContainer(applicationContext)
 
         setContent {
-            MaterialTheme {
+            TeswaTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TeswaAuthScreen(
-                        repository = authRepository,
-                        accountGateRepository = accountGateRepository,
+                        repository = container.authRepository,
+                        accountGateRepository = container.accountGateRepository,
+                        homeClient = container.homeClient,
                         activity = this@MainActivity,
                     )
                 }
@@ -58,6 +61,7 @@ class MainActivity : ComponentActivity() {
 private fun TeswaAuthScreen(
     repository: AuthRepository,
     accountGateRepository: AccountGateRepository,
+    homeClient: OracleHomeClient,
     activity: ComponentActivity,
 ) {
     var state by remember { mutableStateOf<AuthUiState>(AuthUiState.Restoring) }
@@ -83,7 +87,7 @@ private fun TeswaAuthScreen(
                 readyContent = { readySession, _ ->
                     AppShell(
                         initialSession = readySession,
-                        authRepository = repository,
+                        homeClient = homeClient,
                         onSignOut = {
                             repository.signOut()
                             state = AuthUiState.SignedOut

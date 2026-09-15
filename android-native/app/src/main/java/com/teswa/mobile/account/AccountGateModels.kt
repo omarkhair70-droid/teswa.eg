@@ -18,11 +18,15 @@ data class PolicyAcceptance(
 )
 
 sealed interface AccountGateResult<out T> {
-    data class Success<T>(val value: T) : AccountGateResult<T>
+    data class Success<T>(
+        val value: T,
+        val session: AuthSession,
+    ) : AccountGateResult<T>
     data class Failure(
         val message: String,
         val network: Boolean = false,
         val unauthorized: Boolean = false,
+        val session: AuthSession? = null,
     ) : AccountGateResult<Nothing>
 }
 
@@ -31,7 +35,11 @@ sealed interface AccountGateState {
     data class NeedsProfile(val session: AuthSession) : AccountGateState
     data class NeedsPolicies(val session: AuthSession, val profile: AccountProfile) : AccountGateState
     data class Ready(val session: AuthSession, val profile: AccountProfile?) : AccountGateState
-    data class Error(val session: AuthSession, val message: String) : AccountGateState
+    data class Error(
+        val session: AuthSession,
+        val message: String,
+        val sessionExpired: Boolean = false,
+    ) : AccountGateState
 }
 
 object RequiredPolicies {

@@ -19,17 +19,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.teswa.mobile.auth.AuthRepository
-import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
@@ -38,44 +33,28 @@ import kotlinx.coroutines.launch
 fun ItemDetailScreen(
     itemId: String,
     initialSession: AuthSession,
-    authRepository: AuthRepository,
+    client: OracleHomeClient,
     onSessionUpdated: (AuthSession) -> Unit,
+    onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
 ) {
-    val client = remember { OracleHomeClient() }
-    var session by remember(initialSession.accessToken) { mutableStateOf(initialSession) }
-    var state by remember(itemId) { mutableStateOf<ItemDetailUiState>(ItemDetailUiState.Loading) }
+    val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
 
-    suspend fun load(forceRefresh: Boolean = false) {
-        state = ItemDetailUiState.Loading
-        val valid = when (val result = authRepository.ensureValid(session, forceRefresh = forceRefresh)) {
-            is AuthResult.Success -> result.value
-            is AuthResult.Failure -> {
-                state = ItemDetailUiState.Error(result.message)
-                return
-            }
-        }
-        session = valid
-        onSessionUpdated(valid)
-
-        when (val detail = client.fetchDetail(valid, itemId)) {
-            is HomeFeedResult.Success -> state = ItemDetailUiState.Content(detail.value)
-            is HomeFeedResult.Failure -> {
-                if (detail.unauthorized && !forceRefresh) {
-                    load(forceRefresh = true)
-                } else {
-                    state = ItemDetailUiState.Error(detail.message)
-                }
-            }
-        }
-    }
-
     LaunchedEffect(itemId, initialSession.accessToken) {
-        load()
+        holder.updateSession(initialSession)
+        holder.load()
     }
 
-    when (val current = state) {
+    LaunchedEffect(holder.session.accessToken) {
+        onSessionUpdated(holder.session)
+    }
+
+    LaunchedEffect(holder.sessionExpired) {
+        if (holder.sessionExpired) onSessionExpired()
+    }
+
+    when (val current = holder.state) {
         ItemDetailUiState.Loading -> {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -98,7 +77,7 @@ fun ItemDetailScreen(
             ) {
                 Text(current.message)
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { scope.launch { load() } }) { Text("إعادة المحاولة") }
+                Button(onClick = { scope.launch { holder.load() } }) { Text("إعادة المحاولة") }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onBack) { Text("رجوع") }
             }
