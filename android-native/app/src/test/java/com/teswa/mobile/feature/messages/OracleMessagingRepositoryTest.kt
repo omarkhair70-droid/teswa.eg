@@ -106,6 +106,40 @@ class OracleMessagingRepositoryTest {
         assertEquals(listOf("الأقدم", "الأحدث"), result.value.map { it.body })
         assertEquals("/v1/deals/$dealId/messages?limit=100&offset=0&order=desc", transport.requests.single().path)
     }
+
+    @Test
+    fun loadsDealConfirmationParticipants() = runBlocking {
+        val transport = QueueTransport(
+            OracleTransportResult.Response(OracleResponse(200, JSONObject("""{"userIds":["$userId","$otherId"]}"""))),
+        )
+
+        val result = OracleMessagingRepository(authenticator, transport).loadConfirmations(session, dealId)
+
+        assertEquals(setOf(userId, otherId), (result as MessagingResult.Success).value)
+        assertEquals("/v1/deals/$dealId/confirmations", transport.requests.single().path)
+    }
+
+    @Test
+    fun confirmationThenCompletionUseExactOracleContracts() = runBlocking {
+        val transport = QueueTransport(
+            OracleTransportResult.Response(OracleResponse(200, JSONObject().put("ok", true))),
+            OracleTransportResult.Response(OracleResponse(200, JSONObject().put("completed", false))),
+        )
+        val conversation = DealConversation(
+            dealId, "coordinating", "كاميرا", "كتاب", otherId, "سلمى", null, null, 0,
+            "2026-09-15T12:00:00Z",
+        )
+
+        val result = OracleMessagingRepository(authenticator, transport).confirmCompletion(session, conversation)
+
+        assertTrue(result is MessagingResult.Success && !result.value)
+        assertEquals(listOf("/v1/deals/$dealId/confirmations", "/v1/deals/$dealId/complete"), transport.requests.map { it.path })
+        val confirmation = requireNotNull(transport.requests.first().body)
+        assertEquals(setOf("userId", "note"), confirmation.keys().asSequence().toSet())
+        assertEquals(userId, confirmation.getString("userId"))
+        assertTrue(confirmation.isNull("note"))
+        assertEquals(0, requireNotNull(transport.requests.last().body).length())
+    }
 }
 
 private class QueueTransport(vararg results: OracleTransportResult) : OracleTransport {

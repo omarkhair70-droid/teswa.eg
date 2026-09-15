@@ -74,4 +74,10 @@ private class FakeMessagingRepository(
         markReadCalls += 1
         return MessagingResult.Success(Unit, this.session)
     }
+
+    override suspend fun loadConfirmations(session: AuthSession, dealId: String): MessagingResult<Set<String>> =
+        MessagingResult.Success(emptySet(), this.session)
+
+    override suspend fun confirmCompletion(session: AuthSession, conversation: DealConversation): MessagingResult<Boolean> =
+        MessagingResult.Success(false, this.session)
 }

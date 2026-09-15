@@ -65,7 +65,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Home marketplace feed | Implemented | `GET /v1/marketplace/feed` |
 | Item detail and images | Implemented | `GET /v1/marketplace/items/{itemId}/detail` |
 | Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
-| Deal inbox and text coordination | Implemented locally; realtime/device acceptance remains open | `GET /v1/deals/inbox`, deal messages, read marker |
+| Deal inbox, text coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, confirmations, complete-if-ready, completion notifications |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own/public profiles and listing lifecycle | Implemented locally; avatar/trust/device acceptance remains open | own/public profile, owner active listings, follow/block state and actions, listing lifecycle |
@@ -111,7 +111,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Native visual-system foundation: calm Teswa color, type, shape, light, and dark tokens
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
-- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling and complete offer create/inbox/decision flow implemented; direct/contextual and voice remain)
+- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling/completion and complete offer flow implemented; direct/contextual and voice remain)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
 - [ ] Stories required by the current product
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal dispatch, and routes to native item/deal/offer surfaces implemented; push and future direct/contextual/profile routes remain)

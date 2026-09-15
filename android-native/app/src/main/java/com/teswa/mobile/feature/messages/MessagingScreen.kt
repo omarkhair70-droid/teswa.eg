@@ -304,13 +304,14 @@ private fun DealThreadScreen(holder: MessagingStateHolder, conversation: DealCon
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                item { DealCompletionCard(holder, conversation) }
                 if (state.messages.isEmpty()) item { ThreadWelcome(conversation) }
                 items(state.messages, key = { it.id }) { message ->
                     MessageBubble(message, mine = message.senderId == holder.session.user.id)
                 }
             }
         }
-        if (holder.threadState is ThreadUiState.Content) {
+        if (holder.threadState is ThreadUiState.Content && conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
             Surface(shadowElevation = 8.dp) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -333,6 +334,55 @@ private fun DealThreadScreen(holder: MessagingStateHolder, conversation: DealCon
             }
         }
     }
+}
+
+@Composable
+private fun DealCompletionCard(holder: MessagingStateHolder, conversation: DealConversation) {
+    val scope = rememberCoroutineScope()
+    val mine = holder.session.user.id in holder.confirmationUserIds
+    val other = conversation.otherParticipantId in holder.confirmationUserIds
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = if (conversation.status == "completed") MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(dealStatusTitle(conversation.status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(dealStatusDescription(conversation.status), style = MaterialTheme.typography.bodySmall)
+            if (conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (mine) "✓ أنت أكدت" else "○ تأكيدك مستني", style = MaterialTheme.typography.labelMedium)
+                    Text(if (other) "✓ الطرف التاني أكد" else "○ تأكيده مستني", style = MaterialTheme.typography.labelMedium)
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { scope.launch { holder.confirmCompletion() } },
+                    enabled = !mine && !holder.confirmingCompletion,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (holder.confirmingCompletion) "جاري التأكيد…" else if (mine) "تم تسجيل تأكيدك" else "أكد إن المقايضة تمت") }
+            }
+        }
+    }
+}
+
+private fun dealStatusTitle(status: String) = when (status) {
+    "coordinating" -> "الصفقة قيد التنسيق"
+    "completed_pending_confirmation" -> "مستنيين تأكيد الطرفين"
+    "completed" -> "المقايضة تمت"
+    "cancelled" -> "الصفقة اتلغت"
+    "disputed" -> "الصفقة محل مراجعة"
+    else -> "حالة الصفقة"
+}
+
+private fun dealStatusDescription(status: String) = when (status) {
+    "coordinating" -> "اتفقوا على التسليم، وبعد التنفيذ كل طرف يأكد من هنا."
+    "completed_pending_confirmation" -> "طرف أكد الإتمام، ومستنيين التأكيد التاني."
+    "completed" -> "الطرفين أكدوا التبديل وتم إغلاق الصفقة بنجاح."
+    "cancelled" -> "المحادثة محفوظة كسجل، لكن الصفقة لم تعد نشطة."
+    "disputed" -> "التنسيق متوقف لحين مراجعة الحالة."
+    else -> status
 }
 
 @Composable

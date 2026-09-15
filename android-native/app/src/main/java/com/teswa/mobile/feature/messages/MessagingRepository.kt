@@ -18,6 +18,8 @@ interface MessagingRepository {
     suspend fun loadMessages(session: AuthSession, dealId: String): MessagingResult<List<DealMessage>>
     suspend fun sendText(session: AuthSession, dealId: String, recipientUserId: String, body: String): MessagingResult<DealMessage>
     suspend fun markRead(session: AuthSession, dealId: String): MessagingResult<Unit>
+    suspend fun loadConfirmations(session: AuthSession, dealId: String): MessagingResult<Set<String>>
+    suspend fun confirmCompletion(session: AuthSession, conversation: DealConversation): MessagingResult<Boolean>
 }
 
 class OracleMessagingRepository(
@@ -156,6 +158,78 @@ class OracleMessagingRepository(
         }
     }
 
+    override suspend fun loadConfirmations(session: AuthSession, dealId: String): MessagingResult<Set<String>> {
+        val id = dealId.validId() ?: return MessagingResult.Failure("معرّف الصفقة غير صالح.", session)
+        return when (val result = executor.execute(session, OracleRequest(path = "/v1/deals/$id/confirmations"))) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> {
+                    val raw = result.value.body.optJSONArray("userIds")
+                        ?: return MessagingResult.Failure("استجابة تأكيدات الصفقة غير مكتملة.", result.session)
+                    val users = buildSet {
+                        for (index in 0 until raw.length()) raw.optString(index).validId()?.let(::add)
+                    }
+                    MessagingResult.Success(users, result.session)
+                }
+                401 -> expired(result.session)
+                404 -> MessagingResult.Failure("الصفقة غير موجودة أو غير متاحة.", result.session)
+                else -> MessagingResult.Failure("تعذر تحميل تأكيدات الصفقة.", result.session)
+            }
+            else -> result.toFailure("تعذر تحميل تأكيدات الصفقة الآن.")
+        }
+    }
+
+    override suspend fun confirmCompletion(
+        session: AuthSession,
+        conversation: DealConversation,
+    ): MessagingResult<Boolean> {
+        val id = conversation.dealId.validId() ?: return MessagingResult.Failure("معرّف الصفقة غير صالح.", session)
+        if (conversation.status !in COORDINATING) return MessagingResult.Failure("حالة الصفقة لا تسمح بالتأكيد.", session)
+        val confirmation = executor.execute(
+            session,
+            OracleRequest(
+                OracleHttpMethod.POST,
+                "/v1/deals/$id/confirmations",
+                JSONObject().put("userId", session.user.id).put("note", JSONObject.NULL),
+            ),
+        )
+        if (confirmation !is AuthenticatedOracleResult.Response) return confirmation.toFailure("تعذر تسجيل تأكيدك الآن.")
+        if (confirmation.value.status == 401) return expired(confirmation.session)
+        if (confirmation.value.status != 200 || !confirmation.value.body.optBoolean("ok")) {
+            return MessagingResult.Failure("تعذر تسجيل تأكيدك (${confirmation.value.status}).", confirmation.session)
+        }
+        val completion = executor.execute(
+            confirmation.session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/deals/$id/complete", JSONObject()),
+        )
+        if (completion !is AuthenticatedOracleResult.Response) return completion.toFailure("تم تسجيل تأكيدك، لكن تعذر تحديث حالة الصفقة.")
+        if (completion.value.status == 401) return expired(completion.session)
+        if (completion.value.status != 200 || !completion.value.body.has("completed")) {
+            return MessagingResult.Failure("تم تسجيل تأكيدك، لكن استجابة إتمام الصفقة غير صالحة.", completion.session)
+        }
+        val completed = completion.value.body.optBoolean("completed")
+        var updatedSession = completion.session
+        val dispatcher = notificationDispatcher
+        if (dispatcher != null) {
+            if (completed) {
+                val notice = NotificationDispatch(
+                    conversation.otherParticipantId, "deal_completed", "المقايضة تمت",
+                    "الطرفين أكدوا الإتمام. تقدروا تسيبوا تقييم لبعض.", dealId = id,
+                )
+                updatedSession = dispatcher.dispatch(updatedSession, notice)
+                updatedSession = dispatcher.dispatch(updatedSession, notice.copy(targetUserId = session.user.id))
+            } else {
+                updatedSession = dispatcher.dispatch(
+                    updatedSession,
+                    NotificationDispatch(
+                        conversation.otherParticipantId, "deal_completion_confirmation_needed",
+                        "الصفقة مستنية تأكيدك", "الطرف التاني أكد إن المقايضة تمت.", dealId = id,
+                    ),
+                )
+            }
+        }
+        return MessagingResult.Success(completed, updatedSession)
+    }
+
     private suspend fun loadItemTitles(session: AuthSession, ids: List<String>): MessagingResult<Map<String, String>> {
         val value = ids.joinToString(",")
         return when (val result = executor.execute(
@@ -248,5 +322,6 @@ class OracleMessagingRepository(
 
     private companion object {
         val UUID_LIKE = Regex("^[0-9a-fA-F-]{36}$")
+        val COORDINATING = setOf("coordinating", "completed_pending_confirmation")
     }
 }

@@ -43,6 +43,10 @@ class MessagingStateHolder(
         private set
     var sessionExpired by mutableStateOf(false)
         private set
+    var confirmationUserIds by mutableStateOf<Set<String>>(emptySet())
+        private set
+    var confirmingCompletion by mutableStateOf(false)
+        private set
 
     fun updateSession(updated: AuthSession) {
         if (updated.user.id == session.user.id && updated.accessToken != session.accessToken) session = updated
@@ -115,6 +119,10 @@ class MessagingStateHolder(
             is MessagingResult.Success -> {
                 session = result.session
                 threadState = ThreadUiState.Content(result.value)
+                when (val confirmations = repository.loadConfirmations(session, conversation.dealId)) {
+                    is MessagingResult.Success -> { session = confirmations.session; confirmationUserIds = confirmations.value }
+                    is MessagingResult.Failure -> { confirmations.session?.let { session = it }; if (!confirmations.unauthorized) banner = confirmations.message }
+                }
                 val read = repository.markRead(session, conversation.dealId)
                 if (read is MessagingResult.Success) {
                     session = read.session
@@ -142,6 +150,7 @@ class MessagingStateHolder(
         threadState = ThreadUiState.Idle
         composer = ""
         banner = null
+        confirmationUserIds = emptySet()
     }
 
     fun updateComposer(value: String) {
@@ -182,6 +191,26 @@ class MessagingStateHolder(
             }
         }
         sending = false
+    }
+
+    suspend fun confirmCompletion() {
+        val conversation = selectedConversation ?: return
+        if (confirmingCompletion || session.user.id in confirmationUserIds) return
+        confirmingCompletion = true
+        banner = null
+        when (val result = repository.confirmCompletion(session, conversation)) {
+            is MessagingResult.Success -> {
+                session = result.session
+                confirmationUserIds = confirmationUserIds + session.user.id
+                selectedConversation = conversation.copy(status = if (result.value) "completed" else "completed_pending_confirmation")
+            }
+            is MessagingResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                banner = if (result.unauthorized) null else result.message
+            }
+        }
+        confirmingCompletion = false
     }
 
     private fun markSelectedRead(dealId: String) {
