@@ -31,7 +31,7 @@ import com.teswa.mobile.account.AccountGateScreen
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
-import com.teswa.mobile.home.HomeScreen
+import com.teswa.mobile.shell.AppShell
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -81,7 +81,7 @@ private fun TeswaAuthScreen(
                     state = AuthUiState.SignedOut
                 },
                 readyContent = { readySession, _ ->
-                    HomeScreen(
+                    AppShell(
                         initialSession = readySession,
                         authRepository = repository,
                         onSignOut = {
