@@ -58,11 +58,12 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Required-policy gate | Implemented | `GET /v1/policies/acceptances`, `POST /v1/policies/acceptances` |
 | Home marketplace feed | Implemented | `GET /v1/marketplace/feed` |
 | Item detail and images | Implemented | `GET /v1/marketplace/items/{itemId}/detail` |
+| Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
 
-## Next Add Item contract
+## Add Item contract and native implementation
 
-The legacy screen establishes useful behavior, not a layout to copy. The native screen's primary job is to help a user publish a trustworthy swap listing with the least uncertainty. Images, a clear title/category, honest condition, and desired swap intent deserve priority; long-form story fields can be progressive disclosure.
+The legacy screen establishes useful behavior, not a layout to copy. The native screen's primary job is to help a user publish a trustworthy swap listing with the least uncertainty. The implemented native flow uses three focused stages: identity and images, honest condition and useful detail, then swap intent and optional human context. It has a distinct native presentation rather than reproducing the legacy six-step layout.
 
 The existing Oracle contract must be reused:
 
@@ -77,6 +78,8 @@ The existing Oracle contract must be reused:
 - failure compensation through `POST /v1/marketplace/items/{itemId}/publish-failed` and image cleanup
 
 Publish invariants already enforced by Oracle include one to eight HTTPS images, first image as the sole primary image, stable sort order, four supported condition values, three desire modes, UUID ownership, bounded text, and owned object keys. Native validation should prevent avoidable requests but must not weaken server validation.
+
+The Android implementation currently accepts up to four persisted gallery documents or camera captures, resolves real MIME type and byte length, streams each object with fixed `Content-Length`, reports per-image progress, and supports user cancellation. A cancellation or failed publish performs best-effort compensating object cleanup while keeping the local draft. Text and media metadata are recovered per signed-in user after process restart; gallery access uses persistable URI grants.
 
 ## Native product and visual direction
 
@@ -95,7 +98,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Home feed, images, pagination, and item detail
 - [x] Native visual-system foundation: calm Teswa color, type, shape, light, and dark tokens
 - [ ] Final navigation architecture and feature-level reusable components
-- [ ] Add Item: image selection/camera, upload, validation, publish, retry, progress, and draft recovery
+- [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
 - [ ] Messages, offers, deals, unread state, and reconnect behavior
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle
 - [ ] Stories required by the current product
@@ -112,7 +115,7 @@ Before a major screen is built, record its user job, information priority, prima
 - Local unit tests and `assembleDebug` do not prove Google provider, physical-device, Play-update, sender/inbox, OCI deployment, or production acceptance.
 - Public Oracle/Edge and full production cutover evidence must be checked independently; Supabase remains the production and rollback authority until an explicitly approved cutover.
 - The visual-system foundation exists, but feature-level primitives and the final navigation presentation are still incomplete.
-- Add Item media upload must stream bytes safely and expose progress/cancellation; reading large video files wholly into memory is not an acceptable native implementation.
+- Add Item image upload now streams bytes safely and exposes progress/cancellation; physical-device camera/gallery behavior and production object upload remain acceptance gates. Reading large video files wholly into memory is not an acceptable future implementation.
 - `lintDebug` is green with baseline warnings that still need deliberate release work: target API review, Credential Manager mutable-context handling, application icon/data-extraction rules, KTX preferences cleanup, and dependency update review.
 
 ## Expo removal criteria

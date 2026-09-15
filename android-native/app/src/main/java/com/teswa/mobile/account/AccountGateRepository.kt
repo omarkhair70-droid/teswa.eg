@@ -1,6 +1,7 @@
 package com.teswa.mobile.account
 
 import android.content.Context
+import androidx.core.content.edit
 import com.teswa.mobile.auth.AuthSession
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -121,10 +122,10 @@ private class AccountGateCache(context: Context) {
     private val prefs = context.getSharedPreferences("teswa_native_account_gate", Context.MODE_PRIVATE)
 
     fun markVerified(userId: String) {
-        prefs.edit()
-            .putString(key(userId, "fingerprint"), RequiredPolicies.FINGERPRINT)
-            .putLong(key(userId, "verified_at"), System.currentTimeMillis())
-            .apply()
+        prefs.edit {
+            putString(key(userId, "fingerprint"), RequiredPolicies.FINGERPRINT)
+            putLong(key(userId, "verified_at"), System.currentTimeMillis())
+        }
     }
 
     fun isVerified(userId: String): Boolean {
@@ -135,10 +136,10 @@ private class AccountGateCache(context: Context) {
     }
 
     fun clear(userId: String) {
-        prefs.edit()
-            .remove(key(userId, "fingerprint"))
-            .remove(key(userId, "verified_at"))
-            .apply()
+        prefs.edit {
+            remove(key(userId, "fingerprint"))
+            remove(key(userId, "verified_at"))
+        }
     }
 
     private fun key(userId: String, suffix: String) = "$userId:$suffix"

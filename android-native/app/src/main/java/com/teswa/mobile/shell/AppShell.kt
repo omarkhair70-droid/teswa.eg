@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.additem.AddItemRepository
+import com.teswa.mobile.feature.additem.AddItemScreen
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 import kotlinx.coroutines.launch
@@ -41,6 +43,7 @@ private enum class AppTab(
 fun AppShell(
     initialSession: AuthSession,
     homeClient: OracleHomeClient,
+    addItemRepository: AddItemRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -69,10 +72,13 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
             )
 
-            AppTab.ADD -> PendingNativeScreen(
+            AppTab.ADD -> AddItemScreen(
+                initialSession = session,
+                repository = addItemRepository,
+                onSessionUpdated = { session = it },
+                onSessionExpired = onSignOut,
+                onPublished = { selectedTab = AppTab.HOME },
                 modifier = Modifier.padding(padding),
-                title = "اعرض حاجة تستاهل فرصة جديدة",
-                description = "قريبًا: صور واضحة، تفاصيل بسيطة، ونشر مطمئن خطوة بخطوة.",
             )
 
             AppTab.MESSAGES -> PendingNativeScreen(

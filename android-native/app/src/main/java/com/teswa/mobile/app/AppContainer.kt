@@ -6,6 +6,8 @@ import com.teswa.mobile.account.OracleAccountGateClient
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.OracleAuthClient
 import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
+import com.teswa.mobile.feature.additem.AndroidAddItemContentSource
+import com.teswa.mobile.feature.additem.OracleAddItemRepository
 import com.teswa.mobile.home.OracleHomeClient
 
 class AppContainer(context: Context) {
@@ -23,4 +25,10 @@ class AppContainer(context: Context) {
     )
 
     val homeClient = OracleHomeClient(authRepository, oracleTransport)
+
+    val addItemRepository = OracleAddItemRepository(
+        authenticator = authRepository,
+        contentSource = AndroidAddItemContentSource(appContext.contentResolver),
+        transport = oracleTransport,
+    )
 }
