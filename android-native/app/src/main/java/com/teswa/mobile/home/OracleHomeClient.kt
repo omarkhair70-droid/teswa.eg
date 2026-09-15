@@ -40,6 +40,35 @@ class OracleHomeClient(
         }
     }
 
+    suspend fun fetchDetail(
+        session: AuthSession,
+        itemId: String,
+    ): HomeFeedResult<ItemDetail> = withContext(Dispatchers.IO) {
+        val normalizedId = itemId.trim()
+        if (!UUID_LIKE.matches(normalizedId)) {
+            return@withContext HomeFeedResult.Failure("معرّف العنصر غير صالح.")
+        }
+
+        when (val response = request(
+            path = "/v1/marketplace/items/$normalizedId/detail",
+            accessToken = session.accessToken,
+        )) {
+            is Transport.Failure -> HomeFeedResult.Failure(
+                message = "تعذر تحميل تفاصيل العنصر الآن.",
+                network = true,
+            )
+            is Transport.Response -> when (response.status) {
+                200 -> parseDetail(response.body)
+                401 -> HomeFeedResult.Failure(
+                    message = "انتهت الجلسة أثناء تحميل العنصر.",
+                    unauthorized = true,
+                )
+                404 -> HomeFeedResult.Failure("العنصر مش موجود أو لم يعد متاحًا.")
+                else -> HomeFeedResult.Failure("تعذر تحميل تفاصيل العنصر (${response.status}).")
+            }
+        }
+    }
+
     private fun parsePage(body: JSONObject): HomeFeedResult<HomeFeedPage> {
         val rawItems = body.optJSONArray("items")
             ?: return HomeFeedResult.Failure("استجابة الرئيسية غير مكتملة.")
@@ -72,6 +101,42 @@ class OracleHomeClient(
             HomeFeedPage(
                 items = items,
                 hasMore = body.optBoolean("hasMore", false),
+            ),
+        )
+    }
+
+    private fun parseDetail(body: JSONObject): HomeFeedResult<ItemDetail> {
+        val id = body.optString("id").trim()
+        if (id.isBlank()) return HomeFeedResult.Failure("استجابة تفاصيل العنصر غير مكتملة.")
+
+        val images = buildList {
+            val raw = body.optJSONArray("images")
+            if (raw != null) {
+                for (index in 0 until raw.length()) {
+                    val row = raw.optJSONObject(index) ?: continue
+                    nullable(row, "imageUrl")?.let(::add)
+                }
+            }
+        }
+        val owner = body.optJSONObject("ownerPresence")
+
+        return HomeFeedResult.Success(
+            ItemDetail(
+                id = id,
+                title = nullable(body, "title") ?: "عنصر بدون عنوان",
+                description = nullable(body, "description"),
+                condition = nullable(body, "condition"),
+                conditionNotes = nullable(body, "conditionNotes"),
+                category = nullable(body, "category"),
+                city = nullable(body, "city"),
+                area = nullable(body, "area"),
+                images = images,
+                ownerDisplayName = owner?.let { nullable(it, "displayName") },
+                ownerUsername = owner?.let { nullable(it, "username") },
+                desireText = nullable(body, "desireText"),
+                itemStory = nullable(body, "itemStory"),
+                swapReason = nullable(body, "swapReason"),
+                goodFor = nullable(body, "goodFor"),
             ),
         )
     }
@@ -109,5 +174,9 @@ class OracleHomeClient(
     private sealed interface Transport {
         data class Response(val status: Int, val body: JSONObject) : Transport
         data class Failure(val error: IOException) : Transport
+    }
+
+    private companion object {
+        val UUID_LIKE = Regex("^[0-9a-fA-F-]{36}$")
     }
 }
