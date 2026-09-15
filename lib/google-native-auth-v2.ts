@@ -109,9 +109,6 @@ export async function signInWithGoogleNative(options?: GoogleNativeSignInOptions
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
     emitGoogleNativeStep({ flow: 'native_step', step: 'play_services_check_done', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
 
-    // Do not sign the Google account out before every login attempt. The old flow
-    // invalidated the SDK's cached account state and forced a full provider round-trip
-    // on every retry, which made transient backend failures look like Google failures.
     emitGoogleNativeStep({ flow: 'native_step', step: 'native_signin_start', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION }, options);
     const userInfo = await GoogleSignin.signIn();
     if (!userInfo) return { status: 'empty', error: 'تعذر استلام نتيجة تسجيل الدخول من جوجل. حاول مرة تانية.', fallbackToBrowser: true, reason: 'empty_result', implementation: GOOGLE_NATIVE_AUTH_IMPLEMENTATION, moduleVersion: GOOGLE_NATIVE_AUTH_MODULE_VERSION };
