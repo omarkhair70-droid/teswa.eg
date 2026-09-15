@@ -25,7 +25,7 @@ DELIVERY_ROUTES = {'/v1/auth/sign-up', '/v1/auth/resend-confirmation'}
 DOMAIN_GET = (
     re.compile(r'^/v1/moderation/(?:admin|profiles/[0-9a-fA-F-]{36}|items/[0-9a-fA-F-]{36}/context)$'),
     re.compile(r'^/v1/moderation/admin/reports\?status=(?:all|open|reviewing|actioned|dismissed)&type=(?:all|user|item|story|deal|direct_message|deal_message)$'),
-    re.compile(r'^/v1/policies/acceptances\?userId=[0-9a-fA-F-]{36}&keys=[a-z_,]+$'),
+    re.compile(r'^/v1/policies/acceptances\?userId=[0-9a-fA-F-]{36}&keys=(?:[a-z_]|,|%2[Cc])+$'),
     re.compile(r'^/v1/dolab/(?:items|media|notes)\?userId=[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/dolab/items/[0-9a-fA-F-]{36}/publish-source\?userId=[0-9a-fA-F-]{36}$'),
     re.compile(r'^/v1/direct/conversations(?:/[0-9a-fA-F-]{36}(?:/(?:messages|native|typing))?)?(?:\?[^#]*)?$'),
