@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.teswa.mobile.account.AccountGateRepository
+import com.teswa.mobile.account.AccountGateScreen
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
@@ -36,12 +37,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val authRepository = AuthRepository(applicationContext)
+        val accountGateRepository = AccountGateRepository(applicationContext)
 
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TeswaAuthScreen(
                         repository = authRepository,
+                        accountGateRepository = accountGateRepository,
                         activity = this@MainActivity,
                     )
                 }
@@ -53,6 +56,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun TeswaAuthScreen(
     repository: AuthRepository,
+    accountGateRepository: AccountGateRepository,
     activity: ComponentActivity,
 ) {
     var state by remember { mutableStateOf<AuthUiState>(AuthUiState.Restoring) }
@@ -118,30 +122,14 @@ private fun TeswaAuthScreen(
             }
 
             is AuthUiState.SignedIn -> {
-                Text(
-                    text = "تم تسجيل الدخول",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = current.session.user.displayName
-                        ?: current.session.user.email
-                        ?: current.session.user.id,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(20.dp))
-                OutlinedButton(
-                    onClick = {
-                        state = AuthUiState.Working("جاري تسجيل الخروج…")
-                        scope.launch {
-                            repository.signOut()
-                            state = AuthUiState.SignedOut
-                        }
+                AccountGateScreen(
+                    session = current.session,
+                    repository = accountGateRepository,
+                    onSignOut = {
+                        repository.signOut()
+                        state = AuthUiState.SignedOut
                     },
-                ) {
-                    Text("تسجيل الخروج")
-                }
+                )
             }
 
             is AuthUiState.Error -> {
