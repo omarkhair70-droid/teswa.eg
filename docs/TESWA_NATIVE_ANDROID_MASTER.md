@@ -68,7 +68,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Deal inbox and text coordination | Implemented locally; realtime/device acceptance remains open | `GET /v1/deals/inbox`, deal messages, read marker |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
-| Own profile and listing lifecycle | Implemented locally; avatar/device acceptance remains open | `GET /v1/profiles/me`, `POST /v1/profiles/update`, `GET /v1/marketplace/mine`, listing archive/reactivate/delete-archived |
+| Own/public profiles and listing lifecycle | Implemented locally; avatar/trust/device acceptance remains open | own/public profile, owner active listings, follow/block state and actions, listing lifecycle |
 | Settings and account controls | Implemented locally; push permission/device acceptance remains open | profile privacy, notification preferences, blocked users/unblock, account deletion |
 | In-app notifications | Implemented locally; Android push/background acceptance remains open | list, read, read-all, domain dispatch |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
@@ -112,7 +112,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling and complete offer create/inbox/decision flow implemented; direct/contextual and voice remain)
-- [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own profile, editing, and listing lifecycle implemented; other profile and avatar remain)
+- [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
 - [ ] Stories required by the current product
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal dispatch, and routes to native item/deal/offer surfaces implemented; push and future direct/contextual/profile routes remain)
 - [ ] Nearby/location flows

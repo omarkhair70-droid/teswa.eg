@@ -45,6 +45,7 @@ fun ItemDetailScreen(
     onBack: () -> Unit,
     onOfferCreated: () -> Unit,
     onAddItem: () -> Unit,
+    onOpenOwner: (String) -> Unit,
 ) {
     val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
@@ -161,7 +162,14 @@ fun ItemDetailScreen(
 
                         val owner = detail.ownerDisplayName ?: detail.ownerUsername
                         if (!owner.isNullOrBlank()) {
-                            DetailSection("صاحب العنصر", owner)
+                            Spacer(Modifier.height(12.dp))
+                            Text("صاحب العنصر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(6.dp))
+                            if (detail.ownerId != null && detail.ownerId != holder.session.user.id) {
+                                OutlinedButton(onClick = { onOpenOwner(detail.ownerId) }, modifier = Modifier.fillMaxWidth()) { Text(owner) }
+                            } else {
+                                Text(owner, style = MaterialTheme.typography.bodyLarge)
+                            }
                         }
                         if (detail.ownerId != null && detail.ownerId != holder.session.user.id) {
                             Spacer(Modifier.height(18.dp))

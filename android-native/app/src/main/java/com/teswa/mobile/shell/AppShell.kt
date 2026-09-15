@@ -18,6 +18,7 @@ import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
+import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.profile.ProfileScreen
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationDestination
@@ -44,6 +45,7 @@ fun AppShell(
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
+    publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
     onSignOut: suspend () -> Unit,
@@ -53,6 +55,7 @@ fun AppShell(
     var externalItemId by remember { mutableStateOf<String?>(null) }
     var externalDealId by remember { mutableStateOf<String?>(null) }
     var openOffers by remember { mutableStateOf(false) }
+    var externalProfileId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         bottomBar = {
@@ -73,6 +76,7 @@ fun AppShell(
                 initialSession = session,
                 client = homeClient,
                 offersRepository = offersRepository,
+                publicProfileRepository = publicProfileRepository,
                 onSessionUpdated = { session = it },
                 onSignOut = onSignOut,
                 modifier = Modifier.padding(padding),
@@ -80,6 +84,8 @@ fun AppShell(
                 onAddItem = { selectedTab = AppTab.ADD },
                 externalItemId = externalItemId,
                 onExternalItemConsumed = { externalItemId = null },
+                externalProfileId = externalProfileId,
+                onExternalProfileConsumed = { externalProfileId = null },
             )
 
             AppTab.ADD -> AddItemScreen(
@@ -126,7 +132,10 @@ fun AppShell(
                             openOffers = true
                             selectedTab = AppTab.MESSAGES
                         }
-                        is NotificationDestination.Profile,
+                        is NotificationDestination.Profile -> {
+                            externalProfileId = destination.id
+                            selectedTab = AppTab.HOME
+                        }
                         is NotificationDestination.Direct,
                         is NotificationDestination.Contextual -> Unit
                     }

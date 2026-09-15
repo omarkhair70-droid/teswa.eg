@@ -22,6 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +32,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.profile.PublicProfileRepository
+import com.teswa.mobile.feature.profile.PublicProfileScreen
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -37,6 +42,7 @@ fun HomeScreen(
     initialSession: AuthSession,
     client: OracleHomeClient,
     offersRepository: OffersRepository,
+    publicProfileRepository: PublicProfileRepository,
     onSignOut: suspend () -> Unit,
     modifier: Modifier = Modifier,
     onSessionUpdated: (AuthSession) -> Unit = {},
@@ -44,9 +50,12 @@ fun HomeScreen(
     onAddItem: () -> Unit = {},
     externalItemId: String? = null,
     onExternalItemConsumed: () -> Unit = {},
+    externalProfileId: String? = null,
+    onExternalProfileConsumed: () -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
     val scope = rememberCoroutineScope()
+    var selectedProfileId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -67,6 +76,26 @@ fun HomeScreen(
             onExternalItemConsumed()
         }
     }
+    LaunchedEffect(externalProfileId) {
+        externalProfileId?.let {
+            selectedProfileId = it
+            onExternalProfileConsumed()
+        }
+    }
+
+    selectedProfileId?.let { profileId ->
+        PublicProfileScreen(
+            profileId = profileId,
+            initialSession = holder.session,
+            repository = publicProfileRepository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSignOut,
+            onBack = { selectedProfileId = null },
+            onOpenItem = { itemId -> selectedProfileId = null; holder.openItem(itemId) },
+            modifier = modifier,
+        )
+        return
+    }
 
     val selected = holder.selectedItemId
     if (selected != null) {
@@ -81,6 +110,7 @@ fun HomeScreen(
                 onBack = holder::closeItem,
                 onOfferCreated = onOfferCreated,
                 onAddItem = onAddItem,
+                onOpenOwner = { selectedProfileId = it },
             )
         }
         return

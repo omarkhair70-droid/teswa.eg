@@ -36,6 +36,7 @@ import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
+import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.home.OracleHomeClient
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
                         messagingRepository = container.messagingRepository,
                         offersRepository = container.offersRepository,
                         profileRepository = container.profileRepository,
+                        publicProfileRepository = container.publicProfileRepository,
                         settingsRepository = container.settingsRepository,
                         notificationsRepository = container.notificationsRepository,
                         activity = this@MainActivity,
@@ -78,6 +80,7 @@ private fun TeswaAuthScreen(
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
+    publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
     activity: ComponentActivity,
@@ -110,6 +113,7 @@ private fun TeswaAuthScreen(
                         messagingRepository = messagingRepository,
                         offersRepository = offersRepository,
                         profileRepository = profileRepository,
+                        publicProfileRepository = publicProfileRepository,
                         settingsRepository = settingsRepository,
                         notificationsRepository = notificationsRepository,
                         onSignOut = {

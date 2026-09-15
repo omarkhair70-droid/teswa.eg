@@ -12,6 +12,7 @@ import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.feature.messages.OracleMessagingRepository
 import com.teswa.mobile.feature.offers.OracleOffersRepository
 import com.teswa.mobile.feature.profile.OracleProfileRepository
+import com.teswa.mobile.feature.profile.OraclePublicProfileRepository
 import com.teswa.mobile.feature.settings.OracleSettingsRepository
 import com.teswa.mobile.feature.notifications.OracleNotificationsRepository
 import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
@@ -42,6 +43,7 @@ class AppContainer(context: Context) {
     val messagingRepository = OracleMessagingRepository(authRepository, oracleTransport, notificationDispatcher)
     val offersRepository = OracleOffersRepository(authRepository, oracleTransport, notificationDispatcher)
     val profileRepository = OracleProfileRepository(authRepository, oracleTransport)
+    val publicProfileRepository = OraclePublicProfileRepository(authRepository, oracleTransport)
     val settingsRepository = OracleSettingsRepository(authRepository, oracleTransport)
     val notificationsRepository = OracleNotificationsRepository(authRepository, oracleTransport)
 }
