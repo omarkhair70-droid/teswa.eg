@@ -41,25 +41,32 @@ class AuthRepository(context: Context) {
             }
             is AuthResult.Failure -> when (validated.reason) {
                 AuthResult.Reason.NETWORK -> AuthResult.Success(local)
-                AuthResult.Reason.SESSION_EXPIRED -> {
-                    val refreshToken = local.refreshToken
-                    if (refreshToken == null) {
-                        store.clear()
-                        AuthResult.Success(null)
-                    } else {
-                        when (val refreshed = oracle.refresh(refreshToken)) {
-                            is AuthResult.Success -> {
-                                store.write(refreshed.value)
-                                AuthResult.Success(refreshed.value)
-                            }
-                            is AuthResult.Failure -> {
-                                if (refreshed.reason != AuthResult.Reason.NETWORK) store.clear()
-                                refreshed
-                            }
-                        }
-                    }
-                }
+                AuthResult.Reason.SESSION_EXPIRED -> refreshStoredSession(local)
                 else -> validated
+            }
+        }
+    }
+
+    suspend fun ensureValid(session: AuthSession, forceRefresh: Boolean = false): AuthResult<AuthSession> {
+        if (!forceRefresh && session.isUsable()) return AuthResult.Success(session)
+        return refreshStoredSession(session)
+    }
+
+    private suspend fun refreshStoredSession(session: AuthSession): AuthResult<AuthSession> {
+        val refreshToken = session.refreshToken
+            ?: return AuthResult.Failure(
+                reason = AuthResult.Reason.SESSION_EXPIRED,
+                message = "انتهت جلسة تِسوى. سجّل دخولك مرة تانية.",
+            )
+
+        return when (val refreshed = oracle.refresh(refreshToken)) {
+            is AuthResult.Success -> {
+                store.write(refreshed.value)
+                AuthResult.Success(refreshed.value)
+            }
+            is AuthResult.Failure -> {
+                if (refreshed.reason != AuthResult.Reason.NETWORK) store.clear()
+                refreshed
             }
         }
     }

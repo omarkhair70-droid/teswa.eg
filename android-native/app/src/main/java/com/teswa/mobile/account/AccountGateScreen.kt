@@ -3,8 +3,10 @@ package com.teswa.mobile.account
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +33,8 @@ fun AccountGateScreen(
     session: AuthSession,
     repository: AccountGateRepository,
     onSignOut: suspend () -> Unit,
+    modifier: Modifier = Modifier,
+    readyContent: @Composable (AuthSession, AccountProfile?) -> Unit,
 ) {
     var state by remember(session.accessToken) { mutableStateOf<AccountGateState>(AccountGateState.Checking) }
     var displayName by remember(session.user.id) { mutableStateOf(session.user.displayName.orEmpty()) }
@@ -46,12 +50,27 @@ fun AccountGateScreen(
         state = repository.check(session)
     }
 
+    val current = state
+    if (current is AccountGateState.Ready) {
+        readyContent(current.session, current.profile)
+        return
+    }
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp, vertical = 36.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        when (val current = state) {
+        Text(
+            text = "تِسوى",
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(12.dp))
+
+        when (current) {
             AccountGateState.Checking -> {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(14.dp))
@@ -116,34 +135,6 @@ fun AccountGateScreen(
                 }
             }
 
-            is AccountGateState.Ready -> {
-                Text(
-                    text = "الحساب جاهز",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = current.profile?.displayName
-                        ?: current.session.user.displayName
-                        ?: current.session.user.email
-                        ?: "تِسوى",
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Google + Oracle + الملف + السياسات اتأكدوا بنجاح. الخطوة التالية نقل الـHome.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(18.dp))
-                OutlinedButton(
-                    onClick = { scope.launch { onSignOut() } },
-                ) {
-                    Text("تسجيل الخروج")
-                }
-            }
-
             is AccountGateState.Error -> {
                 Text(
                     text = current.message,
@@ -161,6 +152,8 @@ fun AccountGateScreen(
                     Text("تسجيل الخروج")
                 }
             }
+
+            is AccountGateState.Ready -> Unit
         }
     }
 }

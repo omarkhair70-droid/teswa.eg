@@ -31,6 +31,7 @@ import com.teswa.mobile.account.AccountGateScreen
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
+import com.teswa.mobile.home.HomeScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +70,56 @@ private fun TeswaAuthScreen(
         }
     }
 
+    when (val current = state) {
+        is AuthUiState.SignedIn -> {
+            AccountGateScreen(
+                session = current.session,
+                repository = accountGateRepository,
+                modifier = Modifier.fillMaxSize(),
+                onSignOut = {
+                    repository.signOut()
+                    state = AuthUiState.SignedOut
+                },
+                readyContent = { readySession, _ ->
+                    HomeScreen(
+                        initialSession = readySession,
+                        authRepository = repository,
+                        onSignOut = {
+                            repository.signOut()
+                            state = AuthUiState.SignedOut
+                        },
+                    )
+                },
+            )
+        }
+
+        else -> {
+            AuthEntryContent(
+                state = current,
+                onGoogleSignIn = {
+                    state = AuthUiState.Working("جاري تسجيل الدخول…")
+                    scope.launch {
+                        state = when (val result = repository.signInWithGoogle(activity)) {
+                            is AuthResult.Success -> AuthUiState.SignedIn(result.value)
+                            is AuthResult.Failure -> {
+                                if (result.reason == AuthResult.Reason.CANCELLED) AuthUiState.SignedOut
+                                else AuthUiState.Error(result.message)
+                            }
+                        }
+                    }
+                },
+                onRetry = { state = AuthUiState.SignedOut },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuthEntryContent(
+    state: AuthUiState,
+    onGoogleSignIn: () -> Unit,
+    onRetry: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -83,7 +134,7 @@ private fun TeswaAuthScreen(
         )
         Spacer(Modifier.height(12.dp))
 
-        when (val current = state) {
+        when (state) {
             AuthUiState.Restoring -> {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(16.dp))
@@ -97,20 +148,7 @@ private fun TeswaAuthScreen(
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        state = AuthUiState.Working("جاري تسجيل الدخول…")
-                        scope.launch {
-                            state = when (val result = repository.signInWithGoogle(activity)) {
-                                is AuthResult.Success -> AuthUiState.SignedIn(result.value)
-                                is AuthResult.Failure -> {
-                                    if (result.reason == AuthResult.Reason.CANCELLED) AuthUiState.SignedOut
-                                    else AuthUiState.Error(result.message)
-                                }
-                            }
-                        }
-                    },
-                ) {
+                Button(onClick = onGoogleSignIn) {
                     Text("المتابعة باستخدام Google")
                 }
             }
@@ -118,31 +156,22 @@ private fun TeswaAuthScreen(
             is AuthUiState.Working -> {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(16.dp))
-                Text(current.message)
-            }
-
-            is AuthUiState.SignedIn -> {
-                AccountGateScreen(
-                    session = current.session,
-                    repository = accountGateRepository,
-                    onSignOut = {
-                        repository.signOut()
-                        state = AuthUiState.SignedOut
-                    },
-                )
+                Text(state.message)
             }
 
             is AuthUiState.Error -> {
                 Text(
-                    text = current.message,
+                    text = state.message,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { state = AuthUiState.SignedOut }) {
+                Button(onClick = onRetry) {
                     Text("حاول مرة تانية")
                 }
             }
+
+            is AuthUiState.SignedIn -> Unit
         }
     }
 }
