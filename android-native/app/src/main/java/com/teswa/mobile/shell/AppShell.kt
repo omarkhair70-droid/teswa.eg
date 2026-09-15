@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AddItemScreen
+import com.teswa.mobile.feature.messages.MessagingRepository
+import com.teswa.mobile.feature.messages.MessagingScreen
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 import kotlinx.coroutines.launch
@@ -44,6 +46,7 @@ fun AppShell(
     initialSession: AuthSession,
     homeClient: OracleHomeClient,
     addItemRepository: AddItemRepository,
+    messagingRepository: MessagingRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -81,10 +84,12 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
             )
 
-            AppTab.MESSAGES -> PendingNativeScreen(
+            AppTab.MESSAGES -> MessagingScreen(
                 modifier = Modifier.padding(padding),
-                title = "الرسائل والعروض",
-                description = "قريبًا: عروض التبادل ومحادثاتك في مكان واحد هادي وواضح.",
+                initialSession = session,
+                repository = messagingRepository,
+                onSessionUpdated = { session = it },
+                onSessionExpired = onSignOut,
             )
 
             AppTab.PROFILE -> ProfilePlaceholder(

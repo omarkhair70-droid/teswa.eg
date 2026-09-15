@@ -9,6 +9,7 @@ import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
 import com.teswa.mobile.feature.additem.AndroidAddItemContentSource
 import com.teswa.mobile.feature.additem.OracleAddItemRepository
 import com.teswa.mobile.home.OracleHomeClient
+import com.teswa.mobile.feature.messages.OracleMessagingRepository
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -31,4 +32,6 @@ class AppContainer(context: Context) {
         contentSource = AndroidAddItemContentSource(appContext.contentResolver),
         transport = oracleTransport,
     )
+
+    val messagingRepository = OracleMessagingRepository(authRepository, oracleTransport)
 }
