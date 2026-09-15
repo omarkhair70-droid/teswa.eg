@@ -55,11 +55,11 @@ class OffersStateHolder(
         }
     }
 
-    suspend fun act(offerId: String, action: OfferAction) {
+    suspend fun act(offer: OfferSummary, action: OfferAction) {
         if (actingOfferId != null) return
-        actingOfferId = offerId
+        actingOfferId = offer.id
         message = null
-        when (val result = repository.act(session, offerId, action)) {
+        when (val result = repository.act(session, offer, action)) {
             is OffersResult.Success -> {
                 session = result.session
                 acceptedDealId = result.value.dealId

@@ -56,7 +56,7 @@ class OracleOffersRepositoryTest {
         val transport = OfferQueueTransport(response(200, JSONObject().put("dealId", dealId)))
         val repository = OracleOffersRepository(authenticator, transport)
 
-        val result = repository.act(session, offerId, OfferAction.ACCEPT)
+        val result = repository.act(session, offerSummary(), OfferAction.ACCEPT)
 
         assertTrue(result is OffersResult.Success)
         result as OffersResult.Success
@@ -113,6 +113,13 @@ class OracleOffersRepositoryTest {
         "createdAt":"2026-09-15T12:00:00Z"
       }],"hasMore":false
     }""")
+
+    private fun offerSummary() = OfferSummary(
+        offerId, "pending", null,
+        OfferItemSummary(requestedId, "راديو", null),
+        OfferItemSummary(offeredId, "كتاب", null),
+        senderId, userId, null, null, OfferDirection.INCOMING,
+    )
 
     private fun response(status: Int, body: JSONObject) = OracleTransportResult.Response(OracleResponse(status, body))
 }

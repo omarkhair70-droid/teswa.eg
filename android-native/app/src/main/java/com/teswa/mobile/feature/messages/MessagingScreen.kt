@@ -55,6 +55,9 @@ fun MessagingScreen(
     offersRepository: OffersRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
+    initialDealId: String? = null,
+    initialOffers: Boolean = false,
+    onExternalTargetConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
@@ -72,6 +75,19 @@ fun MessagingScreen(
     LaunchedEffect(offersHolder.session.accessToken) { onSessionUpdated(offersHolder.session) }
     LaunchedEffect(holder.sessionExpired, offersHolder.sessionExpired) {
         if (holder.sessionExpired || offersHolder.sessionExpired) onSessionExpired()
+    }
+    LaunchedEffect(initialDealId, initialOffers) {
+        when {
+            initialDealId != null -> {
+                mode = InboxMode.MESSAGES
+                holder.openDeal(initialDealId)
+                onExternalTargetConsumed()
+            }
+            initialOffers -> {
+                mode = InboxMode.OFFERS
+                onExternalTargetConsumed()
+            }
+        }
     }
     LaunchedEffect(holder.selectedConversation?.dealId) {
         while (isActive) {

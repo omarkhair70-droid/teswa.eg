@@ -75,7 +75,7 @@ class OracleMessagingRepositoryTest {
         val transport = QueueTransport(OracleTransportResult.Response(OracleResponse(201, response)))
         val repository = OracleMessagingRepository(authenticator, transport)
 
-        val result = repository.sendText(session, dealId, "  أهلاً  ")
+        val result = repository.sendText(session, dealId, otherId, "  أهلاً  ")
 
         assertTrue(result is MessagingResult.Success)
         val request = transport.requests.single()

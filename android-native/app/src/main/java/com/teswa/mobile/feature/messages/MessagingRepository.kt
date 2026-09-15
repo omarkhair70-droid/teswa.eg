@@ -10,17 +10,20 @@ import com.teswa.mobile.core.network.OracleHttpMethod
 import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
+import com.teswa.mobile.feature.notifications.NotificationDispatch
+import com.teswa.mobile.feature.notifications.NotificationDispatcher
 
 interface MessagingRepository {
     suspend fun loadInbox(session: AuthSession, offset: Int = 0, limit: Int = 50): MessagingResult<DealInboxPage>
     suspend fun loadMessages(session: AuthSession, dealId: String): MessagingResult<List<DealMessage>>
-    suspend fun sendText(session: AuthSession, dealId: String, body: String): MessagingResult<DealMessage>
+    suspend fun sendText(session: AuthSession, dealId: String, recipientUserId: String, body: String): MessagingResult<DealMessage>
     suspend fun markRead(session: AuthSession, dealId: String): MessagingResult<Unit>
 }
 
 class OracleMessagingRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
+    private val notificationDispatcher: NotificationDispatcher? = null,
 ) : MessagingRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -97,8 +100,14 @@ class OracleMessagingRepository(
         }
     }
 
-    override suspend fun sendText(session: AuthSession, dealId: String, body: String): MessagingResult<DealMessage> {
+    override suspend fun sendText(
+        session: AuthSession,
+        dealId: String,
+        recipientUserId: String,
+        body: String,
+    ): MessagingResult<DealMessage> {
         val id = dealId.validId() ?: return MessagingResult.Failure("معرّف المحادثة غير صالح.", session)
+        val recipient = recipientUserId.validId() ?: return MessagingResult.Failure("الطرف الآخر غير صالح.", session)
         val clean = body.trim()
         if (clean.isEmpty()) return MessagingResult.Failure("اكتب رسالة الأول.", session)
         if (clean.length > 2_000) return MessagingResult.Failure("الرسالة لازم تكون 2000 حرف أو أقل.", session)
@@ -108,8 +117,22 @@ class OracleMessagingRepository(
             OracleRequest(OracleHttpMethod.POST, "/v1/deals/$id/messages", payload),
         )) {
             is AuthenticatedOracleResult.Response -> when (result.value.status) {
-                201 -> parseMessage(result.value.body, id)?.let { MessagingResult.Success(it, result.session) }
-                    ?: MessagingResult.Failure("استجابة إرسال الرسالة غير مكتملة.", result.session)
+                201 -> {
+                    val message = parseMessage(result.value.body, id)
+                        ?: return MessagingResult.Failure("استجابة إرسال الرسالة غير مكتملة.", result.session)
+                    val updatedSession = notificationDispatcher?.dispatch(
+                        result.session,
+                        NotificationDispatch(
+                            targetUserId = recipient,
+                            type = "deal_message_received",
+                            title = "رسالة جديدة في الصفقة",
+                            body = clean.take(140),
+                            dealId = id,
+                            messageId = message.id,
+                        ),
+                    ) ?: result.session
+                    MessagingResult.Success(message, updatedSession)
+                }
                 401 -> expired(result.session)
                 403, 404 -> MessagingResult.Failure("مش مسموح بإرسال رسالة في المحادثة دي.", result.session)
                 else -> MessagingResult.Failure("تعذر إرسال الرسالة (${result.value.status}).", result.session)

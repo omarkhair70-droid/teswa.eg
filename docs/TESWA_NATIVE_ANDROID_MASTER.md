@@ -29,6 +29,7 @@ The current package responsibilities are:
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
 - `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
 - `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
+- `feature/notifications/`: in-app activity center, unread mutation, native destination mapping, and best-effort domain-event dispatch.
 - `shell/`: authenticated bottom-navigation shell.
 - `ui/`: shared UI utilities and the first Teswa light/dark color, type, and shape system; this grows through real native screens rather than an Expo visual port.
 
@@ -69,6 +70,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own profile and listing lifecycle | Implemented locally; avatar/device acceptance remains open | `GET /v1/profiles/me`, `POST /v1/profiles/update`, `GET /v1/marketplace/mine`, listing archive/reactivate/delete-archived |
 | Settings and account controls | Implemented locally; push permission/device acceptance remains open | profile privacy, notification preferences, blocked users/unblock, account deletion |
+| In-app notifications | Implemented locally; Android push/background acceptance remains open | list, read, read-all, domain dispatch |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
 
 ## Add Item contract and native implementation
@@ -112,7 +114,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling and complete offer create/inbox/decision flow implemented; direct/contextual and voice remain)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own profile, editing, and listing lifecycle implemented; other profile and avatar remain)
 - [ ] Stories required by the current product
-- [ ] In-app notifications, Android push, and tap routing
+- [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal dispatch, and routes to native item/deal/offer surfaces implemented; push and future direct/contextual/profile routes remain)
 - [ ] Nearby/location flows
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion
 - [ ] Deep links and background/lifecycle behavior

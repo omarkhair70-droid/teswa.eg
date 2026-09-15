@@ -76,7 +76,7 @@ fun OffersContent(
                                 working = holder.actingOfferId == offer.id,
                                 onAction = { action ->
                                     if (action == OfferAction.THINKING) {
-                                        scope.launch { holder.act(offer.id, action) }
+                                        scope.launch { holder.act(offer, action) }
                                     } else {
                                         confirmation = offer.id to action
                                     }
@@ -104,7 +104,8 @@ fun OffersContent(
                 Button(onClick = {
                     confirmation = null
                     scope.launch {
-                        holder.act(offerId, action)
+                        val offer = (holder.state as? OffersUiState.Content)?.inbox?.incoming?.firstOrNull { it.id == offerId }
+                        if (offer != null) holder.act(offer, action)
                         holder.consumeAcceptedDeal()?.let(onOpenDeal)
                     }
                 }) { Text(if (action == OfferAction.ACCEPT) "اقبل وافتح المحادثة" else "ارفض") }

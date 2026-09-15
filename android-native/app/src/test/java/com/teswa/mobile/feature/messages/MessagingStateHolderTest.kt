@@ -67,7 +67,7 @@ private class FakeMessagingRepository(
 
     override suspend fun loadMessages(session: AuthSession, dealId: String) = messagesResult
 
-    override suspend fun sendText(session: AuthSession, dealId: String, body: String): MessagingResult<DealMessage> =
+    override suspend fun sendText(session: AuthSession, dealId: String, recipientUserId: String, body: String): MessagingResult<DealMessage> =
         error("Not used")
 
     override suspend fun markRead(session: AuthSession, dealId: String): MessagingResult<Unit> {

@@ -42,6 +42,8 @@ fun HomeScreen(
     onSessionUpdated: (AuthSession) -> Unit = {},
     onOfferCreated: () -> Unit = {},
     onAddItem: () -> Unit = {},
+    externalItemId: String? = null,
+    onExternalItemConsumed: () -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
     val scope = rememberCoroutineScope()
@@ -57,6 +59,13 @@ fun HomeScreen(
 
     LaunchedEffect(holder.sessionExpired) {
         if (holder.sessionExpired) onSignOut()
+    }
+
+    LaunchedEffect(externalItemId) {
+        externalItemId?.let {
+            holder.openItem(it)
+            onExternalItemConsumed()
+        }
     }
 
     val selected = holder.selectedItemId

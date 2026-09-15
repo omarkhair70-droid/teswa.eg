@@ -20,6 +20,9 @@ import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.ProfileScreen
 import com.teswa.mobile.feature.settings.SettingsRepository
+import com.teswa.mobile.feature.notifications.NotificationDestination
+import com.teswa.mobile.feature.notifications.NotificationsRepository
+import com.teswa.mobile.feature.notifications.NotificationsScreen
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 
@@ -29,6 +32,7 @@ private enum class AppTab(
     HOME("الرئيسية"),
     ADD("إضافة"),
     MESSAGES("الرسائل"),
+    NOTIFICATIONS("تنبيهات"),
     PROFILE("حسابي"),
 }
 
@@ -41,10 +45,14 @@ fun AppShell(
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
     settingsRepository: SettingsRepository,
+    notificationsRepository: NotificationsRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
     var selectedTab by remember { mutableStateOf(AppTab.HOME) }
+    var externalItemId by remember { mutableStateOf<String?>(null) }
+    var externalDealId by remember { mutableStateOf<String?>(null) }
+    var openOffers by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -70,6 +78,8 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
                 onOfferCreated = { selectedTab = AppTab.MESSAGES },
                 onAddItem = { selectedTab = AppTab.ADD },
+                externalItemId = externalItemId,
+                onExternalItemConsumed = { externalItemId = null },
             )
 
             AppTab.ADD -> AddItemScreen(
@@ -88,6 +98,39 @@ fun AppShell(
                 offersRepository = offersRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
+                initialDealId = externalDealId,
+                initialOffers = openOffers,
+                onExternalTargetConsumed = {
+                    externalDealId = null
+                    openOffers = false
+                },
+            )
+
+            AppTab.NOTIFICATIONS -> NotificationsScreen(
+                modifier = Modifier.padding(padding),
+                initialSession = session,
+                repository = notificationsRepository,
+                onSessionUpdated = { session = it },
+                onSessionExpired = onSignOut,
+                onDestination = { destination ->
+                    when (destination) {
+                        is NotificationDestination.Item -> {
+                            externalItemId = destination.id
+                            selectedTab = AppTab.HOME
+                        }
+                        is NotificationDestination.Deal -> {
+                            externalDealId = destination.id
+                            selectedTab = AppTab.MESSAGES
+                        }
+                        is NotificationDestination.Offer -> {
+                            openOffers = true
+                            selectedTab = AppTab.MESSAGES
+                        }
+                        is NotificationDestination.Profile,
+                        is NotificationDestination.Direct,
+                        is NotificationDestination.Contextual -> Unit
+                    }
+                },
             )
 
             AppTab.PROFILE -> ProfileScreen(
@@ -108,5 +151,6 @@ private fun tabGlyph(tab: AppTab): String = when (tab) {
     AppTab.HOME -> "⌂"
     AppTab.ADD -> "+"
     AppTab.MESSAGES -> "✉"
+    AppTab.NOTIFICATIONS -> "◉"
     AppTab.PROFILE -> "●"
 }

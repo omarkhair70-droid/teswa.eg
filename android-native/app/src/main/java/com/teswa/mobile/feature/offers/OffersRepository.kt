@@ -10,10 +10,12 @@ import com.teswa.mobile.core.network.OracleHttpMethod
 import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
+import com.teswa.mobile.feature.notifications.NotificationDispatch
+import com.teswa.mobile.feature.notifications.NotificationDispatcher
 
 interface OffersRepository {
     suspend fun load(session: AuthSession): OffersResult<OffersInbox>
-    suspend fun act(session: AuthSession, offerId: String, action: OfferAction): OffersResult<OfferActionOutcome>
+    suspend fun act(session: AuthSession, offer: OfferSummary, action: OfferAction): OffersResult<OfferActionOutcome>
     suspend fun loadCreation(session: AuthSession, requestedItemId: String): OffersResult<OfferCreationContext>
     suspend fun create(
         session: AuthSession,
@@ -27,6 +29,7 @@ interface OffersRepository {
 class OracleOffersRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
+    private val notificationDispatcher: NotificationDispatcher? = null,
 ) : OffersRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -62,10 +65,10 @@ class OracleOffersRepository(
 
     override suspend fun act(
         session: AuthSession,
-        offerId: String,
+        offer: OfferSummary,
         action: OfferAction,
     ): OffersResult<OfferActionOutcome> {
-        val id = offerId.validId() ?: return OffersResult.Failure("معرّف العرض غير صالح.", session)
+        val id = offer.id.validId() ?: return OffersResult.Failure("معرّف العرض غير صالح.", session)
         val path = when (action) {
             OfferAction.THINKING -> "/v1/offers/$id/thinking"
             OfferAction.SOFT_REJECT -> "/v1/offers/$id/soft-reject"
@@ -81,10 +84,19 @@ class OracleOffersRepository(
                 action == OfferAction.ACCEPT && result.value.status == 200 -> {
                     val dealId = result.value.body.optString("dealId").validId()
                         ?: return OffersResult.Failure("استجابة قبول العرض غير مكتملة.", result.session)
-                    OffersResult.Success(OfferActionOutcome(dealId), result.session)
+                    var updatedSession = result.session
+                    updatedSession = notify(updatedSession, offer.senderId, "offer_accepted", "العرض اتقبل", "صاحب الحاجة قبل العرض.", offerId = id, dealId = dealId)
+                    updatedSession = notify(updatedSession, offer.senderId, "deal_created", "اتفتحت دردشة الصفقة", "العرض اتقبل، وتقدروا تكملوا التنسيق.", offerId = id, dealId = dealId)
+                    updatedSession = notify(updatedSession, offer.receiverId, "deal_created", "اتفتحت دردشة الصفقة", "العرض اتقبل، وتقدروا تكملوا التنسيق.", offerId = id, dealId = dealId)
+                    OffersResult.Success(OfferActionOutcome(dealId), updatedSession)
                 }
-                action != OfferAction.ACCEPT && result.value.status == 200 && result.value.body.optBoolean("ok") ->
-                    OffersResult.Success(OfferActionOutcome(), result.session)
+                action != OfferAction.ACCEPT && result.value.status == 200 && result.value.body.optBoolean("ok") -> {
+                    val type = if (action == OfferAction.THINKING) "offer_thinking" else "offer_soft_rejected"
+                    val title = if (action == OfferAction.THINKING) "صاحب الحاجة محتاج يفكر" else "العرض ما ظبطش المرة دي"
+                    val body = if (action == OfferAction.THINKING) "العرض لسه مفتوح، بس محتاج وقت." else "صاحب الحاجة رفض العرض بلطف."
+                    val updatedSession = notify(result.session, offer.senderId, type, title, body, offerId = id)
+                    OffersResult.Success(OfferActionOutcome(), updatedSession)
+                }
                 result.value.status == 403 -> OffersResult.Failure("مش مسموح لك تغيّر العرض ده.", result.session)
                 result.value.status == 404 -> OffersResult.Failure("العرض مش موجود أو انتهى.", result.session)
                 result.value.status == 409 -> OffersResult.Failure("حالة العرض اتغيرت. حدّث القائمة وجرب تاني.", result.session)
@@ -190,7 +202,11 @@ class OracleOffersRepository(
                 201 -> {
                     val offerId = result.value.body.optString("offerId").validId()
                     if (offerId != null && result.value.body.optBoolean("eventRecorded")) {
-                        OffersResult.Success(CreatedOffer(offerId), result.session)
+                        val updatedSession = notify(
+                            result.session, receiver, "offer_received", "وصلك عرض جديد",
+                            "عندك عرض تبديل جديد مستني ردك.", itemId = requested, offerId = offerId,
+                        )
+                        OffersResult.Success(CreatedOffer(offerId), updatedSession)
                     } else {
                         OffersResult.Failure("استجابة إرسال العرض غير مكتملة.", result.session)
                     }
@@ -289,6 +305,19 @@ class OracleOffersRepository(
     }
 
     private fun expired(session: AuthSession) = OffersResult.Failure("انتهت جلسة تِسوى.", session, unauthorized = true)
+    private suspend fun notify(
+        session: AuthSession,
+        targetUserId: String,
+        type: String,
+        title: String,
+        body: String,
+        itemId: String? = null,
+        offerId: String? = null,
+        dealId: String? = null,
+    ): AuthSession = notificationDispatcher?.dispatch(
+        session,
+        NotificationDispatch(targetUserId, type, title, body, itemId, offerId, dealId),
+    ) ?: session
     private fun String.validId() = trim().takeIf(UUID_LIKE::matches)
     private fun nullable(json: JSONObject, key: String): String? =
         if (!json.has(key) || json.isNull(key)) null else json.optString(key).trim().takeIf(String::isNotEmpty)

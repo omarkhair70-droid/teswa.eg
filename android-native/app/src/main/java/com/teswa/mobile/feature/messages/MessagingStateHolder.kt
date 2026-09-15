@@ -154,7 +154,7 @@ class MessagingStateHolder(
         if (body.isEmpty() || sending) return
         sending = true
         banner = null
-        when (val result = repository.sendText(session, conversation.dealId, body)) {
+        when (val result = repository.sendText(session, conversation.dealId, conversation.otherParticipantId, body)) {
             is MessagingResult.Success -> {
                 session = result.session
                 composer = ""

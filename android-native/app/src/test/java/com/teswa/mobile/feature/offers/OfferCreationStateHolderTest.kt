@@ -42,7 +42,7 @@ private class CreationRepository(
     var createdOfferedId: String? = null
     var createdMessage: String? = null
     override suspend fun load(session: AuthSession): OffersResult<OffersInbox> = error("Not used")
-    override suspend fun act(session: AuthSession, offerId: String, action: OfferAction): OffersResult<OfferActionOutcome> = error("Not used")
+    override suspend fun act(session: AuthSession, offer: OfferSummary, action: OfferAction): OffersResult<OfferActionOutcome> = error("Not used")
     override suspend fun loadCreation(session: AuthSession, requestedItemId: String) = OffersResult.Success(context, this.session)
     override suspend fun create(
         session: AuthSession,
