@@ -24,6 +24,10 @@ The current package responsibilities are:
 - `auth/`: Google Credential Manager, Oracle auth exchange, encrypted session storage, refresh coordination, restore, and logout.
 - `account/`: profile-completeness and required-policy gate.
 - `home/`: marketplace feed, pagination, item detail models and UI.
+- `feature/additem/`: listing draft recovery, media selection/upload, publish orchestration, and native creation UI.
+- `feature/messages/`: deal inbox, chronological text conversation, read state, reconnect polling, and composer state.
+- `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
+- `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
 - `shell/`: authenticated bottom-navigation shell.
 - `ui/`: shared UI utilities and the first Teswa light/dark color, type, and shape system; this grows through real native screens rather than an Expo visual port.
 
@@ -62,6 +66,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Deal inbox and text coordination | Implemented locally; realtime/device acceptance remains open | `GET /v1/deals/inbox`, deal messages, read marker |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
+| Own profile and listing lifecycle | Implemented locally; avatar/device acceptance remains open | `GET /v1/profiles/me`, `POST /v1/profiles/update`, `GET /v1/marketplace/mine`, listing archive/reactivate/delete-archived |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
 
 ## Add Item contract and native implementation
@@ -103,7 +108,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling and complete offer create/inbox/decision flow implemented; direct/contextual and voice remain)
-- [ ] Own/other profile, profile editing, avatar, and listing lifecycle
+- [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own profile, editing, and listing lifecycle implemented; other profile and avatar remain)
 - [ ] Stories required by the current product
 - [ ] In-app notifications, Android push, and tap routing
 - [ ] Nearby/location flows

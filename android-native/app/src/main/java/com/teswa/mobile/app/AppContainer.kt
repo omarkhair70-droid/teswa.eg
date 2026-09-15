@@ -11,6 +11,7 @@ import com.teswa.mobile.feature.additem.OracleAddItemRepository
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.feature.messages.OracleMessagingRepository
 import com.teswa.mobile.feature.offers.OracleOffersRepository
+import com.teswa.mobile.feature.profile.OracleProfileRepository
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -36,4 +37,5 @@ class AppContainer(context: Context) {
 
     val messagingRepository = OracleMessagingRepository(authRepository, oracleTransport)
     val offersRepository = OracleOffersRepository(authRepository, oracleTransport)
+    val profileRepository = OracleProfileRepository(authRepository, oracleTransport)
 }
