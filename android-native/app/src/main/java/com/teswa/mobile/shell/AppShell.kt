@@ -72,9 +72,12 @@ fun AppShell(
             AppTab.HOME -> HomeScreen(
                 initialSession = session,
                 client = homeClient,
+                offersRepository = offersRepository,
                 onSessionUpdated = { session = it },
                 onSignOut = onSignOut,
                 modifier = Modifier.padding(padding),
+                onOfferCreated = { selectedTab = AppTab.MESSAGES },
+                onAddItem = { selectedTab = AppTab.ADD },
             )
 
             AppTab.ADD -> AddItemScreen(

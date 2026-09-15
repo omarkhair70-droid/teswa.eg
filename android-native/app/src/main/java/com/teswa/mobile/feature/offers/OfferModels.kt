@@ -31,6 +31,14 @@ data class OffersInbox(
 
 data class OfferActionOutcome(val dealId: String? = null)
 
+data class OfferCreationContext(
+    val requestedItem: OfferItemSummary,
+    val myActiveItems: List<OfferItemSummary>,
+    val receiverId: String,
+)
+
+data class CreatedOffer(val offerId: String)
+
 sealed interface OffersResult<out T> {
     data class Success<T>(val value: T, val session: AuthSession) : OffersResult<T>
     data class Failure(

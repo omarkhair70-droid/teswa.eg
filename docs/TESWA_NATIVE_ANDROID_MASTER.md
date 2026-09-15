@@ -61,6 +61,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
 | Deal inbox and text coordination | Implemented locally; realtime/device acceptance remains open | `GET /v1/deals/inbox`, deal messages, read marker |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
+| Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
 
 ## Add Item contract and native implementation
@@ -101,7 +102,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Native visual-system foundation: calm Teswa color, type, shape, light, and dark tokens
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
-- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling and offer inbox/decisions implemented; offer creation, direct/contextual and voice remain)
+- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal inbox/text/read/polling and complete offer create/inbox/decision flow implemented; direct/contextual and voice remain)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle
 - [ ] Stories required by the current product
 - [ ] In-app notifications, Android push, and tap routing

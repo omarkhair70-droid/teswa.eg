@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -35,9 +36,12 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     initialSession: AuthSession,
     client: OracleHomeClient,
+    offersRepository: OffersRepository,
     onSignOut: suspend () -> Unit,
     modifier: Modifier = Modifier,
     onSessionUpdated: (AuthSession) -> Unit = {},
+    onOfferCreated: () -> Unit = {},
+    onAddItem: () -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
     val scope = rememberCoroutineScope()
@@ -62,9 +66,12 @@ fun HomeScreen(
                 itemId = selected,
                 initialSession = holder.session,
                 client = client,
+                offersRepository = offersRepository,
                 onSessionUpdated = holder::updateSession,
                 onSessionExpired = onSignOut,
                 onBack = holder::closeItem,
+                onOfferCreated = onOfferCreated,
+                onAddItem = onAddItem,
             )
         }
         return

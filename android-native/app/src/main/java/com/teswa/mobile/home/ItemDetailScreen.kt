@@ -19,13 +19,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.offers.OfferCreationScreen
+import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -34,12 +39,16 @@ fun ItemDetailScreen(
     itemId: String,
     initialSession: AuthSession,
     client: OracleHomeClient,
+    offersRepository: OffersRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
+    onOfferCreated: () -> Unit,
+    onAddItem: () -> Unit,
 ) {
     val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
+    var creatingOffer by remember(itemId) { mutableStateOf(false) }
 
     LaunchedEffect(itemId, initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -52,6 +61,20 @@ fun ItemDetailScreen(
 
     LaunchedEffect(holder.sessionExpired) {
         if (holder.sessionExpired) onSessionExpired()
+    }
+
+    if (creatingOffer) {
+        OfferCreationScreen(
+            requestedItemId = itemId,
+            initialSession = holder.session,
+            repository = offersRepository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = { creatingOffer = false },
+            onAddItem = onAddItem,
+            onOfferSent = onOfferCreated,
+        )
+        return
     }
 
     when (val current = holder.state) {
@@ -139,6 +162,18 @@ fun ItemDetailScreen(
                         val owner = detail.ownerDisplayName ?: detail.ownerUsername
                         if (!owner.isNullOrBlank()) {
                             DetailSection("صاحب العنصر", owner)
+                        }
+                        if (detail.ownerId != null && detail.ownerId != holder.session.user.id) {
+                            Spacer(Modifier.height(18.dp))
+                            Button(
+                                onClick = { creatingOffer = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("قدّم عرض تبديل") }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "هتختار عنصر نشط من حاجتك، والقرار يفضل عند صاحب العنصر.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                     }
                 }

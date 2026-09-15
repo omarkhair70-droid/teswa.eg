@@ -65,6 +65,47 @@ class OracleOffersRepositoryTest {
         assertEquals(0, requireNotNull(transport.requests.single().body).length())
     }
 
+    @Test
+    fun loadsOfferCreationContextWithBlockAndOwnershipChecks() = runBlocking {
+        val validation = JSONObject()
+            .put("id", requestedId).put("title", "راديو").put("ownerId", senderId).put("status", "active")
+        val block = JSONObject().put("blockedByMe", false).put("blockedMe", false).put("isBlockedEitherDirection", false)
+        val owned = JSONObject("""{"items":[{"id":"$offeredId"}],"hasMore":false}""")
+        val items = JSONObject("""{"items":[
+          {"id":"$requestedId","title":"راديو","imageUrl":"https://media.example/radio.jpg"},
+          {"id":"$offeredId","title":"كتاب","imageUrl":null}
+        ]}""")
+        val transport = OfferQueueTransport(
+            response(200, validation), response(200, block), response(200, owned), response(200, items),
+        )
+        val repository = OracleOffersRepository(authenticator, transport)
+
+        val result = repository.loadCreation(session, requestedId) as OffersResult.Success
+
+        assertEquals(senderId, result.value.receiverId)
+        assertEquals("راديو", result.value.requestedItem.title)
+        assertEquals(listOf("كتاب"), result.value.myActiveItems.map { it.title })
+        assertEquals("/v1/profiles/$senderId/block-state", transport.requests[1].path)
+    }
+
+    @Test
+    fun createsOfferWithExactOraclePayload() = runBlocking {
+        val transport = OfferQueueTransport(
+            response(201, JSONObject().put("offerId", offerId).put("eventRecorded", true)),
+        )
+        val repository = OracleOffersRepository(authenticator, transport)
+
+        val result = repository.create(session, requestedId, offeredId, senderId, "  يناسبك؟  ")
+
+        assertTrue(result is OffersResult.Success)
+        val request = transport.requests.single()
+        val body = requireNotNull(request.body)
+        assertEquals("/v1/offers", request.path)
+        assertEquals(setOf("requestedItemId", "offeredItemId", "senderId", "receiverId", "message"), body.keys().asSequence().toSet())
+        assertEquals("يناسبك؟", body.getString("message"))
+        assertEquals(userId, body.getString("senderId"))
+    }
+
     private fun offerPage(status: String, sender: String, receiver: String) = JSONObject("""{
       "items":[{
         "id":"$offerId","status":"$status","message":"يناسبك؟","requestedItemId":"$requestedId",

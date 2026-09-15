@@ -21,6 +21,14 @@ class OffersStateHolderTest {
             override suspend fun load(session: AuthSession) = OffersResult.Success(OffersInbox(emptyList(), emptyList()), session)
             override suspend fun act(session: AuthSession, offerId: String, action: OfferAction) =
                 OffersResult.Success(OfferActionOutcome(dealId), session)
+            override suspend fun loadCreation(session: AuthSession, requestedItemId: String): OffersResult<OfferCreationContext> = error("Not used")
+            override suspend fun create(
+                session: AuthSession,
+                requestedItemId: String,
+                offeredItemId: String,
+                receiverId: String,
+                message: String,
+            ): OffersResult<CreatedOffer> = error("Not used")
         }
         val holder = OffersStateHolder(session, repository)
 

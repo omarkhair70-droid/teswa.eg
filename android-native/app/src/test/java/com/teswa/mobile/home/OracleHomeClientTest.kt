@@ -72,6 +72,27 @@ class OracleHomeClientTest {
         assertTrue(result is HomeFeedResult.Failure)
         assertEquals("استجابة الرئيسية غير مكتملة.", (result as HomeFeedResult.Failure).message)
     }
+
+    @Test
+    fun detailCarriesOwnerIdentityForOfferEligibility() = runBlocking {
+        val ownerId = "22222222-2222-2222-2222-222222222222"
+        val transport = OneShotTransport(
+            OracleTransportResult.Response(
+                OracleResponse(
+                    200,
+                    JSONObject("""{
+                      "id":"11111111-1111-1111-1111-111111111111",
+                      "ownerId":"$ownerId","title":"كاميرا","images":[]
+                    }"""),
+                ),
+            ),
+        )
+        val client = OracleHomeClient(authenticator, transport)
+
+        val result = client.fetchDetail(session, "11111111-1111-1111-1111-111111111111") as HomeFeedResult.Success
+
+        assertEquals(ownerId, result.value.ownerId)
+    }
 }
 
 private class OneShotTransport(

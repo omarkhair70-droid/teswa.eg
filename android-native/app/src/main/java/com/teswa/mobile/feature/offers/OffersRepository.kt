@@ -14,6 +14,14 @@ import org.json.JSONObject
 interface OffersRepository {
     suspend fun load(session: AuthSession): OffersResult<OffersInbox>
     suspend fun act(session: AuthSession, offerId: String, action: OfferAction): OffersResult<OfferActionOutcome>
+    suspend fun loadCreation(session: AuthSession, requestedItemId: String): OffersResult<OfferCreationContext>
+    suspend fun create(
+        session: AuthSession,
+        requestedItemId: String,
+        offeredItemId: String,
+        receiverId: String,
+        message: String,
+    ): OffersResult<CreatedOffer>
 }
 
 class OracleOffersRepository(
@@ -83,6 +91,116 @@ class OracleOffersRepository(
                 else -> OffersResult.Failure("تعذر تحديث العرض (${result.value.status}).", result.session)
             }
             else -> result.toFailure("تعذر تحديث العرض الآن.")
+        }
+    }
+
+    override suspend fun loadCreation(
+        session: AuthSession,
+        requestedItemId: String,
+    ): OffersResult<OfferCreationContext> {
+        val requestedId = requestedItemId.validId()
+            ?: return OffersResult.Failure("معرّف العنصر غير صالح.", session)
+        val validation = when (val result = executor.execute(
+            session,
+            OracleRequest(path = "/v1/offers/items/$requestedId"),
+        )) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> result
+                401 -> return expired(result.session)
+                404 -> return OffersResult.Failure("العنصر المطلوب مش موجود.", result.session)
+                else -> return OffersResult.Failure("تعذر تجهيز العرض (${result.value.status}).", result.session)
+            }
+            else -> return result.toFailure("تعذر تجهيز العرض الآن.")
+        }
+        val ownerId = validation.value.body.optString("ownerId").validId()
+            ?: return OffersResult.Failure("استجابة العنصر غير مكتملة.", validation.session)
+        if (validation.value.body.optString("status") != "active") {
+            return OffersResult.Failure("العنصر المطلوب مش متاح للتبديل حاليًا.", validation.session)
+        }
+        if (ownerId == validation.session.user.id) {
+            return OffersResult.Failure("ما ينفعش تبعت عرض على عنصر من حاجتك.", validation.session)
+        }
+
+        val blockState = executor.execute(
+            validation.session,
+            OracleRequest(path = "/v1/profiles/$ownerId/block-state"),
+        )
+        if (blockState !is AuthenticatedOracleResult.Response) return blockState.toFailure("تعذر التحقق من إمكانية التبادل.")
+        if (blockState.value.status == 401) return expired(blockState.session)
+        if (blockState.value.status != 200) return OffersResult.Failure("تعذر التحقق من إمكانية التبادل.", blockState.session)
+        if (blockState.value.body.optBoolean("isBlockedEitherDirection")) {
+            return OffersResult.Failure("مش ممكن إنشاء عرض لأن التواصل بين الحسابين مقفول.", blockState.session)
+        }
+
+        val owned = executor.execute(
+            blockState.session,
+            OracleRequest(path = "/v1/offers/owned-active-items?userId=${blockState.session.user.id}&limit=50&offset=0"),
+        )
+        if (owned !is AuthenticatedOracleResult.Response) return owned.toFailure("تعذر تحميل حاجتك المعروضة.")
+        if (owned.value.status == 401) return expired(owned.session)
+        if (owned.value.status != 200) return OffersResult.Failure("تعذر تحميل حاجتك المعروضة.", owned.session)
+        val rawIds = owned.value.body.optJSONArray("items")
+            ?: return OffersResult.Failure("استجابة حاجتك المعروضة غير مكتملة.", owned.session)
+        val ownedIds = buildList {
+            for (index in 0 until rawIds.length()) {
+                rawIds.optJSONObject(index)?.optString("id")?.validId()?.let(::add)
+            }
+        }.filterNot { it == requestedId }
+        val summaries = loadItems(owned.session, listOf(requestedId) + ownedIds)
+        if (summaries is OffersResult.Failure) return summaries
+        summaries as OffersResult.Success
+        val byId = summaries.value.associateBy { it.id }
+        val requested = byId[requestedId] ?: OfferItemSummary(
+            requestedId,
+            validation.value.body.optString("title").trim().ifBlank { "عنصر بدون عنوان" },
+            null,
+        )
+        return OffersResult.Success(
+            OfferCreationContext(requested, ownedIds.mapNotNull(byId::get), ownerId),
+            summaries.session,
+        )
+    }
+
+    override suspend fun create(
+        session: AuthSession,
+        requestedItemId: String,
+        offeredItemId: String,
+        receiverId: String,
+        message: String,
+    ): OffersResult<CreatedOffer> {
+        val requested = requestedItemId.validId() ?: return OffersResult.Failure("معرّف العنصر المطلوب غير صالح.", session)
+        val offered = offeredItemId.validId() ?: return OffersResult.Failure("اختار عنصر صالح من حاجتك.", session)
+        val receiver = receiverId.validId() ?: return OffersResult.Failure("صاحب العنصر غير صالح.", session)
+        if (requested == offered || receiver == session.user.id) {
+            return OffersResult.Failure("اختيارات عرض التبديل غير صالحة.", session)
+        }
+        val cleanMessage = message.trim()
+        if (cleanMessage.length > 1_000) return OffersResult.Failure("رسالة العرض لازم تكون 1000 حرف أو أقل.", session)
+        val body = JSONObject()
+            .put("requestedItemId", requested)
+            .put("offeredItemId", offered)
+            .put("senderId", session.user.id)
+            .put("receiverId", receiver)
+            .put("message", cleanMessage.takeIf(String::isNotEmpty) ?: JSONObject.NULL)
+        return when (val result = executor.execute(
+            session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/offers", body),
+        )) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                201 -> {
+                    val offerId = result.value.body.optString("offerId").validId()
+                    if (offerId != null && result.value.body.optBoolean("eventRecorded")) {
+                        OffersResult.Success(CreatedOffer(offerId), result.session)
+                    } else {
+                        OffersResult.Failure("استجابة إرسال العرض غير مكتملة.", result.session)
+                    }
+                }
+                401 -> expired(result.session)
+                403 -> OffersResult.Failure("العرض غير مسموح؛ راجع حالة العناصر أو الحظر.", result.session)
+                409 -> OffersResult.Failure("حالة أحد العنصرين اتغيرت. حدّث وحاول تاني.", result.session)
+                else -> OffersResult.Failure("تعذر إرسال العرض (${result.value.status}).", result.session)
+            }
+            else -> result.toFailure("تعذر إرسال العرض الآن.")
         }
     }
 

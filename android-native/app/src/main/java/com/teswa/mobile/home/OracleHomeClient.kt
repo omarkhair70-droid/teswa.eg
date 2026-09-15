@@ -140,6 +140,7 @@ class OracleHomeClient(
         return HomeFeedResult.Success(
             value = ItemDetail(
                 id = id,
+                ownerId = nullable(body, "ownerId"),
                 title = nullable(body, "title") ?: "عنصر بدون عنوان",
                 description = nullable(body, "description"),
                 condition = nullable(body, "condition"),

@@ -21,6 +21,7 @@ data class HomeFeedPage(
 
 data class ItemDetail(
     val id: String,
+    val ownerId: String?,
     val title: String,
     val description: String?,
     val condition: String?,
