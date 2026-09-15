@@ -14,27 +14,31 @@ class AccountGateRepository(context: Context) {
         val profileDeferred = async { client.fetchProfile(session) }
         val policiesDeferred = async { client.fetchPolicyAcceptances(session) }
 
-        val profileResult = profileDeferred.await()
-        val policiesResult = policiesDeferred.await()
-
-        if (profileResult is AccountGateResult.Failure) {
-            if (profileResult.network && cachedVerified) return@coroutineScope AccountGateState.Ready(session, null)
-            return@coroutineScope AccountGateState.Error(session, profileResult.message)
-        }
-        if (policiesResult is AccountGateResult.Failure) {
-            if (policiesResult.network && cachedVerified) {
-                return@coroutineScope AccountGateState.Ready(session, profileResult.value)
+        val profile = when (val result = profileDeferred.await()) {
+            is AccountGateResult.Success -> result.value
+            is AccountGateResult.Failure -> {
+                if (result.network && cachedVerified) {
+                    return@coroutineScope AccountGateState.Ready(session, null)
+                }
+                return@coroutineScope AccountGateState.Error(session, result.message)
             }
-            return@coroutineScope AccountGateState.Error(session, policiesResult.message)
         }
 
-        val profile = profileResult.value
+        val policies = when (val result = policiesDeferred.await()) {
+            is AccountGateResult.Success -> result.value
+            is AccountGateResult.Failure -> {
+                if (result.network && cachedVerified) {
+                    return@coroutineScope AccountGateState.Ready(session, profile)
+                }
+                return@coroutineScope AccountGateState.Error(session, result.message)
+            }
+        }
+
         if (profile == null || !profile.isComplete) {
             return@coroutineScope AccountGateState.NeedsProfile(session)
         }
 
-        val accepted = requiredPoliciesAccepted(policiesResult.value)
-        if (!accepted) {
+        if (!requiredPoliciesAccepted(policies)) {
             return@coroutineScope AccountGateState.NeedsPolicies(session, profile)
         }
 
