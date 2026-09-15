@@ -17,6 +17,24 @@ data class HomeFeedPage(
     val hasMore: Boolean,
 )
 
+data class ItemDetail(
+    val id: String,
+    val title: String,
+    val description: String?,
+    val condition: String?,
+    val conditionNotes: String?,
+    val category: String?,
+    val city: String?,
+    val area: String?,
+    val images: List<String>,
+    val ownerDisplayName: String?,
+    val ownerUsername: String?,
+    val desireText: String?,
+    val itemStory: String?,
+    val swapReason: String?,
+    val goodFor: String?,
+)
+
 sealed interface HomeFeedResult<out T> {
     data class Success<T>(val value: T) : HomeFeedResult<T>
     data class Failure(
@@ -31,7 +49,14 @@ sealed interface HomeUiState {
     data class Content(
         val items: List<HomeFeedItem>,
         val hasMore: Boolean,
+        val loadingMore: Boolean = false,
     ) : HomeUiState
     data class Empty(val message: String) : HomeUiState
     data class Error(val message: String) : HomeUiState
+}
+
+sealed interface ItemDetailUiState {
+    data object Loading : ItemDetailUiState
+    data class Content(val detail: ItemDetail) : ItemDetailUiState
+    data class Error(val message: String) : ItemDetailUiState
 }
