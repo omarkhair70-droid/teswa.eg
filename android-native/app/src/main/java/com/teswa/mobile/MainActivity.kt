@@ -34,6 +34,7 @@ import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.messages.MessagingRepository
+import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.shell.AppShell
 import com.teswa.mobile.ui.theme.TeswaTheme
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                         homeClient = container.homeClient,
                         addItemRepository = container.addItemRepository,
                         messagingRepository = container.messagingRepository,
+                        offersRepository = container.offersRepository,
                         activity = this@MainActivity,
                     )
                 }
@@ -68,6 +70,7 @@ private fun TeswaAuthScreen(
     homeClient: OracleHomeClient,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
+    offersRepository: OffersRepository,
     activity: ComponentActivity,
 ) {
     var state by remember { mutableStateOf<AuthUiState>(AuthUiState.Restoring) }
@@ -96,6 +99,7 @@ private fun TeswaAuthScreen(
                         homeClient = homeClient,
                         addItemRepository = addItemRepository,
                         messagingRepository = messagingRepository,
+                        offersRepository = offersRepository,
                         onSignOut = {
                             repository.signOut()
                             state = AuthUiState.SignedOut

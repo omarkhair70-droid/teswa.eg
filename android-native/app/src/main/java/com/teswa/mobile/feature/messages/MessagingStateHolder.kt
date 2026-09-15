@@ -89,6 +89,22 @@ class MessagingStateHolder(
         loadThread(conversation, silent = false)
     }
 
+    suspend fun openDeal(dealId: String): Boolean {
+        var current = inboxState as? InboxUiState.Content
+        var conversation = current?.items?.firstOrNull { it.dealId == dealId }
+        if (conversation == null) {
+            load(silent = false)
+            current = inboxState as? InboxUiState.Content
+            conversation = current?.items?.firstOrNull { it.dealId == dealId }
+        }
+        if (conversation == null) {
+            banner = "الصفقة اتقبلت، لكن المحادثة لسه بتتجهز. حدّث بعد لحظات."
+            return false
+        }
+        open(conversation)
+        return true
+    }
+
     suspend fun reloadThread() {
         selectedConversation?.let { loadThread(it, silent = true) }
     }

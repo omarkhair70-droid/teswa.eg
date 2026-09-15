@@ -28,8 +28,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +41,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.feature.offers.OffersContent
+import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.offers.OffersStateHolder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -46,19 +52,27 @@ import kotlinx.coroutines.launch
 fun MessagingScreen(
     initialSession: AuthSession,
     repository: MessagingRepository,
+    offersRepository: OffersRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
+    val offersHolder = remember(initialSession.user.id, offersRepository) { OffersStateHolder(initialSession, offersRepository) }
     val scope = rememberCoroutineScope()
+    var mode by remember { mutableStateOf(InboxMode.MESSAGES) }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
+        offersHolder.updateSession(initialSession)
         holder.load()
+        offersHolder.load()
     }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
-    LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
+    LaunchedEffect(offersHolder.session.accessToken) { onSessionUpdated(offersHolder.session) }
+    LaunchedEffect(holder.sessionExpired, offersHolder.sessionExpired) {
+        if (holder.sessionExpired || offersHolder.sessionExpired) onSessionExpired()
+    }
     LaunchedEffect(holder.selectedConversation?.dealId) {
         while (isActive) {
             delay(30_000)
@@ -81,14 +95,32 @@ fun MessagingScreen(
             Column {
                 Text("الرسائل", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    unreadLabel(holder.inboxState),
+                    if (mode == InboxMode.MESSAGES) unreadLabel(holder.inboxState) else offerLabel(offersHolder.state),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedButton(onClick = { scope.launch { holder.load(silent = true) } }) { Text("تحديث") }
+            OutlinedButton(onClick = {
+                scope.launch {
+                    if (mode == InboxMode.MESSAGES) holder.load(silent = true) else offersHolder.load(silent = true)
+                }
+            }) { Text("تحديث") }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
+        InboxModePicker(mode) { mode = it }
+        if (mode == InboxMode.OFFERS) {
+            OffersContent(
+                holder = offersHolder,
+                onOpenDeal = { dealId ->
+                    scope.launch {
+                        mode = InboxMode.MESSAGES
+                        holder.openDeal(dealId)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+            return@Column
+        }
         holder.banner?.let { OfflineBanner(it) { scope.launch { holder.load(silent = true) } } }
 
         when (val state = holder.inboxState) {
@@ -117,6 +149,31 @@ fun MessagingScreen(
                 }
             }
         }
+    }
+}
+
+private enum class InboxMode { MESSAGES, OFFERS }
+
+@Composable
+private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        HubModeChip("محادثات الصفقات", selected == InboxMode.MESSAGES, Modifier.weight(1f)) { onSelect(InboxMode.MESSAGES) }
+        HubModeChip("العروض", selected == InboxMode.OFFERS, Modifier.weight(1f)) { onSelect(InboxMode.OFFERS) }
+    }
+}
+
+@Composable
+private fun HubModeChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Text(label, Modifier.padding(horizontal = 12.dp, vertical = 11.dp), fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -332,6 +389,11 @@ private fun OfflineBanner(message: String, retry: () -> Unit) {
 private fun unreadLabel(state: InboxUiState): String {
     val count = (state as? InboxUiState.Content)?.items?.sumOf { it.unreadCount } ?: 0
     return if (count > 0) "$count غير مقروء" else "تنسيق صفقاتك في مكان واحد"
+}
+
+private fun offerLabel(state: com.teswa.mobile.feature.offers.OffersUiState): String {
+    val count = (state as? com.teswa.mobile.feature.offers.OffersUiState.Content)?.inbox?.incoming?.size ?: 0
+    return if (count > 0) "$count عرض مستني ردك" else "تابع عروض التبديل"
 }
 
 private fun shortDate(value: String): String {

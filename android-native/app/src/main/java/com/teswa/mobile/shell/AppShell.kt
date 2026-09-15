@@ -28,6 +28,7 @@ import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AddItemScreen
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
+import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 import kotlinx.coroutines.launch
@@ -47,6 +48,7 @@ fun AppShell(
     homeClient: OracleHomeClient,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
+    offersRepository: OffersRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -88,6 +90,7 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
                 initialSession = session,
                 repository = messagingRepository,
+                offersRepository = offersRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
             )
