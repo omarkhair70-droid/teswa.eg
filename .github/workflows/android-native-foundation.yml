@@ -1,0 +1,28 @@
+name: Android Native Foundation
+
+on:
+  pull_request:
+    paths:
+      - 'android-native/**'
+      - '.github/workflows/android-native-foundation.yml'
+  push:
+    branches:
+      - 'native/android-kotlin-foundation-20260915'
+    paths:
+      - 'android-native/**'
+      - '.github/workflows/android-native-foundation.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Assemble native debug app
+        run: gradle -p android-native :app:assembleDebug --stacktrace
