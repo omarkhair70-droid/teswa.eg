@@ -1,0 +1,1 @@
+Native auth unit tests currently cover local session-expiry semantics. Device-level Credential Manager and Oracle exchange behavior are exercised by the Android build plus real-device internal-testing smoke checks before release.

@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - 'native/android-kotlin-foundation-20260915'
+      - 'native/android-auth-oracle-20260915'
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-foundation.yml'
@@ -24,5 +25,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
+      - name: Run native unit tests
+        run: gradle -p android-native :app:testDebugUnitTest --stacktrace
       - name: Assemble native debug app
         run: gradle -p android-native :app:assembleDebug --stacktrace

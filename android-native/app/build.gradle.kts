@@ -13,6 +13,9 @@ android {
         targetSdk = 36
         versionCode = 26
         versionName = "1.0.11"
+
+        buildConfigField("String", "TESWA_API_BASE_URL", "\"https://130-110-122-142.sslip.io\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"918426406146-dog29tsebc44ed5nsh71qirkt53l70in.apps.googleusercontent.com\"")
     }
 
     buildFeatures {
@@ -38,6 +41,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
 
+    implementation("androidx.credentials:credentials:1.7.0-alpha03")
+    implementation("androidx.credentials:credentials-play-services-auth:1.7.0-alpha03")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
