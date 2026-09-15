@@ -42,6 +42,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.settings.SettingsRepository
+import com.teswa.mobile.feature.settings.SettingsScreen
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 fun ProfileScreen(
     initialSession: AuthSession,
     repository: ProfileRepository,
+    settingsRepository: SettingsRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     onAddItem: () -> Unit,
@@ -58,6 +61,7 @@ fun ProfileScreen(
     val holder = remember(initialSession.user.id, repository) { ProfileStateHolder(initialSession, repository) }
     val scope = rememberCoroutineScope()
     var listingConfirmation by remember { mutableStateOf<Pair<MyListing, ListingAction>?>(null) }
+    var showingSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -65,6 +69,19 @@ fun ProfileScreen(
     }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
+
+    if (showingSettings) {
+        SettingsScreen(
+            initialSession = holder.session,
+            repository = settingsRepository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = { showingSettings = false },
+            onSignOut = onSignOut,
+            modifier = modifier,
+        )
+        return
+    }
 
     holder.editDraft?.let { draft ->
         ProfileEditContent(holder, draft, modifier)
@@ -94,8 +111,9 @@ fun ProfileScreen(
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     Button(onClick = holder::beginEdit, modifier = Modifier.weight(1f)) { Text("تعديل الملف") }
-                    OutlinedButton(onClick = { scope.launch { holder.load(silent = true) } }) { Text("تحديث") }
+                    OutlinedButton(onClick = { showingSettings = true }, modifier = Modifier.weight(1f)) { Text("الإعدادات") }
                 }
+                TextButton(onClick = { scope.launch { holder.load(silent = true) } }, modifier = Modifier.fillMaxWidth()) { Text("تحديث البيانات") }
             }
             holder.message?.let { message -> item { ProfileMessage(message) } }
             state.overview.profile.bio?.let { bio ->

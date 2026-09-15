@@ -28,6 +28,7 @@ The current package responsibilities are:
 - `feature/messages/`: deal inbox, chronological text conversation, read state, reconnect polling, and composer state.
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
 - `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
+- `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
 - `shell/`: authenticated bottom-navigation shell.
 - `ui/`: shared UI utilities and the first Teswa light/dark color, type, and shape system; this grows through real native screens rather than an Expo visual port.
 
@@ -67,6 +68,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own profile and listing lifecycle | Implemented locally; avatar/device acceptance remains open | `GET /v1/profiles/me`, `POST /v1/profiles/update`, `GET /v1/marketplace/mine`, listing archive/reactivate/delete-archived |
+| Settings and account controls | Implemented locally; push permission/device acceptance remains open | profile privacy, notification preferences, blocked users/unblock, account deletion |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
 
 ## Add Item contract and native implementation
@@ -112,7 +114,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Stories required by the current product
 - [ ] In-app notifications, Android push, and tap routing
 - [ ] Nearby/location flows
-- [ ] Settings and account controls
+- [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion
 - [ ] Deep links and background/lifecycle behavior
 - [ ] Release AAB with existing Play signing identity
 - [ ] Real-device login, restore, refresh, media, and critical-flow smoke

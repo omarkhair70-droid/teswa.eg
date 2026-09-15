@@ -19,6 +19,7 @@ import com.teswa.mobile.feature.messages.MessagingScreen
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.ProfileScreen
+import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 
@@ -39,6 +40,7 @@ fun AppShell(
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
+    settingsRepository: SettingsRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -92,6 +94,7 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
                 initialSession = session,
                 repository = profileRepository,
+                settingsRepository = settingsRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
                 onAddItem = { selectedTab = AppTab.ADD },
