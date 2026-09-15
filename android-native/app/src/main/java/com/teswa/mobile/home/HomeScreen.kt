@@ -1,6 +1,7 @@
 package com.teswa.mobile.home
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,16 +41,21 @@ fun HomeScreen(
     initialSession: AuthSession,
     authRepository: AuthRepository,
     onSignOut: suspend () -> Unit,
+    modifier: Modifier = Modifier,
+    onSessionUpdated: (AuthSession) -> Unit = {},
 ) {
     val client = remember { OracleHomeClient() }
-    var session by remember(initialSession.accessToken) { mutableStateOf(initialSession) }
+    var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
     var state by remember(initialSession.user.id) { mutableStateOf<HomeUiState>(HomeUiState.Loading) }
     var selectedItemId by remember(initialSession.user.id) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun validSession(forceRefresh: Boolean = false): AuthSession? {
         return when (val auth = authRepository.ensureValid(session, forceRefresh = forceRefresh)) {
-            is AuthResult.Success -> auth.value.also { session = it }
+            is AuthResult.Success -> auth.value.also {
+                session = it
+                onSessionUpdated(it)
+            }
             is AuthResult.Failure -> {
                 state = HomeUiState.Error(auth.message)
                 null
@@ -102,25 +108,33 @@ fun HomeScreen(
     }
 
     LaunchedEffect(initialSession.accessToken) {
+        if (initialSession.accessToken != session.accessToken) {
+            session = initialSession
+        }
         load()
     }
 
     val selected = selectedItemId
     if (selected != null) {
-        ItemDetailScreen(
-            itemId = selected,
-            initialSession = session,
-            authRepository = authRepository,
-            onSessionUpdated = { session = it },
-            onBack = { selectedItemId = null },
-        )
+        Box(modifier = modifier.fillMaxSize()) {
+            ItemDetailScreen(
+                itemId = selected,
+                initialSession = session,
+                authRepository = authRepository,
+                onSessionUpdated = {
+                    session = it
+                    onSessionUpdated(it)
+                },
+                onBack = { selectedItemId = null },
+            )
+        }
         return
     }
 
     when (val current = state) {
         HomeUiState.Loading -> {
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -132,7 +146,7 @@ fun HomeScreen(
 
         is HomeUiState.Empty -> {
             Column(
-                modifier = Modifier
+                modifier = modifier
                     .fillMaxSize()
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -150,7 +164,7 @@ fun HomeScreen(
 
         is HomeUiState.Error -> {
             Column(
-                modifier = Modifier
+                modifier = modifier
                     .fillMaxSize()
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -168,7 +182,7 @@ fun HomeScreen(
 
         is HomeUiState.Content -> {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
