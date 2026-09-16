@@ -39,7 +39,11 @@ $storePassword = Require-EnvironmentVariable 'TESWA_RELEASE_STORE_PASSWORD'
 $keyAlias = Require-EnvironmentVariable 'TESWA_RELEASE_KEY_ALIAS'
 $keyPassword = Require-EnvironmentVariable 'TESWA_RELEASE_KEY_PASSWORD'
 $releaseApiBaseUrl = Require-EnvironmentVariable 'TESWA_RELEASE_API_BASE_URL'
-$expectedUploadFingerprint = Normalize-Fingerprint (Require-EnvironmentVariable 'TESWA_PLAY_UPLOAD_SHA256')
+
+# Official Google Play Console -> App Signature -> Upload key certificate SHA-256.
+# Public certificate fingerprint, not a signing secret. Update only after an intentional Play upload-key reset.
+$expectedUploadFingerprintDisplay = '9E:CE:E2:66:79:C8:7D:4F:6F:51:39:F1:96:7F:ED:20:01:06:C6:C0:FE:42:49:A8:31:8E:F8:84:90:FC:B7:F1'
+$expectedUploadFingerprint = Normalize-Fingerprint $expectedUploadFingerprintDisplay
 
 if (-not (Test-Path -LiteralPath $storeFile -PathType Leaf)) {
     throw "Keystore file not found: $storeFile"
@@ -65,6 +69,7 @@ Write-Host 'Version: 1.0.11 (26)'
 Write-Host "Release API: $releaseApiBaseUrl"
 Write-Host "Keystore: $storeFile"
 Write-Host "Alias: $keyAlias"
+Write-Host "Expected Play upload-key SHA-256: $expectedUploadFingerprintDisplay"
 
 $keytoolOutput = & $keytool -list -v -keystore $storeFile -alias $keyAlias '-storepass:env' 'TESWA_RELEASE_STORE_PASSWORD' 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -79,10 +84,10 @@ if (-not $fingerprintMatch.Success) {
 
 $actualUploadFingerprint = Normalize-Fingerprint $fingerprintMatch.Groups[1].Value
 if ($actualUploadFingerprint -ne $expectedUploadFingerprint) {
-    throw "Upload-key fingerprint mismatch. The configured keystore does not match TESWA_PLAY_UPLOAD_SHA256."
+    throw "Upload-key fingerprint mismatch. The configured keystore is not the Google Play upload key registered for Teswa. Expected $expectedUploadFingerprintDisplay but found $($fingerprintMatch.Groups[1].Value)."
 }
 
-Write-Host "Upload-key SHA-256 matched: $($fingerprintMatch.Groups[1].Value)"
+Write-Host "Upload-key SHA-256 matched Google Play: $($fingerprintMatch.Groups[1].Value)"
 
 $gradleCommand = Get-Command 'gradle.bat' -ErrorAction SilentlyContinue
 if ($null -eq $gradleCommand) {
