@@ -56,6 +56,21 @@ data class StoryDeleteOutcome(
     val storageCleanupComplete: Boolean,
 )
 
+data class StoryViewerPerson(
+    val userId: String,
+    val displayName: String?,
+    val username: String?,
+    val avatarUrl: String?,
+    val viewedAt: String,
+)
+
+data class StoryViewersContext(
+    val storyId: String,
+    val storyCreatedAt: String,
+    val storyCaption: String?,
+    val viewers: List<StoryViewerPerson>,
+)
+
 data class StoryMediaSelection(
     val uri: String,
     val displayName: String,

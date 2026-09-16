@@ -70,7 +70,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
 | Deal inbox, text coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, confirmations, complete-if-ready, completion notifications |
 | Direct and contextual messaging | Implemented locally; voice/device acceptance remains open | direct compose/inbox/requests/read/text, contextual inbox/thread/read/text/notification dispatch |
-| Stories | Implemented locally; owner-viewers/camera/device acceptance remains open | home groups, signed image/video viewer, view/like, contextual reply, streaming publish/cleanup, counts, delete |
+| Stories | Implemented locally; voice/device acceptance remains open | home groups, signed image/video viewer, view/like, contextual reply, gallery/camera create, streaming publish/cleanup, counts, owner viewers, delete |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own/public profiles and listing lifecycle | Implemented locally; avatar/trust/device acceptance remains open | own/public profile, owner active listings, follow/block state and actions, listing lifecycle |
@@ -118,7 +118,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal, offer, direct compose/text/request/read, and contextual text/read/polling flows implemented; voice remains)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
-- [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text reply, gallery create, streaming publish/cleanup, counts, manage, and delete implemented; owner viewer list, camera capture, and voice reply remain)
+- [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented; voice reply remains)
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal/contextual dispatch, and routes to native item/deal/offer/direct/contextual surfaces implemented; Android push/background and profile routes remain)
 - [ ] Nearby/location flows
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion

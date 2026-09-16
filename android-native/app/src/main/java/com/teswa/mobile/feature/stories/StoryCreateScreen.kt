@@ -34,7 +34,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,6 +59,7 @@ fun StoryCreateScreen(
     var progress by remember { mutableStateOf<StoryPublishProgress?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
+    var cameraTarget by remember { mutableStateOf<StoryCameraTarget?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
@@ -71,6 +71,22 @@ fun StoryCreateScreen(
                 draft = draft.copy(media = media)
                 message = null
             }
+        }
+    }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (captured && target != null) {
+            val media = resolver.resolve(target.uri)
+            if (media == null) {
+                target.discard()
+                message = "تعذر قراءة الصورة الملتقطة."
+            } else {
+                draft = draft.copy(media = media)
+                message = null
+            }
+        } else {
+            target?.discard()
         }
     }
     BackHandler(enabled = !publishing, onBack = onBack)
@@ -124,11 +140,22 @@ fun StoryCreateScreen(
                         }
                     }
                 }
-                Button(
-                    onClick = { picker.launch(arrayOf("image/*", "video/*")) },
-                    enabled = !publishing,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (media == null) "اختيار من الجهاز" else "تغيير الملف") }
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Button(
+                        onClick = { picker.launch(arrayOf("image/*", "video/*")) },
+                        enabled = !publishing,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(if (media == null) "اختيار من الجهاز" else "تغيير الملف") }
+                    OutlinedButton(
+                        onClick = {
+                            resolver.createCameraTarget().also {
+                                cameraTarget = it
+                                camera.launch(it.uri)
+                            }
+                        },
+                        enabled = !publishing,
+                    ) { Text("الكاميرا") }
+                }
             }
         }
         Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)) {

@@ -34,6 +34,10 @@ interface StoryRepository {
         session: AuthSession,
         story: StoryRecord,
     ): StoryResult<StoryDeleteOutcome>
+    suspend fun loadViewers(
+        session: AuthSession,
+        storyId: String,
+    ): StoryResult<StoryViewersContext?>
 }
 
 class OracleStoryRepository(
@@ -463,6 +467,32 @@ class OracleStoryRepository(
         }
     }
 
+    override suspend fun loadViewers(
+        session: AuthSession,
+        storyId: String,
+    ): StoryResult<StoryViewersContext?> {
+        val id = storyId.validId() ?: return StoryResult.Failure("معرّف القصة غير صالح.", session)
+        val path = "/v1/stories/$id/viewers?ownerId=${session.user.id}"
+        return when (val result = executor.execute(session, OracleRequest(path = path))) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> {
+                    if (!result.value.body.has("item") || result.value.body.isNull("item")) {
+                        StoryResult.Success(null, result.session)
+                    } else {
+                        val item = result.value.body.optJSONObject("item")
+                        val context = item?.let(::viewersContext)
+                            ?: return StoryResult.Failure("استجابة مشاهدي القصة غير مكتملة.", result.session)
+                        StoryResult.Success(context, result.session)
+                    }
+                }
+                401 -> expired(result.session)
+                403 -> StoryResult.Failure("قائمة المشاهدين متاحة لصاحب القصة فقط.", result.session)
+                else -> StoryResult.Failure("تعذر تحميل المشاهدين (${result.value.status}).", result.session)
+            }
+            else -> result.failure("تعذر تحميل المشاهدين الآن.")
+        }
+    }
+
     private suspend fun cleanup(session: AuthSession, objectBody: JSONObject): Pair<AuthSession, Boolean> {
         val body = JSONObject().put("objects", org.json.JSONArray().put(objectBody))
         return when (
@@ -559,6 +589,29 @@ class OracleStoryRepository(
             createdAt,
             expiresAt,
         )
+    }
+
+    private fun viewersContext(row: JSONObject): StoryViewersContext? {
+        val storyId = row.optString("storyId").validId() ?: return null
+        val createdAt = row.optString("storyCreatedAt").trim().takeIf(String::isNotEmpty) ?: return null
+        val raw = row.optJSONArray("viewers") ?: return null
+        val viewers = buildList {
+            for (index in 0 until raw.length()) {
+                val viewer = raw.optJSONObject(index) ?: continue
+                val userId = viewer.optString("viewerId").validId() ?: continue
+                val viewedAt = viewer.optString("viewedAt").trim().takeIf(String::isNotEmpty) ?: continue
+                add(
+                    StoryViewerPerson(
+                        userId,
+                        nullable(viewer, "displayName"),
+                        nullable(viewer, "username"),
+                        nullable(viewer, "avatarUrl"),
+                        viewedAt,
+                    ),
+                )
+            }
+        }
+        return StoryViewersContext(storyId, createdAt, nullable(row, "storyCaption"), viewers)
     }
 
     private fun booleanMap(row: JSONObject): Map<String, Boolean> = buildMap {

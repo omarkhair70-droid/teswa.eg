@@ -59,6 +59,10 @@ private class StoryManageStateHolder(
         private set
     var sessionExpired by mutableStateOf(false)
         private set
+    var viewersContext by mutableStateOf<StoryViewersContext?>(null)
+        private set
+    var loadingViewers by mutableStateOf(false)
+        private set
 
     fun updateSession(value: AuthSession) {
         if (value.user.id == session.user.id && value.accessToken != session.accessToken) session = value
@@ -96,6 +100,25 @@ private class StoryManageStateHolder(
         deletingId = null
     }
 
+    suspend fun openViewers(item: ManagedStory) {
+        if (loadingViewers) return
+        loadingViewers = true
+        message = null
+        when (val result = repository.loadViewers(session, item.story.id)) {
+            is StoryResult.Success -> {
+                session = result.session
+                viewersContext = result.value
+                if (result.value == null) message = "القصة لم تعد متاحة."
+            }
+            is StoryResult.Failure -> capture(result)
+        }
+        loadingViewers = false
+    }
+
+    fun closeViewers() {
+        viewersContext = null
+    }
+
     private fun capture(result: StoryResult.Failure) {
         result.session?.let { session = it }
         sessionExpired = result.unauthorized
@@ -123,6 +146,11 @@ fun StoryManageScreen(
     }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
+
+    holder.viewersContext?.let { context ->
+        StoryViewersContent(context, onBack = holder::closeViewers, modifier = modifier)
+        return
+    }
 
     when (val state = holder.state) {
         StoryManageUiState.Loading -> StoryManageCenter("بنحضّر قصصك…", modifier, loading = true)
@@ -192,6 +220,7 @@ fun StoryManageScreen(
                         item = item,
                         deleting = holder.deletingId == item.story.id,
                         onDelete = { confirming = item },
+                        onViewers = { scope.launch { holder.openViewers(item) } },
                     )
                 }
             }
@@ -215,7 +244,12 @@ fun StoryManageScreen(
 }
 
 @Composable
-private fun StoryManageRow(item: ManagedStory, deleting: Boolean, onDelete: () -> Unit) {
+private fun StoryManageRow(
+    item: ManagedStory,
+    deleting: Boolean,
+    onDelete: () -> Unit,
+    onViewers: () -> Unit,
+) {
     Card {
         Row(
             Modifier.fillMaxWidth().padding(12.dp),
@@ -251,6 +285,63 @@ private fun StoryManageRow(item: ManagedStory, deleting: Boolean, onDelete: () -
             }
             OutlinedButton(onClick = onDelete, enabled = !deleting) {
                 Text(if (deleting) "…" else "حذف")
+            }
+        }
+        if ((item.viewCount ?: 0) > 0) {
+            TextButton(onClick = onViewers, modifier = Modifier.fillMaxWidth()) {
+                Text("عرض المشاهدين")
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryViewersContent(
+    context: StoryViewersContext,
+    onBack: () -> Unit,
+    modifier: Modifier,
+) {
+    BackHandler(onBack = onBack)
+    LazyColumn(
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("مشاهدو القصة", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(context.storyCaption ?: "قصة بدون تعليق", maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                OutlinedButton(onClick = onBack) { Text("رجوع") }
+            }
+        }
+        if (context.viewers.isEmpty()) {
+            item { Text("لسه محدش شاف القصة.", Modifier.fillMaxWidth().padding(24.dp), textAlign = TextAlign.Center) }
+        } else {
+            items(context.viewers, key = { it.userId }) { viewer ->
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        NetworkImage(
+                            viewer.avatarUrl,
+                            viewer.displayName,
+                            Modifier.size(48.dp),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(viewer.displayName ?: viewer.username ?: "مستخدم تِسوى", fontWeight = FontWeight.SemiBold)
+                            viewer.username?.let { Text("@$it", style = MaterialTheme.typography.bodySmall) }
+                        }
+                        Text(viewer.viewedAt.take(16).replace('T', ' '), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
     }

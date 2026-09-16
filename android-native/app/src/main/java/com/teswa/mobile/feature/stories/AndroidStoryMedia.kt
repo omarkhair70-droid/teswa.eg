@@ -7,6 +7,8 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
+import androidx.core.content.FileProvider
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 
@@ -19,6 +21,7 @@ class AndroidStoryContentSource(
 }
 
 class StoryMediaResolver(context: Context) {
+    private val appContext = context.applicationContext
     private val resolver = context.contentResolver
 
     fun resolve(uri: Uri): StoryMediaSelection? {
@@ -51,6 +54,13 @@ class StoryMediaResolver(context: Context) {
         )
     }
 
+    fun createCameraTarget(): StoryCameraTarget {
+        val directory = File(appContext.cacheDir, "story-camera").apply { mkdirs() }
+        val file = File.createTempFile("teswa-story-", ".jpg", directory)
+        val uri = FileProvider.getUriForFile(appContext, "${appContext.packageName}.fileprovider", file)
+        return StoryCameraTarget(uri, file)
+    }
+
     private fun imageMetadata(uri: Uri): Triple<Int?, Int?, Int?> {
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         runCatching { resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) } }
@@ -72,5 +82,14 @@ class StoryMediaResolver(context: Context) {
         } finally {
             retriever.release()
         }
+    }
+}
+
+data class StoryCameraTarget(
+    val uri: Uri,
+    val file: File,
+) {
+    fun discard() {
+        file.delete()
     }
 }

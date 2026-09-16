@@ -179,6 +179,20 @@ class OracleStoryRepositoryTest {
         assertEquals("$authorId/story.jpg", objectBody?.getString("objectKey"))
     }
 
+    @Test
+    fun loadsOwnerViewerListFromExactRoute() = runBlocking {
+        val viewerId = "66666666-6666-6666-6666-666666666666"
+        val payload = JSONObject(
+            """{"item":{"storyId":"$storyId","storyCreatedAt":"2026-09-15T12:00:00Z","storyCaption":"حكاية","viewers":[{"viewerId":"$viewerId","displayName":"علي","username":"ali","avatarUrl":null,"viewedAt":"2026-09-15T13:00:00Z"}]}}""",
+        )
+        val transport = StoryQueue(response(200, payload))
+
+        val result = OracleStoryRepository(auth, transport).loadViewers(session, storyId) as StoryResult.Success
+
+        assertEquals(viewerId, result.value?.viewers?.single()?.userId)
+        assertEquals("/v1/stories/$storyId/viewers?ownerId=$me", transport.requests.single().path)
+    }
+
     private fun group() = StoryGroup(
         author = StoryAuthor(authorId, "سلمى", "salma", null),
         stories = listOf(

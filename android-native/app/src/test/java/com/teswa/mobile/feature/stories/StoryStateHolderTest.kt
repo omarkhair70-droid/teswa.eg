@@ -92,4 +92,9 @@ private class FakeStoryRepository(
         session: AuthSession,
         story: StoryRecord,
     ): StoryResult<StoryDeleteOutcome> = error("Not used")
+
+    override suspend fun loadViewers(
+        session: AuthSession,
+        storyId: String,
+    ): StoryResult<StoryViewersContext?> = error("Not used")
 }
