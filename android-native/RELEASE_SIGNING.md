@@ -1,46 +1,76 @@
-# Native Android release signing
+# Native Android release gate
 
-Teswa release signing must reuse the upload key already accepted by Google Play. Do not generate a new production key as part of the native rewrite.
+Teswa release artifacts must reuse the upload key already accepted by Google Play and must target an explicitly accepted Oracle release endpoint. Do not generate a new production key or silently ship the rehearsal endpoint as part of the native rewrite.
 
-The repository never stores the keystore or signing passwords. `android-native/app/build.gradle.kts` reads release signing only from these environment variables:
+## Required local environment
+
+The repository never stores signing material or production credentials. A signed release build uses:
 
 - `TESWA_RELEASE_STORE_FILE`
 - `TESWA_RELEASE_STORE_PASSWORD`
 - `TESWA_RELEASE_KEY_ALIAS`
 - `TESWA_RELEASE_KEY_PASSWORD`
+- `TESWA_RELEASE_API_BASE_URL`
 
-If all four are present, the `release` build type uses that signing config. If they are absent, normal unit tests, debug compilation, release compilation and lint still work, but `assembleRelease` / `bundleRelease` intentionally refuse to create a release artifact.
+The release verification helper also requires:
 
-## Verify the key before building
+- `TESWA_PLAY_UPLOAD_SHA256` — the SHA-256 fingerprint shown in **Google Play Console -> App integrity -> Upload key certificate**.
 
-Inspect the existing keystore certificate locally; let `keytool` prompt for the password instead of placing it in shell history:
+Normal unit tests, debug compilation, release compilation and lint can run without these values. `assembleRelease` / `bundleRelease` intentionally refuse to create a release artifact unless signing inputs and an explicit HTTPS release API URL are present.
 
-```powershell
-keytool -list -v -keystore $env:TESWA_RELEASE_STORE_FILE
-```
+The repository fallback API (`https://130-110-122-142.sslip.io`) is retained only so compile/test paths have a concrete configured endpoint. It originated as the public Oracle HTTPS rehearsal surface and must not be treated as production merely because release code compiles against it.
 
-Compare the certificate fingerprint with **Google Play Console -> App integrity -> Upload key certificate**. The Play app-signing certificate and upload-key certificate can be different; the upload-key certificate is the relevant identity for an AAB upload.
+## Preferred signed-AAB command
 
-## Build a signed v26 AAB locally
-
-From the `android-native` directory in PowerShell:
+From the repository root, after setting the required environment variables, run:
 
 ```powershell
-$env:TESWA_RELEASE_STORE_FILE = '<path-to-existing-keystore>'
-$env:TESWA_RELEASE_STORE_PASSWORD = '<local-secret>'
-$env:TESWA_RELEASE_KEY_ALIAS = '<existing-alias>'
-$env:TESWA_RELEASE_KEY_PASSWORD = '<local-secret>'
-.\gradlew.bat :app:bundleRelease
+powershell -ExecutionPolicy Bypass -File .\android-native\scripts\release-gate.ps1
 ```
 
-Expected output:
+The helper:
 
-`app\build\outputs\bundle\release\app-release.aab`
+1. refuses missing signing/API/fingerprint inputs;
+2. confirms the keystore file exists;
+3. requires an absolute HTTPS release API URL;
+4. reads the existing keystore certificate with `keytool` without printing the store password;
+5. compares its SHA-256 fingerprint to `TESWA_PLAY_UPLOAD_SHA256`;
+6. builds `:app:bundleRelease` only after that match;
+7. verifies the resulting AAB signature with `jarsigner`;
+8. prints the final AAB SHA-256 file hash for release evidence.
 
-The native application id remains `com.teswa.mobile` and versionCode remains `26`.
+Expected artifact:
 
-## Update-over-installed-app acceptance
+`android-native\app\build\outputs\bundle\release\app-release.aab`
 
-Use the signed AAB through Google Play Internal testing for the real update test. If Play App Signing is enabled, a locally signed APK uses the upload key while the APK installed from Play is signed with the Play app-signing key, so sideloading that local APK is not a valid update-over-Play proof.
+Release identity remains:
 
-Do not remove the legacy Expo/Supabase mobile runtime until the Play Internal update and Oracle production acceptance gates are both complete.
+- package: `com.teswa.mobile`
+- versionCode: `26`
+- versionName: `1.0.11`
+
+## Manual certificate inspection
+
+If certificate inspection is needed independently, use `keytool` and let the JDK read the password from the environment rather than placing it directly in command arguments:
+
+```powershell
+keytool -list -v -keystore $env:TESWA_RELEASE_STORE_FILE -alias $env:TESWA_RELEASE_KEY_ALIAS -storepass:env TESWA_RELEASE_STORE_PASSWORD
+```
+
+Compare the SHA-256 line with Google Play's **Upload key certificate**. The Play app-signing certificate and the upload-key certificate can be different; the upload-key certificate is the relevant identity for accepting an AAB upload.
+
+## Real update acceptance
+
+Upload the verified signed AAB to Google Play Internal testing, then update the existing `com.teswa.mobile` installation without uninstalling or clearing data. That is the authoritative update-over-installed-app proof.
+
+If Play App Signing is enabled, a locally signed APK normally carries the upload key while the Play-installed APK carries the Play app-signing key. Sideloading the local APK is therefore not a valid replacement for the Play Internal update test.
+
+After the Internal update, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android-native\scripts\device-smoke.ps1
+```
+
+The device helper does not install or replace the app. It checks the installed package/version, cold launch, the real `teswa://notifications` route, and captures evidence before printing the remaining manual critical-flow checklist.
+
+Do not remove the legacy Expo/Supabase mobile runtime until the physical-device, Play Internal update, and Oracle production acceptance gates are complete.
