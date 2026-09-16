@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="teswa_brand_background">#B8623F</color>
+    <color name="teswa_primary">#93482F</color>
+    <color name="teswa_primary_dark">#FFB59A</color>
+    <color name="teswa_launch_background">#F9F3EA</color>
+    <color name="teswa_launch_background_dark">#1A1210</color>
+</resources>

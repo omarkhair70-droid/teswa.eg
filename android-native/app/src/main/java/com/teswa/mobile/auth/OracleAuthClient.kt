@@ -1,56 +1,64 @@
 package com.teswa.mobile.auth
 
-import com.teswa.mobile.BuildConfig
-import kotlinx.coroutines.Dispatchers
+import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
+import com.teswa.mobile.core.network.OracleHttpMethod
+import com.teswa.mobile.core.network.OracleRequest
+import com.teswa.mobile.core.network.OracleResponse
+import com.teswa.mobile.core.network.OracleTransport
+import com.teswa.mobile.core.network.OracleTransportResult
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.IOException
-import java.net.ConnectException
-import java.net.HttpURLConnection
-import java.net.NoRouteToHostException
-import java.net.URL
-import java.net.UnknownHostException
 
 class OracleAuthClient(
-    private val baseUrl: String = BuildConfig.TESWA_API_BASE_URL.trimEnd('/'),
+    private val transport: OracleTransport = HttpUrlConnectionOracleTransport(),
 ) {
-    suspend fun exchangeGoogleIdToken(idToken: String): AuthResult<AuthSession> = withContext(Dispatchers.IO) {
+    suspend fun exchangeGoogleIdToken(idToken: String): AuthResult<AuthSession> {
         val body = JSONObject().put("id_token", idToken)
-        when (val response = requestWithConnectRetry("POST", "/v1/auth/google", body = body)) {
-            is TransportResult.Failure -> AuthResult.Failure(
+        return when (val response = requestWithConnectRetry(OracleHttpMethod.POST, "/v1/auth/google", body = body)) {
+            is OracleTransportResult.NetworkFailure -> AuthResult.Failure(
                 AuthResult.Reason.NETWORK,
                 "تعذر الوصول إلى خادم تِسوى بعد نجاح Google.",
                 retryable = true,
             )
-            is TransportResult.Response -> mapSessionResponse(response)
+            OracleTransportResult.InvalidResponse -> invalidResponse("استجابة تسجيل الدخول من الخادم غير صالحة.")
+            is OracleTransportResult.Response -> mapSessionResponse(response.value)
         }
     }
 
-    suspend fun refresh(refreshToken: String): AuthResult<AuthSession> = withContext(Dispatchers.IO) {
+    suspend fun refresh(refreshToken: String): AuthResult<AuthSession> {
         val body = JSONObject().put("refresh_token", refreshToken)
-        when (val response = request("POST", "/v1/auth/refresh", body = body)) {
-            is TransportResult.Failure -> AuthResult.Failure(
+        return when (val response = request(OracleHttpMethod.POST, "/v1/auth/refresh", body = body)) {
+            is OracleTransportResult.NetworkFailure -> AuthResult.Failure(
                 AuthResult.Reason.NETWORK,
                 "تعذر تجديد جلسة تِسوى.",
                 retryable = true,
             )
-            is TransportResult.Response -> mapSessionResponse(response)
+            OracleTransportResult.InvalidResponse -> invalidResponse("استجابة تجديد الجلسة غير صالحة.")
+            is OracleTransportResult.Response -> if (response.value.status == 401) {
+                AuthResult.Failure(AuthResult.Reason.SESSION_EXPIRED, "انتهت جلسة تِسوى.")
+            } else {
+                mapSessionResponse(response.value)
+            }
         }
     }
 
-    suspend fun validate(session: AuthSession): AuthResult<AuthSession> = withContext(Dispatchers.IO) {
-        when (val response = request("GET", "/v1/auth/session", accessToken = session.accessToken)) {
-            is TransportResult.Failure -> AuthResult.Failure(
+    suspend fun validate(session: AuthSession): AuthResult<AuthSession> {
+        return when (val response = request(
+            OracleHttpMethod.GET,
+            "/v1/auth/session",
+            accessToken = session.accessToken,
+        )) {
+            is OracleTransportResult.NetworkFailure -> AuthResult.Failure(
                 AuthResult.Reason.NETWORK,
                 "تعذر التحقق من الجلسة الآن.",
                 retryable = true,
             )
-            is TransportResult.Response -> {
-                when (response.status) {
+            OracleTransportResult.InvalidResponse -> invalidResponse("استجابة التحقق من الجلسة غير صالحة.")
+            is OracleTransportResult.Response -> {
+                when (response.value.status) {
                     200 -> {
-                        val user = mapUser(response.body.optJSONObject("user"))
-                            ?: return@withContext AuthResult.Failure(
+                        val user = mapUser(response.value.body.optJSONObject("user"))
+                            ?: return AuthResult.Failure(
                                 AuthResult.Reason.INVALID_RESPONSE,
                                 "استجابة الجلسة من الخادم غير صالحة.",
                             )
@@ -65,67 +73,45 @@ class OracleAuthClient(
                         "محاولات كثيرة. جرّب بعد قليل.",
                         retryable = true,
                     )
-                    else -> mapHttpFailure(response)
+                    else -> mapHttpFailure(response.value)
                 }
             }
         }
     }
 
-    suspend fun logout(accessToken: String) = withContext(Dispatchers.IO) {
-        request("POST", "/v1/auth/logout", accessToken = accessToken)
-        Unit
+    suspend fun logout(accessToken: String) {
+        request(OracleHttpMethod.POST, "/v1/auth/logout", accessToken = accessToken)
     }
 
     private suspend fun requestWithConnectRetry(
-        method: String,
+        method: OracleHttpMethod,
         path: String,
         body: JSONObject? = null,
         accessToken: String? = null,
-    ): TransportResult {
+    ): OracleTransportResult {
         val first = request(method, path, body, accessToken)
-        if (first !is TransportResult.Failure || !first.safeToRetry) return first
+        if (first !is OracleTransportResult.NetworkFailure || !first.safeToRetry) return first
         delay(350)
         return request(method, path, body, accessToken)
     }
 
-    private fun request(
-        method: String,
+    private suspend fun request(
+        method: OracleHttpMethod,
         path: String,
         body: JSONObject? = null,
         accessToken: String? = null,
-    ): TransportResult {
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
-                requestMethod = method
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "TeswaNative/${BuildConfig.VERSION_NAME} Android")
-                if (accessToken != null) setRequestProperty("Authorization", "Bearer $accessToken")
-                if (body != null) {
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(body.toString()) }
-                }
-            }
-
-            val status = connection.responseCode
-            val stream = if (status in 200..399) connection.inputStream else connection.errorStream
-            val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            val parsed = runCatching { if (raw.isBlank()) JSONObject() else JSONObject(raw) }.getOrElse { JSONObject() }
-            TransportResult.Response(status, parsed)
-        } catch (error: IOException) {
-            TransportResult.Failure(
-                error,
-                safeToRetry = error is ConnectException || error is UnknownHostException || error is NoRouteToHostException,
-            )
-        } finally {
-            connection?.disconnect()
-        }
+    ): OracleTransportResult {
+        return transport.execute(
+            OracleRequest(
+                method = method,
+                path = path,
+                body = body,
+                bearerToken = accessToken,
+            ),
+        )
     }
 
-    private fun mapSessionResponse(response: TransportResult.Response): AuthResult<AuthSession> {
+    private fun mapSessionResponse(response: OracleResponse): AuthResult<AuthSession> {
         if (response.status !in 200..299) return mapHttpFailure(response)
         val session = mapSession(response.body)
             ?: return AuthResult.Failure(
@@ -135,7 +121,7 @@ class OracleAuthClient(
         return AuthResult.Success(session)
     }
 
-    private fun mapHttpFailure(response: TransportResult.Response): AuthResult.Failure {
+    private fun mapHttpFailure(response: OracleResponse): AuthResult.Failure {
         val error = response.body.optString("error", "unknown")
         return when {
             response.status == 401 && (error == "invalid_session" || error == "invalid_refresh_token") ->
@@ -180,13 +166,9 @@ class OracleAuthClient(
         return body.optString(key).takeIf { it.isNotBlank() }
     }
 
-    private sealed interface TransportResult {
-        data class Response(val status: Int, val body: JSONObject) : TransportResult
-        data class Failure(val error: IOException, val safeToRetry: Boolean) : TransportResult
-    }
+    private fun invalidResponse(message: String) = AuthResult.Failure(
+        AuthResult.Reason.INVALID_RESPONSE,
+        message,
+    )
 
-    private companion object {
-        const val CONNECT_TIMEOUT_MS = 8_000
-        const val READ_TIMEOUT_MS = 12_000
-    }
 }

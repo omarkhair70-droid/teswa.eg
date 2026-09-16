@@ -28,9 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.teswa.mobile.auth.AuthRepository
-import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.additem.EditListingRepository
+import com.teswa.mobile.feature.additem.EditListingScreen
+import com.teswa.mobile.feature.offers.OfferCreationScreen
+import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -38,44 +41,60 @@ import kotlinx.coroutines.launch
 fun ItemDetailScreen(
     itemId: String,
     initialSession: AuthSession,
-    authRepository: AuthRepository,
+    client: OracleHomeClient,
+    editListingRepository: EditListingRepository,
+    offersRepository: OffersRepository,
     onSessionUpdated: (AuthSession) -> Unit,
+    onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
+    onOfferCreated: () -> Unit,
+    onAddItem: () -> Unit,
+    onOpenOwner: (String) -> Unit,
+    onReport: (ReportTarget) -> Unit,
 ) {
-    val client = remember { OracleHomeClient() }
-    var session by remember(initialSession.accessToken) { mutableStateOf(initialSession) }
-    var state by remember(itemId) { mutableStateOf<ItemDetailUiState>(ItemDetailUiState.Loading) }
+    val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
-
-    suspend fun load(forceRefresh: Boolean = false) {
-        state = ItemDetailUiState.Loading
-        val valid = when (val result = authRepository.ensureValid(session, forceRefresh = forceRefresh)) {
-            is AuthResult.Success -> result.value
-            is AuthResult.Failure -> {
-                state = ItemDetailUiState.Error(result.message)
-                return
-            }
-        }
-        session = valid
-        onSessionUpdated(valid)
-
-        when (val detail = client.fetchDetail(valid, itemId)) {
-            is HomeFeedResult.Success -> state = ItemDetailUiState.Content(detail.value)
-            is HomeFeedResult.Failure -> {
-                if (detail.unauthorized && !forceRefresh) {
-                    load(forceRefresh = true)
-                } else {
-                    state = ItemDetailUiState.Error(detail.message)
-                }
-            }
-        }
-    }
+    var creatingOffer by remember(itemId) { mutableStateOf(false) }
+    var editing by remember(itemId) { mutableStateOf(false) }
 
     LaunchedEffect(itemId, initialSession.accessToken) {
-        load()
+        holder.updateSession(initialSession)
+        holder.load()
     }
 
-    when (val current = state) {
+    LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
+    LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
+
+    if (editing) {
+        EditListingScreen(
+            itemId = itemId,
+            initialSession = holder.session,
+            repository = editListingRepository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = {
+                editing = false
+                scope.launch { holder.load() }
+            },
+        )
+        return
+    }
+
+    if (creatingOffer) {
+        OfferCreationScreen(
+            requestedItemId = itemId,
+            initialSession = holder.session,
+            repository = offersRepository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = { creatingOffer = false },
+            onAddItem = onAddItem,
+            onOfferSent = onOfferCreated,
+        )
+        return
+    }
+
+    when (val current = holder.state) {
         ItemDetailUiState.Loading -> {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -90,15 +109,13 @@ fun ItemDetailScreen(
 
         is ItemDetailUiState.Error -> {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
+                modifier = Modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(current.message)
                 Spacer(Modifier.height(16.dp))
-                Button(onClick = { scope.launch { load() } }) { Text("إعادة المحاولة") }
+                Button(onClick = { scope.launch { holder.load() } }) { Text("إعادة المحاولة") }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onBack) { Text("رجوع") }
             }
@@ -120,11 +137,17 @@ fun ItemDetailScreen(
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
-                        val meta = listOfNotNull(detail.category, detail.condition, detail.city, detail.area)
-                            .joinToString(" • ")
+                        val meta = listOfNotNull(detail.category, detail.condition, detail.city, detail.area).joinToString(" • ")
                         if (meta.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
                             Text(meta, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (detail.ownerId == holder.session.user.id) {
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { editing = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("تعديل العنصر") }
                         }
                     }
                 }
@@ -139,9 +162,7 @@ fun ItemDetailScreen(
                                 NetworkImage(
                                     url = imageUrl,
                                     contentDescription = detail.title,
-                                    modifier = Modifier
-                                        .width(300.dp)
-                                        .height(260.dp),
+                                    modifier = Modifier.width(300.dp).height(260.dp),
                                 )
                             }
                         }
@@ -159,7 +180,31 @@ fun ItemDetailScreen(
 
                         val owner = detail.ownerDisplayName ?: detail.ownerUsername
                         if (!owner.isNullOrBlank()) {
-                            DetailSection("صاحب العنصر", owner)
+                            Spacer(Modifier.height(12.dp))
+                            Text("صاحب العنصر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(6.dp))
+                            if (detail.ownerId != null && detail.ownerId != holder.session.user.id) {
+                                OutlinedButton(onClick = { onOpenOwner(detail.ownerId) }, modifier = Modifier.fillMaxWidth()) { Text(owner) }
+                            } else {
+                                Text(owner, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                        if (detail.ownerId != null && detail.ownerId != holder.session.user.id) {
+                            Spacer(Modifier.height(18.dp))
+                            Button(
+                                onClick = { creatingOffer = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("قدّم عرض تبديل") }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "هتختار عنصر نشط من حاجتك، والقرار يفضل عند صاحب العنصر.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = { onReport(ReportTarget.Item(detail.id, detail.title)) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("الإبلاغ عن العنصر") }
                         }
                     }
                 }

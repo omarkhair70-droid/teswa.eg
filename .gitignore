@@ -6,6 +6,14 @@ web-build/
 npm-debug.*
 .DS_Store
 
+# Android signing material must stay local / secret-backed.
+*.keystore
+*.jks
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+
 # @generated expo-cli sync-6f4f90f9c7239a4f
 expo-env.d.ts
 # Python migration-tool bytecode

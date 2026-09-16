@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Runs on teswa-core-01 only. Installs the Teswa-owned push worker in rehearsal
-# mode. Outbound Expo delivery is explicitly disabled; a synthetic local probe is
+# mode. Outbound delivery is explicitly disabled; a synthetic local probe is
 # created and cleaned to verify claim/payload/preference/device semantics.
 
 STAGE="${1:?stage directory required}"
@@ -68,6 +68,7 @@ Group=teswapush
 Environment=PYTHONUNBUFFERED=1
 Environment=TESWA_DB=teswa_rehearsal
 Environment=TESWA_PUSH_SEND_ENABLED=0
+Environment=TESWA_FCM_SERVICE_ACCOUNT_FILE=/etc/teswa/fcm-service-account.json
 ExecStart=/usr/bin/python3 $APP/worker.py --sleep 2
 Restart=on-failure
 RestartSec=2
@@ -97,7 +98,7 @@ sudo touch "$MARK"
 sudo systemctl daemon-reload
 
 HEALTH="$(sudo -u teswapush env TESWA_DB="$DB" TESWA_PUSH_SEND_ENABLED=0 python3 "$APP/worker.py" --health)"
-printf '%s' "$HEALTH" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x["status"]=="ok" and x["outboxReady"] is True and x["sendEnabled"] is False and x["supabaseRuntimeDependency"] is False'
+printf '%s' "$HEALTH" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x["status"]=="ok" and x["outboxReady"] is True and x["sendEnabled"] is False and x["providers"]==["expo","fcm"] and x["supabaseRuntimeDependency"] is False'
 
 PROBE_USER="$(sudo -u postgres "$P" -d "$DB" -Atqc "SELECT id FROM teswa_identity.users ORDER BY id LIMIT 1")"
 [ -n "$PROBE_USER" ] || { echo 'push_worker_deploy=FAIL reason=no_probe_user'; exit 17; }
@@ -120,6 +121,8 @@ INSTALLED_SHA="$(sudo sha256sum "$APP/worker.py" | awk '{print $1}')"
 
 echo 'push_worker_database_auth=unix_peer_no_password'
 echo 'push_worker_send_enabled=false'
+echo 'push_worker_providers=expo,fcm'
+echo 'push_worker_fcm_credentials=external_not_modified'
 echo 'push_worker_outbound_probe=false'
 echo 'push_worker_claim_probe=PASS'
 echo 'push_worker_payload_device_probe=PASS'

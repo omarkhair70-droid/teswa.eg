@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -35,10 +36,10 @@ class SessionStore(context: Context) {
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val ciphertext = cipher.doFinal(payload)
 
-        preferences.edit()
-            .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .putString(KEY_PAYLOAD, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
-            .apply()
+        preferences.edit {
+            putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            putString(KEY_PAYLOAD, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+        }
     }
 
     fun read(): AuthSession? {
@@ -61,7 +62,7 @@ class SessionStore(context: Context) {
     }
 
     fun clear() {
-        preferences.edit().clear().apply()
+        preferences.edit { clear() }
     }
 
     private fun getOrCreateKey(): SecretKey {

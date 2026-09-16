@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Teswa" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/teswa_primary_dark</item>
+        <item name="android:windowBackground">@color/teswa_launch_background_dark</item>
+        <item name="android:statusBarColor">@color/teswa_launch_background_dark</item>
+        <item name="android:navigationBarColor">@color/teswa_launch_background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

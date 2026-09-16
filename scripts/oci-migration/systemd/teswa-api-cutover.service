@@ -1,0 +1,15 @@
+[Unit]
+Description=Teswa Cutover API Gateway
+After=network-online.target teswa-auth-shadow.service teswa-domain-shadow.service teswa-realtime-shadow.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/teswa/api-shell
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/teswa/api-shell/cutover_gateway.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
