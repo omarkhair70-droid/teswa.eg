@@ -41,6 +41,7 @@ import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.shell.AppShell
 import com.teswa.mobile.ui.theme.TeswaTheme
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
                         notificationsRepository = container.notificationsRepository,
                         directRepository = container.directRepository,
                         contextualRepository = container.contextualRepository,
+                        storyRepository = container.storyRepository,
                         activity = this@MainActivity,
                     )
                 }
@@ -89,6 +91,7 @@ private fun TeswaAuthScreen(
     notificationsRepository: NotificationsRepository,
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
+    storyRepository: StoryRepository,
     activity: ComponentActivity,
 ) {
     var state by remember { mutableStateOf<AuthUiState>(AuthUiState.Restoring) }
@@ -124,6 +127,7 @@ private fun TeswaAuthScreen(
                         notificationsRepository = notificationsRepository,
                         directRepository = directRepository,
                         contextualRepository = contextualRepository,
+                        storyRepository = storyRepository,
                         onSignOut = {
                             repository.signOut()
                             state = AuthUiState.SignedOut

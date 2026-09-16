@@ -72,5 +72,21 @@ class MediaTests(unittest.TestCase):
             media.MediaApi(Auth(),store,Allowed(False)).handle('POST','/v1/media/signed-url','Bearer valid',dict(body))
         self.assertEqual(error.exception.status,403)
 
+    def test_active_story_read_allows_authenticated_non_owner_only_when_authorized(self):
+        owner='22222222-2222-4222-8222-222222222222'
+        key=owner+'/story.jpg'; physical='story-media/'+key
+        store=Storage(); store.objects[physical]={'sizeBytes':12,'contentType':'image/jpeg'}
+        class Allowed:
+            def __init__(self,value): self.value=value
+            def can_read(self,user_id,object_key): return self.value and user_id==UID and object_key==key
+        body={'purpose':'story_media','objectKey':key,'contentType':None,'sizeBytes':1,'expiresInSeconds':60}
+        status,out=media.MediaApi(Auth(),store,None,Allowed(True)).handle(
+            'POST','/v1/media/signed-url','Bearer valid',dict(body))
+        self.assertEqual(status,200); self.assertIn('signedUrl',out)
+        with self.assertRaises(media.ApiError) as error:
+            media.MediaApi(Auth(),store,None,Allowed(False)).handle(
+                'POST','/v1/media/signed-url','Bearer valid',dict(body))
+        self.assertEqual(error.exception.status,403)
+
 
 if __name__ == '__main__': unittest.main()

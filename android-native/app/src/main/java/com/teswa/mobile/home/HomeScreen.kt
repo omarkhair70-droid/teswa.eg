@@ -35,6 +35,10 @@ import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileScreen
+import com.teswa.mobile.feature.stories.StoriesRail
+import com.teswa.mobile.feature.stories.StoryRepository
+import com.teswa.mobile.feature.stories.StoryStateHolder
+import com.teswa.mobile.feature.stories.StoryViewerScreen
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -44,6 +48,7 @@ fun HomeScreen(
     client: OracleHomeClient,
     offersRepository: OffersRepository,
     publicProfileRepository: PublicProfileRepository,
+    storyRepository: StoryRepository,
     onSignOut: suspend () -> Unit,
     modifier: Modifier = Modifier,
     onSessionUpdated: (AuthSession) -> Unit = {},
@@ -54,22 +59,32 @@ fun HomeScreen(
     externalProfileId: String? = null,
     onExternalProfileConsumed: () -> Unit = {},
     onStartDirect: (DirectComposeTarget) -> Unit = {},
+    onStoryReplyOpened: (String) -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
+    val storyHolder = remember(initialSession.user.id, storyRepository) { StoryStateHolder(initialSession, storyRepository) }
     val scope = rememberCoroutineScope()
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
+        storyHolder.updateSession(initialSession)
         holder.load()
+        storyHolder.load()
     }
 
     LaunchedEffect(holder.session.accessToken) {
         onSessionUpdated(holder.session)
     }
+    LaunchedEffect(storyHolder.session.accessToken) {
+        onSessionUpdated(storyHolder.session)
+    }
 
     LaunchedEffect(holder.sessionExpired) {
         if (holder.sessionExpired) onSignOut()
+    }
+    LaunchedEffect(storyHolder.sessionExpired) {
+        if (storyHolder.sessionExpired) onSignOut()
     }
 
     LaunchedEffect(externalItemId) {
@@ -83,6 +98,15 @@ fun HomeScreen(
             selectedProfileId = it
             onExternalProfileConsumed()
         }
+    }
+
+    if (storyHolder.viewer != null) {
+        StoryViewerScreen(
+            holder = storyHolder,
+            onReplyOpened = onStoryReplyOpened,
+            modifier = modifier,
+        )
+        return
     }
 
     selectedProfileId?.let { profileId ->
@@ -192,6 +216,8 @@ fun HomeScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                 }
+
+                item { StoriesRail(storyHolder) }
 
                 items(current.items, key = { it.id }) { item ->
                     HomeFeedCard(item = item, onOpen = { holder.openItem(item.id) })

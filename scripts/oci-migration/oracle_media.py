@@ -6,7 +6,7 @@ import re
 import secrets
 from urllib.parse import urlsplit
 
-from oracle_domain_read import ApiError, AuthResolver, valid_uuid
+from oracle_domain_read import ApiError, AuthResolver, sql_text, valid_uuid
 from oracle_marketplace_write import PgWriteRunner
 
 PURPOSE_PREFIX = {
@@ -57,6 +57,16 @@ class DealMediaAuthorizer:
         return isinstance(result,dict) and result.get('allowed') is True
 
 
+class StoryMediaAuthorizer:
+    def __init__(self, db=None): self.db=db or PgWriteRunner()
+    def can_read(self, user_id, key):
+        if not isinstance(key,str) or not key or len(key)>1024: return False
+        result=self.db.query(user_id,"""SELECT json_build_object('allowed',EXISTS(
+          SELECT 1 FROM public.stories s WHERE s.expires_at>now()
+          AND %s IN(s.media_storage_path,s.media_thumbnail_storage_path)))""" % sql_text(key))
+        return isinstance(result,dict) and result.get('allowed') is True
+
+
 class OciStorage:
     def __init__(self, bucket='teswa-media'):
         try:
@@ -103,10 +113,11 @@ class OciStorage:
 
 
 class MediaApi:
-    def __init__(self, auth=None, storage=None, deal_authorizer=None):
+    def __init__(self, auth=None, storage=None, deal_authorizer=None, story_authorizer=None):
         self.auth = auth or AuthResolver()
         self.storage = storage
         self.deal_authorizer = deal_authorizer
+        self.story_authorizer = story_authorizer
 
     def store(self):
         if self.storage is None:
@@ -146,9 +157,12 @@ class MediaApi:
                 raise ApiError(400, 'invalid_expiry')
             purpose_value=body.get('purpose')
             purpose, key, _content_type, _size, physical = object_input(
-                body, user_id, False, allow_non_owner=purpose_value=='deal_voice')
+                body, user_id, False, allow_non_owner=purpose_value in ('deal_voice','story_media'))
             if purpose=='deal_voice':
                 authorizer=self.deal_authorizer or DealMediaAuthorizer()
+                if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
+            if purpose=='story_media' and user_id not in key.split('/'):
+                authorizer=self.story_authorizer or StoryMediaAuthorizer()
                 if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
             if self.store().head(physical) is None:
                 raise ApiError(404, 'media_not_found')

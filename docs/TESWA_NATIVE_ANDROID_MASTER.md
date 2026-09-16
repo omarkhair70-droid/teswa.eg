@@ -28,6 +28,7 @@ The current package responsibilities are:
 - `feature/messages/`: deal inbox, chronological text conversation, read state, reconnect polling, and composer state.
 - `feature/direct/`: privacy-aware compose entry, first-message requests, inbox, accept/ignore, read state, and text conversation.
 - `feature/contextual/`: story-context reply inbox, chronological text threads, read state, notification dispatch, and reconnect polling.
+- `feature/stories/`: home story rail, signed media viewer, image/video presentation, view/like mutations, and contextual text replies.
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
 - `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
 - `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
@@ -69,6 +70,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
 | Deal inbox, text coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, confirmations, complete-if-ready, completion notifications |
 | Direct and contextual messaging | Implemented locally; voice/device acceptance remains open | direct compose/inbox/requests/read/text, contextual inbox/thread/read/text/notification dispatch |
+| Story discovery and viewing | Implemented locally; creation/manage/device acceptance remains open | home groups, active media signing, image/video viewer, view/like, contextual reply |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own/public profiles and listing lifecycle | Implemented locally; avatar/trust/device acceptance remains open | own/public profile, owner active listings, follow/block state and actions, listing lifecycle |
@@ -116,7 +118,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal, offer, direct compose/text/request/read, and contextual text/read/polling flows implemented; voice remains)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
-- [ ] Stories required by the current product
+- [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, and contextual text reply implemented; native create/manage/viewers remain)
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal/contextual dispatch, and routes to native item/deal/offer/direct/contextual surfaces implemented; Android push/background and profile routes remain)
 - [ ] Nearby/location flows
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion

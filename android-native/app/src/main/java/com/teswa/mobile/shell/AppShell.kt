@@ -27,6 +27,7 @@ import com.teswa.mobile.feature.notifications.NotificationsScreen
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 
@@ -53,6 +54,7 @@ fun AppShell(
     notificationsRepository: NotificationsRepository,
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
+    storyRepository: StoryRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -85,6 +87,7 @@ fun AppShell(
                 client = homeClient,
                 offersRepository = offersRepository,
                 publicProfileRepository = publicProfileRepository,
+                storyRepository = storyRepository,
                 onSessionUpdated = { session = it },
                 onSignOut = onSignOut,
                 modifier = Modifier.padding(padding),
@@ -96,6 +99,10 @@ fun AppShell(
                 onExternalProfileConsumed = { externalProfileId = null },
                 onStartDirect = { target ->
                     externalDirectTarget = target
+                    selectedTab = AppTab.MESSAGES
+                },
+                onStoryReplyOpened = { conversationId ->
+                    externalContextualId = conversationId
                     selectedTab = AppTab.MESSAGES
                 },
             )
