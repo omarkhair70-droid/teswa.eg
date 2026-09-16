@@ -32,6 +32,17 @@ class OraclePublicProfileRepositoryTest {
             response(200, JSONObject("""{"items":[{"id":"$item","title":"كتاب","imageUrl":null,"category":"كتب","city":"الجيزة","area":null}]}""")),
             response(200, JSONObject("""{"followingByMe":true,"followsMe":false,"mutual":false,"followerCount":7,"followingCount":4}""")),
             response(200, JSONObject("""{"blockedByMe":false,"blockedMe":false,"isBlockedEitherDirection":false}""")),
+            response(200, JSONObject("""{"metrics":{
+              "userId":"$other","successfulSwapsCount":3,"completedDealsCount":4,"cancelledDealsCount":1,
+              "totalReviewsReceived":3,"averageRating":4.7,"clearDescriptionCount":2,
+              "goodCommunicationCount":3,"onTimeCount":2,"respectfulSwapperCount":3,
+              "responseRate":90.5,"avgResponseTimeMinutes":18.0,"trustLevelKey":"reliable_swapper","trustScore":78
+            }}""")),
+            response(200, JSONObject("""{"items":[{
+              "badgeKey":"reliable_swapper","labelAr":"موثوق في التبديل",
+              "descriptionAr":"عنده سجل جيد","category":"trust","iconName":null,
+              "priority":10,"awardedAt":"2026-09-01T00:00:00Z"
+            }]}""")),
         )
 
         val result = OraclePublicProfileRepository(auth, transport).load(session, other) as ProfileResult.Success
@@ -40,12 +51,16 @@ class OraclePublicProfileRepositoryTest {
         assertEquals("كتاب", result.value.listings.single().title)
         assertEquals(7, result.value.follow.followerCount)
         assertTrue(result.value.follow.followingByMe)
+        assertEquals(78, result.value.trust?.trustScore)
+        assertEquals("موثوق في التبديل", result.value.badges.single().labelAr)
         assertEquals(
             listOf(
                 "/v1/profiles/$other",
                 "/v1/marketplace/owners/$other/active?limit=12",
                 "/v1/profiles/$other/follow-state",
                 "/v1/profiles/$other/block-state",
+                "/v1/profiles/$other/trust",
+                "/v1/profiles/$other/badges",
             ),
             transport.requests.map { it.path },
         )

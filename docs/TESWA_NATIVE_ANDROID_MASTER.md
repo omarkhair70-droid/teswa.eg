@@ -31,7 +31,7 @@ The current package responsibilities are:
 - `feature/stories/`: home story rail, signed image/video viewer, view/like mutations, contextual text/voice replies, streaming publish, and owned-story management.
 - `feature/voice/`: permission-aware AAC capture, review/cancel/send state, streaming private-media upload/cleanup, signed playback, and shared voice UI.
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
-- `feature/profile/`: own-profile editing, streaming avatar/cover replacement and cleanup, owned-listing presentation, and guarded listing lifecycle actions.
+- `feature/profile/`: own-profile editing, streaming avatar/cover replacement and cleanup, public trust/badge presentation, owned-listing presentation, and guarded listing lifecycle actions.
 - `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
 - `feature/notifications/`: in-app activity center, unread mutation, Firebase Installation ID registration, permission-aware native push display, native destination mapping, and best-effort domain-event dispatch.
 - `shell/`: authenticated bottom-navigation shell plus validated internal, `teswa://`, and Teswa HTTPS route handling.
@@ -75,7 +75,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Stories | Implemented locally; device acceptance remains open | home groups, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewers, delete |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
-| Own/public profiles and listing lifecycle | Implemented locally; trust detail/device acceptance remains open | own/public profile, avatar/cover media, owner active listings, follow/block state and actions, listing lifecycle |
+| Own/public profiles and listing lifecycle | Implemented locally; review authoring/device acceptance remains open | own/public profile, avatar/cover media, public trust metrics/badges, owner active listings, follow/block state and actions, listing lifecycle |
 | Settings and account controls | Implemented locally; push permission/device acceptance remains open | profile privacy, notification preferences, blocked users/unblock, account deletion |
 | In-app notifications and native push | Implemented locally; server credential/deployment and device/background acceptance remain open | list, read, read-all, device register/disable, FCM data delivery, native tap routes, domain dispatch |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
@@ -119,7 +119,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal/direct/contextual text and voice upload, cleanup, signed playback, offer/request/read, notifications, and polling implemented locally; physical-device and production acceptance remain)
-- [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, text editing, streaming avatar/cover replace/remove/cleanup, and listing lifecycle implemented; detailed trust, badges, and physical-device media acceptance remain)
+- [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, text editing, streaming avatar/cover replace/remove/cleanup, public trust metrics/badges, and listing lifecycle implemented; review authoring, own-profile trust summary, and physical-device media acceptance remain)
 - [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented locally; physical-device and production acceptance remain)
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, Firebase Installation ID register/disable, dual Expo/FCM worker routing, local display, and item/deal/offer/profile/direct/contextual routes implemented; FCM service-account provisioning, deployment, and physical-device background acceptance remain)
 - [ ] Nearby/location flows (optional one-shot native permission/location, 3 km Oracle nearby feed, and Add Item coordinate publishing implemented locally; physical-device acceptance remains)

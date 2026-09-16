@@ -16,12 +16,36 @@ import org.json.JSONObject
 
 data class PublicListing(val id: String, val title: String, val imageUrl: String?, val category: String?, val city: String?, val area: String?)
 data class FollowState(val followingByMe: Boolean, val followsMe: Boolean, val mutual: Boolean, val followerCount: Int, val followingCount: Int)
+data class TrustMetrics(
+    val completedDealsCount: Int,
+    val cancelledDealsCount: Int,
+    val totalReviewsReceived: Int,
+    val averageRating: Double?,
+    val clearDescriptionCount: Int,
+    val goodCommunicationCount: Int,
+    val onTimeCount: Int,
+    val respectfulSwapperCount: Int,
+    val responseRate: Double?,
+    val avgResponseTimeMinutes: Double?,
+    val trustLevelKey: String,
+    val trustScore: Int,
+)
+data class ProfileBadge(
+    val badgeKey: String,
+    val labelAr: String,
+    val descriptionAr: String,
+    val category: String,
+    val priority: Int,
+    val awardedAt: String?,
+)
 data class PublicProfileOverview(
     val profile: MyProfile,
     val listings: List<PublicListing>,
     val follow: FollowState,
     val blockedByMe: Boolean,
     val blockedMe: Boolean,
+    val trust: TrustMetrics?,
+    val badges: List<ProfileBadge>,
 )
 
 interface PublicProfileRepository {
@@ -73,12 +97,31 @@ class OraclePublicProfileRepository(
         val blockResponse = response(followResponse.session, "/v1/profiles/$id/block-state", "تعذر تحميل حالة الحظر.")
         if (blockResponse is ProfileResult.Failure) return blockResponse
         blockResponse as ProfileResult.Success
+
+        val trustResponse = response(blockResponse.session, "/v1/profiles/$id/trust", "تعذر تحميل مؤشر الثقة.")
+        if (trustResponse is ProfileResult.Failure) return trustResponse
+        trustResponse as ProfileResult.Success
+        val trust = if (trustResponse.value.isNull("metrics")) null else {
+            val raw = trustResponse.value.optJSONObject("metrics")
+                ?: return ProfileResult.Failure("استجابة مؤشر الثقة غير مكتملة.", trustResponse.session)
+            parseTrust(raw) ?: return ProfileResult.Failure("استجابة مؤشر الثقة غير صالحة.", trustResponse.session)
+        }
+
+        val badgesResponse = response(trustResponse.session, "/v1/profiles/$id/badges", "تعذر تحميل شارات الملف.")
+        if (badgesResponse is ProfileResult.Failure) return badgesResponse
+        badgesResponse as ProfileResult.Success
+        val badgesArray = badgesResponse.value.optJSONArray("items")
+            ?: return ProfileResult.Failure("استجابة شارات الملف غير مكتملة.", badgesResponse.session)
+        val badges = buildList {
+            for (index in 0 until badgesArray.length()) badgesArray.optJSONObject(index)?.let(::parseBadge)?.let(::add)
+        }
         return ProfileResult.Success(
             PublicProfileOverview(
                 profile.value, listings, followState,
                 blockResponse.value.optBoolean("blockedByMe"), blockResponse.value.optBoolean("blockedMe"),
+                trust, badges,
             ),
-            blockResponse.session,
+            badgesResponse.session,
         )
     }
 
@@ -132,6 +175,34 @@ class OraclePublicProfileRepository(
         )
     }
 
+    private fun parseTrust(body: JSONObject): TrustMetrics? {
+        val level = body.optString("trustLevelKey").takeIf { it in TRUST_LEVELS } ?: return null
+        val score = body.optInt("trustScore", -1).takeIf { it in 0..100 } ?: return null
+        fun count(key: String) = body.optInt(key, -1).takeIf { it >= 0 }
+        return TrustMetrics(
+            completedDealsCount = count("completedDealsCount") ?: return null,
+            cancelledDealsCount = count("cancelledDealsCount") ?: return null,
+            totalReviewsReceived = count("totalReviewsReceived") ?: return null,
+            averageRating = nullableDouble(body, "averageRating")?.coerceIn(0.0, 5.0),
+            clearDescriptionCount = count("clearDescriptionCount") ?: return null,
+            goodCommunicationCount = count("goodCommunicationCount") ?: return null,
+            onTimeCount = count("onTimeCount") ?: return null,
+            respectfulSwapperCount = count("respectfulSwapperCount") ?: return null,
+            responseRate = nullableDouble(body, "responseRate")?.coerceIn(0.0, 100.0),
+            avgResponseTimeMinutes = nullableDouble(body, "avgResponseTimeMinutes")?.coerceAtLeast(0.0),
+            trustLevelKey = level,
+            trustScore = score,
+        )
+    }
+
+    private fun parseBadge(body: JSONObject): ProfileBadge? {
+        val key = body.optString("badgeKey").trim().takeIf(String::isNotEmpty) ?: return null
+        val label = body.optString("labelAr").trim().takeIf(String::isNotEmpty) ?: return null
+        val description = body.optString("descriptionAr").trim().takeIf(String::isNotEmpty) ?: return null
+        val category = body.optString("category").trim().takeIf(String::isNotEmpty) ?: return null
+        return ProfileBadge(key, label, description, category, body.optInt("priority", 100).coerceAtLeast(0), nullable(body, "awardedAt"))
+    }
+
     private fun AuthenticatedOracleResult.failure(message: String): ProfileResult.Failure = when (this) {
         is AuthenticatedOracleResult.NetworkFailure -> ProfileResult.Failure(message, session, network = true)
         is AuthenticatedOracleResult.InvalidResponse -> ProfileResult.Failure("الخادم أعاد استجابة غير صالحة.", session)
@@ -140,8 +211,13 @@ class OraclePublicProfileRepository(
     }
     private fun expired(session: AuthSession) = ProfileResult.Failure("انتهت جلسة تِسوى.", session, unauthorized = true)
     private fun nullable(body: JSONObject, key: String): String? = if (!body.has(key) || body.isNull(key)) null else body.optString(key).trim().takeIf(String::isNotEmpty)
+    private fun nullableDouble(body: JSONObject, key: String): Double? =
+        if (!body.has(key) || body.isNull(key)) null else body.optDouble(key).takeIf(Double::isFinite)
     private fun String.validId() = trim().takeIf(UUID_LIKE::matches)
-    private companion object { val UUID_LIKE = Regex("^[0-9a-fA-F-]{36}$") }
+    private companion object {
+        val UUID_LIKE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        val TRUST_LEVELS = setOf("new_swapper", "rising_swapper", "reliable_swapper", "trusted_swapper")
+    }
 }
 
 sealed interface PublicProfileUiState {

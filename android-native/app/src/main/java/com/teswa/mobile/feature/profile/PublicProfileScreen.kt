@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,19 +76,22 @@ fun PublicProfileScreen(
                 item { OutlinedButton(onClick = onBack) { Text("رجوع") } }
                 item {
                     Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .48f)) {
-                        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            NetworkImage(profile.avatarUrl, profile.displayName, Modifier.size(92.dp).clip(CircleShape))
-                            Spacer(Modifier.height(10.dp))
-                            Text(profile.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                            Text("@${profile.username}", color = MaterialTheme.colorScheme.primary)
-                            profile.profileTagline?.let { Spacer(Modifier.height(6.dp)); Text(it, textAlign = TextAlign.Center) }
-                            val location = listOfNotNull(profile.area, profile.city).joinToString("، ")
-                            if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
-                            Spacer(Modifier.height(14.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                PublicStat("${state.overview.follow.followerCount}", "متابع", Modifier.weight(1f))
-                                PublicStat("${state.overview.follow.followingCount}", "يتابع", Modifier.weight(1f))
-                                PublicStat("${profile.successfulSwapsCount}", "تبديل", Modifier.weight(1f))
+                        Column(Modifier.fillMaxWidth()) {
+                            profile.coverUrl?.let { NetworkImage(it, "غلاف ${profile.displayName}", Modifier.fillMaxWidth().height(112.dp)) }
+                            Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                NetworkImage(profile.avatarUrl, profile.displayName, Modifier.size(92.dp).clip(CircleShape))
+                                Spacer(Modifier.height(10.dp))
+                                Text(profile.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                Text("@${profile.username}", color = MaterialTheme.colorScheme.primary)
+                                profile.profileTagline?.let { Spacer(Modifier.height(6.dp)); Text(it, textAlign = TextAlign.Center) }
+                                val location = listOfNotNull(profile.area, profile.city).joinToString("، ")
+                                if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(14.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    PublicStat("${state.overview.follow.followerCount}", "متابع", Modifier.weight(1f))
+                                    PublicStat("${state.overview.follow.followingCount}", "يتابع", Modifier.weight(1f))
+                                    PublicStat("${profile.successfulSwapsCount}", "تبديل", Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -121,6 +125,7 @@ fun PublicProfileScreen(
                     ) { Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر المستخدم") }
                     if (state.overview.blockedMe) Text("الحساب ده قافل التفاعل معاك.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
+                item { TrustSummary(state.overview.trust, state.overview.badges) }
                 profile.bio?.let { item { Card { Column(Modifier.padding(16.dp)) { Text("عن المستخدم", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(5.dp)); Text(it) } } } }
                 item { Text("حاجته النشطة", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                 if (state.overview.listings.isEmpty()) item { Text("مفيش عناصر نشطة حاليًا.", Modifier.fillMaxWidth().padding(20.dp), textAlign = TextAlign.Center) }
@@ -149,6 +154,74 @@ fun PublicProfileScreen(
             dismissButton = { TextButton(onClick = { confirmBlock = null }) { Text("رجوع") } },
         )
     }
+}
+
+@Composable
+private fun TrustSummary(metrics: TrustMetrics?, badges: List<ProfileBadge>) {
+    Card {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("الثقة على تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            if (metrics == null) {
+                Text("مؤشر الثقة بيتكوّن مع أول التبديلات والتقييمات الحقيقية.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(trustLevelLabel(metrics.trustLevelKey), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(trustLevelDescription(metrics.trustLevelKey), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text("${metrics.trustScore}/100", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+                LinearProgressIndicator(
+                    progress = { metrics.trustScore / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PublicStat("${metrics.completedDealsCount}", "صفقات مكتملة", Modifier.weight(1f))
+                    PublicStat("${metrics.totalReviewsReceived}", "تقييمات", Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val rating = metrics.averageRating?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "—"
+                    val response = metrics.responseRate?.let { "${it.toInt()}%" } ?: "—"
+                    PublicStat(rating, "متوسط التقييم", Modifier.weight(1f))
+                    PublicStat(response, "معدل الرد", Modifier.weight(1f))
+                }
+                val signals = buildList {
+                    if (metrics.clearDescriptionCount > 0) add("وصف واضح")
+                    if (metrics.goodCommunicationCount > 0) add("تواصل جيد")
+                    if (metrics.onTimeCount > 0) add("ملتزم بالميعاد")
+                    if (metrics.respectfulSwapperCount > 0) add("محترم في التبديل")
+                }
+                if (signals.isNotEmpty()) Text(signals.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+            }
+            if (badges.isNotEmpty()) {
+                Text("الشارات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                badges.sortedBy(ProfileBadge::priority).take(4).forEach { badge ->
+                    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .42f)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                            Text(badge.labelAr, fontWeight = FontWeight.Bold)
+                            Text(badge.descriptionAr, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun trustLevelLabel(key: String) = when (key) {
+    "new_swapper" -> "لسه بيبدأ"
+    "rising_swapper" -> "بيثبت حضوره"
+    "reliable_swapper" -> "موثوق في التبديل"
+    "trusted_swapper" -> "موثوق جدًا"
+    else -> "مؤشر الثقة"
+}
+
+private fun trustLevelDescription(key: String) = when (key) {
+    "new_swapper" -> "المؤشر بيتكوّن مع أول التبديلات والتقييمات."
+    "rising_swapper" -> "عنده إشارات إيجابية أولية في التبديل والتواصل."
+    "reliable_swapper" -> "عنده تجارب مكتملة وإشارات ثقة قوية."
+    "trusted_swapper" -> "سجل قوي في التبديل والتقييمات والتواصل."
+    else -> "الثقة مبنية على نشاط حقيقي داخل تِسوى."
 }
 
 @Composable private fun PublicStat(value: String, label: String, modifier: Modifier) {
