@@ -1,24 +1,35 @@
 package com.teswa.mobile.feature.safety
 
 import com.teswa.mobile.core.network.OracleHttpMethod
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class ReportingModelsTest {
-    @Test fun itemReasonsStayFocusedOnListingSafety() {
+    @Test
+    fun itemReasonsStayFocusedOnListingSafety() {
         val reasons = reasonsFor(ReportTarget.Item("item-1"))
         assertTrue(ReportReason.MISLEADING_ITEM in reasons)
         assertTrue(ReportReason.FRAUD in reasons)
         assertFalse(ReportReason.NO_SHOW in reasons)
     }
-    @Test fun dealReasonsIncludeNoShow() { assertTrue(ReportReason.NO_SHOW in reasonsFor(ReportTarget.Deal("deal-1"))) }
-    @Test fun directReportRequestCarriesExactContractIdentifiers() {
-        val request = reportRequest(ReportTarget.DirectMessage("conversation-1", "message-1", "user-2"), ReportReason.HARASSMENT, "  تفاصيل  ")
-        assertNotNull(request)
+
+    @Test
+    fun dealReasonsIncludeNoShow() {
+        assertTrue(ReportReason.NO_SHOW in reasonsFor(ReportTarget.Deal("deal-1")))
+    }
+
+    @Test
+    fun directReportRequestCarriesExactContractIdentifiers() {
+        val request = requireNotNull(
+            reportRequest(
+                ReportTarget.DirectMessage("conversation-1", "message-1", "user-2"),
+                ReportReason.HARASSMENT,
+                "  تفاصيل  ",
+            ),
+        )
         assertEquals(OracleHttpMethod.POST, request.method)
         assertEquals("/v1/moderation/reports/direct-message", request.path)
         assertEquals("conversation-1", request.body?.optString("conversationId"))
@@ -27,16 +38,29 @@ class ReportingModelsTest {
         assertEquals("harassment", request.body?.optString("reason"))
         assertEquals("تفاصيل", request.body?.optString("details"))
     }
-    @Test fun dealMessageUsesDealMessageEndpoint() {
-        val request = reportRequest(ReportTarget.DealMessage("deal-1", "message-2"), ReportReason.NO_SHOW, null)
-        assertNotNull(request)
+
+    @Test
+    fun dealMessageUsesDealMessageEndpoint() {
+        val request = requireNotNull(
+            reportRequest(
+                ReportTarget.DealMessage("deal-1", "message-2"),
+                ReportReason.NO_SHOW,
+                null,
+            ),
+        )
         assertEquals("/v1/moderation/reports/deal-message", request.path)
         assertEquals("deal-1", request.body?.optString("dealId"))
         assertEquals("message-2", request.body?.optString("dealMessageId"))
         assertTrue(request.body?.isNull("details") == true)
     }
-    @Test fun invalidEmptyTargetIsRejectedBeforeNetwork() { assertNull(reportRequest(ReportTarget.User(""), ReportReason.OTHER, null)) }
-    @Test fun targetKeyIsStableAcrossDisplayLabels() {
+
+    @Test
+    fun invalidEmptyTargetIsRejectedBeforeNetwork() {
+        assertNull(reportRequest(ReportTarget.User(""), ReportReason.OTHER, null))
+    }
+
+    @Test
+    fun targetKeyIsStableAcrossDisplayLabels() {
         assertEquals("user:u1", ReportTarget.User("u1", "أحمد").key)
         assertEquals("item:i1", ReportTarget.Item("i1", "كتاب").key)
     }
