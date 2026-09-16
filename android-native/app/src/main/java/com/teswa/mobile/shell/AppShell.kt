@@ -276,6 +276,7 @@ fun AppShell(
                 repository = notificationsRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
+                onBack = { selectedTab = AppTab.HOME },
                 onDestination = { destination ->
                     when (destination) {
                         is NotificationDestination.Item -> {
