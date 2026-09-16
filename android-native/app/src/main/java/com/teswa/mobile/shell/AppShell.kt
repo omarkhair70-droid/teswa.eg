@@ -1,16 +1,25 @@
 package com.teswa.mobile.shell
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AddItemScreen
@@ -24,6 +33,8 @@ import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationDestination
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NotificationsScreen
+import com.teswa.mobile.feature.notifications.NativePushManager
+import com.teswa.mobile.feature.notifications.PushRegistrationResult
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.contextual.ContextualRepository
@@ -32,6 +43,7 @@ import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import kotlinx.coroutines.launch
 
 private enum class AppTab(
     val label: String,
@@ -55,12 +67,17 @@ fun AppShell(
     publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
+    nativePushManager: NativePushManager,
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
+    launchRoute: String? = null,
+    onLaunchRouteConsumed: () -> Unit = {},
     onSignOut: suspend () -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
     var selectedTab by remember { mutableStateOf(AppTab.HOME) }
     var externalItemId by remember { mutableStateOf<String?>(null) }
@@ -70,6 +87,62 @@ fun AppShell(
     var externalDirectId by remember { mutableStateOf<String?>(null) }
     var externalDirectTarget by remember { mutableStateOf<DirectComposeTarget?>(null) }
     var externalContextualId by remember { mutableStateOf<String?>(null) }
+    var notificationPermissionRequested by remember { mutableStateOf(false) }
+
+    fun syncPush() {
+        scope.launch {
+            when (val result = nativePushManager.sync(session)) {
+                is PushRegistrationResult.Success -> session = result.session
+                is PushRegistrationResult.Failure -> result.session?.let { session = it }
+            }
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        notificationPermissionRequested = true
+        if (granted) syncPush()
+    }
+
+    LaunchedEffect(initialSession.user.id) {
+        if (
+            Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            syncPush()
+        }
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (
+            selectedTab == AppTab.NOTIFICATIONS &&
+            Build.VERSION.SDK_INT >= 33 &&
+            !notificationPermissionRequested &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    val signOutAndDisable: suspend () -> Unit = {
+        nativePushManager.disable(session)
+        onSignOut()
+    }
+
+    LaunchedEffect(launchRoute) {
+        when (val route = NativeRouteParser.parse(launchRoute)) {
+            is NativeRoute.Item -> { externalItemId = route.id; selectedTab = AppTab.HOME }
+            is NativeRoute.Deal -> { externalDealId = route.id; selectedTab = AppTab.MESSAGES }
+            is NativeRoute.Offer -> { openOffers = true; selectedTab = AppTab.MESSAGES }
+            is NativeRoute.Profile -> { externalProfileId = route.id; selectedTab = AppTab.HOME }
+            is NativeRoute.Direct -> { externalDirectId = route.id; selectedTab = AppTab.MESSAGES }
+            is NativeRoute.Contextual -> { externalContextualId = route.id; selectedTab = AppTab.MESSAGES }
+            NativeRoute.Notifications -> selectedTab = AppTab.NOTIFICATIONS
+            null -> Unit
+        }
+        if (launchRoute != null) onLaunchRouteConsumed()
+    }
 
     Scaffold(
         bottomBar = {
@@ -94,7 +167,7 @@ fun AppShell(
                 publicProfileRepository = publicProfileRepository,
                 storyRepository = storyRepository,
                 onSessionUpdated = { session = it },
-                onSignOut = onSignOut,
+                onSignOut = signOutAndDisable,
                 modifier = Modifier.padding(padding),
                 onOfferCreated = { selectedTab = AppTab.MESSAGES },
                 onAddItem = { selectedTab = AppTab.ADD },
@@ -117,7 +190,7 @@ fun AppShell(
                 repository = addItemRepository,
                 locationProvider = locationProvider,
                 onSessionUpdated = { session = it },
-                onSessionExpired = onSignOut,
+                onSessionExpired = signOutAndDisable,
                 onPublished = { selectedTab = AppTab.HOME },
                 modifier = Modifier.padding(padding),
             )
@@ -131,7 +204,7 @@ fun AppShell(
                 contextualRepository = contextualRepository,
                 voiceMediaRepository = voiceMediaRepository,
                 onSessionUpdated = { session = it },
-                onSessionExpired = onSignOut,
+                onSessionExpired = signOutAndDisable,
                 initialDealId = externalDealId,
                 initialOffers = openOffers,
                 initialDirectId = externalDirectId,
@@ -151,7 +224,7 @@ fun AppShell(
                 initialSession = session,
                 repository = notificationsRepository,
                 onSessionUpdated = { session = it },
-                onSessionExpired = onSignOut,
+                onSessionExpired = signOutAndDisable,
                 onDestination = { destination ->
                     when (destination) {
                         is NotificationDestination.Item -> {
@@ -188,9 +261,9 @@ fun AppShell(
                 repository = profileRepository,
                 settingsRepository = settingsRepository,
                 onSessionUpdated = { session = it },
-                onSessionExpired = onSignOut,
+                onSessionExpired = signOutAndDisable,
                 onAddItem = { selectedTab = AppTab.ADD },
-                onSignOut = onSignOut,
+                onSignOut = signOutAndDisable,
             )
         }
     }

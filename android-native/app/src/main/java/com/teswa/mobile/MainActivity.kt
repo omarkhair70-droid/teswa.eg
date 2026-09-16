@@ -1,6 +1,7 @@
 package com.teswa.mobile
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +40,7 @@ import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationsRepository
+import com.teswa.mobile.feature.notifications.NativePushManager
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.stories.StoryRepository
@@ -46,12 +48,16 @@ import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.shell.AppShell
+import com.teswa.mobile.shell.NativeRouteParser
 import com.teswa.mobile.ui.theme.TeswaTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private var pendingRoute by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingRoute = NativeRouteParser.fromIntent(intent)
         val container = AppContainer(applicationContext)
 
         setContent {
@@ -69,15 +75,24 @@ class MainActivity : ComponentActivity() {
                         publicProfileRepository = container.publicProfileRepository,
                         settingsRepository = container.settingsRepository,
                         notificationsRepository = container.notificationsRepository,
+                        nativePushManager = container.nativePushManager,
                         directRepository = container.directRepository,
                         contextualRepository = container.contextualRepository,
                         storyRepository = container.storyRepository,
                         voiceMediaRepository = container.voiceMediaRepository,
+                        launchRoute = pendingRoute,
+                        onLaunchRouteConsumed = { pendingRoute = null },
                         activity = this@MainActivity,
                     )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingRoute = NativeRouteParser.fromIntent(intent)
     }
 }
 
@@ -94,10 +109,13 @@ private fun TeswaAuthScreen(
     publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
+    nativePushManager: NativePushManager,
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
+    launchRoute: String?,
+    onLaunchRouteConsumed: () -> Unit,
     activity: ComponentActivity,
 ) {
     var state by remember { mutableStateOf<AuthUiState>(AuthUiState.Restoring) }
@@ -117,6 +135,7 @@ private fun TeswaAuthScreen(
                 repository = accountGateRepository,
                 modifier = Modifier.fillMaxSize(),
                 onSignOut = {
+                    nativePushManager.disable(current.session)
                     repository.signOut()
                     state = AuthUiState.SignedOut
                 },
@@ -132,10 +151,13 @@ private fun TeswaAuthScreen(
                         publicProfileRepository = publicProfileRepository,
                         settingsRepository = settingsRepository,
                         notificationsRepository = notificationsRepository,
+                        nativePushManager = nativePushManager,
                         directRepository = directRepository,
                         contextualRepository = contextualRepository,
                         storyRepository = storyRepository,
                         voiceMediaRepository = voiceMediaRepository,
+                        launchRoute = launchRoute,
+                        onLaunchRouteConsumed = onLaunchRouteConsumed,
                         onSignOut = {
                             repository.signOut()
                             state = AuthUiState.SignedOut

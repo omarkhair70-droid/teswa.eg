@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -47,6 +48,9 @@ dependencies {
     implementation("androidx.credentials:credentials:1.7.0-alpha03")
     implementation("androidx.credentials:credentials-play-services-auth:1.7.0-alpha03")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-installations")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")

@@ -16,6 +16,8 @@ import com.teswa.mobile.feature.profile.OraclePublicProfileRepository
 import com.teswa.mobile.feature.settings.OracleSettingsRepository
 import com.teswa.mobile.feature.notifications.OracleNotificationsRepository
 import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
+import com.teswa.mobile.feature.notifications.NativePushManager
+import com.teswa.mobile.feature.notifications.OraclePushRegistrationRepository
 import com.teswa.mobile.feature.direct.OracleDirectRepository
 import com.teswa.mobile.feature.contextual.OracleContextualRepository
 import com.teswa.mobile.feature.stories.OracleStoryRepository
@@ -62,4 +64,8 @@ class AppContainer(context: Context) {
     val publicProfileRepository = OraclePublicProfileRepository(authRepository, oracleTransport)
     val settingsRepository = OracleSettingsRepository(authRepository, oracleTransport)
     val notificationsRepository = OracleNotificationsRepository(authRepository, oracleTransport)
+    val nativePushManager = NativePushManager(
+        context = appContext,
+        repository = OraclePushRegistrationRepository(authRepository, oracleTransport),
+    )
 }
