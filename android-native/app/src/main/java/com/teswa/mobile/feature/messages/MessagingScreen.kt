@@ -50,6 +50,9 @@ import kotlinx.coroutines.launch
 import com.teswa.mobile.feature.direct.DirectContent
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.direct.DirectStateHolder
+import com.teswa.mobile.feature.contextual.ContextualContent
+import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.contextual.ContextualStateHolder
 
 @Composable
 fun MessagingScreen(
@@ -57,16 +60,20 @@ fun MessagingScreen(
     repository: MessagingRepository,
     offersRepository: OffersRepository,
     directRepository: DirectRepository,
+    contextualRepository: ContextualRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     initialDealId: String? = null,
     initialOffers: Boolean = false,
+    initialDirectId: String? = null,
+    initialContextualId: String? = null,
     onExternalTargetConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
     val offersHolder = remember(initialSession.user.id, offersRepository) { OffersStateHolder(initialSession, offersRepository) }
     val directHolder = remember(initialSession.user.id, directRepository) { DirectStateHolder(initialSession, directRepository) }
+    val contextualHolder = remember(initialSession.user.id, contextualRepository) { ContextualStateHolder(initialSession, contextualRepository) }
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf(InboxMode.MESSAGES) }
 
@@ -74,16 +81,18 @@ fun MessagingScreen(
         holder.updateSession(initialSession)
         offersHolder.updateSession(initialSession)
         directHolder.updateSession(initialSession)
+        contextualHolder.updateSession(initialSession)
         holder.load()
         offersHolder.load()
     }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(offersHolder.session.accessToken) { onSessionUpdated(offersHolder.session) }
     LaunchedEffect(directHolder.session.accessToken) { onSessionUpdated(directHolder.session) }
+    LaunchedEffect(contextualHolder.session.accessToken) { onSessionUpdated(contextualHolder.session) }
     LaunchedEffect(holder.sessionExpired, offersHolder.sessionExpired) {
-        if (holder.sessionExpired || offersHolder.sessionExpired || directHolder.sessionExpired) onSessionExpired()
+        if (holder.sessionExpired || offersHolder.sessionExpired || directHolder.sessionExpired || contextualHolder.sessionExpired) onSessionExpired()
     }
-    LaunchedEffect(initialDealId, initialOffers) {
+    LaunchedEffect(initialDealId, initialOffers, initialDirectId, initialContextualId) {
         when {
             initialDealId != null -> {
                 mode = InboxMode.MESSAGES
@@ -92,6 +101,16 @@ fun MessagingScreen(
             }
             initialOffers -> {
                 mode = InboxMode.OFFERS
+                onExternalTargetConsumed()
+            }
+            initialDirectId != null -> {
+                mode = InboxMode.DIRECT
+                directHolder.openById(initialDirectId)
+                onExternalTargetConsumed()
+            }
+            initialContextualId != null -> {
+                mode = InboxMode.CONTEXTUAL
+                contextualHolder.openById(initialContextualId)
                 onExternalTargetConsumed()
             }
         }
@@ -122,6 +141,7 @@ fun MessagingScreen(
                         InboxMode.MESSAGES -> unreadLabel(holder.inboxState)
                         InboxMode.OFFERS -> offerLabel(offersHolder.state)
                         InboxMode.DIRECT -> "طلبات ومحادثات خارج الصفقات"
+                        InboxMode.CONTEXTUAL -> "ردود بدأت من قصة"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -133,6 +153,7 @@ fun MessagingScreen(
                         InboxMode.MESSAGES -> holder.load(silent = true)
                         InboxMode.OFFERS -> offersHolder.load(silent = true)
                         InboxMode.DIRECT -> directHolder.load()
+                        InboxMode.CONTEXTUAL -> contextualHolder.load()
                     }
                 }
             }) { Text("تحديث") }
@@ -154,6 +175,10 @@ fun MessagingScreen(
         }
         if (mode == InboxMode.DIRECT) {
             DirectContent(directHolder, Modifier.weight(1f))
+            return@Column
+        }
+        if (mode == InboxMode.CONTEXTUAL) {
+            ContextualContent(contextualHolder, Modifier.weight(1f))
             return@Column
         }
         holder.banner?.let { OfflineBanner(it) { scope.launch { holder.load(silent = true) } } }
@@ -187,7 +212,7 @@ fun MessagingScreen(
     }
 }
 
-private enum class InboxMode { MESSAGES, OFFERS, DIRECT }
+private enum class InboxMode { MESSAGES, OFFERS, DIRECT, CONTEXTUAL }
 
 @Composable
 private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) {
@@ -198,6 +223,7 @@ private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) 
         HubModeChip("محادثات الصفقات", selected == InboxMode.MESSAGES, Modifier.weight(1f)) { onSelect(InboxMode.MESSAGES) }
         HubModeChip("العروض", selected == InboxMode.OFFERS, Modifier.weight(1f)) { onSelect(InboxMode.OFFERS) }
         HubModeChip("مباشر", selected == InboxMode.DIRECT, Modifier.weight(1f)) { onSelect(InboxMode.DIRECT) }
+        HubModeChip("ردود", selected == InboxMode.CONTEXTUAL, Modifier.weight(1f)) { onSelect(InboxMode.CONTEXTUAL) }
     }
 }
 

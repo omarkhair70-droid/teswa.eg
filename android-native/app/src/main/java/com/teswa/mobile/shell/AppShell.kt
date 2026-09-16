@@ -25,6 +25,7 @@ import com.teswa.mobile.feature.notifications.NotificationDestination
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NotificationsScreen
 import com.teswa.mobile.feature.direct.DirectRepository
+import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 
@@ -50,6 +51,7 @@ fun AppShell(
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
     directRepository: DirectRepository,
+    contextualRepository: ContextualRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -58,6 +60,8 @@ fun AppShell(
     var externalDealId by remember { mutableStateOf<String?>(null) }
     var openOffers by remember { mutableStateOf(false) }
     var externalProfileId by remember { mutableStateOf<String?>(null) }
+    var externalDirectId by remember { mutableStateOf<String?>(null) }
+    var externalContextualId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         bottomBar = {
@@ -105,13 +109,18 @@ fun AppShell(
                 repository = messagingRepository,
                 offersRepository = offersRepository,
                 directRepository = directRepository,
+                contextualRepository = contextualRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
                 initialDealId = externalDealId,
                 initialOffers = openOffers,
+                initialDirectId = externalDirectId,
+                initialContextualId = externalContextualId,
                 onExternalTargetConsumed = {
                     externalDealId = null
                     openOffers = false
+                    externalDirectId = null
+                    externalContextualId = null
                 },
             )
 
@@ -139,8 +148,14 @@ fun AppShell(
                             externalProfileId = destination.id
                             selectedTab = AppTab.HOME
                         }
-                        is NotificationDestination.Direct,
-                        is NotificationDestination.Contextual -> Unit
+                        is NotificationDestination.Direct -> {
+                            externalDirectId = destination.route.substringAfterLast('/').takeIf { it.length == 36 }
+                            selectedTab = AppTab.MESSAGES
+                        }
+                        is NotificationDestination.Contextual -> {
+                            externalContextualId = destination.id
+                            selectedTab = AppTab.MESSAGES
+                        }
                     }
                 },
             )

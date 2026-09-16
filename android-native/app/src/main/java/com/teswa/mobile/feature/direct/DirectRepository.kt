@@ -9,8 +9,6 @@ import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
 import com.teswa.mobile.core.network.OracleHttpMethod
 import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleTransport
-import com.teswa.mobile.feature.notifications.NotificationDispatch
-import com.teswa.mobile.feature.notifications.NotificationDispatcher
 import org.json.JSONObject
 
 interface DirectRepository {
@@ -24,7 +22,6 @@ interface DirectRepository {
 class OracleDirectRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
-    private val dispatcher: NotificationDispatcher? = null,
 ) : DirectRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -65,11 +62,8 @@ class OracleDirectRepository(
             is AuthenticatedOracleResult.Response -> when {
                 result.value.status == 200 && result.value.body.optBoolean("ok") -> {
                     val messageId = result.value.body.optString("messageId").validId()
-                    var updated = result.session
-                    if (messageId != null) updated = dispatcher?.dispatch(
-                        updated, NotificationDispatch(conversation.otherUserId, "direct_message_received", "رسالة مباشرة جديدة", clean.take(140), messageId = messageId),
-                    ) ?: updated
-                    DirectResult.Success(Unit, updated)
+                    if (messageId == null) DirectResult.Failure("استجابة إرسال الرسالة غير مكتملة.", result.session)
+                    else DirectResult.Success(Unit, result.session)
                 }
                 result.value.status == 401 -> expired(result.session)
                 result.value.status == 403 -> DirectResult.Failure("المحادثة غير متاحة بسبب الخصوصية أو الحظر.", result.session)
