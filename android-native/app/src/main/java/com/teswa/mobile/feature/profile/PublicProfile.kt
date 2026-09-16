@@ -50,6 +50,11 @@ data class PublicProfileOverview(
 
 interface PublicProfileRepository {
     suspend fun load(session: AuthSession, profileId: String): ProfileResult<PublicProfileOverview>
+    suspend fun loadConnections(
+        session: AuthSession,
+        profileId: String,
+        mode: ProfileConnectionsMode,
+    ): ProfileResult<List<ProfileConnection>>
     suspend fun setFollowing(session: AuthSession, profileId: String, follow: Boolean): ProfileResult<Unit>
     suspend fun setBlocked(session: AuthSession, profileId: String, block: Boolean): ProfileResult<Unit>
 }
@@ -123,6 +128,24 @@ class OraclePublicProfileRepository(
             ),
             badgesResponse.session,
         )
+    }
+
+    override suspend fun loadConnections(
+        session: AuthSession,
+        profileId: String,
+        mode: ProfileConnectionsMode,
+    ): ProfileResult<List<ProfileConnection>> {
+        val id = profileId.validId() ?: return ProfileResult.Failure("معرّف الملف غير صالح.", session)
+        val result = response(
+            session,
+            "/v1/profiles/$id/connections?mode=${mode.apiValue}&limit=50",
+            "تعذر تحميل قائمة المتابعة.",
+        )
+        if (result is ProfileResult.Failure) return result
+        result as ProfileResult.Success
+        val items = parseProfileConnections(result.value)
+            ?: return ProfileResult.Failure("استجابة قائمة المتابعة غير صالحة.", result.session)
+        return ProfileResult.Success(items, result.session)
     }
 
     override suspend fun setFollowing(session: AuthSession, profileId: String, follow: Boolean): ProfileResult<Unit> =

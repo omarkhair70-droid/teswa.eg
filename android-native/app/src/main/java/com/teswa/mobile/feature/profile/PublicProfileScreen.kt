@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,9 +62,45 @@ fun PublicProfileScreen(
     val holder = remember(profileId, repository) { PublicProfileStateHolder(initialSession, profileId, repository) }
     val scope = rememberCoroutineScope()
     var confirmBlock by remember { mutableStateOf<Boolean?>(null) }
+    var connectionsMode by remember(profileId) { mutableStateOf<ProfileConnectionsMode?>(null) }
+    var nestedProfileId by remember(profileId) { mutableStateOf<String?>(null) }
     LaunchedEffect(initialSession.accessToken) { holder.updateSession(initialSession); holder.load() }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
+
+    nestedProfileId?.let { nestedId ->
+        PublicProfileScreen(
+            profileId = nestedId,
+            initialSession = holder.session,
+            repository = repository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = { nestedProfileId = null },
+            onOpenItem = onOpenItem,
+            onMessage = onMessage,
+            onReport = onReport,
+            modifier = modifier,
+        )
+        return
+    }
+
+    connectionsMode?.let { mode ->
+        ProfileConnectionsScreen(
+            profileId = profileId,
+            mode = mode,
+            initialSession = holder.session,
+            repository = repository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = { connectionsMode = null },
+            onOpenProfile = { targetId ->
+                connectionsMode = null
+                nestedProfileId = targetId
+            },
+            modifier = modifier,
+        )
+        return
+    }
 
     when (val state = holder.state) {
         PublicProfileUiState.Loading -> PublicCenter("بنحضّر الملف…", modifier, true)
@@ -90,8 +127,18 @@ fun PublicProfileScreen(
                                 if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
                                 Spacer(Modifier.height(14.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PublicStat("${state.overview.follow.followerCount}", "متابع", Modifier.weight(1f))
-                                    PublicStat("${state.overview.follow.followingCount}", "يتابع", Modifier.weight(1f))
+                                    PublicStat(
+                                        "${state.overview.follow.followerCount}",
+                                        "متابع",
+                                        Modifier.weight(1f),
+                                        onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWERS },
+                                    )
+                                    PublicStat(
+                                        "${state.overview.follow.followingCount}",
+                                        "يتابع",
+                                        Modifier.weight(1f),
+                                        onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWING },
+                                    )
                                     PublicStat("${profile.successfulSwapsCount}", "تبديل", Modifier.weight(1f))
                                 }
                             }
@@ -232,9 +279,19 @@ private fun trustLevelDescription(key: String) = when (key) {
     else -> "الثقة مبنية على نشاط حقيقي داخل تِسوى."
 }
 
-@Composable private fun PublicStat(value: String, label: String, modifier: Modifier) {
-    Surface(modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface.copy(alpha = .75f)) {
-        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(value, fontWeight = FontWeight.Bold); Text(label, style = MaterialTheme.typography.labelSmall) }
+@Composable
+private fun PublicStat(
+    value: String,
+    label: String,
+    modifier: Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    val interactive = if (onClick == null) modifier else modifier.clickable(onClick = onClick)
+    Surface(interactive, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface.copy(alpha = .75f)) {
+        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
