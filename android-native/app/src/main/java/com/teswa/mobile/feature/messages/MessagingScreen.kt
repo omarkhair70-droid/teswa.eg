@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +56,7 @@ import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.offers.OffersStateHolder
 import com.teswa.mobile.feature.reviews.DealReviewCard
 import com.teswa.mobile.feature.reviews.ReviewRepository
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
@@ -82,6 +84,7 @@ fun MessagingScreen(
     initialDirectTarget: DirectComposeTarget? = null,
     initialContextualId: String? = null,
     onExternalTargetConsumed: () -> Unit = {},
+    onReport: (ReportTarget) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -161,6 +164,7 @@ fun MessagingScreen(
             reviewRepository = reviewRepository,
             onSessionUpdated = onSessionUpdated,
             onSessionExpired = onSessionExpired,
+            onReport = onReport,
             modifier = modifier,
         )
         return
@@ -216,6 +220,7 @@ fun MessagingScreen(
                 holder = directHolder,
                 voiceMediaRepository = voiceMediaRepository,
                 dolabBridge = dolabDirectBridge,
+                onReport = onReport,
                 modifier = Modifier.weight(1f),
             )
             return@Column
@@ -358,6 +363,7 @@ private fun DealThreadScreen(
     reviewRepository: ReviewRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
+    onReport: (ReportTarget) -> Unit,
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -385,6 +391,16 @@ private fun DealThreadScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            OutlinedButton(
+                onClick = {
+                    onReport(
+                        ReportTarget.Deal(
+                            conversation.dealId,
+                            "صفقة مع ${conversation.otherDisplayName ?: "الطرف الآخر"}",
+                        ),
+                    )
+                },
+            ) { Text("بلاغ") }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
         holder.banner?.let { OfflineBanner(it) { scope.launch { holder.reloadThread() } } }
@@ -420,6 +436,9 @@ private fun DealThreadScreen(
                         mine = message.senderId == holder.session.user.id,
                         holder = holder,
                         voiceMediaRepository = voiceMediaRepository,
+                        dealId = conversation.dealId,
+                        otherDisplayName = conversation.otherDisplayName,
+                        onReport = onReport,
                     )
                 }
             }
@@ -506,25 +525,48 @@ private fun dealStatusDescription(status: String) = when (status) {
 }
 
 @Composable
-private fun MessageBubble(message: DealMessage, mine: Boolean, holder: MessagingStateHolder, voiceMediaRepository: VoiceMediaRepository) {
+private fun MessageBubble(
+    message: DealMessage,
+    mine: Boolean,
+    holder: MessagingStateHolder,
+    voiceMediaRepository: VoiceMediaRepository,
+    dealId: String,
+    otherDisplayName: String?,
+    onReport: (ReportTarget) -> Unit,
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(.82f),
-            shape = if (mine) MaterialTheme.shapes.medium else MaterialTheme.shapes.small,
-            color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-        ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                if (message.messageType == "voice" && message.audioStoragePath != null) {
-                    VoiceMessagePlayer(message.audioDurationMs) {
-                        when (val result = voiceMediaRepository.signedUrl(holder.session, "deal_voice", message.audioStoragePath)) {
-                            is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
-                            is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showBanner(result.message); null }
+        Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(.82f),
+                shape = if (mine) MaterialTheme.shapes.medium else MaterialTheme.shapes.small,
+                color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    if (message.messageType == "voice" && message.audioStoragePath != null) {
+                        VoiceMessagePlayer(message.audioDurationMs) {
+                            when (val result = voiceMediaRepository.signedUrl(holder.session, "deal_voice", message.audioStoragePath)) {
+                                is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
+                                is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showBanner(result.message); null }
+                            }
                         }
-                    }
-                } else Text(message.body)
-                Spacer(Modifier.height(3.dp))
-                Text(shortDate(message.createdAt), style = MaterialTheme.typography.labelMedium)
+                    } else Text(message.body)
+                    Spacer(Modifier.height(3.dp))
+                    Text(shortDate(message.createdAt), style = MaterialTheme.typography.labelMedium)
+                }
+            }
+            if (!mine) {
+                TextButton(
+                    onClick = {
+                        onReport(
+                            ReportTarget.DealMessage(
+                                dealId = dealId,
+                                messageId = message.id,
+                                fallbackSubject = "رسالة من ${otherDisplayName ?: "الطرف الآخر"}",
+                            ),
+                        )
+                    },
+                ) { Text("الإبلاغ عن الرسالة") }
             }
         }
     }

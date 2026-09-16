@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.teswa.mobile.feature.dolab.DolabDirectMessagingBridge
 import com.teswa.mobile.feature.dolab.DolabDirectShareable
 import com.teswa.mobile.feature.dolab.DolabResult
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
@@ -27,12 +28,13 @@ fun DirectContent(
     holder: DirectStateHolder,
     voiceMediaRepository: VoiceMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
+    onReport: (ReportTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { holder.load() }
     holder.composeTarget?.let { DirectFirstMessage(holder, it, dolabBridge, modifier); return }
-    holder.selected?.let { DirectThread(holder, it, voiceMediaRepository, dolabBridge, modifier); return }
+    holder.selected?.let { DirectThread(holder, it, voiceMediaRepository, dolabBridge, onReport, modifier); return }
     when (val state = holder.state) {
         DirectUiState.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is DirectUiState.Error -> Column(modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
@@ -150,6 +152,7 @@ private fun DirectThread(
     value: DirectConversation,
     voiceMediaRepository: VoiceMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
+    onReport: (ReportTarget) -> Unit,
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -191,6 +194,7 @@ private fun DirectThread(
                     holder = holder,
                     voiceMediaRepository = voiceMediaRepository,
                     dolabBridge = dolabBridge,
+                    onReport = onReport,
                 )
             }
         }
@@ -206,6 +210,7 @@ private fun DirectMessageBubble(
     holder: DirectStateHolder,
     voiceMediaRepository: VoiceMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
+    onReport: (ReportTarget) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var saving by remember(message.id) { mutableStateOf(false) }
@@ -238,23 +243,39 @@ private fun DirectMessageBubble(
                     )
                 }
             }
-            TextButton(
-                enabled = canSave && !saving,
-                onClick = {
-                    scope.launch {
-                        saving = true
-                        when (val result = dolabBridge.saveMessage(holder.session, conversation, message)) {
-                            is DolabResult.Success -> holder.applyExternalSuccess(result.session, "اتحفظت في دولابك.")
-                            is DolabResult.Failure -> holder.applyExternalFailure(
-                                result.session,
-                                result.message,
-                                result.unauthorized,
-                            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    enabled = canSave && !saving,
+                    onClick = {
+                        scope.launch {
+                            saving = true
+                            when (val result = dolabBridge.saveMessage(holder.session, conversation, message)) {
+                                is DolabResult.Success -> holder.applyExternalSuccess(result.session, "اتحفظت في دولابك.")
+                                is DolabResult.Failure -> holder.applyExternalFailure(
+                                    result.session,
+                                    result.message,
+                                    result.unauthorized,
+                                )
+                            }
+                            saving = false
                         }
-                        saving = false
-                    }
-                },
-            ) { Text(if (saving) "بنحفظ…" else "حفظ في دولابي") }
+                    },
+                ) { Text(if (saving) "بنحفظ…" else "حفظ في دولابي") }
+                if (!mine) {
+                    TextButton(
+                        onClick = {
+                            onReport(
+                                ReportTarget.DirectMessage(
+                                    conversationId = conversation.id,
+                                    messageId = message.id,
+                                    reportedUserId = message.senderId,
+                                    fallbackSubject = "رسالة من ${conversation.otherDisplayName ?: conversation.otherUsername ?: "مستخدم تِسوى"}",
+                                ),
+                            )
+                        },
+                    ) { Text("بلاغ") }
+                }
+            }
         }
     }
 }
