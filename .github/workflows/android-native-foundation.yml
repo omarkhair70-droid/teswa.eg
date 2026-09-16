@@ -31,5 +31,5 @@ jobs:
         run: gradle -p android-native :app:compileDebugKotlin --stacktrace
       - name: Compile native release Kotlin
         run: gradle -p android-native :app:compileReleaseKotlin --stacktrace
-      - name: Run native Android lint
-        run: gradle -p android-native :app:lintDebug --stacktrace
+      - name: Run native release Android lint
+        run: gradle -p android-native :app:lintRelease --stacktrace

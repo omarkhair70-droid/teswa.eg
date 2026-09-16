@@ -4,6 +4,17 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val releaseStoreFile = providers.environmentVariable("TESWA_RELEASE_STORE_FILE").orNull
+val releaseStorePassword = providers.environmentVariable("TESWA_RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("TESWA_RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("TESWA_RELEASE_KEY_PASSWORD").orNull
+val releaseSigningReady = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.teswa.mobile"
     compileSdk = 37
@@ -19,6 +30,25 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"918426406146-dog29tsebc44ed5nsh71qirkt53l70in.apps.googleusercontent.com\"")
     }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("release") {
+                storeFile = file(checkNotNull(releaseStoreFile))
+                storePassword = checkNotNull(releaseStorePassword)
+                keyAlias = checkNotNull(releaseKeyAlias)
+                keyPassword = checkNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -32,6 +62,14 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+tasks.matching { it.name == "bundleRelease" || it.name == "assembleRelease" }.configureEach {
+    doFirst {
+        check(releaseSigningReady) {
+            "Release signing requires TESWA_RELEASE_STORE_FILE, TESWA_RELEASE_STORE_PASSWORD, TESWA_RELEASE_KEY_ALIAS, and TESWA_RELEASE_KEY_PASSWORD."
+        }
+    }
 }
 
 dependencies {
