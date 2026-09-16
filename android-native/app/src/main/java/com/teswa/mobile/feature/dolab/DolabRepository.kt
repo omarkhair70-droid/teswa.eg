@@ -158,7 +158,7 @@ class OracleDolabRepository(
         return when (val result = executor.execute(session, request)) {
             is AuthenticatedOracleResult.Response -> when (result.value.status) {
                 200 -> {
-                    // The current Oracle Dolab compatibility API intentionally returns all three list routes under "items".
+                    // The current Oracle Dolab compatibility API returns all three list routes under "items".
                     val rows = result.value.body.optJSONArray("items")
                         ?: return DolabResult.Failure("استجابة الدولاب غير مكتملة.", result.session)
                     DolabResult.Success(rows.mapObjects(parser), result.session)
@@ -255,16 +255,9 @@ class OracleDolabRepository(
     private fun expired(session: AuthSession): DolabResult.Failure =
         DolabResult.Failure("انتهت جلسة تِسوى.", session, unauthorized = true)
 
-    private fun JSONArray.mapObjects(parser: (JSONObject?) -> Any?): List<Any> = buildList {
+    private fun <T> JSONArray.mapObjects(parser: (JSONObject?) -> T?): List<T> = buildList {
         for (index in 0 until length()) parser(optJSONObject(index))?.let(::add)
     }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> JSONArray.mapObjectsTyped(parser: (JSONObject?) -> T?): List<T> = buildList {
-        for (index in 0 until length()) parser(optJSONObject(index))?.let(::add)
-    }
-
-    private fun <T> JSONArray.mapObjects(parser: (JSONObject?) -> T?): List<T> = mapObjectsTyped(parser)
 
     private fun JSONObject.string(key: String): String? =
         if (!has(key) || isNull(key)) null else optString(key).trim().takeIf(String::isNotEmpty)
@@ -275,8 +268,7 @@ class OracleDolabRepository(
     private fun JSONObject.intOrNull(key: String): Int? =
         if (!has(key) || isNull(key)) null else optInt(key).takeIf { it >= 0 }
 
-    private fun JSONObject.putNullable(key: String, value: String?): JSONObject =
-        put(key, value ?: JSONObject.NULL)
+    private fun JSONObject.putNullable(key: String, value: String?): JSONObject = put(key, value ?: JSONObject.NULL)
 
     private fun String.cleanOrNull(): String? = trim().takeIf(String::isNotEmpty)
 }
