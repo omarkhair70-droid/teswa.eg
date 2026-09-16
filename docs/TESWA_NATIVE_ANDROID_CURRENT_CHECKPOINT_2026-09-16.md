@@ -88,7 +88,13 @@ Expected artifact:
 
 `android-native\app\build\outputs\bundle\release\app-release.aab`
 
-Historical local evidence shows an older Teswa Android folder contained `android.keystore` and signed release artifacts, but the keystore bytes/alias/password are not stored in this repository. Do not invent or replace the upload identity casually.
+Historical local evidence showed an older Teswa Android folder contained `android.keystore` and signed release artifacts, but that folder was not authoritative for the current `com.teswa.mobile` identity.
+
+**Upload-key identity is now empirically verified.** On 2026-09-16, the Android credentials for the EAS `production` profile of project `teswa-mobile` / application identifier `com.teswa.mobile` were downloaded locally from EAS. The downloaded JKS certificate SHA-256 was read with `keytool` and matched the Google Play Console **Upload key certificate** exactly:
+
+`9E:CE:E2:66:79:C8:7D:4F:6F:51:39:F1:96:7F:ED:20:01:06:C6:C0:FE:42:49:A8:31:8E:F8:84:90:FC:B7:F1`
+
+No keystore password, key password, JKS bytes, or other signing secret is stored in Git. Do not generate a replacement key or migrate/convert the verified JKS as part of this release gate.
 
 ## Physical-device evidence helper
 
@@ -118,9 +124,9 @@ There is no remaining large Git-side product slice. Remaining acceptance is empi
 
 Identify and accept the Oracle endpoint that is actually intended for native production traffic. Use that exact HTTPS URL as `TESWA_RELEASE_API_BASE_URL`. Do not silently reuse the rehearsal host.
 
-### 2. Verify existing Play upload key + build signed v26 AAB
+### 2. Build signed v26 AAB with the verified Play upload key
 
-Use the existing local Teswa keystore, compare its SHA-256 certificate fingerprint with the Play Console **Upload key certificate**, and run `scripts/release-gate.ps1`.
+The existing Play upload-key certificate match is **closed/verified**. After the production Oracle release endpoint is accepted, point the release environment at the downloaded EAS production JKS and run `scripts/release-gate.ps1` to produce and verify the signed v26 AAB.
 
 ### 3. Google Play Internal update-over-installed-app
 
