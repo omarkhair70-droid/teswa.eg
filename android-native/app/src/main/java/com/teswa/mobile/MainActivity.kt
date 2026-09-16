@@ -37,6 +37,7 @@ import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
+import com.teswa.mobile.feature.dolab.DolabRepository
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.motion.MotionLocationResolver
 import com.teswa.mobile.feature.motion.MotionRepository
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
                         homeClient = container.homeClient,
                         discoverRepository = container.discoverRepository,
                         peopleRepository = container.peopleRepository,
+                        dolabRepository = container.dolabRepository,
                         motionRepository = container.motionRepository,
                         motionLocationResolver = container.motionLocationResolver,
                         locationProvider = container.locationProvider,
@@ -115,6 +117,7 @@ private fun TeswaAuthScreen(
     homeClient: OracleHomeClient,
     discoverRepository: DiscoverRepository,
     peopleRepository: PeopleRepository,
+    dolabRepository: DolabRepository,
     motionRepository: MotionRepository,
     motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
@@ -163,6 +166,7 @@ private fun TeswaAuthScreen(
                         homeClient = homeClient,
                         discoverRepository = discoverRepository,
                         peopleRepository = peopleRepository,
+                        dolabRepository = dolabRepository,
                         motionRepository = motionRepository,
                         motionLocationResolver = motionLocationResolver,
                         locationProvider = locationProvider,
