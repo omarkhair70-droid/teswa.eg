@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AddItemScreen
+import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectRepository
@@ -76,6 +77,7 @@ fun AppShell(
     motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
+    editListingRepository: EditListingRepository,
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
@@ -179,6 +181,7 @@ fun AppShell(
             AppTab.HOME -> HomeScreen(
                 initialSession = session,
                 client = homeClient,
+                editListingRepository = editListingRepository,
                 locationProvider = locationProvider,
                 offersRepository = offersRepository,
                 publicProfileRepository = publicProfileRepository,

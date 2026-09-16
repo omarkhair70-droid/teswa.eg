@@ -8,7 +8,9 @@ import com.teswa.mobile.auth.OracleAuthClient
 import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AndroidAddItemContentSource
+import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.additem.OracleAddItemRepository
+import com.teswa.mobile.feature.additem.OracleEditListingRepository
 import com.teswa.mobile.feature.contextual.OracleContextualRepository
 import com.teswa.mobile.feature.direct.OracleDirectRepository
 import com.teswa.mobile.feature.discover.OracleDiscoverRepository
@@ -62,15 +64,21 @@ class AppContainer(context: Context) {
     val motionRepository = OracleMotionRepository(authRepository, oracleTransport)
     val motionLocationResolver = AndroidCityPulseLocationResolver(appContext, locationProvider)
 
+    private val addItemContentSource = AndroidAddItemContentSource(appContext.contentResolver)
     private val oracleAddItemRepository = OracleAddItemRepository(
         authenticator = authRepository,
-        contentSource = AndroidAddItemContentSource(appContext.contentResolver),
+        contentSource = addItemContentSource,
         transport = oracleTransport,
     )
     val addItemRepository: AddItemRepository = DolabAwareAddItemRepository(
         delegate = oracleAddItemRepository,
         bridge = dolabPublishBridgeRepository,
         contextStore = dolabPublishContextStore,
+    )
+    val editListingRepository: EditListingRepository = OracleEditListingRepository(
+        authenticator = authRepository,
+        contentSource = addItemContentSource,
+        transport = oracleTransport,
     )
     val dolabAddItemHandoff = AndroidDolabAddItemHandoff(
         context = appContext,

@@ -34,6 +34,7 @@ import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
 import com.teswa.mobile.feature.additem.AddItemRepository
+import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
                         motionLocationResolver = container.motionLocationResolver,
                         locationProvider = container.locationProvider,
                         addItemRepository = container.addItemRepository,
+                        editListingRepository = container.editListingRepository,
                         messagingRepository = container.messagingRepository,
                         offersRepository = container.offersRepository,
                         profileRepository = container.profileRepository,
@@ -125,6 +127,7 @@ private fun TeswaAuthScreen(
     motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
+    editListingRepository: EditListingRepository,
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
@@ -175,6 +178,7 @@ private fun TeswaAuthScreen(
                         motionLocationResolver = motionLocationResolver,
                         locationProvider = locationProvider,
                         addItemRepository = addItemRepository,
+                        editListingRepository = editListingRepository,
                         messagingRepository = messagingRepository,
                         offersRepository = offersRepository,
                         profileRepository = profileRepository,

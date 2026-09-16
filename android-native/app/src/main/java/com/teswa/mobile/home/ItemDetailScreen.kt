@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.additem.EditListingRepository
+import com.teswa.mobile.feature.additem.EditListingScreen
 import com.teswa.mobile.feature.offers.OfferCreationScreen
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.ui.NetworkImage
@@ -39,6 +41,7 @@ fun ItemDetailScreen(
     itemId: String,
     initialSession: AuthSession,
     client: OracleHomeClient,
+    editListingRepository: EditListingRepository,
     offersRepository: OffersRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
@@ -50,18 +53,29 @@ fun ItemDetailScreen(
     val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
     var creatingOffer by remember(itemId) { mutableStateOf(false) }
+    var editing by remember(itemId) { mutableStateOf(false) }
 
     LaunchedEffect(itemId, initialSession.accessToken) {
         holder.updateSession(initialSession)
         holder.load()
     }
 
-    LaunchedEffect(holder.session.accessToken) {
-        onSessionUpdated(holder.session)
-    }
+    LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
+    LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
-    LaunchedEffect(holder.sessionExpired) {
-        if (holder.sessionExpired) onSessionExpired()
+    if (editing) {
+        EditListingScreen(
+            itemId = itemId,
+            initialSession = holder.session,
+            repository = editListingRepository,
+            onSessionUpdated = holder::updateSession,
+            onSessionExpired = onSessionExpired,
+            onBack = {
+                editing = false
+                scope.launch { holder.load() }
+            },
+        )
+        return
     }
 
     if (creatingOffer) {
@@ -93,9 +107,7 @@ fun ItemDetailScreen(
 
         is ItemDetailUiState.Error -> {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
+                modifier = Modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -123,11 +135,17 @@ fun ItemDetailScreen(
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
-                        val meta = listOfNotNull(detail.category, detail.condition, detail.city, detail.area)
-                            .joinToString(" • ")
+                        val meta = listOfNotNull(detail.category, detail.condition, detail.city, detail.area).joinToString(" • ")
                         if (meta.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
                             Text(meta, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (detail.ownerId == holder.session.user.id) {
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { editing = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("تعديل العنصر") }
                         }
                     }
                 }
@@ -142,9 +160,7 @@ fun ItemDetailScreen(
                                 NetworkImage(
                                     url = imageUrl,
                                     contentDescription = detail.title,
-                                    modifier = Modifier
-                                        .width(300.dp)
-                                        .height(260.dp),
+                                    modifier = Modifier.width(300.dp).height(260.dp),
                                 )
                             }
                         }

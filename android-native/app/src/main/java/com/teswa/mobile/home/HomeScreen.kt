@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
@@ -54,6 +55,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     initialSession: AuthSession,
     client: OracleHomeClient,
+    editListingRepository: EditListingRepository,
     locationProvider: CurrentLocationProvider,
     offersRepository: OffersRepository,
     publicProfileRepository: PublicProfileRepository,
@@ -96,19 +98,10 @@ fun HomeScreen(
         storyHolder.load()
     }
 
-    LaunchedEffect(holder.session.accessToken) {
-        onSessionUpdated(holder.session)
-    }
-    LaunchedEffect(storyHolder.session.accessToken) {
-        onSessionUpdated(storyHolder.session)
-    }
-
-    LaunchedEffect(holder.sessionExpired) {
-        if (holder.sessionExpired) onSignOut()
-    }
-    LaunchedEffect(storyHolder.sessionExpired) {
-        if (storyHolder.sessionExpired) onSignOut()
-    }
+    LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
+    LaunchedEffect(storyHolder.session.accessToken) { onSessionUpdated(storyHolder.session) }
+    LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSignOut() }
+    LaunchedEffect(storyHolder.sessionExpired) { if (storyHolder.sessionExpired) onSignOut() }
 
     LaunchedEffect(externalItemId) {
         externalItemId?.let {
@@ -189,6 +182,7 @@ fun HomeScreen(
                 itemId = selected,
                 initialSession = holder.session,
                 client = client,
+                editListingRepository = editListingRepository,
                 offersRepository = offersRepository,
                 onSessionUpdated = holder::updateSession,
                 onSessionExpired = onSignOut,
@@ -216,9 +210,7 @@ fun HomeScreen(
 
         is HomeUiState.Empty -> {
             Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
+                modifier = modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -234,9 +226,7 @@ fun HomeScreen(
 
         is HomeUiState.Error -> {
             Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
+                modifier = modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
@@ -267,9 +257,7 @@ fun HomeScreen(
                                 Text("تِسوى", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                                 Text("آخر الحاجات المعروضة للتبادل", style = MaterialTheme.typography.bodyMedium)
                             }
-                            OutlinedButton(onClick = { scope.launch { holder.load() } }) {
-                                Text("تحديث")
-                            }
+                            OutlinedButton(onClick = { scope.launch { holder.load() } }) { Text("تحديث") }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -319,11 +307,8 @@ fun HomeScreen(
                             enabled = !current.loadingMore,
                             onClick = { scope.launch { holder.loadMore() } },
                         ) {
-                            if (current.loadingMore) {
-                                CircularProgressIndicator(modifier = Modifier.height(22.dp))
-                            } else {
-                                Text("تحميل عناصر أكتر")
-                            }
+                            if (current.loadingMore) CircularProgressIndicator(modifier = Modifier.height(22.dp))
+                            else Text("تحميل عناصر أكتر")
                         }
                     }
                 }
@@ -332,9 +317,7 @@ fun HomeScreen(
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { scope.launch { onSignOut() } },
-                    ) {
-                        Text("تسجيل الخروج")
-                    }
+                    ) { Text("تسجيل الخروج") }
                 }
             }
         }
@@ -342,21 +325,13 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeFeedCard(
-    item: HomeFeedItem,
-    onOpen: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onOpen,
-    ) {
+private fun HomeFeedCard(item: HomeFeedItem, onOpen: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
         Column {
             NetworkImage(
                 url = item.coverImageUrl,
                 contentDescription = item.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(210.dp),
+                modifier = Modifier.fillMaxWidth().height(210.dp),
             )
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -373,12 +348,7 @@ private fun HomeFeedCard(
                 }
                 item.description?.takeIf { it.isNotBlank() }?.let { description ->
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Text(description, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { owner ->
                     Spacer(Modifier.height(10.dp))
