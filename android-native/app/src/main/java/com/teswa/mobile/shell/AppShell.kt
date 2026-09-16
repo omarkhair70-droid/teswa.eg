@@ -25,6 +25,7 @@ import com.teswa.mobile.feature.notifications.NotificationDestination
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NotificationsScreen
 import com.teswa.mobile.feature.direct.DirectRepository
+import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
@@ -61,6 +62,7 @@ fun AppShell(
     var openOffers by remember { mutableStateOf(false) }
     var externalProfileId by remember { mutableStateOf<String?>(null) }
     var externalDirectId by remember { mutableStateOf<String?>(null) }
+    var externalDirectTarget by remember { mutableStateOf<DirectComposeTarget?>(null) }
     var externalContextualId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -92,6 +94,10 @@ fun AppShell(
                 onExternalItemConsumed = { externalItemId = null },
                 externalProfileId = externalProfileId,
                 onExternalProfileConsumed = { externalProfileId = null },
+                onStartDirect = { target ->
+                    externalDirectTarget = target
+                    selectedTab = AppTab.MESSAGES
+                },
             )
 
             AppTab.ADD -> AddItemScreen(
@@ -115,11 +121,13 @@ fun AppShell(
                 initialDealId = externalDealId,
                 initialOffers = openOffers,
                 initialDirectId = externalDirectId,
+                initialDirectTarget = externalDirectTarget,
                 initialContextualId = externalContextualId,
                 onExternalTargetConsumed = {
                     externalDealId = null
                     openOffers = false
                     externalDirectId = null
+                    externalDirectTarget = null
                     externalContextualId = null
                 },
             )

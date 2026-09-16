@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileScreen
@@ -52,6 +53,7 @@ fun HomeScreen(
     onExternalItemConsumed: () -> Unit = {},
     externalProfileId: String? = null,
     onExternalProfileConsumed: () -> Unit = {},
+    onStartDirect: (DirectComposeTarget) -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
     val scope = rememberCoroutineScope()
@@ -92,6 +94,7 @@ fun HomeScreen(
             onSessionExpired = onSignOut,
             onBack = { selectedProfileId = null },
             onOpenItem = { itemId -> selectedProfileId = null; holder.openItem(itemId) },
+            onMessage = onStartDirect,
             modifier = modifier,
         )
         return

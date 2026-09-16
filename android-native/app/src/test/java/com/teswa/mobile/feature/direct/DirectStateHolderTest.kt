@@ -42,6 +42,20 @@ class DirectStateHolderTest {
         assertEquals(conversationId, holder.selected?.id)
         assertEquals(1, repository.readCalls)
     }
+
+    @Test
+    fun firstMessageCreatesRequestAndOpensConversation() = runBlocking {
+        val repository = FakeDirectRepository(session, conversation.copy(status = "ignored"))
+        val holder = DirectStateHolder(session, repository)
+        holder.startCompose(DirectComposeTarget(other, "سلمى", "salma", null))
+        holder.compose("  ممكن نتكلم؟  ")
+
+        holder.sendFirst()
+
+        assertEquals("ممكن نتكلم؟", repository.startedBody)
+        assertEquals(conversationId, holder.selected?.id)
+        assertEquals("", holder.composer)
+    }
 }
 
 private class FakeDirectRepository(
@@ -49,12 +63,25 @@ private class FakeDirectRepository(
     private val conversation: DirectConversation,
 ) : DirectRepository {
     var readCalls = 0
+    var startedBody: String? = null
 
     override suspend fun loadInbox(session: AuthSession) =
         DirectResult.Success(listOf(conversation), currentSession)
 
     override suspend fun loadMessages(session: AuthSession, conversationId: String): DirectResult<List<DirectMessage>> =
         DirectResult.Success(emptyList(), currentSession)
+
+    override suspend fun startWithMessage(
+        session: AuthSession,
+        targetUserId: String,
+        body: String,
+    ): DirectResult<DirectStartOutcome> {
+        startedBody = body
+        return DirectResult.Success(
+            DirectStartOutcome(conversation.id, "44444444-4444-4444-4444-444444444444", "requested", true, "تم"),
+            currentSession,
+        )
+    }
 
     override suspend fun send(
         session: AuthSession,

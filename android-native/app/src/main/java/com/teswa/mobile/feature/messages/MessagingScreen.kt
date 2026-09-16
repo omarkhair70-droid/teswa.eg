@@ -48,6 +48,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.teswa.mobile.feature.direct.DirectContent
+import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.direct.DirectStateHolder
 import com.teswa.mobile.feature.contextual.ContextualContent
@@ -66,6 +67,7 @@ fun MessagingScreen(
     initialDealId: String? = null,
     initialOffers: Boolean = false,
     initialDirectId: String? = null,
+    initialDirectTarget: DirectComposeTarget? = null,
     initialContextualId: String? = null,
     onExternalTargetConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -92,7 +94,7 @@ fun MessagingScreen(
     LaunchedEffect(holder.sessionExpired, offersHolder.sessionExpired) {
         if (holder.sessionExpired || offersHolder.sessionExpired || directHolder.sessionExpired || contextualHolder.sessionExpired) onSessionExpired()
     }
-    LaunchedEffect(initialDealId, initialOffers, initialDirectId, initialContextualId) {
+    LaunchedEffect(initialDealId, initialOffers, initialDirectId, initialDirectTarget, initialContextualId) {
         when {
             initialDealId != null -> {
                 mode = InboxMode.MESSAGES
@@ -106,6 +108,11 @@ fun MessagingScreen(
             initialDirectId != null -> {
                 mode = InboxMode.DIRECT
                 directHolder.openById(initialDirectId)
+                onExternalTargetConsumed()
+            }
+            initialDirectTarget != null -> {
+                mode = InboxMode.DIRECT
+                directHolder.startCompose(initialDirectTarget)
                 onExternalTargetConsumed()
             }
             initialContextualId != null -> {

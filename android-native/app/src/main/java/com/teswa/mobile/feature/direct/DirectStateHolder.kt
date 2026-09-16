@@ -21,6 +21,8 @@ class DirectStateHolder(
         private set
     var selected by mutableStateOf<DirectConversation?>(null)
         private set
+    var composeTarget by mutableStateOf<DirectComposeTarget?>(null)
+        private set
     var messages by mutableStateOf<List<DirectMessage>>(emptyList())
         private set
     var composer by mutableStateOf("")
@@ -48,6 +50,7 @@ class DirectStateHolder(
     }
 
     suspend fun open(value: DirectConversation) {
+        composeTarget = null
         selected = value
         composer = ""
         when (val result = repository.loadMessages(session, value.id)) {
@@ -74,8 +77,25 @@ class DirectStateHolder(
         return true
     }
 
+    suspend fun startCompose(target: DirectComposeTarget) {
+        message = null
+        if (state !is DirectUiState.Ready) load()
+        val existing = (state as? DirectUiState.Ready)?.items?.firstOrNull {
+            it.otherUserId == target.userId && it.status != "ignored"
+        }
+        if (existing != null) {
+            open(existing)
+            return
+        }
+        selected = null
+        messages = emptyList()
+        composer = ""
+        composeTarget = target
+    }
+
     fun close() {
         selected = null
+        composeTarget = null
         messages = emptyList()
         composer = ""
         message = null
@@ -94,6 +114,38 @@ class DirectStateHolder(
             is DirectResult.Success -> {
                 session = result.session
                 composer = ""
+                open(conversation)
+            }
+            is DirectResult.Failure -> fail(result)
+        }
+        working = false
+    }
+
+    suspend fun sendFirst() {
+        val target = composeTarget ?: return
+        val body = composer.trim()
+        if (working || body.isEmpty()) return
+        working = true
+        message = null
+        when (val result = repository.startWithMessage(session, target.userId, body)) {
+            is DirectResult.Success -> {
+                session = result.session
+                composer = ""
+                val outcome = result.value
+                val conversation = DirectConversation(
+                    id = outcome.conversationId,
+                    status = outcome.status,
+                    requestedBy = session.user.id,
+                    otherUserId = target.userId,
+                    otherDisplayName = target.displayName,
+                    otherUsername = target.username,
+                    otherAvatarUrl = target.avatarUrl,
+                    lastMessageBody = body,
+                    lastMessageAt = null,
+                    unreadCount = 0,
+                    requiresAction = false,
+                )
+                if (!outcome.accepted && !outcome.message.isNullOrBlank()) message = outcome.message
                 open(conversation)
             }
             is DirectResult.Failure -> fail(result)

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -51,6 +52,7 @@ fun PublicProfileScreen(
     onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
     onOpenItem: (String) -> Unit,
+    onMessage: (DirectComposeTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember(profileId, repository) { PublicProfileStateHolder(initialSession, profileId, repository) }
@@ -94,14 +96,29 @@ fun PublicProfileScreen(
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
+                            onClick = {
+                                onMessage(
+                                    DirectComposeTarget(
+                                        userId = profile.id,
+                                        displayName = profile.displayName,
+                                        username = profile.username,
+                                        avatarUrl = profile.avatarUrl,
+                                    ),
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
+                        ) { Text("مراسلة") }
+                        OutlinedButton(
                             onClick = { scope.launch { holder.toggleFollow() } },
                             modifier = Modifier.weight(1f),
                             enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
                         ) { Text(if (state.overview.follow.followingByMe) "إلغاء المتابعة" else "متابعة") }
-                        OutlinedButton(onClick = { confirmBlock = !state.overview.blockedByMe }, enabled = holder.workingAction == null) {
-                            Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر")
-                        }
                     }
+                    TextButton(
+                        onClick = { confirmBlock = !state.overview.blockedByMe },
+                        enabled = holder.workingAction == null,
+                    ) { Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر المستخدم") }
                     if (state.overview.blockedMe) Text("الحساب ده قافل التفاعل معاك.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
                 profile.bio?.let { item { Card { Column(Modifier.padding(16.dp)) { Text("عن المستخدم", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(5.dp)); Text(it) } } } }

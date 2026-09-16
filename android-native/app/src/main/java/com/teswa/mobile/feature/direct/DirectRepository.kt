@@ -14,6 +14,7 @@ import org.json.JSONObject
 interface DirectRepository {
     suspend fun loadInbox(session: AuthSession): DirectResult<List<DirectConversation>>
     suspend fun loadMessages(session: AuthSession, conversationId: String): DirectResult<List<DirectMessage>>
+    suspend fun startWithMessage(session: AuthSession, targetUserId: String, body: String): DirectResult<DirectStartOutcome>
     suspend fun send(session: AuthSession, conversation: DirectConversation, body: String): DirectResult<Unit>
     suspend fun act(session: AuthSession, conversationId: String, accept: Boolean): DirectResult<Unit>
     suspend fun markRead(session: AuthSession, conversationId: String): DirectResult<Unit>
@@ -51,6 +52,58 @@ class OracleDirectRepository(
                 else -> DirectResult.Failure("تعذر تحميل المحادثة (${result.value.status}).", result.session)
             }
             else -> result.failure("تعذر تحميل المحادثة الآن.")
+        }
+    }
+
+    override suspend fun startWithMessage(
+        session: AuthSession,
+        targetUserId: String,
+        body: String,
+    ): DirectResult<DirectStartOutcome> {
+        val target = targetUserId.validId() ?: return DirectResult.Failure("الحساب المطلوب غير صالح.", session)
+        val clean = body.trim()
+        if (clean.isEmpty() || clean.length > 1_200) {
+            return DirectResult.Failure("الرسالة لازم تكون من 1 إلى 1200 حرف.", session)
+        }
+        val request = OracleRequest(
+            method = OracleHttpMethod.POST,
+            path = "/v1/direct/conversations/start-with-message",
+            body = JSONObject().put("targetUserId", target).put("body", clean),
+        )
+        return when (val result = executor.execute(session, request)) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> {
+                    val payload = result.value.body
+                    if (!payload.has("ok")) {
+                        DirectResult.Failure("استجابة بدء المراسلة غير مكتملة.", result.session)
+                    } else {
+                        val conversationId = payload.optString("conversationId").validId()
+                        val status = payload.optString("status").takeIf { it in STATUSES }
+                        if (conversationId == null || status == null) {
+                            DirectResult.Failure(
+                                payload.optString("message").trim().takeIf(String::isNotEmpty)
+                                    ?: "تعذر بدء المراسلة.",
+                                result.session,
+                            )
+                        } else {
+                            DirectResult.Success(
+                                DirectStartOutcome(
+                                    conversationId = conversationId,
+                                    messageId = payload.optString("messageId").validId(),
+                                    status = status,
+                                    accepted = payload.optBoolean("ok"),
+                                    message = nullable(payload, "message"),
+                                ),
+                                result.session,
+                            )
+                        }
+                    }
+                }
+                401 -> expired(result.session)
+                403 -> DirectResult.Failure("المراسلة غير متاحة بسبب الخصوصية أو الحظر.", result.session)
+                else -> DirectResult.Failure("تعذر بدء المراسلة (${result.value.status}).", result.session)
+            }
+            else -> result.failure("تعذر بدء المراسلة الآن.")
         }
     }
 

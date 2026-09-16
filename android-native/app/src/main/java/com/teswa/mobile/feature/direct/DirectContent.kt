@@ -3,19 +3,23 @@ package com.teswa.mobile.feature.direct
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
 @Composable
 fun DirectContent(holder: DirectStateHolder, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { holder.load() }
+    holder.composeTarget?.let { DirectFirstMessage(holder, it, modifier); return }
     holder.selected?.let { DirectThread(holder, it, modifier); return }
     when (val state = holder.state) {
         DirectUiState.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -26,6 +30,76 @@ fun DirectContent(holder: DirectStateHolder, modifier: Modifier = Modifier) {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("طلبات ومحادثات الناس هتظهر هنا.") }
         } else LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp)) {
             items(state.items, key = { it.id }) { value -> DirectConversationCard(value) { scope.launch { holder.open(value) } } }
+        }
+    }
+}
+
+@Composable
+private fun DirectFirstMessage(
+    holder: DirectStateHolder,
+    target: DirectComposeTarget,
+    modifier: Modifier,
+) {
+    val scope = rememberCoroutineScope()
+    val name = target.displayName ?: target.username ?: "مستخدم تِسوى"
+    Column(modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = holder::close) { Text("رجوع") }
+            Spacer(Modifier.width(12.dp))
+            NetworkImage(target.avatarUrl, name, Modifier.size(44.dp).clip(CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("أول رسالة تبدأ طلب المراسلة", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Text("✉", Modifier.padding(18.dp), style = MaterialTheme.typography.headlineMedium)
+            }
+            Spacer(Modifier.height(14.dp))
+            Text("ابدأ برسالة لها معنى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(7.dp))
+            Text(
+                "فتح الشاشة لا يرسل طلبًا. الطلب يتسجل فقط لما تضغط إرسال.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            holder.message?.let {
+                Spacer(Modifier.height(12.dp))
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
+        }
+        Surface(shadowElevation = 8.dp) {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = holder.composer,
+                    onValueChange = holder::compose,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("اكتب أول رسالة…") },
+                    minLines = 1,
+                    maxLines = 4,
+                )
+                Button(
+                    onClick = { scope.launch { holder.sendFirst() } },
+                    enabled = holder.composer.isNotBlank() && !holder.working,
+                ) { Text(if (holder.working) "…" else "إرسال") }
+            }
         }
     }
 }
