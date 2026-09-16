@@ -2,6 +2,14 @@
 
 Teswa release artifacts must reuse the upload key already accepted by Google Play and must target an explicitly accepted Oracle release endpoint. Do not generate a new production key or silently ship the rehearsal endpoint as part of the native rewrite.
 
+## Google Play upload-key identity
+
+Google Play Console currently registers this Teswa **Upload key certificate SHA-256**:
+
+`9E:CE:E2:66:79:C8:7D:4F:6F:51:39:F1:96:7F:ED:20:01:06:C6:C0:FE:42:49:A8:31:8E:F8:84:90:FC:B7:F1`
+
+This is a public certificate fingerprint, not a signing secret. `scripts/release-gate.ps1` pins this value and refuses to build a release AAB if the configured local keystore certificate does not match it. Update the pinned fingerprint only after an intentional Google Play upload-key reset.
+
 ## Required local environment
 
 The repository never stores signing material or production credentials. A signed release build uses:
@@ -11,10 +19,6 @@ The repository never stores signing material or production credentials. A signed
 - `TESWA_RELEASE_KEY_ALIAS`
 - `TESWA_RELEASE_KEY_PASSWORD`
 - `TESWA_RELEASE_API_BASE_URL`
-
-The release verification helper also requires:
-
-- `TESWA_PLAY_UPLOAD_SHA256` — the SHA-256 fingerprint shown in **Google Play Console -> App integrity -> Upload key certificate**.
 
 Normal unit tests, debug compilation, release compilation and lint can run without these values. `assembleRelease` / `bundleRelease` intentionally refuse to create a release artifact unless signing inputs and an explicit HTTPS release API URL are present.
 
@@ -30,11 +34,11 @@ powershell -ExecutionPolicy Bypass -File .\android-native\scripts\release-gate.p
 
 The helper:
 
-1. refuses missing signing/API/fingerprint inputs;
+1. refuses missing signing/API inputs;
 2. confirms the keystore file exists;
 3. requires an absolute HTTPS release API URL;
 4. reads the existing keystore certificate with `keytool` without printing the store password;
-5. compares its SHA-256 fingerprint to `TESWA_PLAY_UPLOAD_SHA256`;
+5. compares its SHA-256 fingerprint to the Play-pinned Teswa upload certificate above;
 6. builds `:app:bundleRelease` only after that match;
 7. verifies the resulting AAB signature with `jarsigner`;
 8. prints the final AAB SHA-256 file hash for release evidence.
@@ -57,7 +61,7 @@ If certificate inspection is needed independently, use `keytool` and let the JDK
 keytool -list -v -keystore $env:TESWA_RELEASE_STORE_FILE -alias $env:TESWA_RELEASE_KEY_ALIAS -storepass:env TESWA_RELEASE_STORE_PASSWORD
 ```
 
-Compare the SHA-256 line with Google Play's **Upload key certificate**. The Play app-signing certificate and the upload-key certificate can be different; the upload-key certificate is the relevant identity for accepting an AAB upload.
+The SHA-256 line must equal the pinned Google Play **Upload key certificate** above. The Play app-signing certificate and the upload-key certificate can be different; the upload-key certificate is the relevant identity for accepting an AAB upload.
 
 ## Real update acceptance
 
