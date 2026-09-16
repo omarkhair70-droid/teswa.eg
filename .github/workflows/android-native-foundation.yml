@@ -27,5 +27,5 @@ jobs:
           gradle-version: '9.6.0'
       - name: Run native unit tests
         run: gradle -p android-native :app:testDebugUnitTest --stacktrace
-      - name: Assemble native debug app
-        run: gradle -p android-native :app:assembleDebug --stacktrace
+      - name: Compile native Kotlin
+        run: gradle -p android-native :app:compileDebugKotlin --stacktrace

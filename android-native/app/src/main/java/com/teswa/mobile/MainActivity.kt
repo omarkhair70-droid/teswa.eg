@@ -1,7 +1,7 @@
 package com.teswa.mobile
 
-import android.os.Bundle
 import android.content.Intent
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -34,21 +34,22 @@ import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthUiState
 import com.teswa.mobile.feature.additem.AddItemRepository
+import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.direct.DirectRepository
+import com.teswa.mobile.feature.discover.DiscoverRepository
 import com.teswa.mobile.feature.messages.MessagingRepository
+import com.teswa.mobile.feature.notifications.NativePushManager
+import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
-import com.teswa.mobile.feature.profile.ProfileImageRepository
+import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
-import com.teswa.mobile.feature.notifications.NotificationsRepository
-import com.teswa.mobile.feature.notifications.NativePushManager
-import com.teswa.mobile.feature.direct.DirectRepository
-import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
-import com.teswa.mobile.feature.reviews.ReviewRepository
-import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.home.CurrentLocationProvider
+import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.shell.AppShell
 import com.teswa.mobile.shell.NativeRouteParser
 import com.teswa.mobile.ui.theme.TeswaTheme
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
                         repository = container.authRepository,
                         accountGateRepository = container.accountGateRepository,
                         homeClient = container.homeClient,
+                        discoverRepository = container.discoverRepository,
                         locationProvider = container.locationProvider,
                         addItemRepository = container.addItemRepository,
                         messagingRepository = container.messagingRepository,
@@ -105,6 +107,7 @@ private fun TeswaAuthScreen(
     repository: AuthRepository,
     accountGateRepository: AccountGateRepository,
     homeClient: OracleHomeClient,
+    discoverRepository: DiscoverRepository,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
@@ -149,6 +152,7 @@ private fun TeswaAuthScreen(
                     AppShell(
                         initialSession = readySession,
                         homeClient = homeClient,
+                        discoverRepository = discoverRepository,
                         locationProvider = locationProvider,
                         addItemRepository = addItemRepository,
                         messagingRepository = messagingRepository,

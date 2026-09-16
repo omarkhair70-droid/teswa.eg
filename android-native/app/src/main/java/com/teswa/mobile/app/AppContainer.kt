@@ -8,25 +8,26 @@ import com.teswa.mobile.auth.OracleAuthClient
 import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
 import com.teswa.mobile.feature.additem.AndroidAddItemContentSource
 import com.teswa.mobile.feature.additem.OracleAddItemRepository
-import com.teswa.mobile.home.OracleHomeClient
+import com.teswa.mobile.feature.contextual.OracleContextualRepository
+import com.teswa.mobile.feature.direct.OracleDirectRepository
+import com.teswa.mobile.feature.discover.OracleDiscoverRepository
 import com.teswa.mobile.feature.messages.OracleMessagingRepository
+import com.teswa.mobile.feature.notifications.NativePushManager
+import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
+import com.teswa.mobile.feature.notifications.OracleNotificationsRepository
+import com.teswa.mobile.feature.notifications.OraclePushRegistrationRepository
 import com.teswa.mobile.feature.offers.OracleOffersRepository
-import com.teswa.mobile.feature.profile.OracleProfileRepository
-import com.teswa.mobile.feature.profile.OraclePublicProfileRepository
 import com.teswa.mobile.feature.profile.AndroidProfileImageContentSource
 import com.teswa.mobile.feature.profile.OracleProfileImageRepository
-import com.teswa.mobile.feature.settings.OracleSettingsRepository
-import com.teswa.mobile.feature.notifications.OracleNotificationsRepository
-import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
-import com.teswa.mobile.feature.notifications.NativePushManager
-import com.teswa.mobile.feature.notifications.OraclePushRegistrationRepository
-import com.teswa.mobile.feature.direct.OracleDirectRepository
-import com.teswa.mobile.feature.contextual.OracleContextualRepository
-import com.teswa.mobile.feature.stories.OracleStoryRepository
-import com.teswa.mobile.feature.stories.AndroidStoryContentSource
-import com.teswa.mobile.feature.voice.OracleVoiceMediaRepository
+import com.teswa.mobile.feature.profile.OracleProfileRepository
+import com.teswa.mobile.feature.profile.OraclePublicProfileRepository
 import com.teswa.mobile.feature.reviews.OracleReviewRepository
+import com.teswa.mobile.feature.settings.OracleSettingsRepository
+import com.teswa.mobile.feature.stories.AndroidStoryContentSource
+import com.teswa.mobile.feature.stories.OracleStoryRepository
+import com.teswa.mobile.feature.voice.OracleVoiceMediaRepository
 import com.teswa.mobile.home.AndroidLocationProvider
+import com.teswa.mobile.home.OracleHomeClient
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -43,6 +44,7 @@ class AppContainer(context: Context) {
     )
 
     val homeClient = OracleHomeClient(authRepository, oracleTransport)
+    val discoverRepository = OracleDiscoverRepository(authRepository, oracleTransport)
     val locationProvider = AndroidLocationProvider(appContext)
 
     val addItemRepository = OracleAddItemRepository(

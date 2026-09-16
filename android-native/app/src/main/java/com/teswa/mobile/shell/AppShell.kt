@@ -23,34 +23,35 @@ import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AddItemScreen
+import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.direct.DirectComposeTarget
+import com.teswa.mobile.feature.direct.DirectRepository
+import com.teswa.mobile.feature.discover.DiscoverRepository
+import com.teswa.mobile.feature.discover.DiscoverScreen
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
-import com.teswa.mobile.feature.offers.OffersRepository
-import com.teswa.mobile.feature.profile.ProfileRepository
-import com.teswa.mobile.feature.profile.ProfileImageRepository
-import com.teswa.mobile.feature.profile.PublicProfileRepository
-import com.teswa.mobile.feature.profile.ProfileScreen
-import com.teswa.mobile.feature.settings.SettingsRepository
+import com.teswa.mobile.feature.notifications.NativePushManager
 import com.teswa.mobile.feature.notifications.NotificationDestination
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NotificationsScreen
-import com.teswa.mobile.feature.notifications.NativePushManager
 import com.teswa.mobile.feature.notifications.PushRegistrationResult
-import com.teswa.mobile.feature.direct.DirectRepository
-import com.teswa.mobile.feature.direct.DirectComposeTarget
-import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.profile.ProfileImageRepository
+import com.teswa.mobile.feature.profile.ProfileRepository
+import com.teswa.mobile.feature.profile.ProfileScreen
+import com.teswa.mobile.feature.profile.PublicProfileRepository
+import com.teswa.mobile.feature.reviews.ReviewRepository
+import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.stories.StoryRepository
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
-import com.teswa.mobile.home.CurrentLocationProvider
-import com.teswa.mobile.feature.voice.VoiceMediaRepository
-import com.teswa.mobile.feature.reviews.ReviewRepository
 import kotlinx.coroutines.launch
 
-private enum class AppTab(
-    val label: String,
-) {
+private enum class AppTab(val label: String) {
     HOME("الرئيسية"),
+    DISCOVER("اكتشف"),
     ADD("إضافة"),
     MESSAGES("الرسائل"),
     NOTIFICATIONS("تنبيهات"),
@@ -61,6 +62,7 @@ private enum class AppTab(
 fun AppShell(
     initialSession: AuthSession,
     homeClient: OracleHomeClient,
+    discoverRepository: DiscoverRepository,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
@@ -189,6 +191,24 @@ fun AppShell(
                 },
             )
 
+            AppTab.DISCOVER -> DiscoverScreen(
+                initialSession = session,
+                repository = discoverRepository,
+                locationProvider = locationProvider,
+                onSessionUpdated = { session = it },
+                onSessionExpired = signOutAndDisable,
+                onOpenItem = { itemId ->
+                    externalItemId = itemId
+                    selectedTab = AppTab.HOME
+                },
+                onOpenProfile = { profileId ->
+                    externalProfileId = profileId
+                    selectedTab = AppTab.HOME
+                },
+                onOpenStories = { selectedTab = AppTab.HOME },
+                modifier = Modifier.padding(padding),
+            )
+
             AppTab.ADD -> AddItemScreen(
                 initialSession = session,
                 repository = addItemRepository,
@@ -277,6 +297,7 @@ fun AppShell(
 
 private fun tabGlyph(tab: AppTab): String = when (tab) {
     AppTab.HOME -> "⌂"
+    AppTab.DISCOVER -> "⌕"
     AppTab.ADD -> "+"
     AppTab.MESSAGES -> "✉"
     AppTab.NOTIFICATIONS -> "◉"
