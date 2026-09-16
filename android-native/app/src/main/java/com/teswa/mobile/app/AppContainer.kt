@@ -11,6 +11,7 @@ import com.teswa.mobile.feature.additem.OracleAddItemRepository
 import com.teswa.mobile.feature.contextual.OracleContextualRepository
 import com.teswa.mobile.feature.direct.OracleDirectRepository
 import com.teswa.mobile.feature.discover.OracleDiscoverRepository
+import com.teswa.mobile.feature.dolab.OracleDolabRepository
 import com.teswa.mobile.feature.messages.OracleMessagingRepository
 import com.teswa.mobile.feature.motion.AndroidCityPulseLocationResolver
 import com.teswa.mobile.feature.motion.OracleMotionRepository
@@ -49,6 +50,7 @@ class AppContainer(context: Context) {
     val homeClient = OracleHomeClient(authRepository, oracleTransport)
     val discoverRepository = OracleDiscoverRepository(authRepository, oracleTransport)
     val peopleRepository = OraclePeopleRepository(authRepository, oracleTransport)
+    val dolabRepository = OracleDolabRepository(authRepository, oracleTransport)
     val locationProvider = AndroidLocationProvider(appContext)
     val motionRepository = OracleMotionRepository(authRepository, oracleTransport)
     val motionLocationResolver = AndroidCityPulseLocationResolver(appContext, locationProvider)
