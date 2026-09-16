@@ -1,5 +1,8 @@
 package com.teswa.mobile.feature.dolab
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -27,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,10 +40,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.voice.VoiceComposer
+import com.teswa.mobile.feature.voice.VoiceMessagePlayer
+import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -155,10 +165,7 @@ private fun DolabShelf(
         when (val state = holder.state) {
             DolabUiState.Loading -> item { DolabCenter("بنفتح دولابك…", loading = true) }
             is DolabUiState.Error -> item {
-                DolabCenter(
-                    state.message,
-                    primary = "حاول تاني" to { scope.launch { holder.load() } },
-                )
+                DolabCenter(state.message, primary = "حاول تاني" to { scope.launch { holder.load() } })
             }
             is DolabUiState.Empty -> item {
                 DolabCenter(
@@ -204,10 +211,7 @@ private fun DolabItemCard(
     notesCount: Int,
     onOpen: () -> Unit,
 ) {
-    Card(
-        onClick = onOpen,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
+    Card(onClick = onOpen, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
@@ -246,14 +250,55 @@ private fun DolabItemDetail(
     onContinueAsListing: ((DolabItem) -> Unit)?,
     modifier: Modifier,
 ) {
+    val context = LocalContext.current
+    val mediaResolver = remember(context) { DolabMediaResolver(context) }
     val scope = rememberCoroutineScope()
     var draft by remember(item.id, item.updatedAt, item.status) { mutableStateOf(item.toDraft()) }
     var note by remember(item.id) { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
+    var cameraTarget by remember(item.id) { mutableStateOf<DolabCameraTarget?>(null) }
     val workspace = holder.workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
     val notes = workspace.notesFor(item.id)
     val media = workspace.mediaFor(item.id)
     val busy = holder.workingId == item.id
+    val uploadProgress = holder.mediaUploadProgress?.takeIf { it.itemId == item.id }?.percent
+
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        uris.forEach { uri ->
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        }
+        scope.launch {
+            for (uri in uris) {
+                val pending = mediaResolver.resolveImage(uri)
+                if (pending == null) {
+                    holder.showError("الصورة دي مش JPG أو PNG أو WebP، أو مش قادرين نقراها.")
+                    break
+                }
+                if (!holder.addMedia(item, pending)) break
+            }
+        }
+    }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (!saved || target == null) {
+            target?.discard()
+        } else {
+            scope.launch {
+                val pending = mediaResolver.resolveImage(
+                    target.uri,
+                    fallbackName = target.file.name,
+                    fallbackContentType = "image/jpeg",
+                )
+                if (pending == null) holder.showError("الصورة اللي اتصورت مش متاحة للحفظ.")
+                else holder.addMedia(item, pending)
+                target.discard()
+            }
+        }
+    }
+    DisposableEffect(item.id) {
+        onDispose { cameraTarget?.discard() }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -314,6 +359,70 @@ private fun DolabItemDetail(
                 }
             }
         }
+
+        item {
+            Text("الميديا", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                if (item.status.editable) "خلي صور الحاجة وصوتك معاها هنا قبل ما تقرر تنشرها."
+                else "الميديا محفوظة كسياق للحاجة بعد خروجها من مرحلة التجهيز.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (item.status.editable) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { gallery.launch(DolabMediaResolver.SUPPORTED_IMAGE_TYPES.toTypedArray()) },
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("من الصور") }
+                        OutlinedButton(
+                            onClick = {
+                                runCatching { mediaResolver.createCameraTarget() }
+                                    .onSuccess { target -> cameraTarget = target; camera.launch(target.uri) }
+                                    .onFailure { holder.showError("تعذر فتح الكاميرا دلوقتي.") }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                        ) { Text("كاميرا") }
+                    }
+                    VoiceComposer(
+                        enabled = !busy,
+                        sending = busy && uploadProgress != null,
+                        uploadProgress = uploadProgress,
+                        onSend = { voice ->
+                            val pending = mediaResolver.resolveVoice(voice)
+                            if (pending == null) {
+                                holder.showError("التسجيل غير صالح أو لم يعد موجودًا.")
+                                false
+                            } else {
+                                holder.addMedia(item, pending)
+                            }
+                        },
+                        onError = holder::showError,
+                    )
+                    if (uploadProgress != null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("بنحفظ الميديا… $uploadProgress%", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        if (media.isEmpty()) {
+            item { Text("لسه مفيش ميديا محفوظة مع الحاجة دي.", style = MaterialTheme.typography.bodyMedium) }
+        } else {
+            items(media, key = { "media-${it.id}" }) { entry ->
+                DolabMediaCard(
+                    holder = holder,
+                    media = entry,
+                    editable = item.status.editable,
+                    busy = busy,
+                    onDelete = { scope.launch { holder.deleteMedia(entry) } },
+                )
+            }
+        }
+
         item {
             Text("ملاحظاتك", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text("مش شات منفصل؛ دي ذاكرة الحاجة نفسها.", style = MaterialTheme.typography.bodySmall)
@@ -337,19 +446,14 @@ private fun DolabItemDetail(
                 label = { Text("اكتب حاجة عايز تفتكرها") },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = item.status.editable && !busy,
             )
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { scope.launch { if (holder.addNote(item.id, note)) note = "" } },
-                enabled = note.isNotBlank() && !busy,
+                enabled = item.status.editable && note.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("ضيف للمساحة") }
-        }
-        if (media.isNotEmpty()) {
-            item {
-                Text("الميديا", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("${media.size} ملفات محفوظة مع الحاجة. عرض ورفع الميديا هيتربط من نفس Media boundary بدل نظام منفصل.", style = MaterialTheme.typography.bodySmall)
-            }
         }
         item {
             TextButton(onClick = { confirmDelete = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
@@ -371,6 +475,63 @@ private fun DolabItemDetail(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("رجوع") } },
         )
+    }
+}
+
+@Composable
+private fun DolabMediaCard(
+    holder: DolabStateHolder,
+    media: DolabMedia,
+    editable: Boolean,
+    busy: Boolean,
+    onDelete: () -> Unit,
+) {
+    var signedUrl by remember(media.id, media.storagePath) { mutableStateOf<String?>(null) }
+    var imageUrlLoading by remember(media.id, media.storagePath) { mutableStateOf(media.mediaType == "image") }
+
+    LaunchedEffect(media.id, media.storagePath, media.mediaType) {
+        if (media.mediaType == "image") {
+            signedUrl = holder.mediaUrl(media)
+            imageUrlLoading = false
+        }
+    }
+
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)) {
+        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            when (media.mediaType) {
+                "image" -> {
+                    if (imageUrlLoading) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.height(20.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("بنفتح الصورة…", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        NetworkImage(
+                            url = signedUrl,
+                            contentDescription = "صورة محفوظة في الدولاب",
+                            modifier = Modifier.fillMaxWidth().height(190.dp).clip(MaterialTheme.shapes.large),
+                        )
+                    }
+                }
+                "audio" -> VoiceMessagePlayer(
+                    durationMs = media.durationMs?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt(),
+                    loadUrl = { holder.mediaUrl(media) },
+                )
+                "video" -> Text("فيديو محفوظ مع الحاجة", style = MaterialTheme.typography.titleSmall)
+                else -> Text("ملف محفوظ مع الحاجة", style = MaterialTheme.typography.titleSmall)
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(mediaTypeLabel(media.mediaType), fontWeight = FontWeight.SemiBold)
+                    val details = listOfNotNull(media.mimeType, media.sizeBytes?.let(::formatFileSize)).joinToString(" • ")
+                    if (details.isNotBlank()) Text(details, style = MaterialTheme.typography.bodySmall)
+                }
+                if (editable) {
+                    TextButton(onClick = onDelete, enabled = !busy) { Text("حذف") }
+                }
+            }
+        }
     }
 }
 
@@ -502,4 +663,17 @@ private fun statusLabel(status: DolabItemStatus): String = when (status) {
     DolabItemStatus.EXCHANGED -> "اتبدّلت"
     DolabItemStatus.ARCHIVED -> "في الأرشيف"
     DolabItemStatus.UNKNOWN -> "محفوظة"
+}
+
+private fun mediaTypeLabel(value: String): String = when (value) {
+    "image" -> "صورة"
+    "audio" -> "صوت"
+    "video" -> "فيديو"
+    else -> "ميديا"
+}
+
+private fun formatFileSize(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> "%.1f MB".format(bytes.toDouble() / (1024.0 * 1024.0))
+    bytes >= 1024L -> "%.1f KB".format(bytes.toDouble() / 1024.0)
+    else -> "$bytes B"
 }
