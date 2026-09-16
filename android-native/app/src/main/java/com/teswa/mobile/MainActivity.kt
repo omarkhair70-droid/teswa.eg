@@ -37,6 +37,7 @@ import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
+import com.teswa.mobile.feature.dolab.AndroidDolabAddItemHandoff
 import com.teswa.mobile.feature.dolab.DolabRepository
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.motion.MotionLocationResolver
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
                         discoverRepository = container.discoverRepository,
                         peopleRepository = container.peopleRepository,
                         dolabRepository = container.dolabRepository,
+                        dolabAddItemHandoff = container.dolabAddItemHandoff,
                         motionRepository = container.motionRepository,
                         motionLocationResolver = container.motionLocationResolver,
                         locationProvider = container.locationProvider,
@@ -118,6 +120,7 @@ private fun TeswaAuthScreen(
     discoverRepository: DiscoverRepository,
     peopleRepository: PeopleRepository,
     dolabRepository: DolabRepository,
+    dolabAddItemHandoff: AndroidDolabAddItemHandoff,
     motionRepository: MotionRepository,
     motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
@@ -167,6 +170,7 @@ private fun TeswaAuthScreen(
                         discoverRepository = discoverRepository,
                         peopleRepository = peopleRepository,
                         dolabRepository = dolabRepository,
+                        dolabAddItemHandoff = dolabAddItemHandoff,
                         motionRepository = motionRepository,
                         motionLocationResolver = motionLocationResolver,
                         locationProvider = locationProvider,

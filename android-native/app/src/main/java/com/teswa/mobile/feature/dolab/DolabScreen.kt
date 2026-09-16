@@ -59,7 +59,7 @@ fun DolabScreen(
     onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onContinueAsListing: ((DolabItem) -> Unit)? = null,
+    onContinueAsListing: (suspend (DolabItem) -> String?)? = null,
 ) {
     val holder = remember(initialSession.user.id, repository) { DolabStateHolder(initialSession, repository) }
     val scope = rememberCoroutineScope()
@@ -247,7 +247,7 @@ private fun DolabItemDetail(
     item: DolabItem,
     onBack: () -> Unit,
     onDeleted: () -> Unit,
-    onContinueAsListing: ((DolabItem) -> Unit)?,
+    onContinueAsListing: (suspend (DolabItem) -> String?)?,
     modifier: Modifier,
 ) {
     val context = LocalContext.current
@@ -257,10 +257,12 @@ private fun DolabItemDetail(
     var note by remember(item.id) { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var cameraTarget by remember(item.id) { mutableStateOf<DolabCameraTarget?>(null) }
+    var continueWorking by remember(item.id) { mutableStateOf(false) }
     val workspace = holder.workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
     val notes = workspace.notesFor(item.id)
     val media = workspace.mediaFor(item.id)
-    val busy = holder.workingId == item.id
+    val holderBusy = holder.workingId == item.id
+    val busy = holderBusy || continueWorking
     val uploadProgress = holder.mediaUploadProgress?.takeIf { it.itemId == item.id }?.percent
 
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -337,7 +339,7 @@ private fun DolabItemDetail(
                         onClick = { scope.launch { holder.save(item, draft) } },
                         enabled = !busy,
                         modifier = Modifier.weight(1f),
-                    ) { Text(if (busy) "بنحفظ…" else "حفظ") }
+                    ) { Text(if (holderBusy) "بنحفظ…" else "حفظ") }
                     OutlinedButton(
                         onClick = { scope.launch { holder.setReady(item, item.status != DolabItemStatus.READY) } },
                         enabled = !busy,
@@ -354,8 +356,25 @@ private fun DolabItemDetail(
         }
         if (item.status == DolabItemStatus.READY && onContinueAsListing != null) {
             item {
-                Button(onClick = { onContinueAsListing(item) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("كمّلها كإعلان")
+                Button(
+                    onClick = {
+                        if (!continueWorking) scope.launch {
+                            continueWorking = true
+                            val error = onContinueAsListing(item)
+                            continueWorking = false
+                            if (error != null) holder.showError(error)
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (continueWorking) {
+                        CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("بنجهز الإعلان…")
+                    } else {
+                        Text("كمّلها كإعلان")
+                    }
                 }
             }
         }
@@ -389,7 +408,7 @@ private fun DolabItemDetail(
                     }
                     VoiceComposer(
                         enabled = !busy,
-                        sending = busy && uploadProgress != null,
+                        sending = holderBusy && uploadProgress != null,
                         uploadProgress = uploadProgress,
                         onSend = { voice ->
                             val pending = mediaResolver.resolveVoice(voice)

@@ -28,6 +28,7 @@ fun ProfileDolabHost(
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     onAddItem: () -> Unit,
+    onContinueAsListing: suspend (DolabItem) -> String?,
     onSignOut: suspend () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -41,6 +42,7 @@ fun ProfileDolabHost(
             onSessionExpired = onSessionExpired,
             onBack = { showingDolab = false },
             modifier = modifier,
+            onContinueAsListing = onContinueAsListing,
         )
         return
     }

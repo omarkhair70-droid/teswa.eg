@@ -6,11 +6,16 @@ import com.teswa.mobile.account.OracleAccountGateClient
 import com.teswa.mobile.auth.AuthRepository
 import com.teswa.mobile.auth.OracleAuthClient
 import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
+import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AndroidAddItemContentSource
 import com.teswa.mobile.feature.additem.OracleAddItemRepository
 import com.teswa.mobile.feature.contextual.OracleContextualRepository
 import com.teswa.mobile.feature.direct.OracleDirectRepository
 import com.teswa.mobile.feature.discover.OracleDiscoverRepository
+import com.teswa.mobile.feature.dolab.AndroidDolabAddItemHandoff
+import com.teswa.mobile.feature.dolab.DolabAwareAddItemRepository
+import com.teswa.mobile.feature.dolab.DolabPublishContextStore
+import com.teswa.mobile.feature.dolab.OracleDolabPublishBridgeRepository
 import com.teswa.mobile.feature.dolab.OracleDolabRepository
 import com.teswa.mobile.feature.messages.OracleMessagingRepository
 import com.teswa.mobile.feature.motion.AndroidCityPulseLocationResolver
@@ -51,14 +56,28 @@ class AppContainer(context: Context) {
     val discoverRepository = OracleDiscoverRepository(authRepository, oracleTransport)
     val peopleRepository = OraclePeopleRepository(authRepository, oracleTransport)
     val dolabRepository = OracleDolabRepository(authRepository, oracleTransport)
+    val dolabPublishBridgeRepository = OracleDolabPublishBridgeRepository(authRepository, oracleTransport)
+    private val dolabPublishContextStore = DolabPublishContextStore(appContext)
     val locationProvider = AndroidLocationProvider(appContext)
     val motionRepository = OracleMotionRepository(authRepository, oracleTransport)
     val motionLocationResolver = AndroidCityPulseLocationResolver(appContext, locationProvider)
 
-    val addItemRepository = OracleAddItemRepository(
+    private val oracleAddItemRepository = OracleAddItemRepository(
         authenticator = authRepository,
         contentSource = AndroidAddItemContentSource(appContext.contentResolver),
         transport = oracleTransport,
+    )
+    val addItemRepository: AddItemRepository = DolabAwareAddItemRepository(
+        delegate = oracleAddItemRepository,
+        bridge = dolabPublishBridgeRepository,
+        contextStore = dolabPublishContextStore,
+    )
+    val dolabAddItemHandoff = AndroidDolabAddItemHandoff(
+        context = appContext,
+        dolabRepository = dolabRepository,
+        publishBridge = dolabPublishBridgeRepository,
+        addItemRepository = addItemRepository,
+        publishContextStore = dolabPublishContextStore,
     )
 
     private val notificationDispatcher = OracleNotificationDispatcher(authRepository, oracleTransport)

@@ -28,6 +28,8 @@ import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
 import com.teswa.mobile.feature.discover.DiscoverScreen
+import com.teswa.mobile.feature.dolab.AndroidDolabAddItemHandoff
+import com.teswa.mobile.feature.dolab.DolabAddItemHandoffResult
 import com.teswa.mobile.feature.dolab.DolabRepository
 import com.teswa.mobile.feature.dolab.ProfileDolabHost
 import com.teswa.mobile.feature.messages.MessagingRepository
@@ -69,6 +71,7 @@ fun AppShell(
     discoverRepository: DiscoverRepository,
     peopleRepository: PeopleRepository,
     dolabRepository: DolabRepository,
+    dolabAddItemHandoff: AndroidDolabAddItemHandoff,
     motionRepository: MotionRepository,
     motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
@@ -301,6 +304,19 @@ fun AppShell(
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
                 onAddItem = { selectedTab = AppTab.ADD },
+                onContinueAsListing = { item ->
+                    when (val result = dolabAddItemHandoff.prepareAndPersist(session, item)) {
+                        is DolabAddItemHandoffResult.Success -> {
+                            session = result.session
+                            selectedTab = AppTab.ADD
+                            null
+                        }
+                        is DolabAddItemHandoffResult.Failure -> {
+                            result.session?.let { session = it }
+                            result.message
+                        }
+                    }
+                },
                 onSignOut = signOutAndDisable,
             )
         }
