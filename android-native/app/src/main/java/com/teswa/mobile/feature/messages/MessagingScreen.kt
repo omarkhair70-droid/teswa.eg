@@ -54,6 +54,7 @@ import com.teswa.mobile.feature.direct.DirectStateHolder
 import com.teswa.mobile.feature.contextual.ContextualContent
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.contextual.ContextualStateHolder
+import com.teswa.mobile.feature.voice.VoiceComposer
 
 @Composable
 fun MessagingScreen(
@@ -371,6 +372,13 @@ private fun DealThreadScreen(holder: MessagingStateHolder, conversation: DealCon
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    VoiceComposer(
+                        enabled = true,
+                        sending = holder.sending,
+                        uploadProgress = holder.voiceUploadProgress,
+                        onSend = holder::sendVoice,
+                        onError = holder::showBanner,
+                    )
                     OutlinedTextField(
                         value = holder.composer,
                         onValueChange = holder::updateComposer,

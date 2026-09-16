@@ -29,6 +29,10 @@ data class DealMessage(
     val body: String,
     val messageType: String,
     val createdAt: String,
+    val audioStoragePath: String? = null,
+    val audioDurationMs: Int? = null,
+    val audioMimeType: String? = null,
+    val audioSizeBytes: Long? = null,
 )
 
 data class DealInboxPage(

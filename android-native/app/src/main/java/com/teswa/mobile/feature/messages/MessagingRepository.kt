@@ -12,11 +12,21 @@ import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
 import com.teswa.mobile.feature.notifications.NotificationDispatch
 import com.teswa.mobile.feature.notifications.NotificationDispatcher
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
 
 interface MessagingRepository {
     suspend fun loadInbox(session: AuthSession, offset: Int = 0, limit: Int = 50): MessagingResult<DealInboxPage>
     suspend fun loadMessages(session: AuthSession, dealId: String): MessagingResult<List<DealMessage>>
     suspend fun sendText(session: AuthSession, dealId: String, recipientUserId: String, body: String): MessagingResult<DealMessage>
+    suspend fun sendVoice(
+        session: AuthSession,
+        dealId: String,
+        recipientUserId: String,
+        draft: VoiceDraft,
+        onProgress: (Int) -> Unit = {},
+    ): MessagingResult<DealMessage> = MessagingResult.Failure("الرسائل الصوتية غير متاحة الآن.", session)
     suspend fun markRead(session: AuthSession, dealId: String): MessagingResult<Unit>
     suspend fun loadConfirmations(session: AuthSession, dealId: String): MessagingResult<Set<String>>
     suspend fun confirmCompletion(session: AuthSession, conversation: DealConversation): MessagingResult<Boolean>
@@ -26,6 +36,7 @@ class OracleMessagingRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
     private val notificationDispatcher: NotificationDispatcher? = null,
+    private val voiceMediaRepository: VoiceMediaRepository? = null,
 ) : MessagingRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -140,6 +151,70 @@ class OracleMessagingRepository(
                 else -> MessagingResult.Failure("تعذر إرسال الرسالة (${result.value.status}).", result.session)
             }
             else -> result.toFailure("تعذر إرسال الرسالة الآن.")
+        }
+    }
+
+    override suspend fun sendVoice(
+        session: AuthSession,
+        dealId: String,
+        recipientUserId: String,
+        draft: VoiceDraft,
+        onProgress: (Int) -> Unit,
+    ): MessagingResult<DealMessage> {
+        val id = dealId.validId() ?: return MessagingResult.Failure("معرّف المحادثة غير صالح.", session)
+        val recipient = recipientUserId.validId() ?: return MessagingResult.Failure("الطرف الآخر غير صالح.", session)
+        val media = voiceMediaRepository ?: return MessagingResult.Failure("الرسائل الصوتية غير متاحة الآن.", session)
+        val uploaded = media.upload(session, "deal_voice", "deals/$id/${session.user.id}", draft, onProgress)
+        if (uploaded is VoiceMediaResult.Failure) {
+            return MessagingResult.Failure(uploaded.message, uploaded.session, uploaded.network, uploaded.unauthorized)
+        }
+        uploaded as VoiceMediaResult.Success
+        val voice = uploaded.value
+        val payload = JSONObject()
+            .put("dealId", id)
+            .put("senderId", session.user.id)
+            .put("body", "رسالة صوتية")
+            .put("audioStoragePath", voice.objectKey)
+            .put("audioDurationMs", voice.durationMs)
+            .put("audioMimeType", voice.mimeType)
+            .put("audioSizeBytes", voice.sizeBytes)
+            .put("messageType", "voice")
+        return when (val result = executor.execute(
+            uploaded.session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/deals/$id/messages", payload),
+        )) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                201 -> {
+                    val message = parseMessage(result.value.body, id)
+                    if (message == null) {
+                        val cleaned = media.discard(result.session, "deal_voice", voice)
+                        MessagingResult.Failure("استجابة إرسال التسجيل غير مكتملة.", cleaned)
+                    } else {
+                        val updated = notificationDispatcher?.dispatch(
+                            result.session,
+                            NotificationDispatch(
+                                targetUserId = recipient,
+                                type = "deal_voice_message_received",
+                                title = "رسالة صوتية في الصفقة",
+                                body = "وصلك تسجيل صوتي جديد.",
+                                dealId = id,
+                                messageId = message.id,
+                            ),
+                        ) ?: result.session
+                        MessagingResult.Success(message, updated)
+                    }
+                }
+                else -> {
+                    val cleaned = media.discard(result.session, "deal_voice", voice)
+                    if (result.value.status == 401) expired(cleaned)
+                    else MessagingResult.Failure("تعذر إرسال التسجيل (${result.value.status}).", cleaned)
+                }
+            }
+            else -> {
+                val failure = result.toFailure("تعذر إرسال التسجيل الآن.")
+                val cleaned = media.discard(failure.session ?: uploaded.session, "deal_voice", voice)
+                failure.copy(session = cleaned)
+            }
         }
     }
 
@@ -300,6 +375,10 @@ class OracleMessagingRepository(
             senderId = senderId,
             body = row.optString("body"),
             messageType = row.optString("messageType", "text"),
+            audioStoragePath = nullable(row, "audioStoragePath"),
+            audioDurationMs = row.optInt("audioDurationMs").takeIf { !row.isNull("audioDurationMs") && it > 0 },
+            audioMimeType = nullable(row, "audioMimeType"),
+            audioSizeBytes = row.optLong("audioSizeBytes").takeIf { !row.isNull("audioSizeBytes") && it > 0 },
             createdAt = createdAt,
         )
     }

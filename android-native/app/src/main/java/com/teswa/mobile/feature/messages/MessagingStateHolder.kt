@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.voice.VoiceDraft
 
 sealed interface InboxUiState {
     data object Loading : InboxUiState
@@ -38,6 +39,8 @@ class MessagingStateHolder(
     var composer by mutableStateOf("")
         private set
     var sending by mutableStateOf(false)
+        private set
+    var voiceUploadProgress by mutableStateOf<Int?>(null)
         private set
     var banner by mutableStateOf<String?>(null)
         private set
@@ -157,6 +160,10 @@ class MessagingStateHolder(
         composer = value.take(2_000)
     }
 
+    fun showBanner(value: String) {
+        banner = value
+    }
+
     suspend fun send() {
         val conversation = selectedConversation ?: return
         val body = composer.trim()
@@ -191,6 +198,42 @@ class MessagingStateHolder(
             }
         }
         sending = false
+    }
+
+    suspend fun sendVoice(draft: VoiceDraft): Boolean {
+        val conversation = selectedConversation ?: return false
+        if (sending) return false
+        sending = true
+        voiceUploadProgress = 0
+        banner = null
+        val sent = when (val result = repository.sendVoice(
+            session,
+            conversation.dealId,
+            conversation.otherParticipantId,
+            draft,
+        ) { voiceUploadProgress = it }) {
+            is MessagingResult.Success -> {
+                session = result.session
+                val current = threadState as? ThreadUiState.Content
+                threadState = ThreadUiState.Content((current?.messages.orEmpty() + result.value).distinctBy { it.id })
+                val preview = DealMessagePreview("رسالة صوتية", result.value.createdAt, result.value.senderId, "voice")
+                selectedConversation = conversation.copy(latestMessage = preview, lastActivityAt = result.value.createdAt)
+                val inbox = inboxState as? InboxUiState.Content
+                if (inbox != null) inboxState = inbox.copy(items = inbox.items.map {
+                    if (it.dealId == conversation.dealId) it.copy(latestMessage = preview, lastActivityAt = result.value.createdAt) else it
+                })
+                true
+            }
+            is MessagingResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                banner = if (result.unauthorized) null else result.message
+                false
+            }
+        }
+        sending = false
+        voiceUploadProgress = null
+        return sent
     }
 
     suspend fun confirmCompletion() {

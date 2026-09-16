@@ -8,11 +8,16 @@ import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleResponse
 import com.teswa.mobile.core.network.OracleTransport
 import com.teswa.mobile.core.network.OracleTransportResult
+import com.teswa.mobile.feature.voice.UploadedVoice
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class OracleMessagingRepositoryTest {
     private val userId = "11111111-1111-1111-1111-111111111111"
@@ -87,6 +92,37 @@ class OracleMessagingRepositoryTest {
     }
 
     @Test
+    fun uploadsAndSendsExactDealVoiceContract() = runBlocking {
+        val objectKey = "deals/$dealId/$userId/voice.m4a"
+        val response = JSONObject("""{
+          "id":"$messageId","dealId":"$dealId","senderId":"$userId","body":"رسالة صوتية",
+          "messageType":"voice","audioStoragePath":"$objectKey","audioDurationMs":1800,
+          "audioMimeType":"audio/m4a","audioSizeBytes":4,"createdAt":"2026-09-15T12:30:00Z"
+        }""")
+        val transport = QueueTransport(OracleTransportResult.Response(OracleResponse(201, response)))
+        val voiceMedia = FakeVoiceMediaRepository(UploadedVoice(objectKey, 1800, "audio/m4a", 4))
+        val repository = OracleMessagingRepository(authenticator, transport, voiceMediaRepository = voiceMedia)
+        val file = File.createTempFile("voice", ".m4a").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+
+        val result = repository.sendVoice(session, dealId, otherId, VoiceDraft(file, 1800))
+
+        assertTrue(result is MessagingResult.Success)
+        assertEquals("deal_voice", voiceMedia.purpose)
+        assertEquals("deals/$dealId/$userId", voiceMedia.prefix)
+        val request = transport.requests.single()
+        val body = requireNotNull(request.body)
+        assertEquals("/v1/deals/$dealId/messages", request.path)
+        assertEquals(
+            setOf("dealId", "senderId", "body", "audioStoragePath", "audioDurationMs", "audioMimeType", "audioSizeBytes", "messageType"),
+            body.keys().asSequence().toSet(),
+        )
+        assertEquals(objectKey, body.getString("audioStoragePath"))
+        assertEquals("voice", body.getString("messageType"))
+        file.delete()
+        Unit
+    }
+
+    @Test
     fun loadsLatestMessagesInChronologicalDisplayOrder() = runBlocking {
         val olderId = "77777777-7777-7777-7777-777777777777"
         val transport = QueueTransport(
@@ -140,6 +176,25 @@ class OracleMessagingRepositoryTest {
         assertTrue(confirmation.isNull("note"))
         assertEquals(0, requireNotNull(transport.requests.last().body).length())
     }
+}
+
+private class FakeVoiceMediaRepository(private val voice: UploadedVoice) : VoiceMediaRepository {
+    var purpose: String? = null
+    var prefix: String? = null
+    override suspend fun upload(
+        session: AuthSession,
+        purpose: String,
+        objectPrefix: String,
+        draft: VoiceDraft,
+        onProgress: (Int) -> Unit,
+    ): VoiceMediaResult<UploadedVoice> {
+        this.purpose = purpose
+        prefix = objectPrefix
+        onProgress(100)
+        return VoiceMediaResult.Success(voice, session)
+    }
+
+    override suspend fun discard(session: AuthSession, purpose: String, voice: UploadedVoice) = session
 }
 
 private class QueueTransport(vararg results: OracleTransportResult) : OracleTransport {
