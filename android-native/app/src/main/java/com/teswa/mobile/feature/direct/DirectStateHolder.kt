@@ -34,6 +34,8 @@ class DirectStateHolder(
         private set
     var message by mutableStateOf<String?>(null)
         private set
+    var messageIsError by mutableStateOf(true)
+        private set
     var sessionExpired by mutableStateOf(false)
         private set
 
@@ -56,6 +58,8 @@ class DirectStateHolder(
         composeTarget = null
         selected = value
         composer = ""
+        message = null
+        messageIsError = true
         when (val result = repository.loadMessages(session, value.id)) {
             is DirectResult.Success -> {
                 session = result.session
@@ -73,7 +77,7 @@ class DirectStateHolder(
         if (state !is DirectUiState.Ready) load()
         val conversation = (state as? DirectUiState.Ready)?.items?.firstOrNull { it.id == conversationId }
         if (conversation == null) {
-            message = "المحادثة مش موجودة أو لسه بتتجهز."
+            showMessage("المحادثة مش موجودة أو لسه بتتجهز.")
             return false
         }
         open(conversation)
@@ -82,6 +86,7 @@ class DirectStateHolder(
 
     suspend fun startCompose(target: DirectComposeTarget) {
         message = null
+        messageIsError = true
         if (state !is DirectUiState.Ready) load()
         val existing = (state as? DirectUiState.Ready)?.items?.firstOrNull {
             it.otherUserId == target.userId && it.status != "ignored"
@@ -102,6 +107,7 @@ class DirectStateHolder(
         messages = emptyList()
         composer = ""
         message = null
+        messageIsError = true
     }
 
     fun compose(value: String) {
@@ -110,6 +116,25 @@ class DirectStateHolder(
 
     fun showMessage(value: String) {
         message = value
+        messageIsError = true
+    }
+
+    private fun showSuccessMessage(value: String) {
+        message = value
+        messageIsError = false
+    }
+
+    fun applyExternalSuccess(value: AuthSession, statusMessage: String) {
+        updateSession(value)
+        showSuccessMessage(statusMessage)
+    }
+
+    fun applyExternalFailure(value: AuthSession?, statusMessage: String, unauthorized: Boolean) {
+        value?.let { external ->
+            if (external.user.id == session.user.id) session = external
+        }
+        sessionExpired = sessionExpired || unauthorized
+        showMessage(statusMessage)
     }
 
     suspend fun send() {
@@ -134,6 +159,7 @@ class DirectStateHolder(
         working = true
         voiceUploadProgress = 0
         message = null
+        messageIsError = true
         val sent = when (val result = repository.sendVoice(session, conversation, draft) { voiceUploadProgress = it }) {
             is DirectResult.Success -> {
                 session = result.session
@@ -156,6 +182,7 @@ class DirectStateHolder(
         if (working || body.isEmpty()) return
         working = true
         message = null
+        messageIsError = true
         when (val result = repository.startWithMessage(session, target.userId, body)) {
             is DirectResult.Success -> {
                 session = result.session
@@ -174,7 +201,7 @@ class DirectStateHolder(
                     unreadCount = 0,
                     requiresAction = false,
                 )
-                if (!outcome.accepted && !outcome.message.isNullOrBlank()) message = outcome.message
+                if (!outcome.accepted && !outcome.message.isNullOrBlank()) showMessage(outcome.message)
                 open(conversation)
             }
             is DirectResult.Failure -> fail(result)
@@ -206,6 +233,10 @@ class DirectStateHolder(
     private fun fail(result: DirectResult.Failure, hard: Boolean = false) {
         result.session?.let { session = it }
         sessionExpired = result.unauthorized
-        if (hard || result.unauthorized) state = DirectUiState.Error(result.message) else message = result.message
+        if (hard || result.unauthorized) {
+            state = DirectUiState.Error(result.message)
+        } else {
+            showMessage(result.message)
+        }
     }
 }

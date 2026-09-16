@@ -240,6 +240,7 @@ fun AppShell(
                 offersRepository = offersRepository,
                 directRepository = directRepository,
                 contextualRepository = contextualRepository,
+                dolabRepository = dolabRepository,
                 voiceMediaRepository = voiceMediaRepository,
                 reviewRepository = reviewRepository,
                 onSessionUpdated = { session = it },

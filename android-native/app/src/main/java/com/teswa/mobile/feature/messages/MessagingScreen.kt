@@ -36,30 +36,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
-import com.teswa.mobile.ui.NetworkImage
-import com.teswa.mobile.feature.offers.OffersContent
-import com.teswa.mobile.feature.offers.OffersRepository
-import com.teswa.mobile.feature.offers.OffersStateHolder
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import com.teswa.mobile.feature.direct.DirectContent
-import com.teswa.mobile.feature.direct.DirectComposeTarget
-import com.teswa.mobile.feature.direct.DirectRepository
-import com.teswa.mobile.feature.direct.DirectStateHolder
 import com.teswa.mobile.feature.contextual.ContextualContent
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.contextual.ContextualStateHolder
+import com.teswa.mobile.feature.direct.DirectComposeTarget
+import com.teswa.mobile.feature.direct.DirectContent
+import com.teswa.mobile.feature.direct.DirectRepository
+import com.teswa.mobile.feature.direct.DirectStateHolder
+import com.teswa.mobile.feature.dolab.AndroidDolabDirectMessagingBridge
+import com.teswa.mobile.feature.dolab.DolabRepository
+import com.teswa.mobile.feature.offers.OffersContent
+import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.offers.OffersStateHolder
+import com.teswa.mobile.feature.reviews.DealReviewCard
+import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
-import com.teswa.mobile.feature.reviews.DealReviewCard
-import com.teswa.mobile.feature.reviews.ReviewRepository
+import com.teswa.mobile.ui.NetworkImage
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 @Composable
 fun MessagingScreen(
@@ -68,6 +71,7 @@ fun MessagingScreen(
     offersRepository: OffersRepository,
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
+    dolabRepository: DolabRepository,
     voiceMediaRepository: VoiceMediaRepository,
     reviewRepository: ReviewRepository,
     onSessionUpdated: (AuthSession) -> Unit,
@@ -80,10 +84,14 @@ fun MessagingScreen(
     onExternalTargetConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
     val offersHolder = remember(initialSession.user.id, offersRepository) { OffersStateHolder(initialSession, offersRepository) }
     val directHolder = remember(initialSession.user.id, directRepository) { DirectStateHolder(initialSession, directRepository) }
     val contextualHolder = remember(initialSession.user.id, contextualRepository) { ContextualStateHolder(initialSession, contextualRepository) }
+    val dolabDirectBridge = remember(dolabRepository, voiceMediaRepository, context.applicationContext) {
+        AndroidDolabDirectMessagingBridge(context.applicationContext, dolabRepository, voiceMediaRepository)
+    }
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf(InboxMode.MESSAGES) }
 
@@ -99,8 +107,15 @@ fun MessagingScreen(
     LaunchedEffect(offersHolder.session.accessToken) { onSessionUpdated(offersHolder.session) }
     LaunchedEffect(directHolder.session.accessToken) { onSessionUpdated(directHolder.session) }
     LaunchedEffect(contextualHolder.session.accessToken) { onSessionUpdated(contextualHolder.session) }
-    LaunchedEffect(holder.sessionExpired, offersHolder.sessionExpired) {
-        if (holder.sessionExpired || offersHolder.sessionExpired || directHolder.sessionExpired || contextualHolder.sessionExpired) onSessionExpired()
+    LaunchedEffect(
+        holder.sessionExpired,
+        offersHolder.sessionExpired,
+        directHolder.sessionExpired,
+        contextualHolder.sessionExpired,
+    ) {
+        if (holder.sessionExpired || offersHolder.sessionExpired || directHolder.sessionExpired || contextualHolder.sessionExpired) {
+            onSessionExpired()
+        }
     }
     LaunchedEffect(initialDealId, initialOffers, initialDirectId, initialDirectTarget, initialContextualId) {
         when {
@@ -197,7 +212,12 @@ fun MessagingScreen(
             return@Column
         }
         if (mode == InboxMode.DIRECT) {
-            DirectContent(directHolder, voiceMediaRepository, Modifier.weight(1f))
+            DirectContent(
+                holder = directHolder,
+                voiceMediaRepository = voiceMediaRepository,
+                dolabBridge = dolabDirectBridge,
+                modifier = Modifier.weight(1f),
+            )
             return@Column
         }
         if (mode == InboxMode.CONTEXTUAL) {
