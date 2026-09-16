@@ -38,6 +38,7 @@ import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
+import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NativePushManager
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
                         messagingRepository = container.messagingRepository,
                         offersRepository = container.offersRepository,
                         profileRepository = container.profileRepository,
+                        profileImageRepository = container.profileImageRepository,
                         publicProfileRepository = container.publicProfileRepository,
                         settingsRepository = container.settingsRepository,
                         notificationsRepository = container.notificationsRepository,
@@ -106,6 +108,7 @@ private fun TeswaAuthScreen(
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
+    profileImageRepository: ProfileImageRepository,
     publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
@@ -148,6 +151,7 @@ private fun TeswaAuthScreen(
                         messagingRepository = messagingRepository,
                         offersRepository = offersRepository,
                         profileRepository = profileRepository,
+                        profileImageRepository = profileImageRepository,
                         publicProfileRepository = publicProfileRepository,
                         settingsRepository = settingsRepository,
                         notificationsRepository = notificationsRepository,

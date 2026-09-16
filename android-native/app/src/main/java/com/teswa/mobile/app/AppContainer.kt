@@ -13,6 +13,8 @@ import com.teswa.mobile.feature.messages.OracleMessagingRepository
 import com.teswa.mobile.feature.offers.OracleOffersRepository
 import com.teswa.mobile.feature.profile.OracleProfileRepository
 import com.teswa.mobile.feature.profile.OraclePublicProfileRepository
+import com.teswa.mobile.feature.profile.AndroidProfileImageContentSource
+import com.teswa.mobile.feature.profile.OracleProfileImageRepository
 import com.teswa.mobile.feature.settings.OracleSettingsRepository
 import com.teswa.mobile.feature.notifications.OracleNotificationsRepository
 import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
@@ -61,6 +63,11 @@ class AppContainer(context: Context) {
         voiceMediaRepository = voiceMediaRepository,
     )
     val profileRepository = OracleProfileRepository(authRepository, oracleTransport)
+    val profileImageRepository = OracleProfileImageRepository(
+        authenticator = authRepository,
+        contentSource = AndroidProfileImageContentSource(appContext.contentResolver),
+        transport = oracleTransport,
+    )
     val publicProfileRepository = OraclePublicProfileRepository(authRepository, oracleTransport)
     val settingsRepository = OracleSettingsRepository(authRepository, oracleTransport)
     val notificationsRepository = OracleNotificationsRepository(authRepository, oracleTransport)

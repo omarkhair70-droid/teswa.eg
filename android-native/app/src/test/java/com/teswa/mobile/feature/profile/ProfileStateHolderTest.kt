@@ -27,7 +27,7 @@ class ProfileStateHolderTest {
     @Test
     fun editingProfileUpdatesReadyStateWithoutReloadingListings() = runBlocking {
         val repository = FakeProfileRepository(ProfileOverview(profile, listOf(listing)))
-        val holder = ProfileStateHolder(session, repository)
+        val holder = ProfileStateHolder(session, repository, FakeProfileImageRepository())
         holder.load()
         holder.beginEdit()
         holder.updateDraft(requireNotNull(holder.editDraft).copy(displayName = "عمر خير"))
@@ -44,7 +44,7 @@ class ProfileStateHolderTest {
     fun archivingListingUpdatesOnlyThatListing() = runBlocking {
         val second = listing.copy(id = "33333333-3333-3333-3333-333333333333", title = "كتاب")
         val repository = FakeProfileRepository(ProfileOverview(profile, listOf(listing, second)))
-        val holder = ProfileStateHolder(session, repository)
+        val holder = ProfileStateHolder(session, repository, FakeProfileImageRepository())
         holder.load()
 
         holder.actOnListing(listing, ListingAction.ARCHIVE)
@@ -55,6 +55,46 @@ class ProfileStateHolderTest {
         assertEquals(listingId to ListingAction.ARCHIVE, repository.lastListingAction)
         assertTrue(holder.message == null)
     }
+
+    @Test
+    fun replacingAvatarUpdatesProfileWithoutReloadingListings() = runBlocking {
+        val repository = FakeProfileRepository(ProfileOverview(profile, listOf(listing)))
+        val holder = ProfileStateHolder(session, repository, FakeProfileImageRepository())
+        holder.load()
+
+        val success = holder.replaceImage(
+            ProfileImageKind.AVATAR,
+            ProfileImageAsset("content://avatar", "avatar.jpg", "image/jpeg", 4),
+        )
+
+        assertTrue(success)
+        assertEquals("https://media.example/new.jpg", holder.currentProfile?.avatarUrl)
+        assertEquals(listOf(listing), (holder.state as ProfileUiState.Ready).overview.listings)
+        assertEquals(false, holder.messageIsError)
+        assertNull(holder.imageBusyKind)
+    }
+}
+
+private class FakeProfileImageRepository : ProfileImageRepository {
+    override suspend fun replace(
+        session: AuthSession,
+        kind: ProfileImageKind,
+        asset: ProfileImageAsset,
+        previousUrl: String?,
+        onProgress: (Int) -> Unit,
+    ): ProfileResult<ProfileImageMutation> = ProfileResult.Success(
+        ProfileImageMutation("https://media.example/new.jpg", "تم التحديث"),
+        session,
+    )
+
+    override suspend fun remove(
+        session: AuthSession,
+        kind: ProfileImageKind,
+        currentUrl: String?,
+    ): ProfileResult<ProfileImageMutation> = ProfileResult.Success(
+        ProfileImageMutation(null, "تم الحذف"),
+        session,
+    )
 }
 
 private class FakeProfileRepository(initial: ProfileOverview) : ProfileRepository {

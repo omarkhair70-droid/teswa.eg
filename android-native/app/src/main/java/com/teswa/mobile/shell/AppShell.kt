@@ -27,6 +27,7 @@ import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
+import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.profile.ProfileScreen
 import com.teswa.mobile.feature.settings.SettingsRepository
@@ -64,6 +65,7 @@ fun AppShell(
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
     profileRepository: ProfileRepository,
+    profileImageRepository: ProfileImageRepository,
     publicProfileRepository: PublicProfileRepository,
     settingsRepository: SettingsRepository,
     notificationsRepository: NotificationsRepository,
@@ -259,6 +261,7 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
                 initialSession = session,
                 repository = profileRepository,
+                imageRepository = profileImageRepository,
                 settingsRepository = settingsRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,

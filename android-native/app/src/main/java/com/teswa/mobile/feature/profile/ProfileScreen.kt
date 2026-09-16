@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 fun ProfileScreen(
     initialSession: AuthSession,
     repository: ProfileRepository,
+    imageRepository: ProfileImageRepository,
     settingsRepository: SettingsRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
@@ -58,7 +59,9 @@ fun ProfileScreen(
     onSignOut: suspend () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val holder = remember(initialSession.user.id, repository) { ProfileStateHolder(initialSession, repository) }
+    val holder = remember(initialSession.user.id, repository, imageRepository) {
+        ProfileStateHolder(initialSession, repository, imageRepository)
+    }
     val scope = rememberCoroutineScope()
     var listingConfirmation by remember { mutableStateOf<Pair<MyListing, ListingAction>?>(null) }
     var showingSettings by remember { mutableStateOf(false) }
@@ -115,7 +118,7 @@ fun ProfileScreen(
                 }
                 TextButton(onClick = { scope.launch { holder.load(silent = true) } }, modifier = Modifier.fillMaxWidth()) { Text("تحديث البيانات") }
             }
-            holder.message?.let { message -> item { ProfileMessage(message) } }
+            holder.message?.let { message -> item { ProfileMessage(message, holder.messageIsError) } }
             state.overview.profile.bio?.let { bio ->
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -182,7 +185,11 @@ fun ProfileScreen(
 private fun ProfileHero(profile: MyProfile) {
     Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
         Column(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().height(96.dp).background(MaterialTheme.colorScheme.primaryContainer))
+            if (profile.coverUrl != null) {
+                NetworkImage(profile.coverUrl, "غلاف ${profile.displayName}", Modifier.fillMaxWidth().height(112.dp))
+            } else {
+                Box(Modifier.fillMaxWidth().height(112.dp).background(MaterialTheme.colorScheme.primaryContainer))
+            }
             Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 18.dp)) {
                 Box(Modifier.size(84.dp).padding(top = 0.dp)) {
                     NetworkImage(
@@ -260,6 +267,7 @@ private fun ProfileEditContent(holder: ProfileStateHolder, draft: ProfileEditDra
                 Spacer(Modifier.width(12.dp)); Text("تعديل الملف", style = MaterialTheme.typography.headlineSmall)
             }
         }
+        item { ProfileImageEditor(holder) }
         item { EditField("الاسم", draft.displayName, 80) { holder.updateDraft(draft.copy(displayName = it)) } }
         item { EditField("اسم المستخدم", draft.username, 30) { holder.updateDraft(draft.copy(username = it.lowercase())) } }
         item { EditField("جملة تعريفية", draft.profileTagline, 160) { holder.updateDraft(draft.copy(profileTagline = it)) } }
@@ -270,7 +278,7 @@ private fun ProfileEditContent(holder: ProfileStateHolder, draft: ProfileEditDra
                 EditField("المنطقة", draft.area, 120, modifier = Modifier.weight(1f)) { holder.updateDraft(draft.copy(area = it)) }
             }
         }
-        holder.message?.let { item { ProfileMessage(it) } }
+        holder.message?.let { item { ProfileMessage(it, holder.messageIsError) } }
         item {
             Button(
                 onClick = { scope.launch { holder.saveProfile() } },
@@ -302,9 +310,10 @@ private fun EditField(
 }
 
 @Composable
-private fun ProfileMessage(message: String) {
-    Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.error.copy(alpha = .1f)) {
-        Text(message, Modifier.fillMaxWidth().padding(14.dp), color = MaterialTheme.colorScheme.error)
+private fun ProfileMessage(message: String, isError: Boolean) {
+    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = .1f)) {
+        Text(message, Modifier.fillMaxWidth().padding(14.dp), color = color)
     }
 }
 

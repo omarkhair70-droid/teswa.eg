@@ -14,6 +14,7 @@ sealed interface ProfileUiState {
 class ProfileStateHolder(
     initialSession: AuthSession,
     private val repository: ProfileRepository,
+    private val imageRepository: ProfileImageRepository,
 ) {
     var session by mutableStateOf(initialSession)
         private set
@@ -26,6 +27,12 @@ class ProfileStateHolder(
     var actingListingId by mutableStateOf<String?>(null)
         private set
     var message by mutableStateOf<String?>(null)
+        private set
+    var messageIsError by mutableStateOf(true)
+        private set
+    var imageBusyKind by mutableStateOf<ProfileImageKind?>(null)
+        private set
+    var imageProgress by mutableStateOf(0)
         private set
     var sessionExpired by mutableStateOf(false)
         private set
@@ -46,7 +53,10 @@ class ProfileStateHolder(
             is ProfileResult.Failure -> {
                 result.session?.let { session = it }
                 sessionExpired = result.unauthorized
-                if (silent && state is ProfileUiState.Ready && !result.unauthorized) message = result.message
+                if (silent && state is ProfileUiState.Ready && !result.unauthorized) {
+                    message = result.message
+                    messageIsError = true
+                }
                 else state = ProfileUiState.Error(result.message)
             }
         }
@@ -75,7 +85,7 @@ class ProfileStateHolder(
 
     suspend fun saveProfile() {
         val draft = editDraft ?: return
-        draft.validate()?.let { message = it; return }
+        draft.validate()?.let { message = it; messageIsError = true; return }
         savingProfile = true
         message = null
         when (val result = repository.update(session, draft)) {
@@ -89,6 +99,7 @@ class ProfileStateHolder(
                 result.session?.let { session = it }
                 sessionExpired = result.unauthorized
                 message = if (result.unauthorized) null else result.message
+                messageIsError = true
             }
         }
         savingProfile = false
@@ -115,8 +126,71 @@ class ProfileStateHolder(
                 result.session?.let { session = it }
                 sessionExpired = result.unauthorized
                 message = if (result.unauthorized) null else result.message
+                messageIsError = true
             }
         }
         actingListingId = null
+    }
+
+    val currentProfile: MyProfile?
+        get() = (state as? ProfileUiState.Ready)?.overview?.profile
+
+    fun showImageError(value: String) {
+        message = value
+        messageIsError = true
+    }
+
+    suspend fun replaceImage(kind: ProfileImageKind, asset: ProfileImageAsset): Boolean {
+        if (imageBusyKind != null) return false
+        val profile = currentProfile ?: return false
+        asset.validate()?.let { showImageError(it); return false }
+        imageBusyKind = kind
+        imageProgress = 0
+        message = null
+        val previous = if (kind == ProfileImageKind.AVATAR) profile.avatarUrl else profile.coverUrl
+        val result = imageRepository.replace(session, kind, asset, previous) { imageProgress = it }
+        val success = applyImageResult(kind, result)
+        imageBusyKind = null
+        imageProgress = 0
+        return success
+    }
+
+    suspend fun removeImage(kind: ProfileImageKind) {
+        if (imageBusyKind != null) return
+        val profile = currentProfile ?: return
+        val current = if (kind == ProfileImageKind.AVATAR) profile.avatarUrl else profile.coverUrl
+        if (current == null) return
+        imageBusyKind = kind
+        imageProgress = 0
+        message = null
+        applyImageResult(kind, imageRepository.remove(session, kind, current))
+        imageBusyKind = null
+    }
+
+    private fun applyImageResult(kind: ProfileImageKind, result: ProfileResult<ProfileImageMutation>): Boolean {
+        return when (result) {
+            is ProfileResult.Success -> {
+                session = result.session
+                val ready = state as? ProfileUiState.Ready
+                if (ready != null) {
+                    val updated = if (kind == ProfileImageKind.AVATAR) {
+                        ready.overview.profile.copy(avatarUrl = result.value.imageUrl)
+                    } else {
+                        ready.overview.profile.copy(coverUrl = result.value.imageUrl)
+                    }
+                    state = ProfileUiState.Ready(ready.overview.copy(profile = updated))
+                }
+                message = result.value.message
+                messageIsError = false
+                true
+            }
+            is ProfileResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                message = if (result.unauthorized) null else result.message
+                messageIsError = true
+                false
+            }
+        }
     }
 }
