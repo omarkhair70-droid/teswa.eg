@@ -1,6 +1,7 @@
 package com.teswa.mobile.feature.dolab
 
 import com.teswa.mobile.auth.AuthSession
+import java.io.InputStream
 
 enum class DolabItemStatus(val wire: String) {
     DRAFT("draft"),
@@ -46,6 +47,32 @@ data class DolabMedia(
     val createdAt: String?,
 )
 
+data class DolabPendingMedia(
+    val uri: String,
+    val displayName: String,
+    val mediaType: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val durationMs: Long? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val openStream: () -> InputStream,
+) {
+    fun validate(): String? = when {
+        mediaType !in setOf("image", "video", "audio") -> "نوع الميديا غير مدعوم."
+        sizeBytes <= 0L -> "الملف فاضي أو مش متاح."
+        sizeBytes > 50L * 1024L * 1024L -> "حجم الملف أكبر من 50 ميجابايت."
+        mediaType == "audio" && durationMs != null && durationMs !in 500L..120_000L ->
+            "التسجيل لازم يكون بين نصف ثانية ودقيقتين."
+        else -> null
+    }
+}
+
+data class DolabMediaUploadProgress(
+    val itemId: String,
+    val percent: Int,
+)
+
 data class DolabNote(
     val id: String,
     val body: String?,
@@ -61,7 +88,8 @@ data class DolabWorkspace(
     val media: List<DolabMedia>,
     val notes: List<DolabNote>,
 ) {
-    fun mediaFor(itemId: String): List<DolabMedia> = media.filter { it.dolabItemId == itemId }
+    fun mediaFor(itemId: String): List<DolabMedia> =
+        media.filter { it.dolabItemId == itemId }.sortedBy(DolabMedia::sortOrder)
     fun notesFor(itemId: String): List<DolabNote> = notes.filter { it.dolabItemId == itemId }
 }
 

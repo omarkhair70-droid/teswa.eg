@@ -21,12 +21,16 @@ class DolabStateHolder(
         private set
     var creating by mutableStateOf(false)
         private set
+    var mediaUploadProgress by mutableStateOf<DolabMediaUploadProgress?>(null)
+        private set
     var message by mutableStateOf<String?>(null)
         private set
     var messageIsError by mutableStateOf(false)
         private set
     var sessionExpired by mutableStateOf(false)
         private set
+
+    private val signedUrls = mutableMapOf<String, String>()
 
     fun updateSession(updated: AuthSession) {
         if (updated.user.id == session.user.id && updated.accessToken != session.accessToken) session = updated
@@ -64,16 +68,14 @@ class DolabStateHolder(
         when (val result = repository.loadWorkspace(session)) {
             is DolabResult.Success -> {
                 session = result.session
+                signedUrls.clear()
                 state = result.value.asUiState()
             }
             is DolabResult.Failure -> {
                 result.session?.let { session = it }
                 sessionExpired = result.unauthorized
-                if (refresh && workspace() != null && !result.unauthorized) {
-                    show(result.message, error = true)
-                } else {
-                    state = DolabUiState.Error(result.message)
-                }
+                if (refresh && workspace() != null && !result.unauthorized) show(result.message, error = true)
+                else state = DolabUiState.Error(result.message)
             }
         }
         refreshing = false
@@ -139,6 +141,7 @@ class DolabStateHolder(
             is DolabResult.Success -> {
                 session = result.session
                 val current = workspace() ?: return true
+                current.media.filter { it.dolabItemId == item.id }.forEach { signedUrls.remove(it.id) }
                 state = current.copy(
                     items = current.items.filterNot { it.id == item.id },
                     media = current.media.filterNot { it.dolabItemId == item.id },
@@ -199,6 +202,86 @@ class DolabStateHolder(
                 false
             }
         }
+    }
+
+    suspend fun addMedia(item: DolabItem, pending: DolabPendingMedia): Boolean {
+        if (workingId != null) return false
+        pending.validate()?.let { show(it, error = true); return false }
+        workingId = item.id
+        mediaUploadProgress = DolabMediaUploadProgress(item.id, 0)
+        clearMessage()
+        val sortOrder = workspace()?.mediaFor(item.id)?.size ?: 0
+        val result = repository.uploadMedia(session, item.id, pending, sortOrder) { percent ->
+            mediaUploadProgress = DolabMediaUploadProgress(item.id, percent)
+        }
+        workingId = null
+        mediaUploadProgress = null
+        return when (result) {
+            is DolabResult.Success -> {
+                session = result.session
+                val current = workspace() ?: return true
+                state = current.copy(
+                    media = current.media.filterNot { it.id == result.value.id } + result.value,
+                ).asUiState()
+                show("الميديا اتحفظت مع الحاجة.")
+                true
+            }
+            is DolabResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                show(result.message, error = true)
+                false
+            }
+        }
+    }
+
+    suspend fun deleteMedia(media: DolabMedia): Boolean {
+        if (workingId != null) return false
+        workingId = media.dolabItemId ?: media.id
+        clearMessage()
+        val result = repository.deleteMedia(session, media)
+        workingId = null
+        return when (result) {
+            is DolabResult.Success -> {
+                session = result.session
+                signedUrls.remove(media.id)
+                val current = workspace() ?: return true
+                state = current.copy(media = current.media.filterNot { it.id == media.id }).asUiState()
+                show("الميديا اتشالت.")
+                true
+            }
+            is DolabResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                if (result.message.startsWith("اتحذف سجل الميديا")) {
+                    signedUrls.remove(media.id)
+                    val current = workspace()
+                    if (current != null) state = current.copy(media = current.media.filterNot { it.id == media.id }).asUiState()
+                }
+                show(result.message, error = true)
+                false
+            }
+        }
+    }
+
+    suspend fun mediaUrl(media: DolabMedia): String? {
+        signedUrls[media.id]?.let { return it }
+        return when (val result = repository.signedMediaUrl(session, media)) {
+            is DolabResult.Success -> {
+                session = result.session
+                signedUrls[media.id] = result.value
+                result.value
+            }
+            is DolabResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                null
+            }
+        }
+    }
+
+    fun showError(value: String) {
+        show(value, error = true)
     }
 
     private fun replaceItem(item: DolabItem) {
