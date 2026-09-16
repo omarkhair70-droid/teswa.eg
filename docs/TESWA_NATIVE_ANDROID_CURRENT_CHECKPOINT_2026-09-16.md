@@ -1,6 +1,6 @@
 # Teswa Native Android — Current Checkpoint — 2026-09-16
 
-> **Read this first.** Use `TESWA_NATIVE_ANDROID_MASTER_HANDOFF_2026-09-16.md` for broader history and `TESWA_NATIVE_ANDROID_MASTER.md` for invariants. Always re-check PR #523 head before writing.
+> **Read this first.** Use `TESWA_NATIVE_ANDROID_MASTER_HANDOFF_2026-09-16.md` for broader history and `TESWA_NATIVE_ANDROID_MASTER.md` for architecture/release invariants. Always re-check PR #523 head before writing.
 
 ## Repository state
 
@@ -8,158 +8,164 @@
 - Base: `chore/oracle-runtime-cutover-prep-20260910`
 - Active branch: `feat/native-foundation-network-20260915`
 - PR: #523 — `Build Teswa native Android Oracle client`
-- Latest verified green implementation checkpoint before this documentation commit: `ba2fd82b18a16ec8bf9f70bd779129447d99fc3b`
+- Latest verified green implementation checkpoint before this documentation commit: `3cf3062ccfc4542125312ab5322071c40ce09bc4`
 - PR remains **open, mergeable, not merged**.
 - Do **not** merge #523 unless Omar explicitly asks.
 
 ## Native product status
 
-The native Kotlin/Compose client is feature-complete for the planned rewrite scope. Closed slices include:
+The planned Kotlin/Compose rewrite scope is feature-complete. Closed slices include centralized Oracle auth/session/transport; the five-tab Arabic-first shell; Home, Discover, Add Item, Item Detail, Nearby; Offers, Deals, Reviews; Direct/Contextual Messaging and shared Voice; Stories; Profile/Public Profile, Follow/Block, Followers/Following; Settings; Notifications/FCM foundation; People; Motion/City Pulse; Dolab Native 2.0; Edit Listing; Trust & Safety / Reporting; and the final navigation/state cleanup pass.
 
-- centralized Oracle auth/transport/session restore/serialized refresh + exactly one retry after 401;
-- Arabic-first authenticated shell and five permanent bottom destinations: Home, Discover, Add, Messages, Profile;
-- Notifications preserved as an internal route from Home/push/deep links rather than a sixth bottom tab;
-- Home, Item Detail, Nearby/location, Add Item;
-- Offers, Deals, Reviews/Trust;
-- Direct and Contextual Messaging with shared Voice primitives;
-- Stories;
-- Profile/Public Profile, Follow/Block, reusable Followers/Following;
-- Settings;
-- Notifications/FCM foundation;
-- Discover 2.0, People, Motion / City Pulse;
-- Dolab Native 2.0 critical path including media/voice, Dolab -> Add Item and Direct bridge;
-- Full Edit Listing Native preserving the same item and ordered image plan;
-- Native Trust & Safety / Reporting for user, item, story, direct message, deal and deal message;
-- final navigation/state cleanup pass completed before release hardening.
-
-Key closed checkpoints remain documented in the older handoff and PR history. No product feature slice should be reopened without a concrete device or production failure.
+Do not reopen a product slice without a concrete device or production failure.
 
 ## Static / release hardening — CLOSED GREEN
 
-Release hardening is now complete at `ba2fd82b18a16ec8bf9f70bd779129447d99fc3b`.
+Latest verified implementation: `3cf3062ccfc4542125312ab5322071c40ce09bc4`.
 
-### CI gate
+Verified:
 
-`.github/workflows/android-native-foundation.yml` now runs:
-
-- native JVM/unit tests;
-- `compileDebugKotlin`;
-- `compileReleaseKotlin`;
-- `lintRelease`.
-
-Verified at `ba2fd82...`:
-
-- Canonical Stabilization Validation #51: **success**;
-- Android Native Foundation #79: **success**;
+- Canonical Stabilization Validation #54: **success**;
+- Android Native Foundation #82: **success**;
 - native unit tests: **success**;
-- debug Kotlin compile: **success**;
-- release Kotlin compile: **success**;
-- Android release lint: **success**.
+- `compileDebugKotlin`: **success**;
+- `compileReleaseKotlin`: **success**;
+- `lintRelease`: **success**.
 
-### Release branding
+Release hardening includes:
 
-Native Android now uses Teswa's existing repository branding assets rather than generic launcher defaults:
+- Teswa launcher/adaptive/round/monochrome branding;
+- light/dark launch theme and Android 12+ splash resources;
+- API-qualified theme resources instead of lint suppression;
+- keystore/signing material excluded from Git;
+- release signing via environment variables only;
+- release-variant compilation and lint in CI;
+- explicit release API endpoint guard;
+- upload-key fingerprint verification helper;
+- physical-device evidence helper.
 
-- launcher icon;
-- adaptive/round icon;
-- monochrome icon;
-- light/dark launch theme;
-- Android 12+ splash treatment.
-
-The API-level lint issue around `windowLightNavigationBar` was fixed correctly with API-qualified `values-v27` / `values-night-v27` resources rather than suppression or a lint baseline.
-
-### Release identity
-
-Release identity is unchanged:
+Release identity remains unchanged:
 
 - `applicationId com.teswa.mobile`;
 - `versionCode 26`;
 - `versionName 1.0.11`;
-- existing Google Play signing/upload identity must be reused.
+- existing Google Play upload/signing identity must be reused.
 
-### Secure signing path
+## Release endpoint guard
 
-`android-native/app/build.gradle.kts` supports production release signing only when all four environment variables exist:
+The repository fallback endpoint is:
+
+`https://130-110-122-142.sslip.io`
+
+Historical migration evidence identifies that host as the public Oracle HTTPS **rehearsal** surface. It must not be treated as production merely because native compile/tests use it.
+
+`android-native/app/build.gradle.kts` therefore allows that URL as a compile/test fallback only. `assembleRelease` / `bundleRelease` now refuse to produce a distributable release artifact unless an explicit valid HTTPS `TESWA_RELEASE_API_BASE_URL` is supplied.
+
+Production Oracle authority/cutover is still an acceptance gate. Supabase/legacy remains rollback authority until that acceptance is explicit.
+
+## Secure signed-AAB gate
+
+Required signing environment:
 
 - `TESWA_RELEASE_STORE_FILE`;
 - `TESWA_RELEASE_STORE_PASSWORD`;
 - `TESWA_RELEASE_KEY_ALIAS`;
-- `TESWA_RELEASE_KEY_PASSWORD`.
+- `TESWA_RELEASE_KEY_PASSWORD`;
+- `TESWA_RELEASE_API_BASE_URL`.
 
-The repository does not store a production keystore or passwords. Root `.gitignore` explicitly excludes Android signing material including `*.keystore`, `*.jks`, `*.p12`, `*.pfx`, `keystore.properties`, and `signing.properties`.
+The preferred helper also requires:
 
-`android-native/RELEASE_SIGNING.md` documents certificate verification and the signed v26 AAB command. `assembleRelease` / `bundleRelease` intentionally refuse to create a release artifact when the signing environment is incomplete.
+- `TESWA_PLAY_UPLOAD_SHA256` — copied from Google Play Console -> App integrity -> **Upload key certificate**.
 
-Historical local evidence shows an older Teswa Android folder contained `android.keystore` and signed release artifacts, but the key file itself is not stored in this repository. Before a production AAB is built, its certificate must be matched to the Google Play Console **Upload key certificate**. Do not generate a replacement production key casually.
+Run from repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android-native\scripts\release-gate.ps1
+```
+
+The helper refuses missing inputs, validates the HTTPS release API URL, reads the existing keystore certificate without printing the store password, compares its SHA-256 fingerprint to the Play upload certificate, builds `:app:bundleRelease`, verifies the AAB signature with `jarsigner`, and prints the final AAB SHA-256 file hash.
+
+Expected artifact:
+
+`android-native\app\build\outputs\bundle\release\app-release.aab`
+
+Historical local evidence shows an older Teswa Android folder contained `android.keystore` and signed release artifacts, but the keystore bytes/alias/password are not stored in this repository. Do not invent or replace the upload identity casually.
+
+## Physical-device evidence helper
+
+After the native v26 build has been installed/updated through Google Play Internal testing, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android-native\scripts\device-smoke.ps1
+```
+
+The helper does **not** install or replace the application. It:
+
+- resolves one authorized adb device (or accepts `-Serial`);
+- reads model/API/package/version evidence;
+- checks `com.teswa.mobile` and expected versionCode 26;
+- performs a cold launch;
+- exercises the real parser-supported `teswa://notifications` deep link;
+- captures package dump, activity state, launch output and logcat under `android-native/build/device-smoke/<timestamp>/`;
+- prints/saves the remaining manual critical-flow checklist.
+
+It deliberately does not mark camera/media/location/voice/push/Oracle flows accepted automatically.
 
 ## ACTIVE RELEASE GATE
 
-There is no remaining large code/product slice. The active work is empirical release acceptance.
+There is no remaining large Git-side product slice. Remaining acceptance is empirical:
 
-### 1. Physical-device critical-flow smoke
+### 1. Confirm production Oracle release endpoint
 
-On a real Android device validate:
+Identify and accept the Oracle endpoint that is actually intended for native production traffic. Use that exact HTTPS URL as `TESWA_RELEASE_API_BASE_URL`. Do not silently reuse the rehearsal host.
+
+### 2. Verify existing Play upload key + build signed v26 AAB
+
+Use the existing local Teswa keystore, compare its SHA-256 certificate fingerprint with the Play Console **Upload key certificate**, and run `scripts/release-gate.ps1`.
+
+### 3. Google Play Internal update-over-installed-app
+
+Upload the signed v26 AAB to Internal testing and update the existing Play-installed `com.teswa.mobile` without uninstalling or clearing app data.
+
+This is the authoritative update proof. A locally sideloaded upload-key APK is not a substitute when Play App Signing is enabled.
+
+### 4. Physical-device critical-flow smoke
+
+Validate on the updated real device:
 
 - cold launch and existing-session restore;
-- email/Google auth paths used for release;
-- Home/Discover/Add/Messages/Profile navigation;
-- Item Detail and profile navigation;
+- email/Google auth path used for release;
+- Home / Discover / Add / Messages / Profile;
+- Item Detail and Public Profile navigation;
 - camera + gallery + media upload;
-- location/Nearby permission and result path;
-- Direct/contextual messages and voice record/playback;
-- Stories capture/view/upload path;
-- Dolab critical path including save/media/voice and bridges;
-- Edit Listing including image reorder/remove/cover and same-item persistence;
-- Reporting entry points and success state;
-- Followers/Following navigation;
-- notification permission, FCM token sync, background notification open and deep-link routing.
+- location/Nearby;
+- Direct/contextual messages + voice;
+- Stories;
+- Dolab critical path + bridges;
+- Edit Listing same-item persistence and image plan;
+- Reporting;
+- Followers/Following;
+- notification permission + FCM token sync;
+- background/killed-process notification delivery + tap/deep-link route.
 
-A JVM/compile/lint green run is not physical-device acceptance.
+### 5. Oracle production acceptance + rollback evidence
 
-### 2. Signed v26 AAB
+Run the critical reads/writes/media/messaging/notification paths against the intended production Oracle runtime. Only after this passes should Oracle cutover be declared complete.
 
-Use the existing Play upload identity only after fingerprint verification. Build from `android-native` with the signing environment documented in `RELEASE_SIGNING.md`.
-
-Expected artifact when the local signed build is intentionally run:
-
-`android-native/app/build/outputs/bundle/release/app-release.aab`
-
-### 3. Play Internal update-over-installed-app
-
-Upload the signed v26 AAB to Google Play Internal testing and validate it updates the currently installed Play build for package `com.teswa.mobile` without uninstall/data reset.
-
-This is the authoritative update proof. A locally sideloaded APK signed with an upload key is not a substitute when Play App Signing is enabled.
-
-### 4. Oracle production acceptance
-
-Run end-to-end critical flows against the intended production Oracle runtime and collect evidence for:
-
-- auth/session durability;
-- reads/writes for marketplace/profile/social flows;
-- media upload/object access;
-- messaging/voice/stories;
-- notifications/deep links where applicable;
-- rollback path.
-
-Only after this gate passes should production authority/cutover be declared complete.
-
-### 5. Legacy cleanup — LAST
+### 6. Legacy cleanup — LAST
 
 Only after physical-device, Play Internal update, and Oracle production acceptance:
 
-- merge/cut over intentionally;
-- keep rollback evidence;
+- perform the intentional merge/cutover;
+- retain rollback evidence;
 - open a separate cleanup PR removing legacy Expo/React Native/Supabase mobile runtime.
 
-Do not delete the legacy runtime before acceptance.
-
-## Non-negotiable architecture reminder
+## Non-negotiable reminder
 
 - Expo is behavioral reference only.
 - Oracle contracts own data/business truth.
-- Native Android owns the UX implementation.
+- Native Android owns UX implementation.
 - No Supabase/Expo runtime dependency in `android-native`.
-- No network calls in Composables.
-- Reuse real repeated primitives; avoid duplicate media/voice/network stacks.
-- `applicationId com.teswa.mobile`, `versionCode 26`, and the existing Play signing identity remain unchanged through this release gate.
-- Do not claim device, Play-update, push-delivery, or production acceptance from CI alone.
+- No networking inside Composables.
+- Reuse shared media/voice/network primitives.
+- Keep `com.teswa.mobile`, versionCode 26, and the existing Play identity unchanged through this gate.
+- Do not claim physical-device, Play-update, push-delivery, signed-AAB, or Oracle production acceptance from CI alone.
