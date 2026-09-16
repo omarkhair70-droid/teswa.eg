@@ -33,8 +33,8 @@ The current package responsibilities are:
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
 - `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
 - `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
-- `feature/notifications/`: in-app activity center, unread mutation, native destination mapping, and best-effort domain-event dispatch.
-- `shell/`: authenticated bottom-navigation shell.
+- `feature/notifications/`: in-app activity center, unread mutation, Firebase Installation ID registration, permission-aware native push display, native destination mapping, and best-effort domain-event dispatch.
+- `shell/`: authenticated bottom-navigation shell plus validated internal, `teswa://`, and Teswa HTTPS route handling.
 - `ui/`: shared UI utilities and the first Teswa light/dark color, type, and shape system; this grows through real native screens rather than an Expo visual port.
 
 New features should move toward `feature/<name>/` as they are added or materially refactored. Existing packages should be moved only in coherent slices; package churn alone is not useful architecture.
@@ -77,7 +77,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own/public profiles and listing lifecycle | Implemented locally; avatar/trust/device acceptance remains open | own/public profile, owner active listings, follow/block state and actions, listing lifecycle |
 | Settings and account controls | Implemented locally; push permission/device acceptance remains open | profile privacy, notification preferences, blocked users/unblock, account deletion |
-| In-app notifications | Implemented locally; Android push/background acceptance remains open | list, read, read-all, domain dispatch |
+| In-app notifications and native push | Implemented locally; server credential/deployment and device/background acceptance remain open | list, read, read-all, device register/disable, FCM data delivery, native tap routes, domain dispatch |
 | Authenticated app shell | Implemented foundation | No direct endpoint |
 
 ## Add Item contract and native implementation
@@ -121,10 +121,10 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Messages, offers, deals, unread state, and reconnect behavior (deal/direct/contextual text and voice upload, cleanup, signed playback, offer/request/read, notifications, and polling implemented locally; physical-device and production acceptance remain)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
 - [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented locally; physical-device and production acceptance remain)
-- [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal/contextual dispatch, and routes to native item/deal/offer/direct/contextual surfaces implemented; Android push/background and profile routes remain)
+- [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, Firebase Installation ID register/disable, dual Expo/FCM worker routing, local display, and item/deal/offer/profile/direct/contextual routes implemented; FCM service-account provisioning, deployment, and physical-device background acceptance remain)
 - [ ] Nearby/location flows (optional one-shot native permission/location, 3 km Oracle nearby feed, and Add Item coordinate publishing implemented locally; physical-device acceptance remains)
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion
-- [ ] Deep links and background/lifecycle behavior
+- [ ] Deep links and background/lifecycle behavior (validated native/custom/HTTPS route parsing and single-top delivery implemented; verified App Links and killed-process/device acceptance remain)
 - [ ] Release AAB with existing Play signing identity
 - [ ] Real-device login, restore, refresh, media, and critical-flow smoke
 - [ ] Production Oracle end-to-end acceptance and controlled cutover evidence
@@ -133,6 +133,7 @@ Before a major screen is built, record its user job, information priority, prima
 
 - Local unit tests and `assembleDebug` do not prove Google provider, physical-device, Play-update, sender/inbox, OCI deployment, or production acceptance.
 - Public Oracle/Edge and full production cutover evidence must be checked independently; Supabase remains the production and rollback authority until an explicitly approved cutover.
+- The Oracle push worker now preserves Expo delivery while routing `fcm:` devices through FCM HTTP v1 using Firebase Installation IDs. Outbound send remains rehearsal-disabled, no service-account secret is committed, and production FCM delivery is not accepted until the credential is provisioned outside the repository and a physical-device send/tap is observed.
 - The visual-system foundation exists, but feature-level primitives and the final navigation presentation are still incomplete.
 - Add Item image upload now streams bytes safely and exposes progress/cancellation; physical-device camera/gallery behavior and production object upload remain acceptance gates. Reading large video files wholly into memory is not an acceptable future implementation.
 - `lintDebug` is green with baseline warnings that still need deliberate release work: target API review, Credential Manager mutable-context handling, application icon/data-extraction rules, KTX preferences cleanup, and dependency update review.
