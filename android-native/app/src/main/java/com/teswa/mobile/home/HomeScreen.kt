@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -66,6 +67,7 @@ fun HomeScreen(
     onSessionUpdated: (AuthSession) -> Unit = {},
     onOfferCreated: () -> Unit = {},
     onAddItem: () -> Unit = {},
+    onNotifications: () -> Unit = {},
     externalItemId: String? = null,
     onExternalItemConsumed: () -> Unit = {},
     externalProfileId: String? = null,
@@ -262,7 +264,10 @@ fun HomeScreen(
                                 Text("تِسوى", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                                 Text("آخر الحاجات المعروضة للتبادل", style = MaterialTheme.typography.bodyMedium)
                             }
-                            OutlinedButton(onClick = { scope.launch { holder.load() } }) { Text("تحديث") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = onNotifications) { Text("تنبيهات") }
+                                OutlinedButton(onClick = { scope.launch { holder.load() } }) { Text("تحديث") }
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
