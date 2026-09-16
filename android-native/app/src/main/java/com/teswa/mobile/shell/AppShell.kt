@@ -28,6 +28,8 @@ import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
 import com.teswa.mobile.feature.discover.DiscoverScreen
+import com.teswa.mobile.feature.dolab.DolabRepository
+import com.teswa.mobile.feature.dolab.ProfileDolabHost
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
 import com.teswa.mobile.feature.motion.MotionLocationResolver
@@ -41,7 +43,6 @@ import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.people.PeopleRepository
 import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
-import com.teswa.mobile.feature.profile.ProfileScreen
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
@@ -67,6 +68,7 @@ fun AppShell(
     homeClient: OracleHomeClient,
     discoverRepository: DiscoverRepository,
     peopleRepository: PeopleRepository,
+    dolabRepository: DolabRepository,
     motionRepository: MotionRepository,
     motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
@@ -289,12 +291,13 @@ fun AppShell(
                 },
             )
 
-            AppTab.PROFILE -> ProfileScreen(
+            AppTab.PROFILE -> ProfileDolabHost(
                 modifier = Modifier.padding(padding),
                 initialSession = session,
-                repository = profileRepository,
-                imageRepository = profileImageRepository,
+                profileRepository = profileRepository,
+                profileImageRepository = profileImageRepository,
                 settingsRepository = settingsRepository,
+                dolabRepository = dolabRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
                 onAddItem = { selectedTab = AppTab.ADD },
