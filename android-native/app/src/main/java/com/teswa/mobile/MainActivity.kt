@@ -51,6 +51,7 @@ import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.reviews.ReviewRepository
+import com.teswa.mobile.feature.safety.ReportingRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
@@ -98,6 +99,7 @@ class MainActivity : ComponentActivity() {
                         storyRepository = container.storyRepository,
                         voiceMediaRepository = container.voiceMediaRepository,
                         reviewRepository = container.reviewRepository,
+                        reportingRepository = container.reportingRepository,
                         launchRoute = pendingRoute,
                         onLaunchRouteConsumed = { pendingRoute = null },
                         activity = this@MainActivity,
@@ -141,6 +143,7 @@ private fun TeswaAuthScreen(
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
     reviewRepository: ReviewRepository,
+    reportingRepository: ReportingRepository,
     launchRoute: String?,
     onLaunchRouteConsumed: () -> Unit,
     activity: ComponentActivity,
@@ -192,6 +195,7 @@ private fun TeswaAuthScreen(
                         storyRepository = storyRepository,
                         voiceMediaRepository = voiceMediaRepository,
                         reviewRepository = reviewRepository,
+                        reportingRepository = reportingRepository,
                         launchRoute = launchRoute,
                         onLaunchRouteConsumed = onLaunchRouteConsumed,
                         onSignOut = {

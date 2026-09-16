@@ -33,6 +33,7 @@ import com.teswa.mobile.feature.profile.OracleProfileImageRepository
 import com.teswa.mobile.feature.profile.OracleProfileRepository
 import com.teswa.mobile.feature.profile.OraclePublicProfileRepository
 import com.teswa.mobile.feature.reviews.OracleReviewRepository
+import com.teswa.mobile.feature.safety.OracleReportingRepository
 import com.teswa.mobile.feature.settings.OracleSettingsRepository
 import com.teswa.mobile.feature.stories.AndroidStoryContentSource
 import com.teswa.mobile.feature.stories.OracleStoryRepository
@@ -91,6 +92,7 @@ class AppContainer(context: Context) {
     private val notificationDispatcher = OracleNotificationDispatcher(authRepository, oracleTransport)
     val voiceMediaRepository = OracleVoiceMediaRepository(authRepository, oracleTransport)
     val reviewRepository = OracleReviewRepository(authRepository, oracleTransport)
+    val reportingRepository = OracleReportingRepository(authRepository, oracleTransport)
     val messagingRepository = OracleMessagingRepository(authRepository, oracleTransport, notificationDispatcher, voiceMediaRepository)
     val offersRepository = OracleOffersRepository(authRepository, oracleTransport, notificationDispatcher)
     val directRepository = OracleDirectRepository(authRepository, oracleTransport, voiceMediaRepository)

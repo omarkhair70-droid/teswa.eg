@@ -43,9 +43,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.teswa.mobile.feature.safety.ReportTarget
+import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
-import com.teswa.mobile.feature.voice.VoiceComposer
 
 @Composable
 fun StoriesRail(
@@ -177,6 +178,7 @@ private fun StoryAuthorBubble(group: StoryGroup, onOpen: () -> Unit) {
 fun StoryViewerScreen(
     holder: StoryStateHolder,
     onReplyOpened: (String) -> Unit,
+    onReport: (ReportTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewer = holder.viewer ?: return
@@ -297,6 +299,10 @@ fun StoryViewerScreen(
                         enabled = holder.workingAction == null,
                     ) { Text(if (slide.liked) "♥" else "♡") }
                 }
+                TextButton(
+                    onClick = { onReport(ReportTarget.Story(slide.story.id, "قصة $name")) },
+                    enabled = holder.workingAction == null,
+                ) { Text("الإبلاغ عن القصة", color = Color.White) }
             } else {
                 Text("دي قصتك", color = Color.White.copy(alpha = .75f))
             }

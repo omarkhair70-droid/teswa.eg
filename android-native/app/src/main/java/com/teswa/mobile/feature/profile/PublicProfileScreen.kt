@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.direct.DirectComposeTarget
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -54,6 +55,7 @@ fun PublicProfileScreen(
     onBack: () -> Unit,
     onOpenItem: (String) -> Unit,
     onMessage: (DirectComposeTarget) -> Unit,
+    onReport: (ReportTarget) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember(profileId, repository) { PublicProfileStateHolder(initialSession, profileId, repository) }
@@ -123,6 +125,12 @@ fun PublicProfileScreen(
                         onClick = { confirmBlock = !state.overview.blockedByMe },
                         enabled = holder.workingAction == null,
                     ) { Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر المستخدم") }
+                    if (profile.id != holder.session.user.id) {
+                        TextButton(
+                            onClick = { onReport(ReportTarget.User(profile.id, profile.displayName)) },
+                            enabled = holder.workingAction == null,
+                        ) { Text("الإبلاغ عن المستخدم") }
+                    }
                     if (state.overview.blockedMe) Text("الحساب ده قافل التفاعل معاك.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
                 item { TrustSummary(state.overview.trust, state.overview.badges) }

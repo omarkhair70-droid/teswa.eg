@@ -33,6 +33,7 @@ import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.additem.EditListingScreen
 import com.teswa.mobile.feature.offers.OfferCreationScreen
 import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
 
@@ -49,6 +50,7 @@ fun ItemDetailScreen(
     onOfferCreated: () -> Unit,
     onAddItem: () -> Unit,
     onOpenOwner: (String) -> Unit,
+    onReport: (ReportTarget) -> Unit,
 ) {
     val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
@@ -198,6 +200,11 @@ fun ItemDetailScreen(
                                 "هتختار عنصر نشط من حاجتك، والقرار يفضل عند صاحب العنصر.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = { onReport(ReportTarget.Item(detail.id, detail.title)) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("الإبلاغ عن العنصر") }
                         }
                     }
                 }

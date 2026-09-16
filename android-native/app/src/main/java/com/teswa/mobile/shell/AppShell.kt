@@ -48,6 +48,9 @@ import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.reviews.ReviewRepository
+import com.teswa.mobile.feature.safety.ReportTarget
+import com.teswa.mobile.feature.safety.ReportingDialog
+import com.teswa.mobile.feature.safety.ReportingRepository
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
@@ -91,6 +94,7 @@ fun AppShell(
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
     reviewRepository: ReviewRepository,
+    reportingRepository: ReportingRepository,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
     onSignOut: suspend () -> Unit,
@@ -106,6 +110,7 @@ fun AppShell(
     var externalDirectId by remember { mutableStateOf<String?>(null) }
     var externalDirectTarget by remember { mutableStateOf<DirectComposeTarget?>(null) }
     var externalContextualId by remember { mutableStateOf<String?>(null) }
+    var reportTarget by remember { mutableStateOf<ReportTarget?>(null) }
     var notificationPermissionRequested by remember { mutableStateOf(false) }
 
     fun syncPush() {
@@ -203,6 +208,7 @@ fun AppShell(
                     externalContextualId = conversationId
                     selectedTab = AppTab.MESSAGES
                 },
+                onReport = { reportTarget = it },
             )
 
             AppTab.DISCOVER -> DiscoverScreen(
@@ -260,6 +266,7 @@ fun AppShell(
                     externalDirectTarget = null
                     externalContextualId = null
                 },
+                onReport = { reportTarget = it },
             )
 
             AppTab.NOTIFICATIONS -> NotificationsScreen(
@@ -324,6 +331,17 @@ fun AppShell(
                 onSignOut = signOutAndDisable,
             )
         }
+    }
+
+    reportTarget?.let { target ->
+        ReportingDialog(
+            target = target,
+            initialSession = session,
+            repository = reportingRepository,
+            onSessionUpdated = { session = it },
+            onSessionExpired = signOutAndDisable,
+            onDismiss = { reportTarget = null },
+        )
     }
 }
 

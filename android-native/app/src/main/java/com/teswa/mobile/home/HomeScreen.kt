@@ -42,6 +42,7 @@ import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileScreen
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.feature.stories.StoriesRail
 import com.teswa.mobile.feature.stories.StoryCreateScreen
 import com.teswa.mobile.feature.stories.StoryManageScreen
@@ -71,6 +72,7 @@ fun HomeScreen(
     onExternalProfileConsumed: () -> Unit = {},
     onStartDirect: (DirectComposeTarget) -> Unit = {},
     onStoryReplyOpened: (String) -> Unit = {},
+    onReport: (ReportTarget) -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
     val storyHolder = remember(initialSession.user.id, storyRepository) { StoryStateHolder(initialSession, storyRepository) }
@@ -155,6 +157,7 @@ fun HomeScreen(
         StoryViewerScreen(
             holder = storyHolder,
             onReplyOpened = onStoryReplyOpened,
+            onReport = onReport,
             modifier = modifier,
         )
         return
@@ -170,6 +173,7 @@ fun HomeScreen(
             onBack = { selectedProfileId = null },
             onOpenItem = { itemId -> selectedProfileId = null; holder.openItem(itemId) },
             onMessage = onStartDirect,
+            onReport = onReport,
             modifier = modifier,
         )
         return
@@ -190,6 +194,7 @@ fun HomeScreen(
                 onOfferCreated = onOfferCreated,
                 onAddItem = onAddItem,
                 onOpenOwner = { selectedProfileId = it },
+                onReport = onReport,
             )
         }
         return
