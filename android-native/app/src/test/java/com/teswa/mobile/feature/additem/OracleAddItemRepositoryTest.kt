@@ -42,7 +42,7 @@ class OracleAddItemRepositoryTest {
                 BinaryUploadResult.Success
             },
         )
-        val draft = validDraft()
+        val draft = validDraft().copy(locationLatitude = 30.0444, locationLongitude = 31.2357)
 
         val result = repository.publish(session, draft) {}
 
@@ -62,7 +62,8 @@ class OracleAddItemRepositoryTest {
             body.keys().asSequence().toSet(),
         )
         assertTrue(body.isNull("description"))
-        assertTrue(body.isNull("locationLatitude"))
+        assertEquals(30.0444, body.getDouble("locationLatitude"), 0.00001)
+        assertEquals(31.2357, body.getDouble("locationLongitude"), 0.00001)
         assertEquals("good_used", body.getString("condition"))
         assertEquals("flexible", body.getString("desireMode"))
         val image = body.getJSONArray("images").getJSONObject(0)

@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.teswa.mobile.auth.AuthSession
 import kotlinx.coroutines.CancellationException
+import com.teswa.mobile.home.CurrentLocationProvider
+import com.teswa.mobile.home.CurrentLocationResult
 
 enum class AddItemStep { BASICS, DETAILS, EXCHANGE }
 
@@ -38,6 +40,8 @@ class AddItemStateHolder(
     var message by mutableStateOf<String?>(null)
         private set
     var sessionExpired by mutableStateOf(false)
+        private set
+    var locationWorking by mutableStateOf(false)
         private set
 
     val isPublishing: Boolean get() = submissionState is AddItemSubmissionState.Working
@@ -90,13 +94,43 @@ class AddItemStateHolder(
         city: String = draft.city,
         area: String = draft.area,
     ) {
-        if (!isPublishing) draft = draft.copy(
-            condition = condition,
-            conditionNotes = conditionNotes,
-            description = description,
-            city = city,
-            area = area,
-        )
+        if (!isPublishing) {
+            val locationChanged = city != draft.city || area != draft.area
+            draft = draft.copy(
+                condition = condition,
+                conditionNotes = conditionNotes,
+                description = description,
+                city = city,
+                area = area,
+                locationLatitude = if (locationChanged) null else draft.locationLatitude,
+                locationLongitude = if (locationChanged) null else draft.locationLongitude,
+            )
+        }
+    }
+
+    suspend fun useCurrentLocation(provider: CurrentLocationProvider) {
+        if (isPublishing || locationWorking) return
+        locationWorking = true
+        message = null
+        when (val result = provider.current()) {
+            is CurrentLocationResult.Success -> {
+                draft = draft.copy(
+                    locationLatitude = result.location.latitude,
+                    locationLongitude = result.location.longitude,
+                )
+                message = "تم حفظ موقع تقريبي للعنصر. اكتب المدينة والمنطقة لو محتاج توضيح أكتر."
+            }
+            is CurrentLocationResult.Failure -> message = when (result.reason) {
+                CurrentLocationResult.Reason.PERMISSION_DENIED -> "إذن الموقع غير مفعّل. تقدر تكتب المدينة يدويًا."
+                CurrentLocationResult.Reason.SERVICES_DISABLED -> "شغّل خدمة الموقع أو اكتب المدينة يدويًا."
+                CurrentLocationResult.Reason.UNAVAILABLE -> "تعذر تحديد الموقع الآن. تقدر تكتب المدينة يدويًا."
+            }
+        }
+        locationWorking = false
+    }
+
+    fun clearLocation() {
+        if (!isPublishing) draft = draft.copy(locationLatitude = null, locationLongitude = null)
     }
 
     fun updateExchange(

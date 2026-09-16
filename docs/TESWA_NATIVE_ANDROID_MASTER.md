@@ -98,7 +98,7 @@ The existing Oracle contract must be reused:
 
 Publish invariants already enforced by Oracle include one to eight HTTPS images, first image as the sole primary image, stable sort order, four supported condition values, three desire modes, UUID ownership, bounded text, and owned object keys. Native validation should prevent avoidable requests but must not weaken server validation.
 
-The Android implementation currently accepts up to four persisted gallery documents or camera captures, resolves real MIME type and byte length, streams each object with fixed `Content-Length`, reports per-image progress, and supports user cancellation. A cancellation or failed publish performs best-effort compensating object cleanup while keeping the local draft. Text and media metadata are recovered per signed-in user after process restart; gallery access uses persistable URI grants.
+The Android implementation currently accepts up to four persisted gallery documents or camera captures, resolves real MIME type and byte length, streams each object with fixed `Content-Length`, reports per-image progress, and supports user cancellation. A cancellation or failed publish performs best-effort compensating object cleanup while keeping the local draft. Text, optional one-shot coordinates, and media metadata are recovered per signed-in user after process restart; gallery access uses persistable URI grants. Manually changing city or area clears captured coordinates so stale GPS data cannot silently disagree with the visible place.
 
 ## Native product and visual direction
 
@@ -122,7 +122,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
 - [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented locally; physical-device and production acceptance remain)
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal/contextual dispatch, and routes to native item/deal/offer/direct/contextual surfaces implemented; Android push/background and profile routes remain)
-- [ ] Nearby/location flows (optional one-shot native permission/location and 3 km Oracle nearby feed implemented; Add Item location capture and physical-device acceptance remain)
+- [ ] Nearby/location flows (optional one-shot native permission/location, 3 km Oracle nearby feed, and Add Item coordinate publishing implemented locally; physical-device acceptance remains)
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion
 - [ ] Deep links and background/lifecycle behavior
 - [ ] Release AAB with existing Play signing identity

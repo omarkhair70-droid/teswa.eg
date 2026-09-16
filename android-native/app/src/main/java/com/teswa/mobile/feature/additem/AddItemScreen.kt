@@ -1,6 +1,8 @@
 package com.teswa.mobile.feature.additem
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -50,7 +52,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.ui.LocalContentImage
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -59,6 +63,7 @@ import kotlinx.coroutines.Job
 fun AddItemScreen(
     initialSession: AuthSession,
     repository: AddItemRepository,
+    locationProvider: CurrentLocationProvider,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     onPublished: () -> Unit,
@@ -73,6 +78,17 @@ fun AddItemScreen(
     val scope = rememberCoroutineScope()
     var publishJob by remember { mutableStateOf<Job?>(null) }
     var cameraTarget by remember { mutableStateOf<CameraTarget?>(null) }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants.values.any { it }) scope.launch { holder.useCurrentLocation(locationProvider) }
+        else holder.showMessage("إذن الموقع اترفض. تقدر تكتب المدينة والمنطقة يدويًا.")
+    }
+
+    fun useLocation() {
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (coarse || fine) scope.launch { holder.useCurrentLocation(locationProvider) }
+        else locationPermission.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+    }
 
     fun addResolved(uris: List<android.net.Uri>) {
         val images = uris.mapNotNull(resolver::resolve)
@@ -145,7 +161,13 @@ fun AddItemScreen(
                         onCategory = { holder.updateBasics(categoryId = it) },
                         onRetryCategories = { scope.launch { holder.loadCategories() } },
                     )
-                    AddItemStep.DETAILS -> DetailsSection(holder.draft, holder::updateDetails)
+                    AddItemStep.DETAILS -> DetailsSection(
+                        draft = holder.draft,
+                        update = holder::updateDetails,
+                        locationWorking = holder.locationWorking,
+                        onUseLocation = ::useLocation,
+                        onClearLocation = holder::clearLocation,
+                    )
                     AddItemStep.EXCHANGE -> ExchangeSection(holder.draft, holder::updateExchange)
                 }
                 holder.message?.let { InlineError(it) }
@@ -285,6 +307,9 @@ private fun BasicsSection(
 private fun DetailsSection(
     draft: AddItemDraft,
     update: (ItemCondition, String, String, String, String) -> Unit,
+    locationWorking: Boolean,
+    onUseLocation: () -> Unit,
+    onClearLocation: () -> Unit,
 ) {
     FormSection("حالة العنصر", "الوضوح هنا بيمنع خلافات بعدين.") {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -313,6 +338,28 @@ private fun DetailsSection(
                 onValueChange = { update(draft.condition, draft.conditionNotes, draft.description, draft.city, it) },
                 modifier = Modifier.weight(1f), label = { Text("المنطقة") }, singleLine = true,
             )
+        }
+        Spacer(Modifier.height(10.dp))
+        if (draft.locationLatitude == null) {
+            OutlinedButton(enabled = !locationWorking, onClick = onUseLocation, modifier = Modifier.fillMaxWidth()) {
+                Text(if (locationWorking) "بنعرف موقعك…" else "استخدم موقعي التقريبي")
+            }
+            Text(
+                "اختياري، ويُستخدم مرة واحدة عشان العنصر يظهر في الأقرب لي.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("تم حفظ موقع تقريبي", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = onClearLocation) { Text("إزالة") }
+                }
+            }
         }
     }
 }

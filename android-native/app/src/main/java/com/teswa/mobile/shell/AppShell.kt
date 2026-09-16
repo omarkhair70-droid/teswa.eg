@@ -115,6 +115,7 @@ fun AppShell(
             AppTab.ADD -> AddItemScreen(
                 initialSession = session,
                 repository = addItemRepository,
+                locationProvider = locationProvider,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
                 onPublished = { selectedTab = AppTab.HOME },

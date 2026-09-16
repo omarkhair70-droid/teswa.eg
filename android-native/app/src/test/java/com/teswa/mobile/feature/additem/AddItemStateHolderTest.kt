@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.teswa.mobile.home.CurrentLocationResult
+import com.teswa.mobile.home.DeviceLocation
 
 class AddItemStateHolderTest {
     private val session = AuthSession(
@@ -63,6 +65,19 @@ class AddItemStateHolderTest {
         assertTrue(holder.submissionState is AddItemSubmissionState.Idle)
         assertEquals("كتاب", holder.draft.title)
         assertTrue(holder.message!!.contains("المسودة محفوظة"))
+    }
+
+    @Test
+    fun locationIsOptionalAndClearedWhenManualPlaceChanges() = runBlocking {
+        val holder = AddItemStateHolder(session, FakeAddItemRepository())
+
+        holder.useCurrentLocation { CurrentLocationResult.Success(DeviceLocation(30.0444, 31.2357)) }
+
+        assertEquals(30.0444, holder.draft.locationLatitude!!, 0.00001)
+        assertEquals(31.2357, holder.draft.locationLongitude!!, 0.00001)
+        holder.updateDetails(city = "القاهرة")
+        assertEquals(null, holder.draft.locationLatitude)
+        assertEquals(null, holder.draft.locationLongitude)
     }
 }
 

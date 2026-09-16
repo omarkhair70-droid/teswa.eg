@@ -31,6 +31,8 @@ class AddItemDraftStore(context: Context, private val userId: String) {
                 categoryId = json.optString("categoryId").takeIf(String::isNotBlank),
                 city = json.optString("city"),
                 area = json.optString("area"),
+                locationLatitude = json.optDouble("locationLatitude").takeIf { json.has("locationLatitude") && !json.isNull("locationLatitude") && it.isFinite() },
+                locationLongitude = json.optDouble("locationLongitude").takeIf { json.has("locationLongitude") && !json.isNull("locationLongitude") && it.isFinite() },
                 condition = enumValueOrDefault(json.optString("condition"), ItemCondition.GOOD_USED),
                 conditionNotes = json.optString("conditionNotes"),
                 description = json.optString("description"),
@@ -64,6 +66,8 @@ class AddItemDraftStore(context: Context, private val userId: String) {
             .put("categoryId", draft.categoryId ?: "")
             .put("city", draft.city)
             .put("area", draft.area)
+            .put("locationLatitude", draft.locationLatitude ?: JSONObject.NULL)
+            .put("locationLongitude", draft.locationLongitude ?: JSONObject.NULL)
             .put("condition", draft.condition.name)
             .put("conditionNotes", draft.conditionNotes)
             .put("description", draft.description)

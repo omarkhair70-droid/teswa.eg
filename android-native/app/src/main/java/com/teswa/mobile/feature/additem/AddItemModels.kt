@@ -33,6 +33,8 @@ data class AddItemDraft(
     val categoryId: String? = null,
     val city: String = "",
     val area: String = "",
+    val locationLatitude: Double? = null,
+    val locationLongitude: Double? = null,
     val condition: ItemCondition = ItemCondition.GOOD_USED,
     val conditionNotes: String = "",
     val description: String = "",
@@ -54,6 +56,9 @@ data class AddItemDraft(
         conditionNotes.length > 1_000 -> "ملاحظات الحالة أطول من الحد المسموح."
         city.length > 120 -> "اسم المدينة لازم يكون 120 حرف أو أقل."
         area.length > 120 -> "اسم المنطقة لازم يكون 120 حرف أو أقل."
+        (locationLatitude == null) != (locationLongitude == null) -> "بيانات الموقع غير مكتملة."
+        locationLatitude != null && (!locationLatitude.isFinite() || locationLatitude !in -90.0..90.0) -> "خط العرض غير صالح."
+        locationLongitude != null && (!locationLongitude.isFinite() || locationLongitude !in -180.0..180.0) -> "خط الطول غير صالح."
         itemStory.length > 600 -> "قصة العنصر لازم تكون 600 حرف أو أقل."
         swapReason.length > 240 -> "سبب التبديل لازم يكون 240 حرف أو أقل."
         goodFor.length > 240 -> "حقل مناسب لمين لازم يكون 240 حرف أو أقل."
