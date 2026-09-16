@@ -59,12 +59,12 @@ import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 import kotlinx.coroutines.launch
 
-private enum class AppTab(val label: String) {
+private enum class AppTab(val label: String, val showInBottomBar: Boolean = true) {
     HOME("الرئيسية"),
     DISCOVER("اكتشف"),
     ADD("إضافة"),
     MESSAGES("الرسائل"),
-    NOTIFICATIONS("تنبيهات"),
+    NOTIFICATIONS("تنبيهات", showInBottomBar = false),
     PROFILE("حسابي"),
 }
 
@@ -171,7 +171,7 @@ fun AppShell(
     Scaffold(
         bottomBar = {
             NavigationBar {
-                AppTab.entries.forEach { tab ->
+                AppTab.entries.filter { it.showInBottomBar }.forEach { tab ->
                     NavigationBarItem(
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
@@ -196,6 +196,7 @@ fun AppShell(
                 modifier = Modifier.padding(padding),
                 onOfferCreated = { selectedTab = AppTab.MESSAGES },
                 onAddItem = { selectedTab = AppTab.ADD },
+                onNotifications = { selectedTab = AppTab.NOTIFICATIONS },
                 externalItemId = externalItemId,
                 onExternalItemConsumed = { externalItemId = null },
                 externalProfileId = externalProfileId,
