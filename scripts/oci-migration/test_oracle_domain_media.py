@@ -88,5 +88,29 @@ class MediaTests(unittest.TestCase):
                 'POST','/v1/media/signed-url','Bearer valid',dict(body))
         self.assertEqual(error.exception.status,403)
 
+    def test_conversation_voice_reads_require_rls_authorized_participant(self):
+        owner='22222222-2222-4222-8222-222222222222'
+        conversation='33333333-3333-4333-8333-333333333333'
+        class Allowed:
+            def __init__(self,value,expected): self.value=value; self.expected=expected
+            def can_read(self,user_id,object_key): return self.value and user_id==UID and object_key==self.expected
+        for purpose,prefix,slot in (
+            ('direct_voice','direct',4),
+            ('contextual_voice','contextual',5),
+        ):
+            with self.subTest(purpose=purpose):
+                key=f'{prefix}/{conversation}/{owner}/voice.m4a'
+                physical=media.PURPOSE_PREFIX[purpose]+'/'+key
+                store=Storage(); store.objects[physical]={'sizeBytes':12,'contentType':'audio/m4a'}
+                body={'purpose':purpose,'objectKey':key,'contentType':None,'sizeBytes':None,'expiresInSeconds':60}
+                args=[Auth(),store,None,None,None,None]
+                args[slot]=Allowed(True,key)
+                status,out=media.MediaApi(*args).handle('POST','/v1/media/signed-url','Bearer valid',dict(body))
+                self.assertEqual(status,200); self.assertIn('signedUrl',out)
+                args[slot]=Allowed(False,key)
+                with self.assertRaises(media.ApiError) as error:
+                    media.MediaApi(*args).handle('POST','/v1/media/signed-url','Bearer valid',dict(body))
+                self.assertEqual(error.exception.status,403)
+
 
 if __name__ == '__main__': unittest.main()

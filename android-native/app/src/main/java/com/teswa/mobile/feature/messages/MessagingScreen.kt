@@ -55,6 +55,9 @@ import com.teswa.mobile.feature.contextual.ContextualContent
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.contextual.ContextualStateHolder
 import com.teswa.mobile.feature.voice.VoiceComposer
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
+import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 
 @Composable
 fun MessagingScreen(
@@ -63,6 +66,7 @@ fun MessagingScreen(
     offersRepository: OffersRepository,
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
+    voiceMediaRepository: VoiceMediaRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     initialDealId: String? = null,
@@ -132,7 +136,7 @@ fun MessagingScreen(
 
     val selected = holder.selectedConversation
     if (selected != null) {
-        DealThreadScreen(holder, selected, modifier)
+        DealThreadScreen(holder, selected, voiceMediaRepository, modifier)
         return
     }
 
@@ -182,11 +186,11 @@ fun MessagingScreen(
             return@Column
         }
         if (mode == InboxMode.DIRECT) {
-            DirectContent(directHolder, Modifier.weight(1f))
+            DirectContent(directHolder, voiceMediaRepository, Modifier.weight(1f))
             return@Column
         }
         if (mode == InboxMode.CONTEXTUAL) {
-            ContextualContent(contextualHolder, Modifier.weight(1f))
+            ContextualContent(contextualHolder, voiceMediaRepository, Modifier.weight(1f))
             return@Column
         }
         holder.banner?.let { OfflineBanner(it) { scope.launch { holder.load(silent = true) } } }
@@ -316,7 +320,12 @@ private fun ConversationRow(conversation: DealConversation, onOpen: () -> Unit) 
 }
 
 @Composable
-private fun DealThreadScreen(holder: MessagingStateHolder, conversation: DealConversation, modifier: Modifier) {
+private fun DealThreadScreen(
+    holder: MessagingStateHolder,
+    conversation: DealConversation,
+    voiceMediaRepository: VoiceMediaRepository,
+    modifier: Modifier,
+) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val messageCount = (holder.threadState as? ThreadUiState.Content)?.messages?.size ?: 0
@@ -361,7 +370,12 @@ private fun DealThreadScreen(holder: MessagingStateHolder, conversation: DealCon
                 item { DealCompletionCard(holder, conversation) }
                 if (state.messages.isEmpty()) item { ThreadWelcome(conversation) }
                 items(state.messages, key = { it.id }) { message ->
-                    MessageBubble(message, mine = message.senderId == holder.session.user.id)
+                    MessageBubble(
+                        message = message,
+                        mine = message.senderId == holder.session.user.id,
+                        holder = holder,
+                        voiceMediaRepository = voiceMediaRepository,
+                    )
                 }
             }
         }
@@ -447,7 +461,7 @@ private fun dealStatusDescription(status: String) = when (status) {
 }
 
 @Composable
-private fun MessageBubble(message: DealMessage, mine: Boolean) {
+private fun MessageBubble(message: DealMessage, mine: Boolean, holder: MessagingStateHolder, voiceMediaRepository: VoiceMediaRepository) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Surface(
             modifier = Modifier.fillMaxWidth(.82f),
@@ -456,7 +470,14 @@ private fun MessageBubble(message: DealMessage, mine: Boolean) {
             contentColor = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         ) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Text(if (message.messageType == "voice") "رسالة صوتية" else message.body)
+                if (message.messageType == "voice" && message.audioStoragePath != null) {
+                    VoiceMessagePlayer(message.audioDurationMs) {
+                        when (val result = voiceMediaRepository.signedUrl(holder.session, "deal_voice", message.audioStoragePath)) {
+                            is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
+                            is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showBanner(result.message); null }
+                        }
+                    }
+                } else Text(message.body)
                 Spacer(Modifier.height(3.dp))
                 Text(shortDate(message.createdAt), style = MaterialTheme.typography.labelMedium)
             }

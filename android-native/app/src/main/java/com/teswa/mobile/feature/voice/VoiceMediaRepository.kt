@@ -17,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.FileInputStream
 import java.util.UUID
 
@@ -30,6 +31,9 @@ interface VoiceMediaRepository {
     ): VoiceMediaResult<UploadedVoice>
 
     suspend fun discard(session: AuthSession, purpose: String, voice: UploadedVoice): AuthSession
+
+    suspend fun signedUrl(session: AuthSession, purpose: String, objectKey: String): VoiceMediaResult<String> =
+        VoiceMediaResult.Failure("تشغيل التسجيل غير متاح الآن.", session)
 }
 
 class OracleVoiceMediaRepository(
@@ -114,8 +118,35 @@ class OracleVoiceMediaRepository(
             .put("sizeBytes", voice.sizeBytes),
     )
 
+    override suspend fun signedUrl(session: AuthSession, purpose: String, objectKey: String): VoiceMediaResult<String> {
+        if (purpose !in PURPOSES || objectKey.isBlank()) return VoiceMediaResult.Failure("مسار التسجيل غير صالح.", session)
+        val body = JSONObject()
+            .put("purpose", purpose)
+            .put("objectKey", objectKey)
+            .put("contentType", JSONObject.NULL)
+            .put("sizeBytes", JSONObject.NULL)
+            .put("expiresInSeconds", 900)
+        return when (val result = executor.execute(
+            session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/media/signed-url", body),
+        )) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> result.value.body.optString("signedUrl").takeIf { it.startsWith("https://") }
+                    ?.let { VoiceMediaResult.Success(it, result.session) }
+                    ?: VoiceMediaResult.Failure("الخادم أعاد رابط تشغيل غير صالح.", result.session)
+                401 -> expired(result.session)
+                403, 404 -> VoiceMediaResult.Failure("التسجيل غير متاح.", result.session)
+                else -> VoiceMediaResult.Failure("تعذر تشغيل التسجيل (${result.value.status}).", result.session)
+            }
+            else -> result.failure("تعذر تشغيل التسجيل الآن.")
+        }
+    }
+
     private suspend fun cleanup(session: AuthSession, body: JSONObject): AuthSession =
-        when (val result = executor.execute(session, OracleRequest(OracleHttpMethod.DELETE, "/v1/media/objects", body))) {
+        when (val result = executor.execute(
+            session,
+            OracleRequest(OracleHttpMethod.DELETE, "/v1/media/objects", JSONObject().put("objects", JSONArray().put(body))),
+        )) {
             is AuthenticatedOracleResult.Response -> result.session
             is AuthenticatedOracleResult.NetworkFailure -> result.session ?: session
             is AuthenticatedOracleResult.InvalidResponse -> result.session ?: session

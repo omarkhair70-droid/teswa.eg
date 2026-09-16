@@ -45,15 +45,16 @@ class AppContainer(context: Context) {
     )
 
     private val notificationDispatcher = OracleNotificationDispatcher(authRepository, oracleTransport)
-    private val voiceMediaRepository = OracleVoiceMediaRepository(authRepository, oracleTransport)
+    val voiceMediaRepository = OracleVoiceMediaRepository(authRepository, oracleTransport)
     val messagingRepository = OracleMessagingRepository(authRepository, oracleTransport, notificationDispatcher, voiceMediaRepository)
     val offersRepository = OracleOffersRepository(authRepository, oracleTransport, notificationDispatcher)
-    val directRepository = OracleDirectRepository(authRepository, oracleTransport)
-    val contextualRepository = OracleContextualRepository(authRepository, oracleTransport)
+    val directRepository = OracleDirectRepository(authRepository, oracleTransport, voiceMediaRepository)
+    val contextualRepository = OracleContextualRepository(authRepository, oracleTransport, voiceMediaRepository)
     val storyRepository = OracleStoryRepository(
         authenticator = authRepository,
         transport = oracleTransport,
         contentSource = AndroidStoryContentSource(appContext.contentResolver),
+        voiceMediaRepository = voiceMediaRepository,
     )
     val profileRepository = OracleProfileRepository(authRepository, oracleTransport)
     val publicProfileRepository = OraclePublicProfileRepository(authRepository, oracleTransport)

@@ -25,10 +25,11 @@ The current package responsibilities are:
 - `account/`: profile-completeness and required-policy gate.
 - `home/`: marketplace feed, pagination, item detail models and UI.
 - `feature/additem/`: listing draft recovery, media selection/upload, publish orchestration, and native creation UI.
-- `feature/messages/`: deal inbox, chronological text conversation, read state, reconnect polling, and composer state.
-- `feature/direct/`: privacy-aware compose entry, first-message requests, inbox, accept/ignore, read state, and text conversation.
-- `feature/contextual/`: story-context reply inbox, chronological text threads, read state, notification dispatch, and reconnect polling.
-- `feature/stories/`: home story rail, signed image/video viewer, view/like mutations, contextual text replies, streaming publish, and owned-story management.
+- `feature/messages/`: deal inbox, chronological text/voice conversation, read state, reconnect polling, and composer state.
+- `feature/direct/`: privacy-aware compose entry, first-message requests, inbox, accept/ignore, read state, and text/voice conversation.
+- `feature/contextual/`: story-context reply inbox, chronological text/voice threads, read state, notification dispatch, and reconnect polling.
+- `feature/stories/`: home story rail, signed image/video viewer, view/like mutations, contextual text/voice replies, streaming publish, and owned-story management.
+- `feature/voice/`: permission-aware AAC capture, review/cancel/send state, streaming private-media upload/cleanup, signed playback, and shared voice UI.
 - `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
 - `feature/profile/`: own-profile editing, owned-listing presentation, and guarded listing lifecycle actions.
 - `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
@@ -68,9 +69,9 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Home marketplace feed | Implemented | `GET /v1/marketplace/feed` |
 | Item detail and images | Implemented | `GET /v1/marketplace/items/{itemId}/detail` |
 | Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
-| Deal inbox, text coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, confirmations, complete-if-ready, completion notifications |
-| Direct and contextual messaging | Implemented locally; voice/device acceptance remains open | direct compose/inbox/requests/read/text, contextual inbox/thread/read/text/notification dispatch |
-| Stories | Implemented locally; voice/device acceptance remains open | home groups, signed image/video viewer, view/like, contextual reply, gallery/camera create, streaming publish/cleanup, counts, owner viewers, delete |
+| Deal inbox, text/voice coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, voice upload/signed playback, confirmations, complete-if-ready, completion notifications |
+| Direct and contextual messaging | Implemented locally; device acceptance remains open | direct compose/inbox/requests/read/text/voice, contextual inbox/thread/read/text/voice/notification dispatch |
+| Stories | Implemented locally; device acceptance remains open | home groups, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewers, delete |
 | Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
 | Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
 | Own/public profiles and listing lifecycle | Implemented locally; avatar/trust/device acceptance remains open | own/public profile, owner active listings, follow/block state and actions, listing lifecycle |
@@ -116,9 +117,9 @@ Before a major screen is built, record its user job, information priority, prima
 - [x] Native visual-system foundation: calm Teswa color, type, shape, light, and dark tokens
 - [ ] Final navigation architecture and feature-level reusable components
 - [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
-- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal, offer, direct compose/text/request/read, and contextual text/read/polling flows implemented; voice remains)
+- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal/direct/contextual text and voice upload, cleanup, signed playback, offer/request/read, notifications, and polling implemented locally; physical-device and production acceptance remain)
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
-- [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented; voice reply remains)
+- [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented locally; physical-device and production acceptance remain)
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal/contextual dispatch, and routes to native item/deal/offer/direct/contextual surfaces implemented; Android push/background and profile routes remain)
 - [ ] Nearby/location flows
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion

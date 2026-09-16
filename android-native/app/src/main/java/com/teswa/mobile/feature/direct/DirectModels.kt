@@ -16,7 +16,18 @@ data class DirectConversation(
     val requiresAction: Boolean,
 )
 
-data class DirectMessage(val id: String, val senderId: String, val body: String, val messageType: String, val createdAt: String, val readAt: String?)
+data class DirectMessage(
+    val id: String,
+    val senderId: String,
+    val body: String,
+    val messageType: String,
+    val createdAt: String,
+    val readAt: String?,
+    val audioStoragePath: String? = null,
+    val audioDurationMs: Int? = null,
+    val audioMimeType: String? = null,
+    val audioSizeBytes: Long? = null,
+)
 
 data class DirectComposeTarget(
     val userId: String,

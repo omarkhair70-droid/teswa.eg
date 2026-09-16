@@ -10,12 +10,17 @@ import com.teswa.mobile.core.network.OracleHttpMethod
 import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
 
 interface DirectRepository {
     suspend fun loadInbox(session: AuthSession): DirectResult<List<DirectConversation>>
     suspend fun loadMessages(session: AuthSession, conversationId: String): DirectResult<List<DirectMessage>>
     suspend fun startWithMessage(session: AuthSession, targetUserId: String, body: String): DirectResult<DirectStartOutcome>
     suspend fun send(session: AuthSession, conversation: DirectConversation, body: String): DirectResult<Unit>
+    suspend fun sendVoice(session: AuthSession, conversation: DirectConversation, draft: VoiceDraft, onProgress: (Int) -> Unit = {}): DirectResult<Unit> =
+        DirectResult.Failure("الرسائل الصوتية غير متاحة الآن.", session)
     suspend fun act(session: AuthSession, conversationId: String, accept: Boolean): DirectResult<Unit>
     suspend fun markRead(session: AuthSession, conversationId: String): DirectResult<Unit>
 }
@@ -23,6 +28,7 @@ interface DirectRepository {
 class OracleDirectRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
+    private val voiceMediaRepository: VoiceMediaRepository? = null,
 ) : DirectRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -126,6 +132,46 @@ class OracleDirectRepository(
         }
     }
 
+    override suspend fun sendVoice(
+        session: AuthSession,
+        conversation: DirectConversation,
+        draft: VoiceDraft,
+        onProgress: (Int) -> Unit,
+    ): DirectResult<Unit> {
+        val id = conversation.id.validId() ?: return DirectResult.Failure("معرّف المحادثة غير صالح.", session)
+        val media = voiceMediaRepository ?: return DirectResult.Failure("الرسائل الصوتية غير متاحة الآن.", session)
+        val uploaded = media.upload(session, "direct_voice", "direct/$id/${session.user.id}", draft, onProgress)
+        if (uploaded is VoiceMediaResult.Failure) {
+            return DirectResult.Failure(uploaded.message, uploaded.session, uploaded.unauthorized, uploaded.network)
+        }
+        uploaded as VoiceMediaResult.Success
+        val voice = uploaded.value
+        val body = JSONObject()
+            .put("audioStoragePath", voice.objectKey)
+            .put("audioMimeType", voice.mimeType)
+            .put("audioDurationMs", voice.durationMs)
+            .put("audioSizeBytes", voice.sizeBytes)
+        return when (val result = executor.execute(
+            uploaded.session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/direct/conversations/$id/voice", body),
+        )) {
+            is AuthenticatedOracleResult.Response -> when {
+                result.value.status == 200 && result.value.body.optBoolean("ok") && result.value.body.optString("messageId").validId() != null ->
+                    DirectResult.Success(Unit, result.session)
+                else -> {
+                    val cleaned = media.discard(result.session, "direct_voice", voice)
+                    if (result.value.status == 401) expired(cleaned)
+                    else DirectResult.Failure("تعذر إرسال التسجيل (${result.value.status}).", cleaned)
+                }
+            }
+            else -> {
+                val failure = result.failure("تعذر إرسال التسجيل الآن.")
+                val cleaned = media.discard(failure.session ?: uploaded.session, "direct_voice", voice)
+                failure.copy(session = cleaned)
+            }
+        }
+    }
+
     override suspend fun act(session: AuthSession, conversationId: String, accept: Boolean): DirectResult<Unit> = emptyWrite(
         session, conversationId, if (accept) "accept" else "ignore", "تعذر تحديث طلب المراسلة.",
     )
@@ -157,7 +203,13 @@ class OracleDirectRepository(
         val id = row.optString("id").validId() ?: return null
         val sender = row.optString("senderId").validId() ?: return null
         val created = row.optString("createdAt").trim().takeIf(String::isNotEmpty) ?: return null
-        return DirectMessage(id, sender, row.optString("body"), row.optString("messageType","text"), created, nullable(row,"readAt"))
+        return DirectMessage(
+            id, sender, row.optString("body"), row.optString("messageType","text"), created, nullable(row,"readAt"),
+            nullable(row,"audioStoragePath"),
+            row.optInt("audioDurationMs").takeIf { !row.isNull("audioDurationMs") && it > 0 },
+            nullable(row,"audioMimeType"),
+            row.optLong("audioSizeBytes").takeIf { !row.isNull("audioSizeBytes") && it > 0 },
+        )
     }
     private fun AuthenticatedOracleResult.failure(message: String): DirectResult.Failure = when(this) {
         is AuthenticatedOracleResult.NetworkFailure -> DirectResult.Failure(message, session, network=true)

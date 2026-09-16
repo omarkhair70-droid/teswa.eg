@@ -10,17 +10,23 @@ import com.teswa.mobile.core.network.OracleHttpMethod
 import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
 
 interface ContextualRepository {
     suspend fun loadInbox(session: AuthSession): ContextualResult<List<ContextualConversation>>
     suspend fun loadThread(session: AuthSession, conversationId: String): ContextualResult<ContextualThread>
     suspend fun sendText(session: AuthSession, conversationId: String, body: String): ContextualResult<ContextualMessage>
+    suspend fun sendVoice(session: AuthSession, conversationId: String, draft: VoiceDraft, onProgress: (Int) -> Unit = {}): ContextualResult<ContextualMessage> =
+        ContextualResult.Failure("الرسائل الصوتية غير متاحة الآن.", session)
     suspend fun markRead(session: AuthSession, conversationId: String): ContextualResult<Unit>
 }
 
 class OracleContextualRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
+    private val voiceMediaRepository: VoiceMediaRepository? = null,
 ) : ContextualRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -105,6 +111,60 @@ class OracleContextualRepository(
         return ContextualResult.Success(message, updatedSession)
     }
 
+    override suspend fun sendVoice(
+        session: AuthSession,
+        conversationId: String,
+        draft: VoiceDraft,
+        onProgress: (Int) -> Unit,
+    ): ContextualResult<ContextualMessage> {
+        val id = conversationId.validId() ?: return ContextualResult.Failure("معرّف المحادثة غير صالح.", session)
+        val media = voiceMediaRepository ?: return ContextualResult.Failure("الرسائل الصوتية غير متاحة الآن.", session)
+        val uploaded = media.upload(session, "contextual_voice", "contextual/$id/${session.user.id}", draft, onProgress)
+        if (uploaded is VoiceMediaResult.Failure) {
+            return ContextualResult.Failure(uploaded.message, uploaded.session, uploaded.unauthorized, uploaded.network)
+        }
+        uploaded as VoiceMediaResult.Success
+        val voice = uploaded.value
+        val body = JSONObject()
+            .put("senderId", session.user.id)
+            .put("mediaStoragePath", voice.objectKey)
+            .put("mediaDurationMs", voice.durationMs)
+        val response = executor.execute(
+            uploaded.session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/contextual/conversations/$id/voice", body),
+        )
+        if (response !is AuthenticatedOracleResult.Response) {
+            val failure = response.failure("تعذر إرسال التسجيل الآن.")
+            val cleaned = media.discard(failure.session ?: uploaded.session, "contextual_voice", voice)
+            return failure.copy(session = cleaned)
+        }
+        if (response.value.status != 201) {
+            val cleaned = media.discard(response.session, "contextual_voice", voice)
+            return if (response.value.status == 401) expired(cleaned)
+            else ContextualResult.Failure("تعذر إرسال التسجيل (${response.value.status}).", cleaned)
+        }
+        val message = parseMessage(response.value.body)
+        if (message == null) {
+            val cleaned = media.discard(response.session, "contextual_voice", voice)
+            return ContextualResult.Failure("استجابة إرسال التسجيل غير مكتملة.", cleaned)
+        }
+        val notification = executor.execute(
+            response.session,
+            OracleRequest(
+                OracleHttpMethod.POST,
+                "/v1/contextual/notifications",
+                JSONObject().put("conversationId", id).put("messageId", message.id).put("kind", "thread_message"),
+            ),
+        )
+        val updated = when (notification) {
+            is AuthenticatedOracleResult.Response -> notification.session
+            is AuthenticatedOracleResult.NetworkFailure -> notification.session ?: response.session
+            is AuthenticatedOracleResult.InvalidResponse -> notification.session ?: response.session
+            is AuthenticatedOracleResult.SessionFailure -> response.session
+        }
+        return ContextualResult.Success(message, updated)
+    }
+
     override suspend fun markRead(session: AuthSession, conversationId: String): ContextualResult<Unit> {
         val id = conversationId.validId() ?: return ContextualResult.Failure("معرّف المحادثة غير صالح.", session)
         return when (val result = executor.execute(
@@ -167,7 +227,10 @@ class OracleContextualRepository(
         val sender = row.optString("senderId").validId() ?: return null
         val created = row.optString("createdAt").trim().takeIf(String::isNotEmpty) ?: return null
         val kind = row.optString("messageKind", "text").takeIf { it in setOf("text", "voice") } ?: return null
-        return ContextualMessage(id, conversation, sender, row.optString("body"), kind, if (row.isNull("mediaDurationMs")) null else row.optInt("mediaDurationMs"), created)
+        return ContextualMessage(
+            id, conversation, sender, row.optString("body"), kind, nullable(row, "mediaStoragePath"),
+            if (row.isNull("mediaDurationMs")) null else row.optInt("mediaDurationMs"), created,
+        )
     }
 
     private fun AuthenticatedOracleResult.failure(message: String): ContextualResult.Failure = when (this) {

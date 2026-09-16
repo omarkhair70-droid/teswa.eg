@@ -14,13 +14,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
+import com.teswa.mobile.feature.voice.VoiceComposer
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
+import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 
 @Composable
-fun DirectContent(holder: DirectStateHolder, modifier: Modifier = Modifier) {
+fun DirectContent(holder: DirectStateHolder, voiceMediaRepository: VoiceMediaRepository, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { holder.load() }
     holder.composeTarget?.let { DirectFirstMessage(holder, it, modifier); return }
-    holder.selected?.let { DirectThread(holder, it, modifier); return }
+    holder.selected?.let { DirectThread(holder, it, voiceMediaRepository, modifier); return }
     when (val state = holder.state) {
         DirectUiState.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is DirectUiState.Error -> Column(modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
@@ -118,7 +122,7 @@ private fun DirectConversationCard(value: DirectConversation, onOpen: () -> Unit
 }
 
 @Composable
-private fun DirectThread(holder: DirectStateHolder, value: DirectConversation, modifier: Modifier) {
+private fun DirectThread(holder: DirectStateHolder, value: DirectConversation, voiceMediaRepository: VoiceMediaRepository, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -133,17 +137,24 @@ private fun DirectThread(holder: DirectStateHolder, value: DirectConversation, m
             } }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(holder.messages, key = { it.id }) { message -> DirectMessageBubble(message, message.senderId == holder.session.user.id) }
+            items(holder.messages, key = { it.id }) { message -> DirectMessageBubble(message, message.senderId == holder.session.user.id, holder, voiceMediaRepository) }
         }
         if (value.status == "accepted") DirectComposer(holder)
     }
 }
 
 @Composable
-private fun DirectMessageBubble(message: DirectMessage, mine: Boolean) {
+private fun DirectMessageBubble(message: DirectMessage, mine: Boolean, holder: DirectStateHolder, voiceMediaRepository: VoiceMediaRepository) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Surface(shape = MaterialTheme.shapes.medium, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant) {
-            Text(if (message.messageType == "voice") "رسالة صوتية" else message.body, Modifier.padding(12.dp), color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            if (message.messageType == "voice" && message.audioStoragePath != null) {
+                VoiceMessagePlayer(message.audioDurationMs) {
+                    when (val result = voiceMediaRepository.signedUrl(holder.session, "direct_voice", message.audioStoragePath)) {
+                        is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
+                        is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showMessage(result.message); null }
+                    }
+                }
+            } else Text(message.body, Modifier.padding(12.dp), color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -152,6 +163,14 @@ private fun DirectMessageBubble(message: DirectMessage, mine: Boolean) {
 private fun DirectComposer(holder: DirectStateHolder) {
     val scope = rememberCoroutineScope()
     Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
+        VoiceComposer(
+            enabled = true,
+            sending = holder.working,
+            uploadProgress = holder.voiceUploadProgress,
+            onSend = holder::sendVoice,
+            onError = holder::showMessage,
+        )
+        Spacer(Modifier.width(8.dp))
         OutlinedTextField(holder.composer, holder::compose, Modifier.weight(1f), placeholder = { Text("اكتب رسالة…") }, maxLines = 4)
         Spacer(Modifier.width(8.dp)); Button(onClick = { scope.launch { holder.send() } }, enabled = holder.composer.isNotBlank() && !holder.working) { Text("إرسال") }
     }

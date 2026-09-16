@@ -13,6 +13,11 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.teswa.mobile.feature.voice.UploadedVoice
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
+import java.io.File
 
 class OracleContextualRepositoryTest {
     private val me = "11111111-1111-1111-1111-111111111111"
@@ -62,7 +67,44 @@ class OracleContextualRepositoryTest {
         assertEquals("thread_message", notificationBody.getString("kind"))
     }
 
+    @Test
+    fun voiceUsesExactUploadMessageAndNotificationContracts() = runBlocking {
+        val key = "contextual/$conversation/$me/voice.m4a"
+        val sent = JSONObject("""{
+          "id":"$message","conversationId":"$conversation","senderId":"$me","body":"رسالة صوتية",
+          "messageKind":"voice","mediaStoragePath":"$key","mediaDurationMs":1700,"createdAt":"2026-09-15T12:00:00Z"
+        }""")
+        val transport = ContextQueue(response(201, sent), response(200, JSONObject().put("ok", true)))
+        val media = ContextVoiceMedia(UploadedVoice(key, 1700, "audio/m4a", 4))
+        val file = File.createTempFile("voice", ".m4a").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+
+        val result = OracleContextualRepository(auth, transport, media).sendVoice(session, conversation, VoiceDraft(file, 1700))
+
+        assertTrue(result is ContextualResult.Success)
+        assertEquals("contextual_voice", media.purpose)
+        assertEquals("contextual/$conversation/$me", media.prefix)
+        assertEquals(
+            listOf("/v1/contextual/conversations/$conversation/voice", "/v1/contextual/notifications"),
+            transport.requests.map { it.path },
+        )
+        val body = requireNotNull(transport.requests.first().body)
+        assertEquals(setOf("senderId", "mediaStoragePath", "mediaDurationMs"), body.keys().asSequence().toSet())
+        file.delete()
+        Unit
+    }
+
     private fun response(status: Int, body: JSONObject) = OracleTransportResult.Response(OracleResponse(status, body))
+}
+
+private class ContextVoiceMedia(private val value: UploadedVoice) : VoiceMediaRepository {
+    var purpose: String? = null
+    var prefix: String? = null
+    override suspend fun upload(session: AuthSession, purpose: String, objectPrefix: String, draft: VoiceDraft, onProgress: (Int) -> Unit): VoiceMediaResult<UploadedVoice> {
+        this.purpose = purpose
+        prefix = objectPrefix
+        return VoiceMediaResult.Success(value, session)
+    }
+    override suspend fun discard(session: AuthSession, purpose: String, voice: UploadedVoice) = session
 }
 
 private class ContextQueue(vararg values: OracleTransportResult) : OracleTransport {

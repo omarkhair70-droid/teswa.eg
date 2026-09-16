@@ -17,6 +17,9 @@ import org.json.JSONObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
 
 interface StoryRepository {
     suspend fun loadHome(session: AuthSession): StoryResult<List<StoryGroup>>
@@ -24,6 +27,8 @@ interface StoryRepository {
     suspend fun markViewed(session: AuthSession, storyId: String): StoryResult<Unit>
     suspend fun setLiked(session: AuthSession, storyId: String, liked: Boolean): StoryResult<Boolean>
     suspend fun reply(session: AuthSession, storyId: String, body: String): StoryResult<StoryReplyReceipt>
+    suspend fun replyVoice(session: AuthSession, storyId: String, draft: VoiceDraft, onProgress: (Int) -> Unit = {}): StoryResult<StoryReplyReceipt> =
+        StoryResult.Failure("الرد الصوتي غير متاح الآن.", session)
     suspend fun publish(
         session: AuthSession,
         draft: StoryDraft,
@@ -45,6 +50,7 @@ class OracleStoryRepository(
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
     private val contentSource: StoryContentSource = StoryContentSource { error("Story content source is unavailable.") },
     private val binaryUploader: BinaryUploader = StreamingBinaryUploader(),
+    private val voiceMediaRepository: VoiceMediaRepository? = null,
 ) : StoryRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -184,6 +190,70 @@ class OracleStoryRepository(
             }
             else -> result.failure("تعذر إرسال رد القصة الآن.")
         }
+    }
+
+    override suspend fun replyVoice(
+        session: AuthSession,
+        storyId: String,
+        draft: VoiceDraft,
+        onProgress: (Int) -> Unit,
+    ): StoryResult<StoryReplyReceipt> {
+        val id = storyId.validId() ?: return StoryResult.Failure("معرّف القصة غير صالح.", session)
+        val media = voiceMediaRepository ?: return StoryResult.Failure("الرد الصوتي غير متاح الآن.", session)
+        val ensured = executor.execute(
+            session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/contextual/stories/$id/ensure", JSONObject()),
+        )
+        if (ensured !is AuthenticatedOracleResult.Response) return ensured.failure("تعذر تجهيز رد القصة الآن.")
+        if (ensured.value.status == 401) return expired(ensured.session)
+        val conversationId = ensured.value.body.optString("conversationId").validId()
+            ?: return StoryResult.Failure("تعذر تجهيز محادثة القصة.", ensured.session)
+        val uploaded = media.upload(
+            ensured.session,
+            "contextual_voice",
+            "contextual/$conversationId/${session.user.id}",
+            draft,
+            onProgress,
+        )
+        if (uploaded is VoiceMediaResult.Failure) {
+            return StoryResult.Failure(uploaded.message, uploaded.session, uploaded.unauthorized, uploaded.network)
+        }
+        uploaded as VoiceMediaResult.Success
+        val voice = uploaded.value
+        val body = JSONObject()
+            .put("senderId", session.user.id)
+            .put("mediaStoragePath", voice.objectKey)
+            .put("mediaDurationMs", voice.durationMs)
+        val sent = executor.execute(
+            uploaded.session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/contextual/conversations/$conversationId/voice", body),
+        )
+        if (sent !is AuthenticatedOracleResult.Response) {
+            val failure = sent.failure("تعذر إرسال الرد الصوتي الآن.")
+            val cleaned = media.discard(failure.session ?: uploaded.session, "contextual_voice", voice)
+            return failure.copy(session = cleaned)
+        }
+        val messageId = sent.value.body.optString("id").validId()
+        if (sent.value.status != 201 || messageId == null) {
+            val cleaned = media.discard(sent.session, "contextual_voice", voice)
+            return if (sent.value.status == 401) expired(cleaned)
+            else StoryResult.Failure("تعذر إرسال الرد الصوتي (${sent.value.status}).", cleaned)
+        }
+        val notify = executor.execute(
+            sent.session,
+            OracleRequest(
+                OracleHttpMethod.POST,
+                "/v1/contextual/notifications",
+                JSONObject().put("conversationId", conversationId).put("messageId", messageId).put("kind", "story_reply_initial"),
+            ),
+        )
+        val updated = when (notify) {
+            is AuthenticatedOracleResult.Response -> notify.session
+            is AuthenticatedOracleResult.NetworkFailure -> notify.session ?: sent.session
+            is AuthenticatedOracleResult.InvalidResponse -> notify.session ?: sent.session
+            is AuthenticatedOracleResult.SessionFailure -> sent.session
+        }
+        return StoryResult.Success(StoryReplyReceipt(conversationId, messageId), updated)
     }
 
     override suspend fun publish(

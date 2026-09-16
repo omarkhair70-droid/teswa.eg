@@ -25,6 +25,7 @@ data class ContextualMessage(
     val senderId: String,
     val body: String,
     val kind: String,
+    val mediaStoragePath: String?,
     val durationMs: Int?,
     val createdAt: String,
 )

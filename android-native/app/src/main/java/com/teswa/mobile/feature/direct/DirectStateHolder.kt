@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.voice.VoiceDraft
 
 sealed interface DirectUiState {
     data object Loading : DirectUiState
@@ -28,6 +29,8 @@ class DirectStateHolder(
     var composer by mutableStateOf("")
         private set
     var working by mutableStateOf(false)
+        private set
+    var voiceUploadProgress by mutableStateOf<Int?>(null)
         private set
     var message by mutableStateOf<String?>(null)
         private set
@@ -105,6 +108,10 @@ class DirectStateHolder(
         composer = value.take(1_200)
     }
 
+    fun showMessage(value: String) {
+        message = value
+    }
+
     suspend fun send() {
         val conversation = selected ?: return
         val body = composer.trim()
@@ -119,6 +126,28 @@ class DirectStateHolder(
             is DirectResult.Failure -> fail(result)
         }
         working = false
+    }
+
+    suspend fun sendVoice(draft: VoiceDraft): Boolean {
+        val conversation = selected ?: return false
+        if (working) return false
+        working = true
+        voiceUploadProgress = 0
+        message = null
+        val sent = when (val result = repository.sendVoice(session, conversation, draft) { voiceUploadProgress = it }) {
+            is DirectResult.Success -> {
+                session = result.session
+                open(conversation)
+                true
+            }
+            is DirectResult.Failure -> {
+                fail(result)
+                false
+            }
+        }
+        working = false
+        voiceUploadProgress = null
+        return sent
     }
 
     suspend fun sendFirst() {

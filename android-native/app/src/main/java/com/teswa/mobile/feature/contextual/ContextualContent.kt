@@ -31,9 +31,13 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.teswa.mobile.feature.voice.VoiceComposer
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
+import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 
 @Composable
-fun ContextualContent(holder: ContextualStateHolder, modifier: Modifier = Modifier) {
+fun ContextualContent(holder: ContextualStateHolder, voiceMediaRepository: VoiceMediaRepository, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { holder.load() }
     LaunchedEffect(holder.thread?.conversation?.id) {
@@ -43,7 +47,7 @@ fun ContextualContent(holder: ContextualStateHolder, modifier: Modifier = Modifi
             if (current == null) holder.load(silent = true) else holder.reloadThread()
         }
     }
-    holder.thread?.let { ContextualThreadContent(holder, it, modifier); return }
+    holder.thread?.let { ContextualThreadContent(holder, it, voiceMediaRepository, modifier); return }
     when (val state = holder.state) {
         ContextualUiState.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is ContextualUiState.Error -> Column(modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
@@ -69,7 +73,7 @@ fun ContextualContent(holder: ContextualStateHolder, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun ContextualThreadContent(holder: ContextualStateHolder, thread: ContextualThread, modifier: Modifier) {
+private fun ContextualThreadContent(holder: ContextualStateHolder, thread: ContextualThread, voiceMediaRepository: VoiceMediaRepository, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -89,12 +93,27 @@ private fun ContextualThreadContent(holder: ContextualStateHolder, thread: Conte
                 val mine = value.senderId == holder.session.user.id
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
                     Surface(shape = MaterialTheme.shapes.medium, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant) {
-                        Text(if (value.kind == "voice") "رسالة صوتية" else value.body, Modifier.padding(12.dp), color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (value.kind == "voice" && value.mediaStoragePath != null) {
+                            VoiceMessagePlayer(value.durationMs) {
+                                when (val result = voiceMediaRepository.signedUrl(holder.session, "contextual_voice", value.mediaStoragePath)) {
+                                    is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
+                                    is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showMessage(result.message); null }
+                                }
+                            }
+                        } else Text(value.body, Modifier.padding(12.dp), color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
+            VoiceComposer(
+                enabled = true,
+                sending = holder.working,
+                uploadProgress = holder.voiceUploadProgress,
+                onSend = holder::sendVoice,
+                onError = holder::showMessage,
+            )
+            Spacer(Modifier.width(8.dp))
             OutlinedTextField(holder.composer, holder::compose, Modifier.weight(1f), placeholder = { Text("رد في سياق القصة…") }, maxLines = 4)
             Spacer(Modifier.width(8.dp))
             Button(onClick = { scope.launch { holder.send() } }, enabled = holder.composer.isNotBlank() && !holder.working) { Text("إرسال") }

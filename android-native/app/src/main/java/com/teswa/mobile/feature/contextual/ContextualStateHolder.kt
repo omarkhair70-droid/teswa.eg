@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.voice.VoiceDraft
 
 sealed interface ContextualUiState {
     data object Loading : ContextualUiState
@@ -24,6 +25,8 @@ class ContextualStateHolder(
     var composer by mutableStateOf("")
         private set
     var working by mutableStateOf(false)
+        private set
+    var voiceUploadProgress by mutableStateOf<Int?>(null)
         private set
     var message by mutableStateOf<String?>(null)
         private set
@@ -85,6 +88,10 @@ class ContextualStateHolder(
         composer = value.take(1_200)
     }
 
+    fun showMessage(value: String) {
+        message = value
+    }
+
     suspend fun send() {
         val current = thread ?: return
         val body = composer.trim()
@@ -100,6 +107,28 @@ class ContextualStateHolder(
             is ContextualResult.Failure -> fail(result)
         }
         working = false
+    }
+
+    suspend fun sendVoice(draft: VoiceDraft): Boolean {
+        val current = thread ?: return false
+        if (working) return false
+        working = true
+        voiceUploadProgress = 0
+        message = null
+        val sent = when (val result = repository.sendVoice(session, current.conversation.id, draft) { voiceUploadProgress = it }) {
+            is ContextualResult.Success -> {
+                session = result.session
+                thread = current.copy(messages = (current.messages + result.value).distinctBy { it.id })
+                true
+            }
+            is ContextualResult.Failure -> {
+                fail(result)
+                false
+            }
+        }
+        working = false
+        voiceUploadProgress = null
+        return sent
     }
 
     suspend fun reloadThread() {

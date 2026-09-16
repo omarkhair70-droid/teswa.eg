@@ -30,6 +30,7 @@ import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
 
 private enum class AppTab(
     val label: String,
@@ -55,6 +56,7 @@ fun AppShell(
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
+    voiceMediaRepository: VoiceMediaRepository,
     onSignOut: suspend () -> Unit,
 ) {
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
@@ -123,6 +125,7 @@ fun AppShell(
                 offersRepository = offersRepository,
                 directRepository = directRepository,
                 contextualRepository = contextualRepository,
+                voiceMediaRepository = voiceMediaRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = onSignOut,
                 initialDealId = externalDealId,

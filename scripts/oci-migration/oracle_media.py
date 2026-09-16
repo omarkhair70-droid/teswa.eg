@@ -67,6 +67,26 @@ class StoryMediaAuthorizer:
         return isinstance(result,dict) and result.get('allowed') is True
 
 
+class DirectVoiceMediaAuthorizer:
+    def __init__(self, db=None): self.db=db or PgWriteRunner()
+    def can_read(self, user_id, key):
+        match=re.fullmatch(r'direct/([0-9a-fA-F-]{36})/([0-9a-fA-F-]{36})/[^/]+',key)
+        if not match: return False
+        conversation_id=valid_uuid(match.group(1)); valid_uuid(match.group(2))
+        result=self.db.query(user_id,"SELECT json_build_object('allowed',EXISTS(SELECT 1 FROM public.direct_conversations WHERE id='%s'::uuid))" % conversation_id)
+        return isinstance(result,dict) and result.get('allowed') is True
+
+
+class ContextualVoiceMediaAuthorizer:
+    def __init__(self, db=None): self.db=db or PgWriteRunner()
+    def can_read(self, user_id, key):
+        match=re.fullmatch(r'contextual/([0-9a-fA-F-]{36})/([0-9a-fA-F-]{36})/[^/]+',key)
+        if not match: return False
+        conversation_id=valid_uuid(match.group(1)); valid_uuid(match.group(2))
+        result=self.db.query(user_id,"SELECT json_build_object('allowed',EXISTS(SELECT 1 FROM public.contextual_conversations WHERE id='%s'::uuid))" % conversation_id)
+        return isinstance(result,dict) and result.get('allowed') is True
+
+
 class OciStorage:
     def __init__(self, bucket='teswa-media'):
         try:
@@ -113,11 +133,14 @@ class OciStorage:
 
 
 class MediaApi:
-    def __init__(self, auth=None, storage=None, deal_authorizer=None, story_authorizer=None):
+    def __init__(self, auth=None, storage=None, deal_authorizer=None, story_authorizer=None,
+                 direct_authorizer=None, contextual_authorizer=None):
         self.auth = auth or AuthResolver()
         self.storage = storage
         self.deal_authorizer = deal_authorizer
         self.story_authorizer = story_authorizer
+        self.direct_authorizer = direct_authorizer
+        self.contextual_authorizer = contextual_authorizer
 
     def store(self):
         if self.storage is None:
@@ -157,12 +180,18 @@ class MediaApi:
                 raise ApiError(400, 'invalid_expiry')
             purpose_value=body.get('purpose')
             purpose, key, _content_type, _size, physical = object_input(
-                body, user_id, False, allow_non_owner=purpose_value in ('deal_voice','story_media'))
+                body, user_id, False, allow_non_owner=purpose_value in ('deal_voice','direct_voice','contextual_voice','story_media'))
             if purpose=='deal_voice':
                 authorizer=self.deal_authorizer or DealMediaAuthorizer()
                 if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
             if purpose=='story_media' and user_id not in key.split('/'):
                 authorizer=self.story_authorizer or StoryMediaAuthorizer()
+                if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
+            if purpose=='direct_voice':
+                authorizer=self.direct_authorizer or DirectVoiceMediaAuthorizer()
+                if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
+            if purpose=='contextual_voice':
+                authorizer=self.contextual_authorizer or ContextualVoiceMediaAuthorizer()
                 if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
             if self.store().head(physical) is None:
                 raise ApiError(404, 'media_not_found')

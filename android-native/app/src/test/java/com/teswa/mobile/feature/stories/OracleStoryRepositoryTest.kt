@@ -16,6 +16,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
+import com.teswa.mobile.feature.voice.UploadedVoice
+import com.teswa.mobile.feature.voice.VoiceDraft
+import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.voice.VoiceMediaResult
 
 class OracleStoryRepositoryTest {
     private val me = "11111111-1111-1111-1111-111111111111"
@@ -81,6 +86,40 @@ class OracleStoryRepositoryTest {
             notice.keys().asSequence().toSet(),
         )
         assertEquals("story_reply_initial", notice.getString("kind"))
+    }
+
+    @Test
+    fun voiceReplyEnsuresThreadThenSendsAndNotifies() = runBlocking {
+        val key = "contextual/$conversationId/$me/voice.m4a"
+        val sent = JSONObject("""{
+          "id":"$messageId","conversationId":"$conversationId","senderId":"$me","body":"رسالة صوتية",
+          "messageKind":"voice","mediaStoragePath":"$key","mediaDurationMs":1900,"createdAt":"2026-09-15T12:00:00Z"
+        }""")
+        val transport = StoryQueue(
+            response(200, JSONObject().put("conversationId", conversationId)),
+            response(201, sent),
+            response(200, JSONObject().put("ok", true)),
+        )
+        val media = StoryVoiceMedia(UploadedVoice(key, 1900, "audio/m4a", 4))
+        val repository = OracleStoryRepository(auth, transport, voiceMediaRepository = media)
+        val file = File.createTempFile("voice", ".m4a").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+
+        val result = repository.replyVoice(session, storyId, VoiceDraft(file, 1900))
+
+        assertTrue(result is StoryResult.Success)
+        assertEquals("contextual_voice", media.purpose)
+        assertEquals("contextual/$conversationId/$me", media.prefix)
+        assertEquals(
+            listOf(
+                "/v1/contextual/stories/$storyId/ensure",
+                "/v1/contextual/conversations/$conversationId/voice",
+                "/v1/contextual/notifications",
+            ),
+            transport.requests.map { it.path },
+        )
+        assertEquals("story_reply_initial", transport.requests.last().body?.getString("kind"))
+        file.delete()
+        Unit
     }
 
     @Test
@@ -218,6 +257,17 @@ class OracleStoryRepositoryTest {
 
     private fun response(status: Int, body: JSONObject) =
         OracleTransportResult.Response(OracleResponse(status, body))
+}
+
+private class StoryVoiceMedia(private val value: UploadedVoice) : VoiceMediaRepository {
+    var purpose: String? = null
+    var prefix: String? = null
+    override suspend fun upload(session: AuthSession, purpose: String, objectPrefix: String, draft: VoiceDraft, onProgress: (Int) -> Unit): VoiceMediaResult<UploadedVoice> {
+        this.purpose = purpose
+        prefix = objectPrefix
+        return VoiceMediaResult.Success(value, session)
+    }
+    override suspend fun discard(session: AuthSession, purpose: String, voice: UploadedVoice) = session
 }
 
 private class PublishingStoryTransport(

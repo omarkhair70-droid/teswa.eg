@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.teswa.mobile.ui.NetworkImage
 import kotlinx.coroutines.launch
+import com.teswa.mobile.feature.voice.VoiceComposer
 
 @Composable
 fun StoriesRail(
@@ -259,6 +260,19 @@ fun StoryViewerScreen(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    VoiceComposer(
+                        enabled = holder.workingAction == null,
+                        sending = holder.workingAction == "voice_reply",
+                        uploadProgress = holder.voiceUploadProgress,
+                        onSend = { draft ->
+                            holder.sendVoiceReply(draft)?.let {
+                                holder.close()
+                                onReplyOpened(it)
+                                true
+                            } ?: false
+                        },
+                        onError = holder::showMessage,
+                    )
                     OutlinedTextField(
                         value = holder.replyComposer,
                         onValueChange = holder::composeReply,

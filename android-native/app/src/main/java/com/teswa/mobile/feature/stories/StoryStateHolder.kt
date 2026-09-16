@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.voice.VoiceDraft
 
 sealed interface StoryHomeState {
     data object Loading : StoryHomeState
@@ -27,6 +28,8 @@ class StoryStateHolder(
     var replyComposer by mutableStateOf("")
         private set
     var workingAction by mutableStateOf<String?>(null)
+        private set
+    var voiceUploadProgress by mutableStateOf<Int?>(null)
         private set
     var message by mutableStateOf<String?>(null)
         private set
@@ -91,6 +94,10 @@ class StoryStateHolder(
         replyComposer = value.take(800)
     }
 
+    fun showMessage(value: String) {
+        message = value
+    }
+
     suspend fun toggleLike() {
         val currentViewer = viewer ?: return
         val slide = currentViewer.slides.getOrNull(activeIndex) ?: return
@@ -128,6 +135,27 @@ class StoryStateHolder(
                 null
             }
         }
+    }
+
+    suspend fun sendVoiceReply(draft: VoiceDraft): String? {
+        val slide = viewer?.slides?.getOrNull(activeIndex) ?: return null
+        if (workingAction != null || slide.story.userId == session.user.id) return null
+        workingAction = "voice_reply"
+        voiceUploadProgress = 0
+        message = null
+        val conversationId = when (val result = repository.replyVoice(session, slide.story.id, draft) { voiceUploadProgress = it }) {
+            is StoryResult.Success -> {
+                session = result.session
+                result.value.conversationId
+            }
+            is StoryResult.Failure -> {
+                capture(result)
+                null
+            }
+        }
+        workingAction = null
+        voiceUploadProgress = null
+        return conversationId
     }
 
     private suspend fun markCurrentViewed() {
