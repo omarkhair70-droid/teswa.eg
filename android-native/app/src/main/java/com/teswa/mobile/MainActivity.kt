@@ -41,6 +41,7 @@ import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.notifications.NativePushManager
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.people.PeopleRepository
 import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
                         accountGateRepository = container.accountGateRepository,
                         homeClient = container.homeClient,
                         discoverRepository = container.discoverRepository,
+                        peopleRepository = container.peopleRepository,
                         locationProvider = container.locationProvider,
                         addItemRepository = container.addItemRepository,
                         messagingRepository = container.messagingRepository,
@@ -108,6 +110,7 @@ private fun TeswaAuthScreen(
     accountGateRepository: AccountGateRepository,
     homeClient: OracleHomeClient,
     discoverRepository: DiscoverRepository,
+    peopleRepository: PeopleRepository,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
@@ -153,6 +156,7 @@ private fun TeswaAuthScreen(
                         initialSession = readySession,
                         homeClient = homeClient,
                         discoverRepository = discoverRepository,
+                        peopleRepository = peopleRepository,
                         locationProvider = locationProvider,
                         addItemRepository = addItemRepository,
                         messagingRepository = messagingRepository,

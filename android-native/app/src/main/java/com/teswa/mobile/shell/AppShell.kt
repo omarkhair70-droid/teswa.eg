@@ -36,6 +36,7 @@ import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.notifications.NotificationsScreen
 import com.teswa.mobile.feature.notifications.PushRegistrationResult
 import com.teswa.mobile.feature.offers.OffersRepository
+import com.teswa.mobile.feature.people.PeopleRepository
 import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.ProfileScreen
@@ -63,6 +64,7 @@ fun AppShell(
     initialSession: AuthSession,
     homeClient: OracleHomeClient,
     discoverRepository: DiscoverRepository,
+    peopleRepository: PeopleRepository,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
@@ -194,6 +196,7 @@ fun AppShell(
             AppTab.DISCOVER -> DiscoverScreen(
                 initialSession = session,
                 repository = discoverRepository,
+                peopleRepository = peopleRepository,
                 locationProvider = locationProvider,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,

@@ -17,6 +17,7 @@ import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
 import com.teswa.mobile.feature.notifications.OracleNotificationsRepository
 import com.teswa.mobile.feature.notifications.OraclePushRegistrationRepository
 import com.teswa.mobile.feature.offers.OracleOffersRepository
+import com.teswa.mobile.feature.people.OraclePeopleRepository
 import com.teswa.mobile.feature.profile.AndroidProfileImageContentSource
 import com.teswa.mobile.feature.profile.OracleProfileImageRepository
 import com.teswa.mobile.feature.profile.OracleProfileRepository
@@ -45,6 +46,7 @@ class AppContainer(context: Context) {
 
     val homeClient = OracleHomeClient(authRepository, oracleTransport)
     val discoverRepository = OracleDiscoverRepository(authRepository, oracleTransport)
+    val peopleRepository = OraclePeopleRepository(authRepository, oracleTransport)
     val locationProvider = AndroidLocationProvider(appContext)
 
     val addItemRepository = OracleAddItemRepository(

@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.people.PeopleRepository
+import com.teswa.mobile.feature.people.PeopleScreen
 import com.teswa.mobile.home.CurrentLocationProvider
 import kotlinx.coroutines.launch
 
@@ -22,6 +24,7 @@ import kotlinx.coroutines.launch
 fun DiscoverScreen(
     initialSession: AuthSession,
     repository: DiscoverRepository,
+    peopleRepository: PeopleRepository,
     locationProvider: CurrentLocationProvider,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
@@ -34,6 +37,7 @@ fun DiscoverScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var queryDraft by remember { mutableStateOf("") }
+    var peopleOpen by remember { mutableStateOf(false) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         if (grants.values.any { it }) scope.launch { holder.enableNearby(locationProvider) }
         else holder.showLocationPermissionDenied()
@@ -52,6 +56,22 @@ fun DiscoverScreen(
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (coarse || fine) scope.launch { holder.enableNearby(locationProvider) }
         else locationPermission.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+    }
+
+    if (peopleOpen) {
+        PeopleScreen(
+            initialSession = holder.session,
+            repository = peopleRepository,
+            onSessionUpdated = { updated ->
+                holder.updateSession(updated)
+                onSessionUpdated(updated)
+            },
+            onSessionExpired = onSessionExpired,
+            onOpenProfile = onOpenProfile,
+            onBack = { peopleOpen = false },
+            modifier = modifier,
+        )
+        return
     }
 
     when (val current = holder.state) {
@@ -78,6 +98,7 @@ fun DiscoverScreen(
             },
             onNearby = ::requestNearby,
             onDisableNearby = { scope.launch { holder.disableNearby() } },
+            onOpenPeople = { peopleOpen = true },
             onOpenProfile = onOpenProfile,
             onOpenItem = onOpenItem,
             onOpenStories = onOpenStories,
@@ -102,6 +123,7 @@ fun DiscoverScreen(
             },
             onNearby = ::requestNearby,
             onDisableNearby = { scope.launch { holder.disableNearby() } },
+            onOpenPeople = { peopleOpen = true },
             onOpenProfile = onOpenProfile,
             onOpenItem = onOpenItem,
             onOpenStories = onOpenStories,

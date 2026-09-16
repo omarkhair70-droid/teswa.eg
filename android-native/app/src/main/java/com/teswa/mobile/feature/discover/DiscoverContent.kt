@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,7 @@ fun DiscoverList(
     onClearFilters: () -> Unit,
     onNearby: () -> Unit,
     onDisableNearby: () -> Unit,
+    onOpenPeople: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenItem: (String) -> Unit,
     onOpenStories: () -> Unit,
@@ -145,16 +147,32 @@ fun DiscoverList(
 
         item { StoriesEntryCard(onOpenStories) }
 
-        if (people.isNotEmpty()) {
-            item {
-                Text("ناس تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("شوف الشخص قبل ما تشوف عرضه.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("ناس تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("شوف الشخص قبل ما تشوف عرضه.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onOpenPeople) { Text("عرض الكل") }
+            }
+            if (people.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(people, key = { it.id }) { person ->
                         PersonPreviewCard(person, onOpenProfile)
                     }
                 }
+            } else {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "افتح دليل ناس تِسوى ودور بالاسم أو المدينة.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
