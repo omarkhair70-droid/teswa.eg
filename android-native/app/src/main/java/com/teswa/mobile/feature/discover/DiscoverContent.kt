@@ -52,6 +52,7 @@ fun DiscoverList(
     onNearby: () -> Unit,
     onDisableNearby: () -> Unit,
     onOpenPeople: () -> Unit,
+    onOpenMotion: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenItem: (String) -> Unit,
     onOpenStories: () -> Unit,
@@ -176,7 +177,7 @@ fun DiscoverList(
             }
         }
 
-        item { MotionBoundaryCard() }
+        item { MotionEntryCard(onOpenMotion) }
 
         item {
             Text("حاجات ممكن تناسبك", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -270,15 +271,22 @@ private fun StoriesEntryCard(onOpenStories: () -> Unit) {
 }
 
 @Composable
-private fun MotionBoundaryCard() {
-    Card {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("نبض تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                "الحركة الحية في المدينة، القصص النشطة والعناصر اللي عليها اهتمام ليهم مساحة مستقلة هنا بدل ما نزحم التصفح العادي.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text("هنفصل النبض عن نتائج البحث عشان كل مساحة تفضل واضحة ومفيدة.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun MotionEntryCard(onOpen: () -> Unit) {
+    Card(onClick = onOpen) {
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("نبض تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "شوف العناصر اللي بدأت تتحرك، الحكايات، لقطات الفيديو، ونبض مدينتك في مساحة مستقلة.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Spacer(Modifier.size(10.dp))
+            OutlinedButton(onClick = onOpen) { Text("افتح") }
         }
     }
 }

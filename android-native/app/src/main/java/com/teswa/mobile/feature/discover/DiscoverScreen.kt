@@ -15,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.feature.motion.MotionLocationResolver
+import com.teswa.mobile.feature.motion.MotionRepository
+import com.teswa.mobile.feature.motion.MotionScreen
 import com.teswa.mobile.feature.people.PeopleRepository
 import com.teswa.mobile.feature.people.PeopleScreen
 import com.teswa.mobile.home.CurrentLocationProvider
@@ -25,6 +28,8 @@ fun DiscoverScreen(
     initialSession: AuthSession,
     repository: DiscoverRepository,
     peopleRepository: PeopleRepository,
+    motionRepository: MotionRepository,
+    motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
@@ -38,6 +43,7 @@ fun DiscoverScreen(
     val context = LocalContext.current
     var queryDraft by remember { mutableStateOf("") }
     var peopleOpen by remember { mutableStateOf(false) }
+    var motionOpen by remember { mutableStateOf(false) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         if (grants.values.any { it }) scope.launch { holder.enableNearby(locationProvider) }
         else holder.showLocationPermissionDenied()
@@ -74,6 +80,25 @@ fun DiscoverScreen(
         return
     }
 
+    if (motionOpen) {
+        MotionScreen(
+            initialSession = holder.session,
+            repository = motionRepository,
+            locationResolver = motionLocationResolver,
+            onSessionUpdated = { updated ->
+                holder.updateSession(updated)
+                onSessionUpdated(updated)
+            },
+            onSessionExpired = onSessionExpired,
+            onOpenItem = onOpenItem,
+            onOpenProfile = onOpenProfile,
+            onOpenStories = onOpenStories,
+            onBack = { motionOpen = false },
+            modifier = modifier,
+        )
+        return
+    }
+
     when (val current = holder.state) {
         DiscoverUiState.Loading -> DiscoverCentered("بنرتّب لك عالم تِسوى…", modifier, loading = true)
         is DiscoverUiState.Error -> DiscoverCentered(
@@ -99,6 +124,7 @@ fun DiscoverScreen(
             onNearby = ::requestNearby,
             onDisableNearby = { scope.launch { holder.disableNearby() } },
             onOpenPeople = { peopleOpen = true },
+            onOpenMotion = { motionOpen = true },
             onOpenProfile = onOpenProfile,
             onOpenItem = onOpenItem,
             onOpenStories = onOpenStories,
@@ -124,6 +150,7 @@ fun DiscoverScreen(
             onNearby = ::requestNearby,
             onDisableNearby = { scope.launch { holder.disableNearby() } },
             onOpenPeople = { peopleOpen = true },
+            onOpenMotion = { motionOpen = true },
             onOpenProfile = onOpenProfile,
             onOpenItem = onOpenItem,
             onOpenStories = onOpenStories,

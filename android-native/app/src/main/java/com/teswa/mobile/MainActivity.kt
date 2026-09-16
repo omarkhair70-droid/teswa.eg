@@ -38,6 +38,8 @@ import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
 import com.teswa.mobile.feature.messages.MessagingRepository
+import com.teswa.mobile.feature.motion.MotionLocationResolver
+import com.teswa.mobile.feature.motion.MotionRepository
 import com.teswa.mobile.feature.notifications.NativePushManager
 import com.teswa.mobile.feature.notifications.NotificationsRepository
 import com.teswa.mobile.feature.offers.OffersRepository
@@ -73,6 +75,8 @@ class MainActivity : ComponentActivity() {
                         homeClient = container.homeClient,
                         discoverRepository = container.discoverRepository,
                         peopleRepository = container.peopleRepository,
+                        motionRepository = container.motionRepository,
+                        motionLocationResolver = container.motionLocationResolver,
                         locationProvider = container.locationProvider,
                         addItemRepository = container.addItemRepository,
                         messagingRepository = container.messagingRepository,
@@ -111,6 +115,8 @@ private fun TeswaAuthScreen(
     homeClient: OracleHomeClient,
     discoverRepository: DiscoverRepository,
     peopleRepository: PeopleRepository,
+    motionRepository: MotionRepository,
+    motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
@@ -157,6 +163,8 @@ private fun TeswaAuthScreen(
                         homeClient = homeClient,
                         discoverRepository = discoverRepository,
                         peopleRepository = peopleRepository,
+                        motionRepository = motionRepository,
+                        motionLocationResolver = motionLocationResolver,
                         locationProvider = locationProvider,
                         addItemRepository = addItemRepository,
                         messagingRepository = messagingRepository,

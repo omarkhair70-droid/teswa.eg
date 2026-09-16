@@ -30,6 +30,8 @@ import com.teswa.mobile.feature.discover.DiscoverRepository
 import com.teswa.mobile.feature.discover.DiscoverScreen
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
+import com.teswa.mobile.feature.motion.MotionLocationResolver
+import com.teswa.mobile.feature.motion.MotionRepository
 import com.teswa.mobile.feature.notifications.NativePushManager
 import com.teswa.mobile.feature.notifications.NotificationDestination
 import com.teswa.mobile.feature.notifications.NotificationsRepository
@@ -65,6 +67,8 @@ fun AppShell(
     homeClient: OracleHomeClient,
     discoverRepository: DiscoverRepository,
     peopleRepository: PeopleRepository,
+    motionRepository: MotionRepository,
+    motionLocationResolver: MotionLocationResolver,
     locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
@@ -197,6 +201,8 @@ fun AppShell(
                 initialSession = session,
                 repository = discoverRepository,
                 peopleRepository = peopleRepository,
+                motionRepository = motionRepository,
+                motionLocationResolver = motionLocationResolver,
                 locationProvider = locationProvider,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
