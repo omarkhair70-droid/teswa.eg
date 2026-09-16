@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -15,7 +17,7 @@ val releaseApiBaseUrl = providers.environmentVariable("TESWA_RELEASE_API_BASE_UR
     ?.takeIf(String::isNotEmpty)
 val releaseApiReady = releaseApiBaseUrl?.let { value ->
     runCatching {
-        val uri = java.net.URI(value)
+        val uri = URI(value)
         uri.scheme.equals("https", ignoreCase = true) &&
             !uri.host.isNullOrBlank() &&
             uri.query == null &&
