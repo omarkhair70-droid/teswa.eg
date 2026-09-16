@@ -41,7 +41,7 @@ fun ProfileConnectionsScreen(
     profileId: String,
     mode: ProfileConnectionsMode,
     initialSession: AuthSession,
-    repository: ProfileConnectionsRepository,
+    repository: PublicProfileRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
