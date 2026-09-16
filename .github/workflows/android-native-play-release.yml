@@ -114,15 +114,6 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Setup Node.js for EAS Submit
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22.13.0'
-          cache: npm
-
-      - name: Install project dependencies
-        run: npm ci
-
       - name: Verify required release secrets
         shell: bash
         env:
@@ -130,25 +121,39 @@ jobs:
           STORE_PASSWORD: ${{ secrets.TESWA_RELEASE_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.TESWA_RELEASE_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.TESWA_RELEASE_KEY_PASSWORD }}
-          EXPO_TOKEN_VALUE: ${{ secrets.EXPO_TOKEN }}
+          PLAY_JSON_B64: ${{ secrets.TESWA_PLAY_SERVICE_ACCOUNT_JSON_B64 }}
         run: |
           set -euo pipefail
-          for name in KEYSTORE_B64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD EXPO_TOKEN_VALUE; do
+          for name in KEYSTORE_B64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD PLAY_JSON_B64; do
             if [[ -z "${!name:-}" ]]; then
               echo "Missing required release secret: $name"
               exit 10
             fi
           done
 
-      - name: Materialize upload keystore
+      - name: Materialize signing and Google Play credentials
         shell: bash
         env:
           KEYSTORE_B64: ${{ secrets.TESWA_RELEASE_KEYSTORE_B64 }}
+          PLAY_JSON_B64: ${{ secrets.TESWA_PLAY_SERVICE_ACCOUNT_JSON_B64 }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/teswa-release"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/teswa-release/upload.jks"
-          chmod 600 "$RUNNER_TEMP/teswa-release/upload.jks"
+          printf '%s' "$PLAY_JSON_B64" | base64 --decode > "$RUNNER_TEMP/teswa-release/play-service-account.json"
+          chmod 600 "$RUNNER_TEMP/teswa-release/upload.jks" "$RUNNER_TEMP/teswa-release/play-service-account.json"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'teswa-release' / 'play-service-account.json'
+          data = json.loads(path.read_text(encoding='utf-8'))
+          if data.get('type') != 'service_account' or not data.get('client_email') or not data.get('private_key'):
+              raise SystemExit('Invalid Google Play service-account JSON')
+          print('Google Play service-account JSON parsed successfully.')
+          PY
 
       - name: Verify Google Play upload key fingerprint
         shell: bash
@@ -208,7 +213,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Configure temporary EAS Submit profile
+      - name: Resolve Google Play track
         shell: bash
         env:
           TARGET: ${{ inputs.target }}
@@ -216,67 +221,114 @@ jobs:
           ROLLOUT_PERCENT: ${{ inputs.rollout_percent }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
 
-          path = Path("eas.json")
-          data = json.loads(path.read_text(encoding="utf-8"))
-          target = os.environ["TARGET"]
-          closed_track = os.environ["CLOSED_TRACK"]
-          rollout_percent = int(os.environ["ROLLOUT_PERCENT"])
-
-          if target == "internal":
-              track = "internal"
-              release_status = "completed"
-              rollout = None
-          elif target == "closed":
-              track = closed_track
-              release_status = "completed"
-              rollout = None
-          else:
-              track = "production"
-              if rollout_percent == 100:
-                  release_status = "completed"
-                  rollout = None
-              else:
-                  release_status = "inProgress"
-                  rollout = rollout_percent / 100
-
-          android = {
-              "track": track,
-              "releaseStatus": release_status,
-              "applicationId": "com.teswa.mobile",
-          }
-          if rollout is not None:
-              android["rollout"] = rollout
-
-          data.setdefault("submit", {})["native-play"] = {"android": android}
-          path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
-              env_file.write(f"PLAY_TRACK={track}\n")
-              env_file.write(f"PLAY_STATUS={release_status}\n")
-              if rollout is not None:
-                  env_file.write(f"PLAY_ROLLOUT={rollout}\n")
+          case "$TARGET" in
+            internal)
+              TRACK="internal"
+              STATUS="completed"
+              USER_FRACTION=""
+              ;;
+            closed)
+              TRACK="$CLOSED_TRACK"
+              STATUS="completed"
+              USER_FRACTION=""
+              ;;
+            production)
+              TRACK="production"
+              if [[ "$ROLLOUT_PERCENT" == "100" ]]; then
+                STATUS="completed"
+                USER_FRACTION=""
+              else
+                STATUS="inProgress"
+                USER_FRACTION="$(python3 - <<PY
+          print(int("$ROLLOUT_PERCENT") / 100)
           PY
+          )"
+              fi
+              ;;
+          esac
 
-      - name: Verify EAS authentication
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas-cli@latest whoami
+          echo "PLAY_TRACK=$TRACK" >> "$GITHUB_ENV"
+          echo "PLAY_STATUS=$STATUS" >> "$GITHUB_ENV"
+          echo "PLAY_USER_FRACTION=$USER_FRACTION" >> "$GITHUB_ENV"
 
-      - name: Submit native AAB to existing Teswa app on Google Play
+      - name: Install Google Play API client
+        run: python3 -m pip install --disable-pip-version-check --quiet google-api-python-client google-auth
+
+      - name: Publish native AAB directly to Google Play
+        shell: bash
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: >-
-          npx eas-cli@latest submit
-          --platform android
-          --profile native-play
-          --path "$AAB_PATH"
-          --non-interactive
-          --wait
+          PLAY_SERVICE_ACCOUNT_FILE: ${{ runner.temp }}/teswa-release/play-service-account.json
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          package_name = os.environ['PACKAGE_NAME']
+          aab_path = os.environ['AAB_PATH']
+          track = os.environ['PLAY_TRACK']
+          status = os.environ['PLAY_STATUS']
+          fraction_raw = os.environ.get('PLAY_USER_FRACTION', '').strip()
+          credentials_file = os.environ['PLAY_SERVICE_ACCOUNT_FILE']
+
+          credentials = service_account.Credentials.from_service_account_file(
+              credentials_file,
+              scopes=['https://www.googleapis.com/auth/androidpublisher'],
+          )
+          service = build('androidpublisher', 'v3', credentials=credentials, cache_discovery=False)
+
+          edit = service.edits().insert(packageName=package_name, body={}).execute()
+          edit_id = edit['id']
+
+          try:
+              bundle = service.edits().bundles().upload(
+                  packageName=package_name,
+                  editId=edit_id,
+                  media_body=MediaFileUpload(
+                      aab_path,
+                      mimetype='application/octet-stream',
+                      resumable=True,
+                  ),
+              ).execute()
+
+              version_code = str(bundle['versionCode'])
+              release = {
+                  'name': f'Teswa Native {version_code}',
+                  'versionCodes': [version_code],
+                  'status': status,
+              }
+              if fraction_raw:
+                  release['userFraction'] = float(fraction_raw)
+
+              service.edits().tracks().update(
+                  packageName=package_name,
+                  editId=edit_id,
+                  track=track,
+                  body={
+                      'track': track,
+                      'releases': [release],
+                  },
+              ).execute()
+
+              service.edits().commit(
+                  packageName=package_name,
+                  editId=edit_id,
+              ).execute()
+          except Exception:
+              try:
+                  service.edits().delete(packageName=package_name, editId=edit_id).execute()
+              except Exception:
+                  pass
+              raise
+
+          print(f'PLAY_PUBLISH=PASS package={package_name} versionCode={version_code} track={track} status={status}')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env_file:
+              env_file.write(f'PLAY_VERSION_CODE={version_code}\n')
+          PY
 
       - name: Release summary
         shell: bash
@@ -286,10 +338,11 @@ jobs:
             echo ""
             echo "- Package: \`$PACKAGE_NAME\`"
             echo "- Source: \`${{ inputs.source_ref }}\`"
+            echo "- Version code: \`${PLAY_VERSION_CODE:-unknown}\`"
             echo "- Track: \`$PLAY_TRACK\`"
             echo "- Status: \`$PLAY_STATUS\`"
-            if [[ -n "${PLAY_ROLLOUT:-}" ]]; then
-              echo "- Rollout: \`$PLAY_ROLLOUT\`"
+            if [[ -n "${PLAY_USER_FRACTION:-}" ]]; then
+              echo "- Rollout: \`$PLAY_USER_FRACTION\`"
             fi
             echo "- API: \`${{ inputs.api_base_url }}\`"
             echo "- AAB: \`$AAB_PATH\`"
