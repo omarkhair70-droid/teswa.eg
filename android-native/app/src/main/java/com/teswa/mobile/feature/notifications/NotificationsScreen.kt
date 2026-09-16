@@ -44,6 +44,7 @@ fun NotificationsScreen(
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     onDestination: (NotificationDestination) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember(initialSession.user.id, repository) { NotificationsStateHolder(initialSession, repository) }
@@ -63,22 +64,32 @@ fun NotificationsScreen(
     }
 
     when (val state = holder.state) {
-        NotificationsUiState.Loading -> NotificationCenter("بنراجع الجديد…", modifier, loading = true)
+        NotificationsUiState.Loading -> NotificationCenter(
+            "بنراجع الجديد…",
+            modifier,
+            loading = true,
+            secondary = "رجوع للرئيسية" to onBack,
+        )
         NotificationsUiState.Empty -> NotificationCenter(
             "كله هادي هنا. لما يحصل عرض أو رسالة أو خطوة مهمة هتلاقيها في المكان ده.",
             modifier,
             primary = "تحديث" to { scope.launch { holder.load() } },
+            secondary = "رجوع للرئيسية" to onBack,
         )
         is NotificationsUiState.Error -> NotificationCenter(
             state.message,
             modifier,
             primary = "حاول تاني" to { scope.launch { holder.load() } },
+            secondary = "رجوع للرئيسية" to onBack,
         )
         is NotificationsUiState.Content -> LazyColumn(
             modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item {
+                OutlinedButton(onClick = onBack) { Text("رجوع للرئيسية") }
+            }
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -162,6 +173,7 @@ private fun NotificationCenter(
     modifier: Modifier,
     loading: Boolean = false,
     primary: Pair<String, () -> Unit>? = null,
+    secondary: Pair<String, () -> Unit>? = null,
 ) {
     Column(
         modifier.fillMaxSize().padding(28.dp),
@@ -171,6 +183,7 @@ private fun NotificationCenter(
         if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(14.dp)) }
         Text(message, textAlign = TextAlign.Center)
         primary?.let { Spacer(Modifier.height(16.dp)); Button(onClick = it.second) { Text(it.first) } }
+        secondary?.let { Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = it.second) { Text(it.first) } }
     }
 }
 
