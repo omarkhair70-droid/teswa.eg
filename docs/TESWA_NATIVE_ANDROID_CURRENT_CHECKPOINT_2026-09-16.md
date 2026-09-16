@@ -1,6 +1,6 @@
 # Teswa Native Android — Current Checkpoint — 2026-09-16
 
-> **Read this before the older `TESWA_NATIVE_ANDROID_MASTER_HANDOFF_2026-09-16.md`.** The older handoff remains useful for architecture/history, but its Dolab, Edit Listing, Reporting, Followers/Following, and navigation status is stale. Always re-check PR #523 head before writing.
+> **Read this first.** Use `TESWA_NATIVE_ANDROID_MASTER_HANDOFF_2026-09-16.md` for broader history and `TESWA_NATIVE_ANDROID_MASTER.md` for invariants. Always re-check PR #523 head before writing.
 
 ## Repository state
 
@@ -8,176 +8,158 @@
 - Base: `chore/oracle-runtime-cutover-prep-20260910`
 - Active branch: `feat/native-foundation-network-20260915`
 - PR: #523 — `Build Teswa native Android Oracle client`
-- Latest verified implementation checkpoint before this documentation commit: `46e16879461af889b7125fc31028bfcdb67a6ee8`
+- Latest verified green implementation checkpoint before this documentation commit: `ba2fd82b18a16ec8bf9f70bd779129447d99fc3b`
 - PR remains **open, mergeable, not merged**.
 - Do **not** merge #523 unless Omar explicitly asks.
-- Continue using focused JVM/unit tests + `compileDebugKotlin`; no APK/AAB during normal feature slices.
 
-## Closed native product slices
+## Native product status
 
-### Dolab Native 2.0 critical path
+The native Kotlin/Compose client is feature-complete for the planned rewrite scope. Closed slices include:
 
-Implemented:
+- centralized Oracle auth/transport/session restore/serialized refresh + exactly one retry after 401;
+- Arabic-first authenticated shell and five permanent bottom destinations: Home, Discover, Add, Messages, Profile;
+- Notifications preserved as an internal route from Home/push/deep links rather than a sixth bottom tab;
+- Home, Item Detail, Nearby/location, Add Item;
+- Offers, Deals, Reviews/Trust;
+- Direct and Contextual Messaging with shared Voice primitives;
+- Stories;
+- Profile/Public Profile, Follow/Block, reusable Followers/Following;
+- Settings;
+- Notifications/FCM foundation;
+- Discover 2.0, People, Motion / City Pulse;
+- Dolab Native 2.0 critical path including media/voice, Dolab -> Add Item and Direct bridge;
+- Full Edit Listing Native preserving the same item and ordered image plan;
+- Native Trust & Safety / Reporting for user, item, story, direct message, deal and deal message;
+- final navigation/state cleanup pass completed before release hardening.
 
-- secure object-centric image/media capture/upload/preview/delete;
-- shared voice UI/player reuse without a second voice stack;
-- Dolab -> Add Item prefill/handoff;
-- durable source relationship via `publishedItemId`;
-- post-publish reconciliation that avoids duplicate marketplace listings when only Dolab relation marking fails;
-- Direct messaging bridge:
-  - `من دولابي` inserts a small item/note selection into the direct composer;
-  - `حفظ في دولابي` saves direct text messages;
-  - direct voice is copied into Dolab-owned `dolab_media`.
+Key closed checkpoints remain documented in the older handoff and PR history. No product feature slice should be reopened without a concrete device or production failure.
 
-Key green checkpoints:
+## Static / release hardening — CLOSED GREEN
 
-- `c1e5ac1e019303b285e54d22f5b1f6c9020427a2` — Dolab media capture/previews.
-- `518faceda05cb98098bb2455ee3a52e3aa632750` — Dolab -> Add Item publishing bridge.
-- `0498c2a1981bbdd754b7f779e7be51a240403ed7` — Dolab <-> Direct messaging bridge; Android #59 + Canonical #31 green.
+Release hardening is now complete at `ba2fd82b18a16ec8bf9f70bd779129447d99fc3b`.
 
-### Full Edit Listing Native
+### CI gate
 
-Native listing editing is implemented instead of delete/recreate:
+`.github/workflows/android-native-foundation.yml` now runs:
 
-- preserves the existing marketplace `itemId`;
-- owner-only edit entry from Item Detail;
-- core fields use the real Oracle edit contract;
-- existing images remain references until the ordered image plan is accepted;
-- only newly added images are uploaded;
-- up to four images with remove/reorder/set-cover behavior;
-- shared Add Item validation/media/upload primitives are reused;
-- Item Detail reloads after editor exit;
-- partial durable save is reported honestly if core data saved but a later image stage fails.
+- native JVM/unit tests;
+- `compileDebugKotlin`;
+- `compileReleaseKotlin`;
+- `lintRelease`.
 
-Oracle routes used:
+Verified at `ba2fd82...`:
 
-- `GET /v1/marketplace/items/{id}/edit`
-- `POST /v1/marketplace/items/{id}/edit`
-- `GET /v1/marketplace/items/{id}/edit/images`
-- `POST /v1/marketplace/items/{id}/edit/images/plan`
-- existing `/v1/media/uploads`, upload URL PUT, `/v1/media/uploads/complete`, `/v1/media/objects` cleanup.
+- Canonical Stabilization Validation #51: **success**;
+- Android Native Foundation #79: **success**;
+- native unit tests: **success**;
+- debug Kotlin compile: **success**;
+- release Kotlin compile: **success**;
+- Android release lint: **success**.
 
-Verified at `c01338b824642bdde21ec1933d544d98ef430d57`:
+### Release branding
 
-- Canonical #33: **success**.
-- Android Native Foundation #61: **success**.
-- Native unit tests: **success**.
-- `compileDebugKotlin`: **success**.
+Native Android now uses Teswa's existing repository branding assets rather than generic launcher defaults:
 
-### Native Trust & Safety / Reporting
+- launcher icon;
+- adaptive/round icon;
+- monochrome icon;
+- light/dark launch theme;
+- Android 12+ splash treatment.
 
-One reusable Oracle-backed native reporting experience now covers:
+The API-level lint issue around `windowLightNavigationBar` was fixed correctly with API-qualified `values-v27` / `values-night-v27` resources rather than suppression or a lint baseline.
 
-- user/profile;
-- marketplace item;
-- story;
-- direct message;
-- deal;
-- deal message.
+### Release identity
 
-Implementation structure:
+Release identity is unchanged:
 
-- typed report targets + allowed reasons;
-- Oracle context validation before submission;
-- one Arabic reusable Reporting Dialog hosted centrally in `AppShell`;
-- feature screens only emit a real typed `ReportTarget`;
-- self-owned content/messages avoid report actions where ownership is known;
-- contextual/story-reply message reporting was intentionally not invented because Oracle has no contextual-message report endpoint.
+- `applicationId com.teswa.mobile`;
+- `versionCode 26`;
+- `versionName 1.0.11`;
+- existing Google Play signing/upload identity must be reused.
 
-Verified at `be6e22237005d32413f446f8a64ca7229b81a3f9`:
+### Secure signing path
 
-- Canonical #38: **success**.
-- Android Native Foundation #66: **success**.
-- Native unit tests: **success**.
-- `compileDebugKotlin`: **success**.
+`android-native/app/build.gradle.kts` supports production release signing only when all four environment variables exist:
 
-### Reusable Followers / Following
+- `TESWA_RELEASE_STORE_FILE`;
+- `TESWA_RELEASE_STORE_PASSWORD`;
+- `TESWA_RELEASE_KEY_ALIAS`;
+- `TESWA_RELEASE_KEY_PASSWORD`.
 
-The Oracle read contract already existed; no backend endpoint was invented.
+The repository does not store a production keystore or passwords. Root `.gitignore` explicitly excludes Android signing material including `*.keystore`, `*.jks`, `*.p12`, `*.pfx`, `keystore.properties`, and `signing.properties`.
 
-Contract reused:
+`android-native/RELEASE_SIGNING.md` documents certificate verification and the signed v26 AAB command. `assembleRelease` / `bundleRelease` intentionally refuse to create a release artifact when the signing environment is incomplete.
 
-- `GET /v1/profiles/{profileId}/connections?mode=followers|following&limit=50`
+Historical local evidence shows an older Teswa Android folder contained `android.keystore` and signed release artifacts, but the key file itself is not stored in this repository. Before a production AAB is built, its certificate must be matched to the Google Play Console **Upload key certificate**. Do not generate a replacement production key casually.
 
-Native behavior:
+## ACTIVE RELEASE GATE
 
-- one reusable `ProfileConnectionsScreen` handles both modes;
-- Arabic-first shared loading/empty/error states;
-- rows use the existing public profile identity fields;
-- selecting another user opens the existing `PublicProfileScreen`, not a duplicate profile implementation;
-- the current user's own row is marked and does not recursively open itself;
-- Public Profile follower/following counters are now real navigation entry points.
+There is no remaining large code/product slice. The active work is empirical release acceptance.
 
-Implementation:
+### 1. Physical-device critical-flow smoke
 
-- `7270f66c69fb9a5f5ff5e900e0c37eedf4837c53` — connections screen/repository integration/tests;
-- `7a9d0d95bfda138fba6e79708fd12e00b9624c47` — final repository type correction.
+On a real Android device validate:
 
-Verified at `7a9d0d9...`:
+- cold launch and existing-session restore;
+- email/Google auth paths used for release;
+- Home/Discover/Add/Messages/Profile navigation;
+- Item Detail and profile navigation;
+- camera + gallery + media upload;
+- location/Nearby permission and result path;
+- Direct/contextual messages and voice record/playback;
+- Stories capture/view/upload path;
+- Dolab critical path including save/media/voice and bridges;
+- Edit Listing including image reorder/remove/cover and same-item persistence;
+- Reporting entry points and success state;
+- Followers/Following navigation;
+- notification permission, FCM token sync, background notification open and deep-link routing.
 
-- Canonical #41: **success**.
-- Android Native Foundation #69: **success**.
-- Native unit tests: **success**.
-- `compileDebugKotlin`: **success**.
+A JVM/compile/lint green run is not physical-device acceptance.
 
-### Home / Navigation reconciliation — first pass
+### 2. Signed v26 AAB
 
-Bottom navigation is now reduced from six permanent destinations to five product-level destinations:
+Use the existing Play upload identity only after fingerprint verification. Build from `android-native` with the signing environment documented in `RELEASE_SIGNING.md`.
 
-- الرئيسية
-- اكتشف
-- إضافة
-- الرسائل
-- حسابي
+Expected artifact when the local signed build is intentionally run:
 
-Notifications remain a real internal destination for push/deep links and manual access, but are no longer a permanent sixth bottom tab. Home exposes `تنبيهات` from its header, and the existing notification permission/sync/routing logic remains intact.
+`android-native/app/build/outputs/bundle/release/app-release.aab`
 
-Implementation:
+### 3. Play Internal update-over-installed-app
 
-- `c5832905962ad6876fcc2b4b9e3df863cbb05ba5` — hide Notifications from permanent bottom navigation while preserving the route;
-- `46e16879461af889b7125fc31028bfcdb67a6ee8` — expose Notifications from Home.
+Upload the signed v26 AAB to Google Play Internal testing and validate it updates the currently installed Play build for package `com.teswa.mobile` without uninstall/data reset.
 
-Verified at `46e1687...`:
+This is the authoritative update proof. A locally sideloaded APK signed with an upload key is not a substitute when Play App Signing is enabled.
 
-- Canonical #43: **success**.
-- Android Native Foundation #71: **success**.
-- Native unit tests: **success**.
-- `compileDebugKotlin`: **success**.
+### 4. Oracle production acceptance
 
-No emulator/APK/AAB was used for these feature slices.
+Run end-to-end critical flows against the intended production Oracle runtime and collect evidence for:
 
-## Active next product/release slice
+- auth/session durability;
+- reads/writes for marketplace/profile/social flows;
+- media upload/object access;
+- messaging/voice/stories;
+- notifications/deep links where applicable;
+- rollback path.
 
-Proceed with **final UI/state quality + static/release cleanup**, not new large product architecture.
+Only after this gate passes should production authority/cutover be declared complete.
 
-Priorities:
+### 5. Legacy cleanup — LAST
 
-1. route consistency and navigation polish after the five-tab shell;
-2. remove misplaced/clutter actions and obvious placeholder-like UI;
-3. loading/empty/error/offline consistency across core surfaces;
-4. RTL and dark-mode review using the existing theme/system support;
-5. static/lint/dependency/warning cleanup without changing product semantics;
-6. then move to the physical-device release gate.
+Only after physical-device, Play Internal update, and Oracle production acceptance:
 
-Dark mode is already system-aware in `TeswaTheme`. Android manifest already declares `android:supportsRtl="true"`; do not force a new global layout-direction architecture without a concrete failing case.
+- merge/cut over intentionally;
+- keep rollback evidence;
+- open a separate cleanup PR removing legacy Expo/React Native/Supabase mobile runtime.
 
-## Remaining release gates after quality/static cleanup
-
-- physical-device critical-flow smoke: auth/session, camera/gallery/media, location, messaging/voice, Stories, Dolab, Edit Listing, Reporting, Followers/Following;
-- push/background/deep-link acceptance on device;
-- signed v26 AAB using the existing Play signing identity;
-- Play Internal update-over-installed-app validation;
-- production Oracle end-to-end acceptance;
-- controlled cutover + rollback evidence;
-- only after acceptance, a separate cleanup PR removing legacy Expo/React Native/Supabase mobile runtime.
+Do not delete the legacy runtime before acceptance.
 
 ## Non-negotiable architecture reminder
 
 - Expo is behavioral reference only.
 - Oracle contracts own data/business truth.
-- Native Android owns the best UX implementation.
+- Native Android owns the UX implementation.
 - No Supabase/Expo runtime dependency in `android-native`.
 - No network calls in Composables.
 - Reuse real repeated primitives; avoid duplicate media/voice/network stacks.
-- `applicationId com.teswa.mobile`, `versionCode 26`, and the existing Play signing identity stay unchanged until the release plan explicitly changes them.
-- Do not claim production acceptance from JVM/compile CI alone.
+- `applicationId com.teswa.mobile`, `versionCode 26`, and the existing Play signing identity remain unchanged through this release gate.
+- Do not claim device, Play-update, push-delivery, or production acceptance from CI alone.
