@@ -30,6 +30,7 @@ import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
+import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 
 private enum class AppTab(
@@ -46,6 +47,7 @@ private enum class AppTab(
 fun AppShell(
     initialSession: AuthSession,
     homeClient: OracleHomeClient,
+    locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
@@ -87,6 +89,7 @@ fun AppShell(
             AppTab.HOME -> HomeScreen(
                 initialSession = session,
                 client = homeClient,
+                locationProvider = locationProvider,
                 offersRepository = offersRepository,
                 publicProfileRepository = publicProfileRepository,
                 storyRepository = storyRepository,

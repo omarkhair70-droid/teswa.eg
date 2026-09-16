@@ -86,6 +86,32 @@ class OracleHomeClient(
         }
     }
 
+    override suspend fun fetchNearby(
+        session: AuthSession,
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Double,
+        offset: Int,
+        limit: Int,
+    ): HomeFeedResult<HomeFeedPage> {
+        if (!latitude.isFinite() || latitude !in -90.0..90.0 || !longitude.isFinite() || longitude !in -180.0..180.0 ||
+            !radiusKm.isFinite() || radiusKm !in 0.1..100.0
+        ) return HomeFeedResult.Failure("الموقع غير صالح.", session = session)
+        val safeOffset = offset.coerceAtLeast(0)
+        val safeLimit = limit.coerceIn(1, 40)
+        val path = "/v1/marketplace/nearby?latitude=$latitude&longitude=$longitude&radiusKm=$radiusKm&limit=$safeLimit&offset=$safeOffset"
+        return when (val result = executor.execute(session, OracleRequest(path = path))) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> parsePage(result.value.body, result.session)
+                401 -> expired("انتهت الجلسة أثناء تحميل العناصر القريبة.", result.session)
+                else -> HomeFeedResult.Failure("تعذر تحميل العناصر القريبة (${result.value.status}).", session = result.session)
+            }
+            is AuthenticatedOracleResult.NetworkFailure -> HomeFeedResult.Failure("تعذر تحميل العناصر القريبة الآن.", network = true, session = result.session)
+            is AuthenticatedOracleResult.InvalidResponse -> HomeFeedResult.Failure("استجابة العناصر القريبة غير صالحة.", session = result.session)
+            is AuthenticatedOracleResult.SessionFailure -> result.failure.toHomeFailure()
+        }
+    }
+
     private fun parsePage(body: JSONObject, session: AuthSession): HomeFeedResult<HomeFeedPage> {
         val rawItems = body.optJSONArray("items")
             ?: return HomeFeedResult.Failure("استجابة الرئيسية غير مكتملة.", session = session)

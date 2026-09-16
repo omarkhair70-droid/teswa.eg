@@ -23,7 +23,7 @@ The current package responsibilities are:
 - `core/network/`: centralized Oracle base URL, timeouts, headers, JSON decoding, transport failures, authenticated execution, one refresh and one retry after HTTP 401.
 - `auth/`: Google Credential Manager, Oracle auth exchange, encrypted session storage, refresh coordination, restore, and logout.
 - `account/`: profile-completeness and required-policy gate.
-- `home/`: marketplace feed, pagination, item detail models and UI.
+- `home/`: marketplace feed, optional permission-aware nearby discovery, pagination, item detail models and UI.
 - `feature/additem/`: listing draft recovery, media selection/upload, publish orchestration, and native creation UI.
 - `feature/messages/`: deal inbox, chronological text/voice conversation, read state, reconnect polling, and composer state.
 - `feature/direct/`: privacy-aware compose entry, first-message requests, inbox, accept/ignore, read state, and text/voice conversation.
@@ -67,6 +67,7 @@ Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated st
 | Profile completeness gate | Implemented | `GET /v1/profiles/me`, `POST /v1/profiles/setup` |
 | Required-policy gate | Implemented | `GET /v1/policies/acceptances`, `POST /v1/policies/acceptances` |
 | Home marketplace feed | Implemented | `GET /v1/marketplace/feed` |
+| Nearby marketplace discovery | Implemented locally; device acceptance remains open | `GET /v1/marketplace/nearby`, one-shot coarse/fine native location |
 | Item detail and images | Implemented | `GET /v1/marketplace/items/{itemId}/detail` |
 | Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
 | Deal inbox, text/voice coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, voice upload/signed playback, confirmations, complete-if-ready, completion notifications |
@@ -121,7 +122,7 @@ Before a major screen is built, record its user job, information priority, prima
 - [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, editing, and listing lifecycle implemented; avatar, detailed trust, and badges remain)
 - [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented locally; physical-device and production acceptance remain)
 - [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, offer/deal/contextual dispatch, and routes to native item/deal/offer/direct/contextual surfaces implemented; Android push/background and profile routes remain)
-- [ ] Nearby/location flows
+- [ ] Nearby/location flows (optional one-shot native permission/location and 3 km Oracle nearby feed implemented; Add Item location capture and physical-device acceptance remain)
 - [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion
 - [ ] Deep links and background/lifecycle behavior
 - [ ] Release AAB with existing Play signing identity

@@ -54,6 +54,37 @@ class HomeStateHolderTest {
         assertTrue(holder.state is HomeUiState.Error)
     }
 
+    @Test
+    fun nearbyLocationLoadsNearbyPageWithoutAffectingBaseFlow() = runBlocking {
+        val nearby = item("near-1", "قريب")
+        val repository = FakeHomeRepository(
+            feedResults = listOf(HomeFeedResult.Success(HomeFeedPage(emptyList(), false), session)),
+            nearbyResults = listOf(HomeFeedResult.Success(HomeFeedPage(listOf(nearby), false), session)),
+        )
+        val holder = HomeStateHolder(session, repository)
+
+        holder.enableNearby { CurrentLocationResult.Success(DeviceLocation(30.0, 31.0)) }
+
+        assertEquals(DeviceLocation(30.0, 31.0), holder.nearbyLocation)
+        assertEquals(listOf("near-1"), (holder.state as HomeUiState.Content).items.map { it.id })
+        assertEquals(listOf(Triple(30.0, 31.0, 0)), repository.nearbyCalls)
+    }
+
+    @Test
+    fun deniedLocationStaysOptionalAndDoesNotReplaceFeedState() = runBlocking {
+        val repository = FakeHomeRepository(
+            feedResults = listOf(HomeFeedResult.Success(HomeFeedPage(listOf(item("item-1", "عنصر")), false), session)),
+        )
+        val holder = HomeStateHolder(session, repository)
+        holder.load()
+
+        holder.enableNearby { CurrentLocationResult.Failure(CurrentLocationResult.Reason.PERMISSION_DENIED) }
+
+        assertTrue(holder.state is HomeUiState.Content)
+        assertEquals(null, holder.nearbyLocation)
+        assertTrue(holder.notice?.contains("تكمل") == true)
+    }
+
     private fun item(id: String, title: String) = HomeFeedItem(
         id = id,
         title = title,
@@ -69,9 +100,12 @@ class HomeStateHolderTest {
 
 private class FakeHomeRepository(
     feedResults: List<HomeFeedResult<HomeFeedPage>>,
+    nearbyResults: List<HomeFeedResult<HomeFeedPage>> = emptyList(),
 ) : HomeRepository {
     private val feeds = ArrayDeque(feedResults)
+    private val nearby = ArrayDeque(nearbyResults)
     val offsets = mutableListOf<Int>()
+    val nearbyCalls = mutableListOf<Triple<Double, Double, Int>>()
 
     override suspend fun fetchFeed(
         session: AuthSession,
@@ -86,4 +120,16 @@ private class FakeHomeRepository(
         session: AuthSession,
         itemId: String,
     ): HomeFeedResult<ItemDetail> = error("Not used in this state-holder test.")
+
+    override suspend fun fetchNearby(
+        session: AuthSession,
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Double,
+        offset: Int,
+        limit: Int,
+    ): HomeFeedResult<HomeFeedPage> {
+        nearbyCalls += Triple(latitude, longitude, offset)
+        return nearby.removeFirst()
+    }
 }

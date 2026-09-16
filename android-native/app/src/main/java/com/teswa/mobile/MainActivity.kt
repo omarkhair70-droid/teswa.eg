@@ -44,6 +44,7 @@ import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.home.OracleHomeClient
+import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.shell.AppShell
 import com.teswa.mobile.ui.theme.TeswaTheme
 import kotlinx.coroutines.launch
@@ -60,6 +61,7 @@ class MainActivity : ComponentActivity() {
                         repository = container.authRepository,
                         accountGateRepository = container.accountGateRepository,
                         homeClient = container.homeClient,
+                        locationProvider = container.locationProvider,
                         addItemRepository = container.addItemRepository,
                         messagingRepository = container.messagingRepository,
                         offersRepository = container.offersRepository,
@@ -84,6 +86,7 @@ private fun TeswaAuthScreen(
     repository: AuthRepository,
     accountGateRepository: AccountGateRepository,
     homeClient: OracleHomeClient,
+    locationProvider: CurrentLocationProvider,
     addItemRepository: AddItemRepository,
     messagingRepository: MessagingRepository,
     offersRepository: OffersRepository,
@@ -121,6 +124,7 @@ private fun TeswaAuthScreen(
                     AppShell(
                         initialSession = readySession,
                         homeClient = homeClient,
+                        locationProvider = locationProvider,
                         addItemRepository = addItemRepository,
                         messagingRepository = messagingRepository,
                         offersRepository = offersRepository,

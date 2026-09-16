@@ -1,5 +1,9 @@
 package com.teswa.mobile.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.offers.OffersRepository
@@ -48,6 +54,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     initialSession: AuthSession,
     client: OracleHomeClient,
+    locationProvider: CurrentLocationProvider,
     offersRepository: OffersRepository,
     publicProfileRepository: PublicProfileRepository,
     storyRepository: StoryRepository,
@@ -66,9 +73,21 @@ fun HomeScreen(
     val holder = remember(initialSession.user.id, client) { HomeStateHolder(initialSession, client) }
     val storyHolder = remember(initialSession.user.id, storyRepository) { StoryStateHolder(initialSession, storyRepository) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
     var creatingStory by remember { mutableStateOf(false) }
     var managingStories by remember { mutableStateOf(false) }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants.values.any { it }) scope.launch { holder.enableNearby(locationProvider) }
+        else holder.showNotice("إذن الموقع اترفض. تقدر تكمل استخدام تِسوى عادي.")
+    }
+
+    fun requestNearby() {
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (coarse || fine) scope.launch { holder.enableNearby(locationProvider) }
+        else locationPermission.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+    }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -253,6 +272,21 @@ fun HomeScreen(
                             }
                         }
                         Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (holder.nearbyLocation == null) {
+                                OutlinedButton(enabled = !holder.locationWorking, onClick = ::requestNearby) {
+                                    Text(if (holder.locationWorking) "بنحدد موقعك…" else "الأقرب لي")
+                                }
+                            } else {
+                                Button(enabled = !holder.locationWorking, onClick = { scope.launch { holder.disableNearby() } }) {
+                                    Text("قريب مني · إلغاء")
+                                }
+                            }
+                        }
+                        holder.notice?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
 
@@ -266,6 +300,16 @@ fun HomeScreen(
 
                 items(current.items, key = { it.id }) { item ->
                     HomeFeedCard(item = item, onOpen = { holder.openItem(item.id) })
+                }
+
+                if (current.items.isEmpty()) {
+                    item {
+                        Text(
+                            "مفيش عناصر قريبة في النطاق ده حاليًا. جرّب ترجع لكل العناصر.",
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
                 }
 
                 if (current.hasMore) {

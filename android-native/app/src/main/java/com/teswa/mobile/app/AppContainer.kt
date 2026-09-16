@@ -21,6 +21,7 @@ import com.teswa.mobile.feature.contextual.OracleContextualRepository
 import com.teswa.mobile.feature.stories.OracleStoryRepository
 import com.teswa.mobile.feature.stories.AndroidStoryContentSource
 import com.teswa.mobile.feature.voice.OracleVoiceMediaRepository
+import com.teswa.mobile.home.AndroidLocationProvider
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -37,6 +38,7 @@ class AppContainer(context: Context) {
     )
 
     val homeClient = OracleHomeClient(authRepository, oracleTransport)
+    val locationProvider = AndroidLocationProvider(appContext)
 
     val addItemRepository = OracleAddItemRepository(
         authenticator = authRepository,

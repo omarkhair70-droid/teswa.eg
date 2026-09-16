@@ -93,6 +93,22 @@ class OracleHomeClientTest {
 
         assertEquals(ownerId, result.value.ownerId)
     }
+
+    @Test
+    fun nearbyUsesExactBoundedOracleContract() = runBlocking {
+        val transport = OneShotTransport(
+            OracleTransportResult.Response(OracleResponse(200, JSONObject("""{"items":[],"hasMore":false}"""))),
+        )
+        val client = OracleHomeClient(authenticator, transport)
+
+        val result = client.fetchNearby(session, 30.0444, 31.2357, radiusKm = 3.0, offset = 5, limit = 99)
+
+        assertTrue(result is HomeFeedResult.Success)
+        assertEquals(
+            "/v1/marketplace/nearby?latitude=30.0444&longitude=31.2357&radiusKm=3.0&limit=40&offset=5",
+            transport.request.path,
+        )
+    }
 }
 
 private class OneShotTransport(

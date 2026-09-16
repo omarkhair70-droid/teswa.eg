@@ -13,4 +13,13 @@ interface HomeRepository {
         session: AuthSession,
         itemId: String,
     ): HomeFeedResult<ItemDetail>
+
+    suspend fun fetchNearby(
+        session: AuthSession,
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Double = 3.0,
+        offset: Int = 0,
+        limit: Int = 20,
+    ): HomeFeedResult<HomeFeedPage> = HomeFeedResult.Failure("العناصر القريبة غير متاحة الآن.", session = session)
 }
