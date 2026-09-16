@@ -44,6 +44,7 @@ import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.reviews.ReviewRepository
 import kotlinx.coroutines.launch
 
 private enum class AppTab(
@@ -74,6 +75,7 @@ fun AppShell(
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
+    reviewRepository: ReviewRepository,
     launchRoute: String? = null,
     onLaunchRouteConsumed: () -> Unit = {},
     onSignOut: suspend () -> Unit,
@@ -205,6 +207,7 @@ fun AppShell(
                 directRepository = directRepository,
                 contextualRepository = contextualRepository,
                 voiceMediaRepository = voiceMediaRepository,
+                reviewRepository = reviewRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
                 initialDealId = externalDealId,

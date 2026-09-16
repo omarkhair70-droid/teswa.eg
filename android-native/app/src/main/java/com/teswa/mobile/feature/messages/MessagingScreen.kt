@@ -58,6 +58,8 @@ import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
+import com.teswa.mobile.feature.reviews.DealReviewCard
+import com.teswa.mobile.feature.reviews.ReviewRepository
 
 @Composable
 fun MessagingScreen(
@@ -67,6 +69,7 @@ fun MessagingScreen(
     directRepository: DirectRepository,
     contextualRepository: ContextualRepository,
     voiceMediaRepository: VoiceMediaRepository,
+    reviewRepository: ReviewRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
     initialDealId: String? = null,
@@ -136,7 +139,15 @@ fun MessagingScreen(
 
     val selected = holder.selectedConversation
     if (selected != null) {
-        DealThreadScreen(holder, selected, voiceMediaRepository, modifier)
+        DealThreadScreen(
+            holder = holder,
+            conversation = selected,
+            voiceMediaRepository = voiceMediaRepository,
+            reviewRepository = reviewRepository,
+            onSessionUpdated = onSessionUpdated,
+            onSessionExpired = onSessionExpired,
+            modifier = modifier,
+        )
         return
     }
 
@@ -324,6 +335,9 @@ private fun DealThreadScreen(
     holder: MessagingStateHolder,
     conversation: DealConversation,
     voiceMediaRepository: VoiceMediaRepository,
+    reviewRepository: ReviewRepository,
+    onSessionUpdated: (AuthSession) -> Unit,
+    onSessionExpired: suspend () -> Unit,
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -368,6 +382,17 @@ private fun DealThreadScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { DealCompletionCard(holder, conversation) }
+                if (conversation.status == "completed") {
+                    item {
+                        DealReviewCard(
+                            dealId = conversation.dealId,
+                            initialSession = holder.session,
+                            repository = reviewRepository,
+                            onSessionUpdated = { updated -> holder.updateSession(updated); onSessionUpdated(updated) },
+                            onSessionExpired = onSessionExpired,
+                        )
+                    }
+                }
                 if (state.messages.isEmpty()) item { ThreadWelcome(conversation) }
                 items(state.messages, key = { it.id }) { message ->
                     MessageBubble(

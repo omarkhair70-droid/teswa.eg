@@ -46,6 +46,7 @@ import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
+import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.home.OracleHomeClient
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.shell.AppShell
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
                         contextualRepository = container.contextualRepository,
                         storyRepository = container.storyRepository,
                         voiceMediaRepository = container.voiceMediaRepository,
+                        reviewRepository = container.reviewRepository,
                         launchRoute = pendingRoute,
                         onLaunchRouteConsumed = { pendingRoute = null },
                         activity = this@MainActivity,
@@ -117,6 +119,7 @@ private fun TeswaAuthScreen(
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
+    reviewRepository: ReviewRepository,
     launchRoute: String?,
     onLaunchRouteConsumed: () -> Unit,
     activity: ComponentActivity,
@@ -160,6 +163,7 @@ private fun TeswaAuthScreen(
                         contextualRepository = contextualRepository,
                         storyRepository = storyRepository,
                         voiceMediaRepository = voiceMediaRepository,
+                        reviewRepository = reviewRepository,
                         launchRoute = launchRoute,
                         onLaunchRouteConsumed = onLaunchRouteConsumed,
                         onSignOut = {
