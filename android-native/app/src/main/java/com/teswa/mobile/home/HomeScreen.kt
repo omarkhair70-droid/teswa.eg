@@ -322,13 +322,6 @@ fun HomeScreen(
                         }
                     }
                 }
-
-                item {
-                    OutlinedButton(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { scope.launch { onSignOut() } },
-                    ) { Text("تسجيل الخروج") }
-                }
             }
         }
     }
