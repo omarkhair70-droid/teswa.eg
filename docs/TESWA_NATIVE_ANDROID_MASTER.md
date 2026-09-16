@@ -1,145 +1,307 @@
 # Teswa Native Android Master
 
-This document is the living engineering handoff for the native Android replacement client. The Expo application remains a behavioral and product reference only until native parity and release acceptance are proven.
+This is the living engineering source of truth for the native Android replacement client. For the exact current server/runtime evidence and operator state, read `docs/TESWA_NATIVE_ANDROID_MASTER_HANDOFF_2026-09-17.md` and `docs/TESWA_NATIVE_ANDROID_CURRENT_CHECKPOINT_2026-09-17.md` first.
 
 ## Identity and release invariants
 
 - Repository: `omarkhair70-droid/teswa.eg`
-- Canonical integration branch: `chore/oracle-runtime-cutover-prep-20260910`
+- Canonical/base branch: `chore/oracle-runtime-cutover-prep-20260910`
+- Active native branch: `feat/native-foundation-network-20260915`
+- Active PR: #523 — intentionally open/unmerged until explicit acceptance
 - Native project: `android-native/`
-- Package and application ID: `com.teswa.mobile`
-- Current version: `versionCode 26`, `versionName 1.0.11`
+- Package/application ID: `com.teswa.mobile`
+- Release: `versionCode 26`, `versionName 1.0.11`
 - Toolchain: JDK 17, Gradle 9.6.0 in CI, Kotlin 2.3.21, Android Gradle Plugin 9.4.0
-- A production AAB must use the existing Play signing identity and must update the installed Teswa app without uninstalling it.
-- Native runtime code must not depend on Expo, Expo Updates, or Supabase.
+- Existing Google Play signing/upload identity must be preserved.
+- Native runtime code must not depend on Expo, Expo Updates, React Native, or Supabase.
+- Never merge #523 unless Omar explicitly asks.
 
-## Current native architecture
+Verified Google Play upload certificate SHA-256:
 
-`AppContainer` is the composition root. It owns the shared Oracle transport and constructs authentication, account-gate, and marketplace clients.
+`9E:CE:E2:66:79:C8:7D:4F:6F:51:39:F1:96:7F:ED:20:01:06:C6:C0:FE:42:49:A8:31:8E:F8:84:90:FC:B7:F1`
 
-The current package responsibilities are:
+No JKS, password, Firebase private key, OAuth token, or production secret belongs in Git.
 
-- `app/`: application composition and, as migration continues, app/navigation state.
-- `core/network/`: centralized Oracle base URL, timeouts, headers, JSON decoding, transport failures, authenticated execution, one refresh and one retry after HTTP 401.
-- `auth/`: Google Credential Manager, Oracle auth exchange, encrypted session storage, refresh coordination, restore, and logout.
-- `account/`: profile-completeness and required-policy gate.
-- `home/`: marketplace feed, optional permission-aware nearby discovery, pagination, item detail models and UI.
-- `feature/additem/`: listing draft recovery, media selection/upload, publish orchestration, and native creation UI.
-- `feature/messages/`: deal inbox, chronological text/voice conversation, read state, reconnect polling, and composer state.
-- `feature/direct/`: privacy-aware compose entry, first-message requests, inbox, accept/ignore, read state, and text/voice conversation.
-- `feature/contextual/`: story-context reply inbox, chronological text/voice threads, read state, notification dispatch, and reconnect polling.
-- `feature/stories/`: home story rail, signed image/video viewer, view/like mutations, contextual text/voice replies, streaming publish, and owned-story management.
-- `feature/voice/`: permission-aware AAC capture, review/cancel/send state, streaming private-media upload/cleanup, signed playback, and shared voice UI.
-- `feature/offers/`: offer creation, incoming/sent inbox, receiver decisions, and accepted-deal routing.
-- `feature/profile/`: own-profile editing, streaming avatar/cover replacement and cleanup, public trust/badge presentation, owned-listing presentation, and guarded listing lifecycle actions.
-- `feature/settings/`: direct-message privacy, notification preferences, block-list management, sign-out, and confirmed account deletion.
-- `feature/notifications/`: in-app activity center, unread mutation, Firebase Installation ID registration, permission-aware native push display, native destination mapping, and best-effort domain-event dispatch.
-- `feature/reviews/`: completed-deal review context, identity-bound rating submission, qualitative trust signals, and existing-review presentation.
-- `shell/`: authenticated bottom-navigation shell plus validated internal, `teswa://`, and Teswa HTTPS route handling.
-- `ui/`: shared UI utilities and the first Teswa light/dark color, type, and shape system; this grows through real native screens rather than an Expo visual port.
+## Product / architecture rule
 
-New features should move toward `feature/<name>/` as they are added or materially refactored. Existing packages should be moved only in coherent slices; package churn alone is not useful architecture.
+The migration is **not a port**.
 
-## Networking and session contract
+- Expo = behavioral/product reference only.
+- Oracle backend = durable data/business truth.
+- Native Android = best new implementation of the user job.
 
-All Oracle API traffic uses the shared `OracleTransport` boundary. The default implementation owns:
+Architecture:
 
-- `BuildConfig.TESWA_API_BASE_URL`
-- 8-second connect and 12-second read timeouts
-- JSON request/response handling
-- `Accept`, `Content-Type`, `Authorization`, and native `User-Agent` headers
-- explicit offline, timeout, I/O, and invalid-JSON outcomes
+`Repository/API/data -> StateHolder/ViewModel -> Compose UI`
 
-Authenticated requests run through `AuthenticatedOracleExecutor`:
+Rules:
 
-1. ensure the supplied access token is usable;
-2. send the Oracle request;
-3. on the first 401, refresh once and persist rotated tokens;
-4. retry the original request once with the rotated access token;
-5. return a session-expired result if refresh is invalid, or the second response without another retry.
+- no networking in Composables;
+- one shared Oracle transport/authenticated executor;
+- exactly one centralized session refresh + one retry after HTTP 401;
+- feature-oriented packages;
+- shared media/voice/network primitives;
+- Android owns device/UX responsibilities, Oracle owns business/data authority;
+- no provider-specific transport/storage logic scattered across screens.
 
-Refresh is mutex-protected. Concurrent feature requests reuse a newly rotated stored session instead of racing multiple refresh calls. Network failures do not clear an otherwise valid local session and must not be reported as Google-provider failures.
+## Current native packages
 
-## Migrated features and Oracle contracts
+`AppContainer` is the composition root. Important packages include:
 
-| Native feature | Status | Oracle endpoints |
-| --- | --- | --- |
-| Google sign-in and session | Implemented; real-device acceptance remains open | `POST /v1/auth/google`, `POST /v1/auth/refresh`, `GET /v1/auth/session`, `POST /v1/auth/logout` |
-| Profile completeness gate | Implemented | `GET /v1/profiles/me`, `POST /v1/profiles/setup` |
-| Required-policy gate | Implemented | `GET /v1/policies/acceptances`, `POST /v1/policies/acceptances` |
-| Home marketplace feed | Implemented | `GET /v1/marketplace/feed` |
-| Nearby marketplace discovery | Implemented locally; device acceptance remains open | `GET /v1/marketplace/nearby`, one-shot coarse/fine native location |
-| Item detail and images | Implemented | `GET /v1/marketplace/items/{itemId}/detail` |
-| Add Item publishing | Implemented locally; device/production acceptance remains open | categories, media grant/PUT/complete/cleanup, marketplace publish |
-| Deal inbox, text/voice coordination, and completion | Implemented locally; realtime/device acceptance remains open | deal inbox/messages/read, voice upload/signed playback, confirmations, complete-if-ready, completion notifications |
-| Direct and contextual messaging | Implemented locally; device acceptance remains open | direct compose/inbox/requests/read/text/voice, contextual inbox/thread/read/text/voice/notification dispatch |
-| Stories | Implemented locally; device acceptance remains open | home groups, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewers, delete |
-| Offer inbox and receiver decisions | Implemented locally; notification/device acceptance remains open | offer lists, thinking, soft reject, accept |
-| Offer creation from item detail | Implemented locally; notification/device acceptance remains open | item validation, block state, owned items, create offer |
-| Own/public profiles and listing lifecycle | Implemented locally; device acceptance remains open | own/public profile, avatar/cover media, public trust metrics/badges, completed-deal review authoring, owner active listings, follow/block state and actions, listing lifecycle |
-| Settings and account controls | Implemented locally; push permission/device acceptance remains open | profile privacy, notification preferences, blocked users/unblock, account deletion |
-| In-app notifications and native push | Implemented locally; server credential/deployment and device/background acceptance remain open | list, read, read-all, device register/disable, FCM data delivery, native tap routes, domain dispatch |
-| Authenticated app shell | Implemented foundation | No direct endpoint |
+- `core/network/` — base URL, transport, errors, authenticated execution;
+- `auth/` — Google Credential Manager, Oracle exchange, encrypted sessions, refresh/logout;
+- `account/` — profile/policy gates;
+- `home/` — feed, item detail, Nearby/location;
+- `feature/additem/` — draft/media/publish;
+- `feature/offers/` — offer creation/inbox/decisions;
+- `feature/messages/`, `feature/direct/`, `feature/contextual/` — deal/direct/story-context conversations;
+- `feature/voice/` — shared AAC capture/upload/playback;
+- `feature/stories/` — rail/view/create/reply/manage;
+- `feature/profile/` — own/public profile, social connections, media, trust, listing lifecycle;
+- `feature/reviews/` — completed-deal reviews/trust signals;
+- `feature/settings/` — privacy, notifications, blocks, signout/deletion;
+- `feature/notifications/` — center, registration, display/tap routes;
+- `feature/discover/`, `feature/people/`, `feature/motion/` — discovery world;
+- `feature/dolab/` — private object workspace / marketplace bridge;
+- `feature/safety/` — reporting;
+- `shell/` — five-tab shell and validated native/custom/HTTPS routes;
+- `ui/` — shared Teswa visual primitives.
 
-## Add Item contract and native implementation
+## Native product scope — Git side closed
 
-The legacy screen establishes useful behavior, not a layout to copy. The native screen's primary job is to help a user publish a trustworthy swap listing with the least uncertainty. The implemented native flow uses three focused stages: identity and images, honest condition and useful detail, then swap intent and optional human context. It has a distinct native presentation rather than reproducing the legacy six-step layout.
+The planned product rewrite scope is implemented. Closed slices include:
 
-The existing Oracle contract must be reused:
+- Auth/session/account gates
+- Home + Item Detail
+- Add Item
+- Offers + Deals + Reviews
+- Direct/Contextual Messaging + shared Voice
+- Stories
+- Profile/Public Profile + Follow/Block + Followers/Following
+- Settings
+- Notification Center + FCM foundation
+- Nearby/location
+- Discover 2.0 + People + Motion/City Pulse
+- Dolab Native 2.0
+- Edit Listing Native
+- Trust & Safety / Reporting
+- final Home/navigation/state cleanup
 
-- `GET /v1/marketplace/categories`
-- `POST /v1/media/uploads` to obtain an upload grant
-- `PUT` to the granted object URL with a known content type and byte length
-- `POST /v1/media/uploads/complete` to verify the object and obtain its public URL
-- `DELETE /v1/media/objects` for compensating cleanup
-- `POST /v1/marketplace/items` with the existing exact publish payload
-- optional `POST /v1/marketplace/items/{itemId}/wanted-tags`
-- optional `POST /v1/marketplace/items/{itemId}/video`
-- failure compensation through `POST /v1/marketplace/items/{itemId}/publish-failed` and image cleanup
+Do not reopen a product slice without a concrete device or production failure.
 
-Publish invariants already enforced by Oracle include one to eight HTTPS images, first image as the sole primary image, stable sort order, four supported condition values, three desire modes, UUID ownership, bounded text, and owned object keys. Native validation should prevent avoidable requests but must not weaken server validation.
+## Shared networking/session contract
 
-The Android implementation currently accepts up to four persisted gallery documents or camera captures, resolves real MIME type and byte length, streams each object with fixed `Content-Length`, reports per-image progress, and supports user cancellation. A cancellation or failed publish performs best-effort compensating object cleanup while keeping the local draft. Text, optional one-shot coordinates, and media metadata are recovered per signed-in user after process restart; gallery access uses persistable URI grants. Manually changing city or area clears captured coordinates so stale GPS data cannot silently disagree with the visible place.
+All Oracle API traffic goes through the shared `OracleTransport` boundary. The default implementation owns:
 
-## Native product and visual direction
+- `BuildConfig.TESWA_API_BASE_URL`;
+- connect/read timeouts;
+- JSON request/response handling;
+- `Accept`, `Content-Type`, `Authorization`, and native `User-Agent` headers;
+- explicit offline/timeout/I/O/invalid-response outcomes.
 
-The native client is Arabic-first and RTL-first. It should use an intentional Teswa system for type hierarchy, spacing, surfaces, cards, actions, navigation, media, motion, feedback, and loading/empty/error/offline states. Material 3 is the implementation substrate, not the visual identity.
+Authenticated requests use `AuthenticatedOracleExecutor`:
 
-Before a major screen is built, record its user job, information priority, primary interaction, and removable complexity. Do not reproduce Expo layouts, Facebook Marketplace, Dubizzle, or generic Material samples.
+1. use the supplied/stored session;
+2. send the request;
+3. on first HTTP 401, refresh once and persist rotated tokens;
+4. retry the original request exactly once;
+5. return the second response/session-expired result without looping.
 
-## Migration checklist
+Refresh is mutex-protected so concurrent features do not race multiple token rotations.
+
+## Release endpoint boundary
+
+Historical compile/test fallback:
+
+`https://130-110-122-142.sslip.io`
+
+That host is rehearsal history, not implicit production authority.
+
+Current intended public cutover hostname:
+
+`https://core01.tail6afd9b.ts.net`
+
+Observed 2026-09-17 routing:
+
+`Tailscale Funnel -> 127.0.0.1:4140 cutover gateway -> Auth 3110 / Domain 3130 / Realtime 3120`
+
+Public `/healthz` and `/v1/auth/healthz` returned HTTP 200 after the earlier transient DNS incident. Re-check immediately before final release and then supply the explicitly accepted HTTPS URL as `TESWA_RELEASE_API_BASE_URL`.
+
+Never hardcode observed Funnel edge IPs.
+
+## Oracle database authority
+
+Current clean cutover target:
+
+`teswa_cutover_20260913`
+
+Historical rehearsal DB:
+
+`teswa_rehearsal`
+
+The final DB closure already occurred around 2026-09-13 and later fixes explicitly refer to post-final-closure state. Do not blindly rerun the old final refresh and do not merge row differences between rehearsal/cutover without a new evidence-backed migration plan.
+
+Systemd cutover services use the cutover DB. Older Docker/canary components can still use rehearsal and remain rollback/staging history until final acceptance.
+
+## Push / FCM architecture and current server state
+
+Business notification truth remains Oracle-owned. FCM/Expo are delivery couriers.
+
+The current push worker supports both:
+
+- legacy Expo push registrations;
+- native Android `fcm:` registrations through FCM HTTP v1.
+
+Firebase project:
+
+- project ID `teswa-7d052`
+- Android package `com.teswa.mobile`
+
+Core external secret path:
+
+`/etc/teswa/fcm-service-account.json`
+
+The secret is not committed. Live observed permissions are `root:teswapush 0640`.
+
+Server-side validation completed:
+
+- upgraded worker health: providers Expo + FCM, `fcmConfigured=true`;
+- Firebase OAuth acquisition: PASS;
+- FCM HTTP v1 `validate_only=true`: HTTP 200 PASS;
+- validation delivered no notification and did not touch the outbox.
+
+The cutover push daemon is intentionally **inactive + disabled** until activation. Do not run it on the cutover DB with `TESWA_PUSH_SEND_ENABLED=0`, because claimed jobs would be marked skipped.
+
+At the last device inventory there were 52 legacy Expo registrations / 50 active and zero native `fcm:` registrations. Physical-device registration/delivery/tap acceptance remains open.
+
+Operator helpers:
+
+- `scripts/oci-migration/cutover-runtime-evidence.sh`
+- `scripts/oci-migration/push-cutover-activation-gate.sh`
+
+The older `scripts/oci-migration/push-shadow-guest-deploy.sh` is rehearsal-only and must not be treated as production activation.
+
+## Persistent cutover gateway source
+
+The manually proven Core gateway is now codified in Git:
+
+- `scripts/oci-migration/runtime-source/api-shell/cutover_gateway.py`
+- `scripts/oci-migration/systemd/teswa-api-cutover.service`
+
+It wraps the canonical `shadow_gateway.Server` and pins the systemd cutover upstream ports. The Funnel terminates TLS outside the Python gateway.
+
+The gateway base health field `productionTraffic:false` is historical/hardcoded metadata, not a live route selector. Use routing + downstream health evidence to prove which stack is active.
+
+## Auth release boundary
+
+Current public Auth health is otherwise healthy but reports:
+
+`confirmationDispatchConfigured:false`
+
+Email confirmation delivery remains an explicit release blocker and is independent of Firebase push credentials.
+
+## Add Item / media contract
+
+Native Add Item reuses Oracle-owned media/publish contracts rather than legacy Supabase paths:
+
+- category lookup;
+- upload grant;
+- fixed-length PUT;
+- upload complete/verification;
+- compensating object cleanup;
+- exact marketplace publish contract;
+- optional wanted tags/video;
+- publish-failed compensation.
+
+Native media flows stream bytes, expose progress/cancellation, preserve draft recovery, and avoid guessing deletion of unowned/external objects.
+
+## Release acceptance checklist
 
 - [x] Native project and Play package identity
-- [x] Google Credential Manager to Oracle auth exchange
-- [x] Encrypted native session persistence
-- [x] Central refresh ownership and single retry after 401
-- [x] Profile and policy account gates
-- [x] Authenticated shell and bottom-navigation foundation
-- [x] Home feed, images, pagination, and item detail
-- [x] Native visual-system foundation: calm Teswa color, type, shape, light, and dark tokens
-- [ ] Final navigation architecture and feature-level reusable components
-- [x] Add Item: image selection/camera, streaming upload, validation, publish, retry, progress, cancellation, cleanup, and draft recovery
-- [ ] Messages, offers, deals, unread state, and reconnect behavior (deal/direct/contextual text and voice upload, cleanup, signed playback, offer/request/read, notifications, and polling implemented locally; physical-device and production acceptance remain)
-- [ ] Own/other profile, profile editing, avatar, and listing lifecycle (own/public profiles, social actions, text editing, streaming avatar/cover replace/remove/cleanup, public trust metrics/badges, completed-deal review authoring, and listing lifecycle implemented; own-profile trust summary and physical-device media acceptance remain)
-- [ ] Stories required by the current product (home rail, signed image/video viewer, view/like, contextual text/voice reply, gallery/camera create, streaming publish/cleanup, counts, owner viewer list, manage, and delete implemented locally; physical-device and production acceptance remain)
-- [ ] In-app notifications, Android push, and tap routing (center, unread/read-all, Firebase Installation ID register/disable, dual Expo/FCM worker routing, local display, and item/deal/offer/profile/direct/contextual routes implemented; FCM service-account provisioning, deployment, and physical-device background acceptance remain)
-- [ ] Nearby/location flows (optional one-shot native permission/location, 3 km Oracle nearby feed, and Add Item coordinate publishing implemented locally; physical-device acceptance remains)
-- [x] Settings and account controls: messaging privacy, notification preferences, blocked users, sign-out, and confirmed deletion
-- [ ] Deep links and background/lifecycle behavior (validated native/custom/HTTPS route parsing and single-top delivery implemented; verified App Links and killed-process/device acceptance remain)
-- [ ] Release AAB with existing Play signing identity
-- [ ] Real-device login, restore, refresh, media, and critical-flow smoke
-- [ ] Production Oracle end-to-end acceptance and controlled cutover evidence
+- [x] Google Credential Manager -> Oracle auth exchange
+- [x] Encrypted session persistence + centralized refresh/retry
+- [x] Profile/policy account gates
+- [x] Native shell/navigation/product routes
+- [x] Home/Discover/Nearby/People/Motion
+- [x] Add Item + media/publish orchestration
+- [x] Offers/Deals/Reviews
+- [x] Direct/Contextual Messaging + shared Voice
+- [x] Stories
+- [x] Own/Public Profile + media/social/trust
+- [x] Settings/account controls
+- [x] Dolab Native 2.0 + bridges
+- [x] Edit Listing
+- [x] Reporting + Followers/Following
+- [x] Play upload-key certificate verified
+- [x] Persistent cutover gateway installed/proven
+- [x] Public Funnel DNS/health currently reachable
+- [x] FCM service-account provisioned outside Git
+- [x] FCM OAuth passed
+- [x] FCM HTTP v1 validate-only passed
+- [ ] Auth confirmation dispatch configured and accepted
+- [ ] Final explicit production endpoint acceptance for `TESWA_RELEASE_API_BASE_URL`
+- [ ] Signed v26 AAB through release gate
+- [ ] Google Play Internal update over existing install
+- [ ] Native `fcm:` registration observed on cutover DB
+- [ ] Cutover push worker activated with outbound send enabled
+- [ ] Foreground/background/killed-process push delivery + tap route verified
+- [ ] Real-device critical-flow smoke
+- [ ] Oracle production end-to-end acceptance + rollback evidence
+- [ ] Intentional merge/cutover
+- [ ] Separate legacy mobile cleanup PR
 
-## Known blockers and acceptance boundaries
+## Release helpers
 
-- Local unit tests and `assembleDebug` do not prove Google provider, physical-device, Play-update, sender/inbox, OCI deployment, or production acceptance.
-- Public Oracle/Edge and full production cutover evidence must be checked independently; Supabase remains the production and rollback authority until an explicitly approved cutover.
-- The Oracle push worker now preserves Expo delivery while routing `fcm:` devices through FCM HTTP v1 using Firebase Installation IDs. Outbound send remains rehearsal-disabled, no service-account secret is committed, and production FCM delivery is not accepted until the credential is provisioned outside the repository and a physical-device send/tap is observed.
-- The visual-system foundation exists, but feature-level primitives and the final navigation presentation are still incomplete.
-- Add Item image upload now streams bytes safely and exposes progress/cancellation; physical-device camera/gallery behavior and production object upload remain acceptance gates. Reading large video files wholly into memory is not an acceptable future implementation.
-- Profile avatar and cover changes use the same owned Oracle media boundary, fixed-length streaming, post-save old-object cleanup, and no guessed deletion of legacy external URLs; camera/gallery and production object-storage acceptance remain open.
-- `lintDebug` is green with baseline warnings that still need deliberate release work: target API review, Credential Manager mutable-context handling, application icon/data-extraction rules, KTX preferences cleanup, and dependency update review.
+Signed AAB:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android-native\scripts\release-gate.ps1
+```
+
+Physical-device evidence after Play Internal install/update:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android-native\scripts\device-smoke.ps1
+```
+
+Server evidence:
+
+```bash
+bash scripts/oci-migration/cutover-runtime-evidence.sh
+```
+
+Push status/preflight:
+
+```bash
+bash scripts/oci-migration/push-cutover-activation-gate.sh status
+bash scripts/oci-migration/push-cutover-activation-gate.sh preflight
+```
+
+The activation mode is deliberately guarded and should only be used after a real native FCM registration exists and the operator intentionally confirms the cutover DB.
+
+## Acceptance boundaries
+
+Green CI/compile does not prove:
+
+- Google provider behavior on the release device;
+- Play update-over-installed-app;
+- physical camera/gallery/location/voice behavior;
+- real background/killed push delivery;
+- notification tap/deep-link behavior;
+- production media/message writes;
+- final Oracle rollback/cutover acceptance.
+
+Do not declare those accepted until empirical evidence exists.
 
 ## Expo removal criteria
 
-Remove or archive Expo only in a separate final cleanup PR after every required checklist item is native, the release AAB is signed with the existing Play identity, the update path is tested without uninstalling, real-device critical flows pass, production Oracle behavior is accepted, deep links/notifications/background behavior are covered, and rollback is documented. That cleanup PR may then remove Expo runtime/build dependencies, Expo Updates, obsolete Supabase mobile code, and stale documentation.
+Legacy Expo/React Native/Supabase mobile runtime remains rollback history until all release acceptance gates pass. Remove/archive it only in a **separate final cleanup PR** after:
+
+- signed v26 AAB;
+- Play Internal update over the existing app;
+- real-device critical flows;
+- production Oracle acceptance;
+- push/deep-link/background acceptance;
+- rollback evidence.
+
+Preserve git history. The target is controlled retirement, not pretending the legacy runtime never existed.
