@@ -3,6 +3,10 @@ package com.teswa.mobile.feature.stories
 import com.teswa.mobile.auth.AuthResult
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.auth.SessionAuthenticator
+import com.teswa.mobile.core.media.BinaryUploadRequest
+import com.teswa.mobile.core.media.BinaryUploadResult
+import com.teswa.mobile.core.media.BinaryUploader
+import com.teswa.mobile.core.media.StreamingBinaryUploader
 import com.teswa.mobile.core.network.AuthenticatedOracleExecutor
 import com.teswa.mobile.core.network.AuthenticatedOracleResult
 import com.teswa.mobile.core.network.HttpUrlConnectionOracleTransport
@@ -10,6 +14,9 @@ import com.teswa.mobile.core.network.OracleHttpMethod
 import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleTransport
 import org.json.JSONObject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 interface StoryRepository {
     suspend fun loadHome(session: AuthSession): StoryResult<List<StoryGroup>>
@@ -17,11 +24,23 @@ interface StoryRepository {
     suspend fun markViewed(session: AuthSession, storyId: String): StoryResult<Unit>
     suspend fun setLiked(session: AuthSession, storyId: String, liked: Boolean): StoryResult<Boolean>
     suspend fun reply(session: AuthSession, storyId: String, body: String): StoryResult<StoryReplyReceipt>
+    suspend fun publish(
+        session: AuthSession,
+        draft: StoryDraft,
+        onProgress: (StoryPublishProgress) -> Unit,
+    ): StoryResult<String>
+    suspend fun loadOwned(session: AuthSession): StoryResult<List<ManagedStory>>
+    suspend fun deleteOwned(
+        session: AuthSession,
+        story: StoryRecord,
+    ): StoryResult<StoryDeleteOutcome>
 }
 
 class OracleStoryRepository(
     authenticator: SessionAuthenticator,
     transport: OracleTransport = HttpUrlConnectionOracleTransport(),
+    private val contentSource: StoryContentSource = StoryContentSource { error("Story content source is unavailable.") },
+    private val binaryUploader: BinaryUploader = StreamingBinaryUploader(),
 ) : StoryRepository {
     private val executor = AuthenticatedOracleExecutor(authenticator, transport)
 
@@ -163,6 +182,321 @@ class OracleStoryRepository(
         }
     }
 
+    override suspend fun publish(
+        session: AuthSession,
+        draft: StoryDraft,
+        onProgress: (StoryPublishProgress) -> Unit,
+    ): StoryResult<String> {
+        draft.validate()?.let { return StoryResult.Failure(it, session) }
+        val media = requireNotNull(draft.media)
+        val objectKey = "${session.user.id}/${java.util.UUID.randomUUID()}.${extension(media)}"
+        val objectBody = mediaObject(objectKey, media.contentType, media.sizeBytes)
+        var activeSession = session
+        var granted = false
+        try {
+            val grant = executor.execute(
+                activeSession,
+                OracleRequest(OracleHttpMethod.POST, "/v1/media/uploads", objectBody),
+            )
+            val uploadUrl = when (grant) {
+                is AuthenticatedOracleResult.Response -> {
+                    activeSession = grant.session
+                    if (grant.value.status == 401) return expired(grant.session)
+                    if (grant.value.status != 201) {
+                        return StoryResult.Failure("تعذر تجهيز رفع القصة (${grant.value.status}).", grant.session)
+                    }
+                    grant.value.body.optString("uploadUrl").takeIf { it.startsWith("https://") }
+                        ?: return StoryResult.Failure("الخادم أعاد تصريح رفع غير صالح.", grant.session)
+                }
+                else -> return grant.failure("تعذر تجهيز رفع القصة الآن.")
+            }
+            granted = true
+            val upload = binaryUploader.upload(
+                BinaryUploadRequest(
+                    uploadUrl = uploadUrl,
+                    contentType = media.contentType,
+                    sizeBytes = media.sizeBytes,
+                    openStream = { contentSource.open(media) },
+                    onProgress = { sent, total ->
+                        val percent = if (total <= 0L) 0 else ((sent * 100L) / total).toInt().coerceIn(0, 100)
+                        onProgress(StoryPublishProgress.Uploading(percent))
+                    },
+                ),
+            )
+            if (upload is BinaryUploadResult.Failure) {
+                onProgress(StoryPublishProgress.CleaningUp)
+                val cleaned = cleanup(activeSession, objectBody)
+                return StoryResult.Failure(
+                    if (cleaned.second) "تعذر رفع وسائط القصة. حاول تاني."
+                    else "تعذر رفع القصة وتنظيف الملف المؤقت بأمان.",
+                    cleaned.first,
+                    network = upload.retryable,
+                )
+            }
+            when (
+                val complete = executor.execute(
+                    activeSession,
+                    OracleRequest(OracleHttpMethod.POST, "/v1/media/uploads/complete", objectBody),
+                )
+            ) {
+                is AuthenticatedOracleResult.Response -> {
+                    activeSession = complete.session
+                    if (complete.value.status == 401) {
+                        cleanup(activeSession, objectBody)
+                        return expired(activeSession)
+                    }
+                    if (complete.value.status != 200 || complete.value.body.optString("objectKey") != objectKey) {
+                        cleanup(activeSession, objectBody)
+                        return StoryResult.Failure("تعذر تثبيت وسائط القصة.", activeSession)
+                    }
+                }
+                else -> {
+                    val failure = complete.failure("تعذر تثبيت وسائط القصة الآن.")
+                    val cleaned = cleanup(failure.session ?: activeSession, objectBody)
+                    return failure.copy(session = cleaned.first)
+                }
+            }
+            onProgress(StoryPublishProgress.Saving)
+            val createBody = JSONObject()
+                .put("userId", activeSession.user.id)
+                .put("mediaType", media.mediaType)
+                .put("mediaStoragePath", objectKey)
+                .put("mediaThumbnailStoragePath", JSONObject.NULL)
+                .putNullable("caption", draft.caption.trim().takeIf(String::isNotEmpty))
+                .putNullable("durationMs", if (media.mediaType == "video") media.durationMs else null)
+                .putNullable("width", media.width)
+                .putNullable("height", media.height)
+            return when (
+                val create = executor.execute(
+                    activeSession,
+                    OracleRequest(OracleHttpMethod.POST, "/v1/stories", createBody),
+                )
+            ) {
+                is AuthenticatedOracleResult.Response -> {
+                    activeSession = create.session
+                    val storyId = create.value.body.optString("storyId").validId()
+                    if (create.value.status == 201 && storyId != null) {
+                        StoryResult.Success(storyId, activeSession)
+                    } else {
+                        onProgress(StoryPublishProgress.CleaningUp)
+                        val cleaned = cleanup(activeSession, objectBody)
+                        StoryResult.Failure("تم رفع الوسائط لكن تعذر نشر القصة.", cleaned.first)
+                    }
+                }
+                else -> {
+                    val failure = create.failure("تعذر نشر القصة الآن.")
+                    onProgress(StoryPublishProgress.CleaningUp)
+                    val cleaned = cleanup(failure.session ?: activeSession, objectBody)
+                    failure.copy(session = cleaned.first)
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            if (granted) withContext(NonCancellable) { cleanup(activeSession, objectBody) }
+            throw cancelled
+        }
+    }
+
+    override suspend fun loadOwned(session: AuthSession): StoryResult<List<ManagedStory>> {
+        var activeSession = session
+        val stories: List<StoryRecord> = when (
+            val result = executor.execute(
+                activeSession,
+                OracleRequest(path = "/v1/stories/users/${session.user.id}/active"),
+            )
+        ) {
+            is AuthenticatedOracleResult.Response -> {
+                activeSession = result.session
+                if (result.value.status == 401) return expired(result.session)
+                val raw = result.value.body.optJSONArray("items")
+                    ?: return StoryResult.Failure("استجابة قصصك غير مكتملة.", result.session)
+                buildList<StoryRecord> {
+                    for (index in 0 until raw.length()) {
+                        val parsed = raw.optJSONObject(index)?.let(::story)
+                        if (parsed != null) add(parsed)
+                    }
+                }
+            }
+            else -> return result.failure("تعذر تحميل قصصك الآن.")
+        }
+        if (stories.isEmpty()) return StoryResult.Success(emptyList(), activeSession)
+        val ids = stories.joinToString(",") { it.id }
+        var viewCounts: Map<String, Int>? = null
+        var likeCounts: Map<String, Int>? = null
+        when (
+            val result = executor.execute(
+                activeSession,
+                OracleRequest(path = "/v1/stories/views/counts?ids=$ids"),
+            )
+        ) {
+            is AuthenticatedOracleResult.Response -> {
+                activeSession = result.session
+                if (result.value.status == 401) return expired(result.session)
+                if (result.value.status == 200) viewCounts = result.value.body.optJSONObject("values")?.let(::intMap)
+            }
+            is AuthenticatedOracleResult.SessionFailure ->
+                return StoryResult.Failure(
+                    result.failure.message,
+                    unauthorized = result.failure.reason == AuthResult.Reason.SESSION_EXPIRED,
+                )
+            else -> Unit
+        }
+        when (
+            val result = executor.execute(
+                activeSession,
+                OracleRequest(path = "/v1/stories/likes/counts?ids=$ids"),
+            )
+        ) {
+            is AuthenticatedOracleResult.Response -> {
+                activeSession = result.session
+                if (result.value.status == 401) return expired(result.session)
+                if (result.value.status == 200) likeCounts = result.value.body.optJSONObject("values")?.let(::intMap)
+            }
+            is AuthenticatedOracleResult.SessionFailure ->
+                return StoryResult.Failure(
+                    result.failure.message,
+                    unauthorized = result.failure.reason == AuthResult.Reason.SESSION_EXPIRED,
+                )
+            else -> Unit
+        }
+        val managed = mutableListOf<ManagedStory>()
+        for (story in stories) {
+                val signBody = JSONObject()
+                    .put("purpose", "story_media")
+                    .put("objectKey", story.mediaStoragePath)
+                    .put("contentType", JSONObject.NULL)
+                    .put("sizeBytes", 1)
+                    .put("expiresInSeconds", 3_600)
+                val signedUrl = when (
+                    val result = executor.execute(
+                        activeSession,
+                        OracleRequest(OracleHttpMethod.POST, "/v1/media/signed-url", signBody),
+                    )
+                ) {
+                    is AuthenticatedOracleResult.Response -> {
+                        activeSession = result.session
+                        if (result.value.status == 401) return expired(result.session)
+                        result.value.body.optString("signedUrl").takeIf {
+                            result.value.status == 200 && it.startsWith("https://")
+                        }
+                    }
+                    is AuthenticatedOracleResult.SessionFailure ->
+                        return StoryResult.Failure(
+                            result.failure.message,
+                            unauthorized = result.failure.reason == AuthResult.Reason.SESSION_EXPIRED,
+                        )
+                    else -> null
+                }
+            managed += ManagedStory(story, signedUrl, viewCounts?.get(story.id), likeCounts?.get(story.id))
+        }
+        return StoryResult.Success(managed, activeSession)
+    }
+
+    override suspend fun deleteOwned(
+        session: AuthSession,
+        story: StoryRecord,
+    ): StoryResult<StoryDeleteOutcome> {
+        val id = story.id.validId() ?: return StoryResult.Failure("معرّف القصة غير صالح.", session)
+        return when (
+            val result = executor.execute(
+                session,
+                OracleRequest(
+                    OracleHttpMethod.POST,
+                    "/v1/stories/$id/delete",
+                    JSONObject().put("userId", session.user.id),
+                ),
+            )
+        ) {
+            is AuthenticatedOracleResult.Response -> when (result.value.status) {
+                200 -> {
+                    val raw = result.value.body.optJSONArray("storagePaths")
+                        ?: return StoryResult.Failure("استجابة حذف القصة غير مكتملة.", result.session)
+                    val paths = buildList {
+                        for (index in 0 until raw.length()) {
+                            raw.optString(index).trim().takeIf(String::isNotEmpty)?.let(::add)
+                        }
+                    }
+                    if (paths.isEmpty()) {
+                        StoryResult.Success(StoryDeleteOutcome(true), result.session)
+                    } else {
+                        val objects = org.json.JSONArray()
+                        paths.forEach { path ->
+                            objects.put(
+                                JSONObject()
+                                    .put("purpose", "story_media")
+                                    .put("objectKey", path)
+                                    .put("contentType", JSONObject.NULL)
+                                    .put("sizeBytes", JSONObject.NULL),
+                            )
+                        }
+                        when (
+                            val cleanup = executor.execute(
+                                result.session,
+                                OracleRequest(
+                                    OracleHttpMethod.DELETE,
+                                    "/v1/media/objects",
+                                    JSONObject().put("objects", objects),
+                                ),
+                            )
+                        ) {
+                            is AuthenticatedOracleResult.Response ->
+                                StoryResult.Success(
+                                    StoryDeleteOutcome(
+                                        cleanup.value.status == 200 &&
+                                            cleanup.value.body.optInt("deleted") == paths.size,
+                                    ),
+                                    cleanup.session,
+                                )
+                            is AuthenticatedOracleResult.NetworkFailure ->
+                                StoryResult.Success(StoryDeleteOutcome(false), cleanup.session ?: result.session)
+                            is AuthenticatedOracleResult.InvalidResponse ->
+                                StoryResult.Success(StoryDeleteOutcome(false), cleanup.session ?: result.session)
+                            is AuthenticatedOracleResult.SessionFailure ->
+                                StoryResult.Success(StoryDeleteOutcome(false), result.session)
+                        }
+                    }
+                }
+                401 -> expired(result.session)
+                404 -> StoryResult.Failure("القصة لم تعد موجودة.", result.session)
+                else -> StoryResult.Failure("تعذر حذف القصة (${result.value.status}).", result.session)
+            }
+            else -> result.failure("تعذر حذف القصة الآن.")
+        }
+    }
+
+    private suspend fun cleanup(session: AuthSession, objectBody: JSONObject): Pair<AuthSession, Boolean> {
+        val body = JSONObject().put("objects", org.json.JSONArray().put(objectBody))
+        return when (
+            val result = executor.execute(
+                session,
+                OracleRequest(OracleHttpMethod.DELETE, "/v1/media/objects", body),
+            )
+        ) {
+            is AuthenticatedOracleResult.Response ->
+                result.session to (result.value.status == 200 && result.value.body.optInt("deleted") == 1)
+            is AuthenticatedOracleResult.NetworkFailure -> (result.session ?: session) to false
+            is AuthenticatedOracleResult.InvalidResponse -> (result.session ?: session) to false
+            is AuthenticatedOracleResult.SessionFailure -> session to false
+        }
+    }
+
+    private fun mediaObject(objectKey: String, contentType: String, sizeBytes: Long) =
+        JSONObject()
+            .put("purpose", "story_media")
+            .put("objectKey", objectKey)
+            .put("contentType", contentType)
+            .put("sizeBytes", sizeBytes)
+
+    private fun extension(media: StoryMediaSelection): String {
+        val fromName = media.displayName.substringAfterLast('.', "").lowercase().takeIf { it.matches(EXTENSION) }
+        return fromName ?: when (media.contentType) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "video/quicktime" -> "mov"
+            "video/mp4" -> "mp4"
+            else -> "jpg"
+        }
+    }
+
     private suspend fun booleanWrite(
         session: AuthSession,
         storyId: String,
@@ -231,6 +565,12 @@ class OracleStoryRepository(
         row.keys().forEach { key -> if (key.validId() != null && row.opt(key) is Boolean) put(key, row.optBoolean(key)) }
     }
 
+    private fun intMap(row: JSONObject): Map<String, Int> = buildMap {
+        row.keys().forEach { key ->
+            if (key.validId() != null && row.opt(key) is Number) put(key, row.optInt(key).coerceAtLeast(0))
+        }
+    }
+
     private fun StoryResult<Boolean>.unit(): StoryResult<Unit> = when (this) {
         is StoryResult.Success -> StoryResult.Success(Unit, session)
         is StoryResult.Failure -> this
@@ -255,7 +595,10 @@ class OracleStoryRepository(
 
     private fun String.validId() = trim().takeIf(UUID::matches)
 
+    private fun JSONObject.putNullable(key: String, value: Any?) = put(key, value ?: JSONObject.NULL)
+
     private companion object {
         val UUID = Regex("^[0-9a-fA-F-]{36}$")
+        val EXTENSION = Regex("^[a-z0-9]{1,8}$")
     }
 }

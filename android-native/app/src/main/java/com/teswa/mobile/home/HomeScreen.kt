@@ -36,6 +36,8 @@ import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.profile.PublicProfileScreen
 import com.teswa.mobile.feature.stories.StoriesRail
+import com.teswa.mobile.feature.stories.StoryCreateScreen
+import com.teswa.mobile.feature.stories.StoryManageScreen
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.stories.StoryStateHolder
 import com.teswa.mobile.feature.stories.StoryViewerScreen
@@ -65,6 +67,8 @@ fun HomeScreen(
     val storyHolder = remember(initialSession.user.id, storyRepository) { StoryStateHolder(initialSession, storyRepository) }
     val scope = rememberCoroutineScope()
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
+    var creatingStory by remember { mutableStateOf(false) }
+    var managingStories by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -98,6 +102,41 @@ fun HomeScreen(
             selectedProfileId = it
             onExternalProfileConsumed()
         }
+    }
+
+    if (creatingStory) {
+        StoryCreateScreen(
+            initialSession = storyHolder.session,
+            repository = storyRepository,
+            onSessionUpdated = storyHolder::updateSession,
+            onSessionExpired = onSignOut,
+            onPublished = {
+                creatingStory = false
+                scope.launch { storyHolder.load() }
+            },
+            onBack = { creatingStory = false },
+            modifier = modifier,
+        )
+        return
+    }
+
+    if (managingStories) {
+        StoryManageScreen(
+            initialSession = storyHolder.session,
+            repository = storyRepository,
+            onSessionUpdated = storyHolder::updateSession,
+            onSessionExpired = onSignOut,
+            onCreate = {
+                managingStories = false
+                creatingStory = true
+            },
+            onBack = {
+                managingStories = false
+                scope.launch { storyHolder.load(silent = true) }
+            },
+            modifier = modifier,
+        )
+        return
     }
 
     if (storyHolder.viewer != null) {
@@ -217,7 +256,13 @@ fun HomeScreen(
                     }
                 }
 
-                item { StoriesRail(storyHolder) }
+                item {
+                    StoriesRail(
+                        storyHolder,
+                        onCreate = { creatingStory = true },
+                        onManage = { managingStories = true },
+                    )
+                }
 
                 items(current.items, key = { it.id }) { item ->
                     HomeFeedCard(item = item, onOpen = { holder.openItem(item.id) })

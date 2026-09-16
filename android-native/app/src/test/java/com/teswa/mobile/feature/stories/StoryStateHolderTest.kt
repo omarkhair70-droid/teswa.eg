@@ -78,4 +78,18 @@ private class FakeStoryRepository(
             currentSession,
         )
     }
+
+    override suspend fun publish(
+        session: AuthSession,
+        draft: StoryDraft,
+        onProgress: (StoryPublishProgress) -> Unit,
+    ): StoryResult<String> = error("Not used")
+
+    override suspend fun loadOwned(session: AuthSession): StoryResult<List<ManagedStory>> =
+        error("Not used")
+
+    override suspend fun deleteOwned(
+        session: AuthSession,
+        story: StoryRecord,
+    ): StoryResult<StoryDeleteOutcome> = error("Not used")
 }

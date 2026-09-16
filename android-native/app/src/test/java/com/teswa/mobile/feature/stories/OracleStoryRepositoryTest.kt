@@ -8,11 +8,14 @@ import com.teswa.mobile.core.network.OracleRequest
 import com.teswa.mobile.core.network.OracleResponse
 import com.teswa.mobile.core.network.OracleTransport
 import com.teswa.mobile.core.network.OracleTransportResult
+import com.teswa.mobile.core.media.BinaryUploadResult
+import com.teswa.mobile.core.media.BinaryUploader
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
 
 class OracleStoryRepositoryTest {
     private val me = "11111111-1111-1111-1111-111111111111"
@@ -80,6 +83,102 @@ class OracleStoryRepositoryTest {
         assertEquals("story_reply_initial", notice.getString("kind"))
     }
 
+    @Test
+    fun publishesStreamingMediaThenCreatesExactStoryEnvelope() = runBlocking {
+        val transport = PublishingStoryTransport(storyId)
+        val uploaded = mutableListOf<ByteArray>()
+        val uploader = BinaryUploader { request ->
+            uploaded += request.openStream().readBytes()
+            request.onProgress(request.sizeBytes, request.sizeBytes)
+            BinaryUploadResult.Success
+        }
+        val repository = OracleStoryRepository(
+            authenticator = auth,
+            transport = transport,
+            contentSource = StoryContentSource { ByteArrayInputStream(byteArrayOf(1, 2, 3)) },
+            binaryUploader = uploader,
+        )
+        val draft = StoryDraft(
+            StoryMediaSelection(
+                uri = "content://story",
+                displayName = "moment.jpg",
+                contentType = "image/jpeg",
+                sizeBytes = 3,
+                width = 1080,
+                height = 1920,
+                durationMs = null,
+            ),
+            caption = "  لحظة جميلة  ",
+        )
+
+        val result = repository.publish(session, draft) {} as StoryResult.Success
+
+        assertEquals(storyId, result.value)
+        assertEquals(1, uploaded.size)
+        assertEquals(
+            listOf("/v1/media/uploads", "/v1/media/uploads/complete", "/v1/stories"),
+            transport.requests.map { it.path },
+        )
+        val create = requireNotNull(transport.requests.last().body)
+        assertEquals(
+            setOf(
+                "userId",
+                "mediaType",
+                "mediaStoragePath",
+                "mediaThumbnailStoragePath",
+                "caption",
+                "durationMs",
+                "width",
+                "height",
+            ),
+            create.keys().asSequence().toSet(),
+        )
+        assertEquals(me, create.getString("userId"))
+        assertEquals("لحظة جميلة", create.getString("caption"))
+        assertTrue(create.getString("mediaStoragePath").startsWith("$me/"))
+    }
+
+    @Test
+    fun loadsOwnedStoriesWithMetricsAndSignedPreview() = runBlocking {
+        val active = JSONObject(homePayload().getJSONArray("items").getJSONObject(0).toString())
+            .let { JSONObject().put("items", it.getJSONArray("stories")) }
+        val transport = StoryQueue(
+            response(200, active),
+            response(200, JSONObject().put("values", JSONObject().put(storyId, 7))),
+            response(200, JSONObject().put("values", JSONObject().put(storyId, 3))),
+            response(200, JSONObject().put("signedUrl", "https://object.example/preview")),
+        )
+
+        val result = OracleStoryRepository(auth, transport).loadOwned(session) as StoryResult.Success
+
+        assertEquals(7, result.value.single().viewCount)
+        assertEquals(3, result.value.single().likeCount)
+        assertEquals("https://object.example/preview", result.value.single().signedUrl)
+    }
+
+    @Test
+    fun deletesOwnedStoryThenCleansReturnedStoragePaths() = runBlocking {
+        val transport = StoryQueue(
+            response(
+                200,
+                JSONObject().put("found", true).put("storagePaths", org.json.JSONArray().put("$authorId/story.jpg")),
+            ),
+            response(200, JSONObject().put("deleted", 1)),
+        )
+
+        val result = OracleStoryRepository(auth, transport).deleteOwned(session, group().stories.single())
+
+        assertTrue(result is StoryResult.Success && result.value.storageCleanupComplete)
+        assertEquals("/v1/stories/$storyId/delete", transport.requests[0].path)
+        assertEquals(setOf("userId"), transport.requests[0].body?.keys()?.asSequence()?.toSet())
+        assertEquals("/v1/media/objects", transport.requests[1].path)
+        val objectBody = transport.requests[1].body
+            ?.getJSONArray("objects")
+            ?.getJSONObject(0)
+        assertEquals("story_media", objectBody?.getString("purpose"))
+        assertEquals("$authorId/story.jpg", objectBody?.getString("objectKey"))
+    }
+
     private fun group() = StoryGroup(
         author = StoryAuthor(authorId, "سلمى", "salma", null),
         stories = listOf(
@@ -105,6 +204,32 @@ class OracleStoryRepositoryTest {
 
     private fun response(status: Int, body: JSONObject) =
         OracleTransportResult.Response(OracleResponse(status, body))
+}
+
+private class PublishingStoryTransport(
+    private val storyId: String,
+) : OracleTransport {
+    val requests = mutableListOf<OracleRequest>()
+
+    override suspend fun execute(request: OracleRequest): OracleTransportResult {
+        requests += request
+        return when (request.path) {
+            "/v1/media/uploads" ->
+                OracleTransportResult.Response(
+                    OracleResponse(201, JSONObject().put("uploadUrl", "https://upload.example/story")),
+                )
+            "/v1/media/uploads/complete" ->
+                OracleTransportResult.Response(
+                    OracleResponse(
+                        200,
+                        JSONObject().put("objectKey", requireNotNull(request.body).getString("objectKey")),
+                    ),
+                )
+            "/v1/stories" ->
+                OracleTransportResult.Response(OracleResponse(201, JSONObject().put("storyId", storyId)))
+            else -> error("Unexpected request ${request.path}")
+        }
+    }
 }
 
 private class StoryQueue(vararg values: OracleTransportResult) : OracleTransport {

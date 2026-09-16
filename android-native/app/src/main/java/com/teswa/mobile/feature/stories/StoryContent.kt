@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,6 +49,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun StoriesRail(
     holder: StoryStateHolder,
+    onCreate: () -> Unit,
+    onManage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -76,16 +79,62 @@ fun StoriesRail(
         }
         is StoryHomeState.Ready -> if (state.groups.isNotEmpty()) {
             Column(modifier.fillMaxWidth()) {
-                Text("حكايات تِسوى", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("حكايات تِسوى", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    OutlinedButton(onClick = onManage) { Text("إدارة قصصي") }
+                }
                 Spacer(Modifier.height(10.dp))
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(13.dp),
                 ) {
+                    item {
+                        Column(
+                            Modifier.width(76.dp).clickable(onClick = onCreate),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Surface(
+                                Modifier.size(68.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("+", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            Spacer(Modifier.height(5.dp))
+                            Text("قصتك", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                     items(state.groups, key = { it.author.id }) { group ->
                         StoryAuthorBubble(group) { scope.launch { holder.open(group) } }
                     }
                 }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(
+                    modifier.fillMaxWidth().clickable(onClick = onCreate),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .45f),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column {
+                            Text("شارك أول قصة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("صورة أو فيديو لمدة 24 ساعة", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("+", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                TextButton(onClick = onManage) { Text("إدارة قصصي") }
             }
         }
     }

@@ -19,6 +19,7 @@ import com.teswa.mobile.feature.notifications.OracleNotificationDispatcher
 import com.teswa.mobile.feature.direct.OracleDirectRepository
 import com.teswa.mobile.feature.contextual.OracleContextualRepository
 import com.teswa.mobile.feature.stories.OracleStoryRepository
+import com.teswa.mobile.feature.stories.AndroidStoryContentSource
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -47,7 +48,11 @@ class AppContainer(context: Context) {
     val offersRepository = OracleOffersRepository(authRepository, oracleTransport, notificationDispatcher)
     val directRepository = OracleDirectRepository(authRepository, oracleTransport)
     val contextualRepository = OracleContextualRepository(authRepository, oracleTransport)
-    val storyRepository = OracleStoryRepository(authRepository, oracleTransport)
+    val storyRepository = OracleStoryRepository(
+        authenticator = authRepository,
+        transport = oracleTransport,
+        contentSource = AndroidStoryContentSource(appContext.contentResolver),
+    )
     val profileRepository = OracleProfileRepository(authRepository, oracleTransport)
     val publicProfileRepository = OraclePublicProfileRepository(authRepository, oracleTransport)
     val settingsRepository = OracleSettingsRepository(authRepository, oracleTransport)
