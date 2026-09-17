@@ -17,7 +17,7 @@ The work in this branch is **not a prototype, not a parallel visual lab, and not
 
 Do **not** restart the design process from scratch. Do **not** return to generic Material screens. Do **not** restore the old Expo UI wholesale. Do **not** merge PR #526 merely because CI is green.
 
-The next product gate is **Google Play Internal Testing on a real device**.
+Google Play Internal Testing has now been **published successfully**. The next product gate is **real-device acceptance using that Play build**.
 
 ---
 
@@ -268,46 +268,42 @@ Operating rule:
 
 ---
 
-## 7. GOOGLE PLAY INTERNAL TEST — NEXT ACTION
+## 7. GOOGLE PLAY INTERNAL TEST — PUBLISHED
 
-Teswa is already an existing Google Play application. This is an update to the same package, **not** a new Play listing.
+Teswa is already an existing Google Play application. This release was published as an update to the same package, **not** a new Play listing.
 
-Use the workflow on **main**:
+### Published candidate
 
-`.github/workflows/android-native-play-release.yml`
+- Play track: **Internal Testing**
+- Package: `com.teswa.mobile`
+- versionCode: **28**
+- versionName: **1.0.12**
+- API: `https://core01.tail6afd9b.ts.net`
+- App code checkpoint: `d46bb53d1a572f8162b0e0b0d62f3821f30ad5e7`
+- One-shot release branch: `release/teswa-internal-20260918-v28`
+- Release workflow commit: `4547608e38c9ff0f4ae220989edd0acc3e9bb101`
+- GitHub Actions run: **35284900705**
+- Result: **SUCCESS**
 
-Workflow name:
+The release job verified:
+- required release secrets;
+- Google Play upload-key fingerprint;
+- native unit tests;
+- release Kotlin compile;
+- release lint;
+- signed release AAB creation;
+- AAB artifact upload;
+- direct publication to Google Play.
 
-**Android Native Play Release**
+Final Play proof from the release log:
 
-For this candidate use:
-
-- `source_ref = d46bb53d1a572f8162b0e0b0d62f3821f30ad5e7`
-- `target = internal`
-- `api_base_url = https://core01.tail6afd9b.ts.net`
-- `rollout_percent = 100` (ignored for Internal, harmless default)
-- production confirmation: leave empty
-- closed_track: irrelevant when target=internal
-
-The workflow:
-- verifies release signing secrets,
-- verifies the Google Play upload key fingerprint,
-- runs native unit tests,
-- compiles release Kotlin,
-- runs release lint,
-- builds a **signed release AAB**,
-- publishes directly to Google Play Internal Testing.
+`PLAY_PUBLISH=PASS package=com.teswa.mobile versionCode=28 track=internal status=completed`
 
 ### Important
 
 Do **not** use the debug preview AAB for Play.
 
-The old debug preview:
-- is debug-signed,
-- is not the Play release artifact,
-- historically used the rehearsal fallback unless release configuration was injected.
-
-The Play workflow above is the correct release-signing + production-API path.
+The Play/Internal build above is release-signed and configured against the production Teswa API. It is the build Omar should now install/update from Google Play and visually inspect.
 
 ---
 
@@ -444,7 +440,9 @@ At the time this handoff was written:
 - Mergeable: **Yes**
 - validated code checkpoint: `d46bb53d1a572f8162b0e0b0d62f3821f30ad5e7`
 - Android Native Foundation run #210: **SUCCESS**
-- candidate: **versionCode 28 / versionName 1.0.12**
+- handoff-head Foundation run #211: **SUCCESS**
+- Google Play Internal release run 35284900705: **SUCCESS**
+- Internal Testing publish: **PASS — versionCode 28 / versionName 1.0.12**
 - package: `com.teswa.mobile`
 - release API: `https://core01.tail6afd9b.ts.net`
 
@@ -454,7 +452,7 @@ The next chat should **not** spend time reconstructing history before acting.
 
 Start with:
 
-> Read `docs/TESWA_NATIVE_PHASE02_FINAL_HANDOFF_2026-09-18.md`. Verify PR #526 and the latest branch head. If Internal Testing has not been published yet, publish the validated versionCode 28 candidate from commit `d46bb53d1a572f8162b0e0b0d62f3821f30ad5e7` using the main Android Native Play Release workflow. Then use Omar’s real-device screenshots/feedback as the only authority for the next closure pass. Keep PR #526 Draft and Unmerged until Omar explicitly approves merge.
+> Read `docs/TESWA_NATIVE_PHASE02_FINAL_HANDOFF_2026-09-18.md`. Verify PR #526 and the latest branch head. Internal Testing versionCode 28 is already published successfully. Start from Omar’s real-device screenshots/feedback from that Play build; do not redesign in theory first. Fix only what the real device proves, keep the authored Teswa product laws intact, bump versionCode to 29 before any subsequent Play upload, and keep PR #526 Draft and Unmerged until Omar explicitly approves merge.
 
 ---
 
@@ -466,4 +464,4 @@ The remaining work is no longer “design the app in theory”.
 
 It is now:
 
-**SHIP TO INTERNAL → LOOK AT THE REAL PRODUCT → FIX WHAT THE DEVICE PROVES → LOCK → PRODUCTION LATER.**
+**INTERNAL IS LIVE → LOOK AT THE REAL PRODUCT → FIX WHAT THE DEVICE PROVES → LOCK → PRODUCTION LATER.**
