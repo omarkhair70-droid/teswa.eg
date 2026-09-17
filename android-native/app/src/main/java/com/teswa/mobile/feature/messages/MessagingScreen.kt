@@ -96,6 +96,7 @@ fun MessagingScreen(
     reviewRepository: ReviewRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
+    modifier: Modifier = Modifier,
     initialDealId: String? = null,
     initialOffers: Boolean = false,
     initialDirectId: String? = null,
@@ -104,7 +105,6 @@ fun MessagingScreen(
     onExternalTargetConsumed: () -> Unit = {},
     onReport: (ReportTarget) -> Unit = {},
     onFocusedStateChanged: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
@@ -387,7 +387,7 @@ private fun ConversationRow(conversation: DealConversation, onOpen: () -> Unit) 
             Spacer(Modifier.height(3.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${conversation.requestedItemTitle} ↔ ${conversation.offeredItemTitle}",
+                    "${conversation.requestedItemTitle} مقابل ${conversation.offeredItemTitle}",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,

@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.reviews
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,12 +19,23 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEvidenceLine
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
 import kotlinx.coroutines.launch
 
 @Composable
@@ -40,67 +52,75 @@ fun DealReviewCard(
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
-    Card {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            when (val state = holder.state) {
-                ReviewUiState.Loading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.height(22.dp), strokeWidth = 2.dp)
-                    Text("بنراجع حالة تقييم الصفقة…")
-                }
-                is ReviewUiState.Error -> {
-                    Text("التقييم", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { scope.launch { holder.load() } }) { Text("حاول تاني") }
-                }
-                is ReviewUiState.Ready -> {
-                    val existing = state.context.existingReview
-                    Text(
-                        if (existing == null) "قيّم تجربتك مع ${state.context.reviewee.displayName}" else "تقييمك للتجربة",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+        when (val state = holder.state) {
+            ReviewUiState.Loading -> TeswaInlineLoading("بنراجع حالة التقييم…")
+            is ReviewUiState.Error -> TeswaInlineMessage(
+                title = "التقييم مش متاح دلوقتي",
+                body = state.message,
+                icon = TeswaIcons.Refresh,
+                actionLabel = "حاول تاني",
+                onAction = { scope.launch { holder.load() } },
+            )
+            is ReviewUiState.Ready -> {
+                val existing = state.context.existingReview
+                TeswaSectionHeader(
+                    if (existing == null) "قيّم تجربتك مع ${state.context.reviewee.displayName}" else "تقييمك للتجربة",
+                )
+                if (existing != null) {
+                    ExistingReviewContent(existing)
+                } else {
+                    TeswaInlineMessage(
+                        title = "دليل من صفقة حقيقية",
+                        body = "التقييم متاح لأن الطرفين أكدوا إن التبديل تم، ومش بيتنشر كتفاعل مجهول.",
+                        icon = TeswaIcons.Trust,
+                        emphasis = TeswaEmphasis.Normal,
                     )
-                    if (existing != null) {
-                        ExistingReviewContent(existing)
-                    } else {
-                        Text("التقييم مرتبط بصفقة مكتملة ومش بيتنشر كنص مجهول.", style = MaterialTheme.typography.bodySmall)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            (1..5).forEach { value ->
-                                FilterChip(
-                                    selected = holder.draft.rating == value,
-                                    onClick = { holder.setRating(value) },
-                                    label = { Text("$value★") },
-                                    enabled = !holder.submitting,
-                                )
-                            }
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                    ) {
+                        (1..5).forEach { value ->
+                            TeswaChoiceChip(
+                                label = value.toString(),
+                                selected = holder.draft.rating == value,
+                                onClick = { holder.setRating(value) },
+                                leadingIcon = TeswaIcons.Review,
+                            )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ReviewSignal("وصف واضح", holder.draft.clearDescription, holder::toggleClearDescription, Modifier.weight(1f))
-                            ReviewSignal("تواصل جيد", holder.draft.goodCommunication, holder::toggleGoodCommunication, Modifier.weight(1f))
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ReviewSignal("ملتزم", holder.draft.onTime, holder::toggleOnTime, Modifier.weight(1f))
-                            ReviewSignal("محترم", holder.draft.respectfulSwapper, holder::toggleRespectful, Modifier.weight(1f))
-                        }
-                        OutlinedTextField(
-                            value = holder.draft.comment,
-                            onValueChange = holder::setComment,
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("تعليق اختياري") },
-                            minLines = 2,
-                            maxLines = 4,
-                            enabled = !holder.submitting,
-                            supportingText = { Text("${holder.draft.comment.length} / 1000") },
-                        )
-                        Button(
-                            onClick = { scope.launch { holder.submit() } },
-                            enabled = !holder.submitting && holder.draft.rating in 1..5,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(if (holder.submitting) "جاري إرسال التقييم…" else "إرسال التقييم") }
                     }
-                    holder.message?.let {
-                        Spacer(Modifier.height(2.dp))
-                        Text(it, color = if (existing == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                        ReviewSignal("وصف واضح", holder.draft.clearDescription, holder::toggleClearDescription, Modifier.weight(1f))
+                        ReviewSignal("تواصل جيد", holder.draft.goodCommunication, holder::toggleGoodCommunication, Modifier.weight(1f))
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                        ReviewSignal("ملتزم", holder.draft.onTime, holder::toggleOnTime, Modifier.weight(1f))
+                        ReviewSignal("محترم", holder.draft.respectfulSwapper, holder::toggleRespectful, Modifier.weight(1f))
+                    }
+                    TeswaTextField(
+                        value = holder.draft.comment,
+                        onValueChange = holder::setComment,
+                        label = "تعليق اختياري",
+                        supportingText = "${holder.draft.comment.length} / 1000",
+                        singleLine = false,
+                        minLines = 2,
+                        maxLines = 4,
+                        enabled = !holder.submitting,
+                    )
+                    TeswaPrimaryAction(
+                        text = "إرسال التقييم",
+                        icon = TeswaIcons.Review,
+                        onClick = { scope.launch { holder.submit() } },
+                        enabled = holder.draft.rating in 1..5,
+                        loading = holder.submitting,
+                    )
+                }
+                holder.message?.let { message ->
+                    TeswaInlineMessage(
+                        title = if (existing == null) "التقييم ما اتبعتش" else "تم",
+                        body = message,
+                        emphasis = if (existing == null) TeswaEmphasis.Strong else TeswaEmphasis.Normal,
+                    )
                 }
             }
         }
@@ -109,18 +129,22 @@ fun DealReviewCard(
 
 @Composable
 private fun ReviewSignal(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label) }, modifier = modifier)
+    TeswaChoiceChip(label = label, selected = selected, onClick = onClick, modifier = modifier)
 }
 
 @Composable
 private fun ExistingReviewContent(review: ExistingReview) {
-    Text("${review.rating} من 5 ★", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+    TeswaEvidenceLine(
+        icon = TeswaIcons.Review,
+        text = "${review.rating} من 5",
+        supporting = "تقييمك محفوظ على الصفقة المكتملة",
+    )
     val signals = buildList {
         if (review.clearDescription) add("وصف واضح")
         if (review.goodCommunication) add("تواصل جيد")
         if (review.onTime) add("ملتزم بالميعاد")
         if (review.respectfulSwapper) add("محترم في التبديل")
     }
-    if (signals.isNotEmpty()) Text(signals.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
+    if (signals.isNotEmpty()) Text(signals.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
     review.comment?.let { Text(it) }
 }

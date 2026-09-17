@@ -56,8 +56,8 @@ import kotlinx.coroutines.launch
 fun OffersContent(
     holder: OffersStateHolder,
     onOpenDeal: (String) -> Unit,
-    initialDirection: OfferDirection = OfferDirection.INCOMING,
     modifier: Modifier = Modifier,
+    initialDirection: OfferDirection = OfferDirection.INCOMING,
 ) {
     val scope = rememberCoroutineScope()
     var direction by remember(initialDirection) { mutableStateOf(initialDirection) }

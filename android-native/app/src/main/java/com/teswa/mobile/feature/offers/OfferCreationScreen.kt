@@ -200,43 +200,6 @@ private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
 )
 
 @Composable
-private fun RequestedItemCard(item: OfferItemSummary) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f)) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(
-                item.imageUrl,
-                item.title,
-                Modifier.size(82.dp).clip(MaterialTheme.shapes.medium),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("الحاجة اللي عجبتك", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(4.dp))
-                Text(item.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SelectableOfferItem(item: OfferItemSummary, selected: Boolean, onSelect: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onSelect),
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
-    ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(item.imageUrl, item.title, Modifier.size(68.dp).clip(MaterialTheme.shapes.small))
-            Spacer(Modifier.width(12.dp))
-            Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.width(8.dp))
-            Surface(shape = CircleShape, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant) {
-                Text(if (selected) "✓" else "○", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
 private fun OfferSentState(modifier: Modifier, onOfferSent: () -> Unit) {
     CreationCenter(
         "عرضك اتبعت. هتلاقي حالته في مركز الرسائل والعروض.",

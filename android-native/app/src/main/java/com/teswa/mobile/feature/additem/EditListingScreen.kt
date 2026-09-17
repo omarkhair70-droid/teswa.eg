@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.LocalContentImage
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 
 @Composable
@@ -391,31 +393,24 @@ private fun EditImageCard(
 
 @Composable
 private fun EditFormSection(title: String, hint: String, content: @Composable () -> Unit) {
-    Card {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(14.dp))
-            content()
-        }
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(TeswaSpacing.xxs))
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(TeswaSpacing.sm))
+        content()
     }
 }
 
 @Composable
 private fun EditChoiceCard(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f),
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (selected) "●" else "○", color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(10.dp))
-            Text(label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
-        }
-    }
+    TeswaChoiceChip(
+        label = label,
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
+    )
 }
 
 @Composable

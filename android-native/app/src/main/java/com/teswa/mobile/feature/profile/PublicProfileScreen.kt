@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.profile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,21 @@ import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaActionSheet
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaEvidenceLine
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 
 @Composable
@@ -64,6 +80,13 @@ fun PublicProfileScreen(
     var confirmBlock by remember { mutableStateOf<Boolean?>(null) }
     var connectionsMode by remember(profileId) { mutableStateOf<ProfileConnectionsMode?>(null) }
     var nestedProfileId by remember(profileId) { mutableStateOf<String?>(null) }
+    BackHandler {
+        when {
+            nestedProfileId != null -> nestedProfileId = null
+            connectionsMode != null -> connectionsMode = null
+            else -> onBack()
+        }
+    }
     LaunchedEffect(initialSession.accessToken) { holder.updateSession(initialSession); holder.load() }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
@@ -107,48 +130,51 @@ fun PublicProfileScreen(
         is PublicProfileUiState.Error -> PublicCenter(state.message, modifier, primary = "حاول تاني" to { scope.launch { holder.load() } }, secondary = "رجوع" to onBack)
         is PublicProfileUiState.Ready -> {
             val profile = state.overview.profile
-            LazyColumn(
-                modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                item { OutlinedButton(onClick = onBack) { Text("رجوع") } }
+            Column(modifier.fillMaxSize()) {
+                TeswaFocusedHeader(
+                    title = "ملف شخص",
+                    onBack = onBack,
+                    actionIcon = if (profile.id != holder.session.user.id) TeswaIcons.Report else null,
+                    actionDescription = if (profile.id != holder.session.user.id) "الإبلاغ عن المستخدم" else null,
+                    onAction = if (profile.id != holder.session.user.id) ({ onReport(ReportTarget.User(profile.id, profile.displayName)) }) else null,
+                )
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = TeswaLayout.FocusedContentPadding,
+                    verticalArrangement = Arrangement.spacedBy(TeswaLayout.SectionGap),
+                ) {
                 item {
-                    Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .48f)) {
-                        Column(Modifier.fillMaxWidth()) {
-                            profile.coverUrl?.let { NetworkImage(it, "غلاف ${profile.displayName}", Modifier.fillMaxWidth().height(112.dp)) }
-                            Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                NetworkImage(profile.avatarUrl, profile.displayName, Modifier.size(92.dp).clip(CircleShape))
-                                Spacer(Modifier.height(10.dp))
-                                Text(profile.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                                Text("@${profile.username}", color = MaterialTheme.colorScheme.primary)
-                                profile.profileTagline?.let { Spacer(Modifier.height(6.dp)); Text(it, textAlign = TextAlign.Center) }
-                                val location = listOfNotNull(profile.area, profile.city).joinToString("، ")
-                                if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
-                                Spacer(Modifier.height(14.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PublicStat(
-                                        "${state.overview.follow.followerCount}",
-                                        "متابع",
-                                        Modifier.weight(1f),
-                                        onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWERS },
-                                    )
-                                    PublicStat(
-                                        "${state.overview.follow.followingCount}",
-                                        "يتابع",
-                                        Modifier.weight(1f),
-                                        onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWING },
-                                    )
-                                    PublicStat("${profile.successfulSwapsCount}", "تبديل", Modifier.weight(1f))
-                                }
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        profile.coverUrl?.let { NetworkImage(it, "غلاف ${profile.displayName}", Modifier.fillMaxWidth().height(TeswaLayout.ProfileCoverHeight)) }
+                        NetworkImage(profile.avatarUrl, profile.displayName, Modifier.size(TeswaLayout.ProfileAvatarLarge).clip(CircleShape))
+                        Spacer(Modifier.height(TeswaSpacing.xs))
+                        Text(profile.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("@${profile.username}", color = MaterialTheme.colorScheme.primary)
+                        profile.profileTagline?.let { Text(it, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium) }
+                        val location = listOfNotNull(profile.area, profile.city).joinToString("، ")
+                        if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(TeswaSpacing.sm))
+                        TeswaEvidenceLine(
+                            icon = TeswaIcons.Trust,
+                            text = "${profile.successfulSwapsCount} تبديل مكتمل",
+                            supporting = "دليل ناتج عن تبديلات أكدها الطرفان",
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                            TextButton(onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWERS }) {
+                                Text("${state.overview.follow.followerCount} متابع")
+                            }
+                            TextButton(onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWING }) {
+                                Text("يتابع ${state.overview.follow.followingCount}")
                             }
                         }
                     }
                 }
-                holder.message?.let { item { Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.error.copy(alpha = .1f)) { Text(it, Modifier.fillMaxWidth().padding(12.dp), color = MaterialTheme.colorScheme.error) } } }
+                holder.message?.let { message -> item { TeswaInlineMessage("الحالة ما اتحدثتش", message, emphasis = TeswaEmphasis.Strong) } }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
+                    Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                        TeswaPrimaryAction(
+                            text = "اطلب كلام",
+                            icon = TeswaIcons.Conversation,
                             onClick = {
                                 onMessage(
                                     DirectComposeTarget(
@@ -161,104 +187,111 @@ fun PublicProfileScreen(
                             },
                             modifier = Modifier.weight(1f),
                             enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
-                        ) { Text("مراسلة") }
-                        OutlinedButton(
+                        )
+                        TeswaSecondaryAction(
+                            text = if (state.overview.follow.followingByMe) "إلغاء المتابعة" else "متابعة",
                             onClick = { scope.launch { holder.toggleFollow() } },
                             modifier = Modifier.weight(1f),
                             enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
-                        ) { Text(if (state.overview.follow.followingByMe) "إلغاء المتابعة" else "متابعة") }
+                        )
                     }
                     TextButton(
                         onClick = { confirmBlock = !state.overview.blockedByMe },
                         enabled = holder.workingAction == null,
                     ) { Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر المستخدم") }
-                    if (profile.id != holder.session.user.id) {
-                        TextButton(
-                            onClick = { onReport(ReportTarget.User(profile.id, profile.displayName)) },
-                            enabled = holder.workingAction == null,
-                        ) { Text("الإبلاغ عن المستخدم") }
-                    }
                     if (state.overview.blockedMe) Text("الحساب ده قافل التفاعل معاك.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
                 item { TrustSummary(state.overview.trust, state.overview.badges) }
-                profile.bio?.let { item { Card { Column(Modifier.padding(16.dp)) { Text("عن المستخدم", style = MaterialTheme.typography.titleMedium); Spacer(Modifier.height(5.dp)); Text(it) } } } }
-                item { Text("حاجته النشطة", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-                if (state.overview.listings.isEmpty()) item { Text("مفيش عناصر نشطة حاليًا.", Modifier.fillMaxWidth().padding(20.dp), textAlign = TextAlign.Center) }
+                profile.bio?.let { bio -> item { Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) { TeswaSectionHeader("عن الشخص"); Text(bio) } } }
+                item { TeswaSectionHeader("حاجاته النشطة") }
+                if (state.overview.listings.isEmpty()) item { TeswaEmptyField("مفيش حاجات نشطة", "لما يحط حاجة في اللعب هتظهر هنا.") }
                 else items(state.overview.listings, key = { it.id }) { listing ->
-                    Card(onClick = { onOpenItem(listing.id) }) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            NetworkImage(listing.imageUrl, listing.title, Modifier.size(82.dp).clip(MaterialTheme.shapes.medium))
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(listing.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(listOfNotNull(listing.category, listing.city).joinToString(" • "), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
+                    TeswaObjectRow(
+                        item = TeswaObjectIdentity(
+                            title = listing.title,
+                            imageUrl = listing.imageUrl,
+                            meta = listOfNotNull(listing.category, listing.city).joinToString(" · "),
+                        ),
+                        state = "في اللعب",
+                        stateEmphasis = TeswaEmphasis.Strong,
+                        onClick = { onOpenItem(listing.id) },
+                    )
                 }
+            }
             }
         }
     }
 
     confirmBlock?.let { block ->
-        AlertDialog(
-            onDismissRequest = { confirmBlock = null },
-            title = { Text(if (block) "حظر المستخدم؟" else "إلغاء الحظر؟") },
-            text = { Text(if (block) "هيتقفل التفاعل الجديد بين الحسابين وتختفي علاقات المتابعة." else "هيبقى التفاعل متاح من جديد حسب إعدادات الخصوصية.") },
-            confirmButton = { Button(onClick = { confirmBlock = null; scope.launch { holder.toggleBlock() } }) { Text(if (block) "حظر" else "إلغاء الحظر") } },
-            dismissButton = { TextButton(onClick = { confirmBlock = null }) { Text("رجوع") } },
-        )
+        TeswaActionSheet(
+            title = if (block) "حظر المستخدم؟" else "إلغاء الحظر؟",
+            supporting = if (block) "هيتقفل التفاعل الجديد بين الحسابين وتختفي علاقات المتابعة." else "هيبقى التفاعل متاح من جديد حسب إعدادات الخصوصية.",
+            onDismiss = { confirmBlock = null },
+        ) {
+            TeswaPrimaryAction(
+                text = if (block) "حظر المستخدم" else "إلغاء الحظر",
+                icon = if (block) TeswaIcons.Block else TeswaIcons.Trust,
+                onClick = { confirmBlock = null; scope.launch { holder.toggleBlock() } },
+            )
+            TextButton(onClick = { confirmBlock = null }, modifier = Modifier.fillMaxWidth()) { Text("رجوع") }
+        }
     }
 }
 
 @Composable
 private fun TrustSummary(metrics: TrustMetrics?, badges: List<ProfileBadge>) {
-    Card {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("الثقة على تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (metrics == null) {
-                Text("مؤشر الثقة بيتكوّن مع أول التبديلات والتقييمات الحقيقية.", style = MaterialTheme.typography.bodyMedium)
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(trustLevelLabel(metrics.trustLevelKey), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(trustLevelDescription(metrics.trustLevelKey), style = MaterialTheme.typography.bodySmall)
-                    }
-                    Text("${metrics.trustScore}/100", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                }
-                LinearProgressIndicator(
-                    progress = { metrics.trustScore / 100f },
-                    modifier = Modifier.fillMaxWidth(),
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+        TeswaSectionHeader("أدلة من التعامل")
+        if (metrics == null) {
+            TeswaInlineMessage(
+                title = "الأدلة لسه بتتكوّن",
+                body = "هتظهر هنا بعد تبديلات مكتملة وتقييمات مرتبطة بيها.",
+                icon = TeswaIcons.Trust,
+            )
+        } else {
+            TeswaInlineMessage(
+                title = trustLevelLabel(metrics.trustLevelKey),
+                body = trustLevelDescription(metrics.trustLevelKey),
+                icon = TeswaIcons.Trust,
+                emphasis = TeswaEmphasis.Normal,
+            )
+            TeswaEvidenceLine(
+                icon = TeswaIcons.Accepted,
+                text = "${metrics.completedDealsCount} صفقة مكتملة",
+                supporting = "${metrics.totalReviewsReceived} تقييم مرتبط بنتائج حقيقية",
+            )
+            metrics.averageRating?.let { rating ->
+                TeswaEvidenceLine(
+                    icon = TeswaIcons.Review,
+                    text = "متوسط التقييم ${String.format(java.util.Locale.US, "%.1f", rating)} من 5",
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PublicStat("${metrics.completedDealsCount}", "صفقات مكتملة", Modifier.weight(1f))
-                    PublicStat("${metrics.totalReviewsReceived}", "تقييمات", Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val rating = metrics.averageRating?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "—"
-                    val response = metrics.responseRate?.let { "${it.toInt()}%" } ?: "—"
-                    PublicStat(rating, "متوسط التقييم", Modifier.weight(1f))
-                    PublicStat(response, "معدل الرد", Modifier.weight(1f))
-                }
-                val signals = buildList {
-                    if (metrics.clearDescriptionCount > 0) add("وصف واضح")
-                    if (metrics.goodCommunicationCount > 0) add("تواصل جيد")
-                    if (metrics.onTimeCount > 0) add("ملتزم بالميعاد")
-                    if (metrics.respectfulSwapperCount > 0) add("محترم في التبديل")
-                }
-                if (signals.isNotEmpty()) Text(signals.joinToString(" • "), style = MaterialTheme.typography.bodySmall)
             }
-            if (badges.isNotEmpty()) {
-                Text("الشارات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                badges.sortedBy(ProfileBadge::priority).take(4).forEach { badge ->
-                    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .42f)) {
-                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                            Text(badge.labelAr, fontWeight = FontWeight.Bold)
-                            Text(badge.descriptionAr, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
+            metrics.responseRate?.let { response ->
+                TeswaEvidenceLine(
+                    icon = TeswaIcons.Conversation,
+                    text = "معدل الرد ${response.toInt()}%",
+                )
             }
+            val signals = buildList {
+                if (metrics.clearDescriptionCount > 0) add("وصف واضح")
+                if (metrics.goodCommunicationCount > 0) add("تواصل جيد")
+                if (metrics.onTimeCount > 0) add("ملتزم بالميعاد")
+                if (metrics.respectfulSwapperCount > 0) add("محترم في التبديل")
+            }
+            if (signals.isNotEmpty()) {
+                TeswaEvidenceLine(
+                    icon = TeswaIcons.Safety,
+                    text = signals.joinToString(" · "),
+                    supporting = "إشارات متكررة من تقييمات صفقات مكتملة",
+                )
+            }
+        }
+        badges.sortedBy(ProfileBadge::priority).take(4).forEach { badge ->
+            TeswaEvidenceLine(
+                icon = TeswaIcons.Trust,
+                text = badge.labelAr,
+                supporting = badge.descriptionAr,
+            )
         }
     }
 }
@@ -279,27 +312,25 @@ private fun trustLevelDescription(key: String) = when (key) {
     else -> "الثقة مبنية على نشاط حقيقي داخل تِسوى."
 }
 
-@Composable
-private fun PublicStat(
-    value: String,
-    label: String,
-    modifier: Modifier,
-    onClick: (() -> Unit)? = null,
-) {
-    val interactive = if (onClick == null) modifier else modifier.clickable(onClick = onClick)
-    Surface(interactive, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface.copy(alpha = .75f)) {
-        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
 @Composable private fun PublicCenter(message: String, modifier: Modifier, loading: Boolean = false, primary: Pair<String, () -> Unit>? = null, secondary: Pair<String, () -> Unit>? = null) {
-    Column(modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(12.dp)) }
-        Text(message, textAlign = TextAlign.Center)
-        primary?.let { Spacer(Modifier.height(16.dp)); Button(onClick = it.second) { Text(it.first) } }
-        secondary?.let { Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = it.second) { Text(it.first) } }
+    Column(
+        modifier.fillMaxSize().padding(TeswaLayout.ScreenHorizontal),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (loading) {
+            TeswaInlineLoading(message)
+        } else {
+            TeswaInlineMessage(
+                title = "الملف مش متاح دلوقتي",
+                body = message,
+                icon = TeswaIcons.Refresh,
+                actionLabel = primary?.first,
+                onAction = primary?.second,
+            )
+            secondary?.let { (label, action) ->
+                Spacer(Modifier.height(TeswaSpacing.xs))
+                TeswaSecondaryAction(text = label, onClick = action)
+            }
+        }
     }
 }

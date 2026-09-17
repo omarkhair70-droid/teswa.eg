@@ -31,6 +31,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -56,6 +57,11 @@ import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.ui.LocalContentImage
+import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaRadius
+import com.teswa.mobile.ui.system.TeswaSize
+import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
@@ -455,7 +461,11 @@ private fun AddItemSuccess(modifier: Modifier, onHome: () -> Unit, onAnother: ()
         verticalArrangement = Arrangement.Center,
     ) {
         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
-            Text("✓", modifier = Modifier.padding(horizontal = 23.dp, vertical = 14.dp), style = MaterialTheme.typography.headlineLarge)
+            Icon(
+                imageVector = TeswaIcons.Accepted,
+                contentDescription = null,
+                modifier = Modifier.padding(TeswaSpacing.md).size(TeswaSize.iconHero),
+            )
         }
         Spacer(Modifier.height(20.dp))
         Text("العنصر اتنشر", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -470,30 +480,18 @@ private fun AddItemSuccess(modifier: Modifier, onHome: () -> Unit, onAnother: ()
 
 @Composable
 private fun FormSection(title: String, hint: String, content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(4.dp))
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(14.dp))
-            content()
-        }
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(TeswaSpacing.xxs))
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(TeswaSpacing.sm))
+        content()
     }
 }
 
 @Composable
 private fun ChoiceCard(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f),
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (selected) "●" else "○", color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(10.dp)); Text(label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
-        }
-    }
+    TeswaChoiceChip(label = label, selected = selected, onClick = onClick, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
