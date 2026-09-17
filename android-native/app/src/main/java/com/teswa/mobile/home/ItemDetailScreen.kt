@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,10 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,8 +23,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,17 +38,21 @@ import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaBottomCommitBar
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEvidenceLine
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
 import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
-import com.teswa.mobile.ui.system.TeswaObjectStage
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
+import com.teswa.mobile.ui.system.TeswaObjectMoment
+import com.teswa.mobile.ui.system.TeswaObjectMomentVariant
 import com.teswa.mobile.ui.system.TeswaPersonIdentity
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTraceNote
 import kotlinx.coroutines.launch
 
 @Composable
@@ -151,7 +153,9 @@ fun ItemDetailScreen(
             val detail = current.detail
             val isMine = detail.ownerId == holder.session.user.id
             val owner = detail.ownerDisplayName ?: detail.ownerUsername
-            val meta = listOfNotNull(detail.condition, detail.city, detail.area).joinToString(" · ")
+            val place = listOfNotNull(detail.city, detail.area).filter { it.isNotBlank() }.joinToString(" · ")
+            val meta = listOfNotNull(detail.condition, detail.category).filter { it.isNotBlank() }.joinToString(" · ")
+            val portraitTrace = detail.itemStory?.takeIf { it.isNotBlank() }
             Column(Modifier.fillMaxSize()) {
                 TeswaFocusedHeader(
                     title = if (isMine) "من دولابك" else "حاجة ممكنة",
@@ -162,22 +166,25 @@ fun ItemDetailScreen(
                 )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    contentPadding = TeswaLayout.FocusedContentPadding,
+                    contentPadding = PaddingValues(
+                        start = TeswaLayout.ScreenHorizontal,
+                        end = TeswaLayout.ScreenHorizontal,
+                        bottom = TeswaLayout.SectionGap,
+                    ),
                     verticalArrangement = Arrangement.spacedBy(TeswaLayout.SectionGap),
                 ) {
                     item {
-                        TeswaObjectStage(
-                            item = TeswaObjectIdentity(
-                                title = detail.title,
-                                imageUrl = detail.images.firstOrNull(),
-                                meta = meta.ifBlank { detail.category.orEmpty() }.takeIf { it.isNotBlank() },
-                                owner = owner,
-                            ),
-                            eyebrow = detail.category,
-                            state = if (isMine) "حاجتك" else "متاحة للعرض",
-                            stateEmphasis = if (isMine) TeswaEmphasis.Quiet else TeswaEmphasis.Strong,
+                        TeswaObjectMoment(
+                            title = detail.title,
+                            imageUrl = detail.images.firstOrNull(),
+                            meta = meta.takeIf { it.isNotBlank() },
+                            owner = owner?.let { name -> listOfNotNull("عند $name", place.takeIf { it.isNotBlank() }).joinToString(" · ") },
+                            trace = portraitTrace,
+                            archiveLabel = place.takeIf { it.isNotBlank() } ?: detail.condition,
+                            variant = TeswaObjectMomentVariant.Hero,
                         )
                     }
+
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
                             TeswaSecondaryAction(
@@ -210,6 +217,7 @@ fun ItemDetailScreen(
                             }
                         }
                     }
+
                     if (detail.images.size > 1) {
                         item {
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
@@ -217,53 +225,91 @@ fun ItemDetailScreen(
                                     NetworkImage(
                                         url = imageUrl,
                                         contentDescription = "صورة إضافية لـ ${detail.title}",
-                                        modifier = Modifier.width(150.dp).height(120.dp),
+                                        modifier = Modifier
+                                            .width(150.dp)
+                                            .height(120.dp)
+                                            .clip(MaterialTheme.shapes.large),
                                     )
                                 }
                             }
                         }
                     }
+
                     if (!owner.isNullOrBlank()) {
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
                                 TeswaSectionHeader("صاحب الحاجة")
                                 TeswaPersonIdentity(
                                     name = owner,
-                                    supporting = listOfNotNull(detail.city, detail.area)
-                                        .joinToString(" · ")
-                                        .takeIf { it.isNotBlank() },
-                                    evidence = if (isMine) "دي حاجتك" else "افتح ملفه للأدلة والمراجعات",
+                                    supporting = place.takeIf { it.isNotBlank() },
+                                    evidence = if (isMine) "دي حاجتك ولسه تاريخها مربوط بيك" else "افتح ملفه وشوف أثر التبديلات اللي حصلت فعلًا",
                                     onClick = detail.ownerId?.takeIf { !isMine }?.let { ownerId -> ({ onOpenOwner(ownerId) }) },
                                 )
                             }
                         }
                     }
+
                     detail.desireText?.takeIf { it.isNotBlank() }?.let { desire ->
                         item {
-                            TeswaInlineMessage(
-                                title = "مفتوح لإيه؟",
-                                body = desire,
-                                icon = TeswaIcons.Exchange,
-                                emphasis = TeswaEmphasis.Normal,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                            ) {
+                                TeswaMarkIcon(
+                                    mark = TeswaMark.Possible,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                                ) {
+                                    Text(
+                                        text = "مفتوح لإيه؟",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    TeswaTraceNote(desire)
+                                }
+                            }
                         }
                     }
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
-                            detail.description?.let { DetailSection("الوصف", it) }
-                            detail.conditionNotes?.let { DetailSection("حالة الحاجة", it) }
-                            detail.itemStory?.let { DetailSection("حكايتها", it) }
-                            detail.swapReason?.let { DetailSection("ليه داخلة اللعب؟", it) }
-                            detail.goodFor?.let { DetailSection("مناسبة لمين؟", it) }
+
+                    detail.description?.takeIf { it.isNotBlank() }?.let { description ->
+                        item { LongDetail("عن الحاجة", description) }
+                    }
+                    detail.conditionNotes?.takeIf { it.isNotBlank() }?.let { condition ->
+                        item { LongDetail("أثر الاستخدام", condition) }
+                    }
+                    if (portraitTrace == null) {
+                        detail.itemStory?.takeIf { it.isNotBlank() }?.let { story ->
+                            item { LongDetail("حكايتها", story) }
                         }
                     }
+                    detail.swapReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                        item { LongDetail("ليه صاحبها فتحها لاحتمال جديد؟", reason) }
+                    }
+                    detail.goodFor?.takeIf { it.isNotBlank() }?.let { goodFor ->
+                        item { LongDetail("ممكن تناسب مين؟", goodFor) }
+                    }
+
                     if (!isMine) {
                         item {
-                            TeswaEvidenceLine(
-                                icon = TeswaIcons.Exchange,
-                                text = "العرض حاجة واحدة مقابل حاجة واحدة",
-                                supporting = "هتختار حاجة نشطة من دولابك قبل الإرسال.",
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                                TeswaSectionHeader("لو قررت تدخل العلاقة")
+                                TeswaExchangeMemoryPair(
+                                    requestedTitle = detail.title,
+                                    requestedImageUrl = detail.images.firstOrNull(),
+                                    offeredTitle = null,
+                                    offeredImageUrl = null,
+                                    state = "عرض جديد",
+                                    emptyOfferedLabel = "اختيارك من دولابك",
+                                )
+                                TeswaEvidenceLine(
+                                    icon = TeswaIcons.Exchange,
+                                    text = "حاجة واحدة مقابل حاجة واحدة",
+                                    supporting = "اختيارك من دولابك هو اللي يكمّل العلاقة قبل الإرسال.",
+                                )
+                            }
                         }
                     }
                 }
@@ -280,8 +326,17 @@ fun ItemDetailScreen(
 }
 
 @Composable
-private fun DetailSection(title: String, value: String) {
-    if (value.isBlank()) return
-    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    Text(value, style = MaterialTheme.typography.bodyLarge)
+private fun LongDetail(title: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
