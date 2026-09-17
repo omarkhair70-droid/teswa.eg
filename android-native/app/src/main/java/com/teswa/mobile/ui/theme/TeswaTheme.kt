@@ -11,27 +11,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teswa.mobile.ui.system.TeswaPalette
+import com.teswa.mobile.ui.system.TeswaRadius
 
 private val TeswaLightColors = lightColorScheme(
-    primary = Color(0xFF93482F),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFFDBCF),
+    primary = TeswaPalette.Clay,
+    onPrimary = Color.White,
+    primaryContainer = TeswaPalette.ClayContainer,
     onPrimaryContainer = Color(0xFF3A0B00),
-    secondary = Color(0xFF46665B),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFC9EBDD),
+    secondary = TeswaPalette.Sage,
+    onSecondary = Color.White,
+    secondaryContainer = TeswaPalette.SageContainer,
     onSecondaryContainer = Color(0xFF062019),
-    tertiary = Color(0xFF805610),
-    onTertiary = Color(0xFFFFFFFF),
-    background = Color(0xFFFBF8F3),
-    onBackground = Color(0xFF211A17),
-    surface = Color(0xFFFFFDFC),
-    onSurface = Color(0xFF211A17),
-    surfaceVariant = Color(0xFFF2E8E2),
+    tertiary = TeswaPalette.Amber,
+    onTertiary = Color.White,
+    background = TeswaPalette.Paper,
+    onBackground = TeswaPalette.Ink,
+    surface = TeswaPalette.Surface,
+    onSurface = TeswaPalette.Ink,
+    surfaceVariant = TeswaPalette.MutedField,
     onSurfaceVariant = Color(0xFF53433C),
-    outline = Color(0xFF88736A),
+    outline = TeswaPalette.Outline,
     error = Color(0xFFBA1A1A),
 )
 
@@ -84,26 +85,45 @@ private val TeswaTypography = Typography(
     titleLarge = Typography().titleLarge.copy(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp,
         lineHeight = 29.sp,
     ),
     titleMedium = Typography().titleMedium.copy(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
         lineHeight = 24.sp,
     ),
-    bodyLarge = Typography().bodyLarge.copy(fontFamily = FontFamily.SansSerif, lineHeight = 26.sp),
-    bodyMedium = Typography().bodyMedium.copy(fontFamily = FontFamily.SansSerif, lineHeight = 22.sp),
-    bodySmall = Typography().bodySmall.copy(fontFamily = FontFamily.SansSerif, lineHeight = 18.sp),
-    labelLarge = Typography().labelLarge.copy(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold),
-    labelMedium = Typography().labelMedium.copy(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium),
+    bodyLarge = Typography().bodyLarge.copy(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 16.sp,
+        lineHeight = 26.sp,
+    ),
+    bodyMedium = Typography().bodyMedium.copy(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 14.sp,
+        lineHeight = 22.sp,
+    ),
+    bodySmall = Typography().bodySmall.copy(
+        fontFamily = FontFamily.SansSerif,
+        lineHeight = 18.sp,
+    ),
+    labelLarge = Typography().labelLarge.copy(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+    ),
+    labelMedium = Typography().labelMedium.copy(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+    ),
 )
 
 private val TeswaShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp),
+    extraSmall = RoundedCornerShape(TeswaRadius.xs),
+    small = RoundedCornerShape(TeswaRadius.sm),
+    medium = RoundedCornerShape(TeswaRadius.md),
+    large = RoundedCornerShape(TeswaRadius.lg),
+    extraLarge = RoundedCornerShape(TeswaRadius.hero),
 )
 
 @Composable
