@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
@@ -48,6 +49,7 @@ import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaObjectStage
 import com.teswa.mobile.ui.system.TeswaPersonIdentity
 import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 
@@ -68,8 +70,11 @@ fun ItemDetailScreen(
 ) {
     val holder = remember(itemId, client) { ItemDetailStateHolder(itemId, initialSession, client) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var creatingOffer by remember(itemId) { mutableStateOf(false) }
     var editing by remember(itemId) { mutableStateOf(false) }
+    var sharing by remember(itemId) { mutableStateOf(false) }
+    var shareMessage by remember(itemId) { mutableStateOf<String?>(null) }
 
     BackHandler {
         when {
@@ -172,6 +177,38 @@ fun ItemDetailScreen(
                             state = if (isMine) "حاجتك" else "متاحة للعرض",
                             stateEmphasis = if (isMine) TeswaEmphasis.Quiet else TeswaEmphasis.Strong,
                         )
+                    }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                            TeswaSecondaryAction(
+                                text = if (sharing) "بنجهّز المشاركة…" else "شارك الاحتمال",
+                                icon = TeswaIcons.Share,
+                                enabled = !sharing,
+                                onClick = {
+                                    scope.launch {
+                                        sharing = true
+                                        shareMessage = null
+                                        runCatching { sharePublicItem(context, detail) }
+                                            .onSuccess { includedImage ->
+                                                if (!includedImage) {
+                                                    shareMessage = "شاركنا الرابط العام من غير الصورة عشان المشاركة تفضل شغالة."
+                                                }
+                                            }
+                                            .onFailure {
+                                                shareMessage = "تعذر فتح المشاركة دلوقتي. حاول مرة تانية."
+                                            }
+                                        sharing = false
+                                    }
+                                },
+                            )
+                            shareMessage?.let { message ->
+                                Text(
+                                    text = message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                     if (detail.images.size > 1) {
                         item {

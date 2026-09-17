@@ -9,6 +9,8 @@ class NativeRouteParserTest {
 
     @Test
     fun parsesInternalCustomAndHttpsRoutes() {
+        assertEquals(NativeRoute.Item(id), NativeRouteParser.parse("https://teswa.eg/item/$id"))
+        assertEquals(NativeRoute.Item(id), NativeRouteParser.parse("https://www.teswa.eg/item/$id?from=share"))
         assertEquals(NativeRoute.Deal(id), NativeRouteParser.parse("/deal/$id"))
         assertEquals(NativeRoute.Direct(id), NativeRouteParser.parse("teswa://direct/$id"))
         assertEquals(NativeRoute.Profile(id), NativeRouteParser.parse("https://teswa.eg/profile/$id?from=push"))
