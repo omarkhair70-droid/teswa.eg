@@ -33,6 +33,7 @@ object TeswaLayout {
 
     // Identity geometry is shared across Me/edit/public identity surfaces.
     val ProfileCoverHeight = 112.dp
+    val ProfileCoverRadius = 32.dp
     val ProfileAvatarLarge = 84.dp
 
     const val MaxTitleLines = 2
