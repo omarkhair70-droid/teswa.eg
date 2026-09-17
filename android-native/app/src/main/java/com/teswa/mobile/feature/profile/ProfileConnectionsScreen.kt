@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.profile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
 import kotlinx.coroutines.launch
 
 @Composable
@@ -52,6 +63,7 @@ fun ProfileConnectionsScreen(
         ProfileConnectionsStateHolder(initialSession, profileId, mode, repository)
     }
     val scope = rememberCoroutineScope()
+    BackHandler(onBack = onBack)
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -61,47 +73,38 @@ fun ProfileConnectionsScreen(
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
     Column(modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            OutlinedButton(onClick = onBack) { Text("رجوع") }
-            Column(Modifier.weight(1f)) {
-                Text(mode.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(
-                    if (mode == ProfileConnectionsMode.FOLLOWERS) "الناس اللي بتتابع الحساب" else "الحسابات اللي بيتابعها",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        TeswaFocusedHeader(title = mode.title, onBack = onBack)
+        Text(
+            if (mode == ProfileConnectionsMode.FOLLOWERS) "الناس اللي بتتابع الحساب" else "الحسابات اللي بيتابعها",
+            modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         when (val state = holder.state) {
-            ProfileConnectionsUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            is ProfileConnectionsUiState.Error -> Column(
-                Modifier.fillMaxSize().padding(28.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(state.message, textAlign = TextAlign.Center)
-                Spacer(Modifier.size(14.dp))
-                Button(onClick = { scope.launch { holder.load() } }) { Text("حاول تاني") }
-            }
+            ProfileConnectionsUiState.Loading -> TeswaInlineLoading(
+                "بنحمّل العلاقات…",
+                Modifier.padding(TeswaLayout.ScreenHorizontal),
+            )
+            is ProfileConnectionsUiState.Error -> TeswaInlineMessage(
+                title = "العلاقات مش متاحة",
+                body = state.message,
+                icon = TeswaIcons.Refresh,
+                actionLabel = "حاول تاني",
+                onAction = { scope.launch { holder.load() } },
+                modifier = Modifier.padding(TeswaLayout.ScreenHorizontal),
+            )
             is ProfileConnectionsUiState.Ready -> if (state.items.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (mode == ProfileConnectionsMode.FOLLOWERS) "مفيش متابعين هنا لسه." else "مش بيتابع حد هنا لسه.",
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                TeswaEmptyField(
+                    title = "لسه مفيش علاقات هنا",
+                    body = if (mode == ProfileConnectionsMode.FOLLOWERS) "مفيش متابعين للحساب لسه." else "الحساب مش بيتابع حد لسه.",
+                    modifier = Modifier.padding(TeswaLayout.ScreenHorizontal),
+                )
             } else {
                 LazyColumn(
                     Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = TeswaLayout.FocusedContentPadding,
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
                 ) {
                     items(state.items, key = { it.profileId }) { connection ->
                         ProfileConnectionRow(
@@ -124,29 +127,24 @@ private fun ProfileConnectionRow(
 ) {
     val name = connection.displayName ?: connection.username ?: "مستخدم تِسوى"
     val location = listOfNotNull(connection.area, connection.city).joinToString("، ")
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (mine) Modifier else Modifier.clickable(onClick = onOpen)),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f),
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = TeswaSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            NetworkImage(connection.avatarUrl, name, Modifier.size(52.dp).clip(CircleShape))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                connection.username?.let {
-                    Text("@$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                }
-                if (location.isNotBlank()) {
-                    Text(location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            if (mine) Text("أنت", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        TeswaPersonIdentity(
+            name = name,
+            avatarUrl = connection.avatarUrl,
+            supporting = connection.username?.let { "@$it" },
+            evidence = location.takeIf { it.isNotBlank() },
+            onClick = if (mine) null else onOpen,
+            modifier = Modifier.weight(1f),
+        )
+        if (mine) {
+            TeswaStatePill(
+                text = "أنت",
+                emphasis = TeswaEmphasis.Quiet,
+            )
         }
     }
 }

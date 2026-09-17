@@ -33,3 +33,16 @@ jobs:
         run: gradle -p android-native :app:compileReleaseKotlin --stacktrace
       - name: Run native release Android lint
         run: gradle -p android-native :app:lintRelease --stacktrace
+      - name: Build installable debug APK
+        run: gradle -p android-native :app:assembleDebug --stacktrace
+      - name: Build debug Android App Bundle
+        run: gradle -p android-native :app:bundleDebug --stacktrace
+      - name: Upload native preview builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: teswa-native-preview-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            android-native/app/build/outputs/apk/debug/app-debug.apk
+            android-native/app/build/outputs/bundle/debug/app-debug.aab

@@ -1,7 +1,7 @@
 package com.teswa.mobile.feature.contextual
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,12 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,21 +20,34 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
+import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 @Composable
-fun ContextualContent(holder: ContextualStateHolder, voiceMediaRepository: VoiceMediaRepository, modifier: Modifier = Modifier) {
+fun ContextualContent(
+    holder: ContextualStateHolder,
+    voiceMediaRepository: VoiceMediaRepository,
+    modifier: Modifier = Modifier,
+) {
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { holder.load() }
     LaunchedEffect(holder.thread?.conversation?.id) {
         while (isActive) {
             delay(30_000)
@@ -47,24 +55,58 @@ fun ContextualContent(holder: ContextualStateHolder, voiceMediaRepository: Voice
             if (current == null) holder.load(silent = true) else holder.reloadThread()
         }
     }
-    holder.thread?.let { ContextualThreadContent(holder, it, voiceMediaRepository, modifier); return }
+
+    holder.thread?.let {
+        ContextualThreadContent(holder, it, voiceMediaRepository, modifier)
+        return
+    }
+
     when (val state = holder.state) {
-        ContextualUiState.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        is ContextualUiState.Error -> Column(modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
-            Text(state.message)
-            Button(onClick = { scope.launch { holder.load() } }) { Text("حاول تاني") }
-        }
+        ContextualUiState.Loading -> TeswaInlineLoading(
+            "بنرجّع الردود لسياقها…",
+            modifier.padding(TeswaLayout.ScreenHorizontal),
+        )
+        is ContextualUiState.Error -> TeswaInlineMessage(
+            title = "ردود القصص مش متاحة",
+            body = state.message,
+            icon = TeswaIcons.Refresh,
+            emphasis = TeswaEmphasis.Strong,
+            actionLabel = "حاول تاني",
+            onAction = { scope.launch { holder.load() } },
+            modifier = modifier.padding(TeswaLayout.ScreenHorizontal),
+        )
         is ContextualUiState.Ready -> if (state.items.isEmpty()) {
-            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("ردود القصص هتظهر هنا.") }
-        } else LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp)) {
-            items(state.items, key = { it.id }) { value ->
-                Card(onClick = { scope.launch { holder.open(value) } }, modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-                    Column(Modifier.padding(14.dp)) {
-                        Row {
-                            Text(value.other.displayName ?: value.other.username ?: "مستخدم تِسوى", Modifier.weight(1f), fontWeight = if (value.unreadCount > 0) FontWeight.Bold else FontWeight.Medium)
-                            Text("رد قصة", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                        }
-                        Text(value.latestBody ?: "ابدأوا الكلام من سياق القصة", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            TeswaEmptyField(
+                title = "مفيش كلام بدأ من قصة",
+                body = "لما رد يفتح كلام، السبب اللي بدأه يفضل محفوظ هنا بدل ما يتحول لشات بلا سياق.",
+                modifier = modifier.padding(TeswaLayout.ScreenHorizontal),
+            )
+        } else {
+            LazyColumn(
+                modifier.fillMaxSize(),
+                contentPadding = TeswaLayout.RootContentPadding,
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            ) {
+                item {
+                    TeswaTraceNote("كل سطر هنا بدأ من لحظة محددة. السياق يفضل مع الكلام عشان ما يبقاش مجرد inbox تاني.")
+                }
+                items(state.items, key = { it.id }) { value ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { scope.launch { holder.open(value) } }
+                            .padding(vertical = TeswaSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                    ) {
+                        TeswaPersonIdentity(
+                            name = value.other.displayName ?: value.other.username ?: "مستخدم تِسوى",
+                            avatarUrl = value.other.avatarUrl,
+                            supporting = value.latestBody ?: "الكلام بدأ من قصة",
+                            evidence = if (value.unreadCount > 0) "${value.unreadCount} جديد" else "سياق القصة محفوظ",
+                            modifier = Modifier.weight(1f),
+                        )
+                        TeswaStatePill("من قصة", emphasis = TeswaEmphasis.Quiet)
                     }
                 }
             }
@@ -73,39 +115,89 @@ fun ContextualContent(holder: ContextualStateHolder, voiceMediaRepository: Voice
 }
 
 @Composable
-private fun ContextualThreadContent(holder: ContextualStateHolder, thread: ContextualThread, voiceMediaRepository: VoiceMediaRepository, modifier: Modifier) {
+private fun ContextualThreadContent(
+    holder: ContextualStateHolder,
+    thread: ContextualThread,
+    voiceMediaRepository: VoiceMediaRepository,
+    modifier: Modifier,
+) {
     val scope = rememberCoroutineScope()
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = holder::close) { Text("رجوع") }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(thread.conversation.other.displayName ?: thread.conversation.other.username ?: "مستخدم تِسوى", fontWeight = FontWeight.Bold)
-                Text("محادثة بدأت من قصة", style = MaterialTheme.typography.bodySmall)
-            }
+        TeswaFocusedHeader(title = "كلام بدأ من قصة", onBack = holder::close)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TeswaLayout.ScreenHorizontal),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            TeswaArchiveLabel("CONTEXT / STORY")
+            TeswaPersonIdentity(
+                name = thread.conversation.other.displayName ?: thread.conversation.other.username ?: "مستخدم تِسوى",
+                avatarUrl = thread.conversation.other.avatarUrl,
+                supporting = "الشخص اللي رد على اللحظة",
+            )
+            TeswaTraceNote("المحادثة دي موجودة لأن قصة سبقتها. السبب ده جزء من معناها، ومش بيتشال لما الرسائل تزيد.")
         }
-        Surface(color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
-            Text("السياق محفوظ عشان الرد يفضل مفهوم من غير ما يتحول لضوضاء.", Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodySmall)
+
+        holder.message?.let { message ->
+            TeswaInlineMessage(
+                title = "الرد مكملش",
+                body = message,
+                emphasis = TeswaEmphasis.Strong,
+                modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+            )
         }
-        holder.message?.let { Text(it, Modifier.fillMaxWidth().padding(10.dp), color = MaterialTheme.colorScheme.error) }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(
+                horizontal = TeswaLayout.ScreenHorizontal,
+                vertical = TeswaSpacing.md,
+            ),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
             items(thread.messages, key = { it.id }) { value ->
                 val mine = value.senderId == holder.session.user.id
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-                    Surface(shape = MaterialTheme.shapes.medium, color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+                ) {
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
                         if (value.kind == "voice" && value.mediaStoragePath != null) {
                             VoiceMessagePlayer(value.durationMs) {
                                 when (val result = voiceMediaRepository.signedUrl(holder.session, "contextual_voice", value.mediaStoragePath)) {
-                                    is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
-                                    is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showMessage(result.message); null }
+                                    is VoiceMediaResult.Success -> {
+                                        holder.updateSession(result.session)
+                                        result.value
+                                    }
+                                    is VoiceMediaResult.Failure -> {
+                                        result.session?.let(holder::updateSession)
+                                        holder.showMessage(result.message)
+                                        null
+                                    }
                                 }
                             }
-                        } else Text(value.body, Modifier.padding(12.dp), color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Text(
+                                value.body,
+                                Modifier.padding(TeswaSpacing.md),
+                                color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.sm),
+            verticalAlignment = Alignment.Bottom,
+        ) {
             VoiceComposer(
                 enabled = true,
                 sending = holder.working,
@@ -113,10 +205,23 @@ private fun ContextualThreadContent(holder: ContextualStateHolder, thread: Conte
                 onSend = holder::sendVoice,
                 onError = holder::showMessage,
             )
-            Spacer(Modifier.width(8.dp))
-            OutlinedTextField(holder.composer, holder::compose, Modifier.weight(1f), placeholder = { Text("رد في سياق القصة…") }, maxLines = 4)
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = { scope.launch { holder.send() } }, enabled = holder.composer.isNotBlank() && !holder.working) { Text("إرسال") }
+            Spacer(Modifier.width(TeswaSpacing.xs))
+            TeswaTextField(
+                value = holder.composer,
+                onValueChange = holder::compose,
+                modifier = Modifier.weight(1f),
+                label = "رد في نفس السياق",
+                placeholder = "كمّل من اللحظة اللي بدأت الكلام…",
+                singleLine = false,
+                maxLines = 4,
+            )
+            Spacer(Modifier.width(TeswaSpacing.xs))
+            com.teswa.mobile.ui.system.TeswaIconAction(
+                icon = TeswaIcons.Send,
+                contentDescription = "إرسال الرد",
+                onClick = { scope.launch { holder.send() } },
+                enabled = holder.composer.isNotBlank() && !holder.working,
+            )
         }
     }
 }

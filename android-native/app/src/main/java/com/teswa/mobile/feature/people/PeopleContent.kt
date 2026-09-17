@@ -1,37 +1,34 @@
 package com.teswa.mobile.feature.people
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEvidenceLine
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSearchField
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTraceNote
 
 @Composable
 internal fun PeopleDirectoryContent(
@@ -49,106 +46,122 @@ internal fun PeopleDirectoryContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(bottom = TeswaSpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
     ) {
         item {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("ناس تِسوى", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        "اكتشف الشخص قبل العرض: اهتماماته، مكانه، ونشاطه على تِسوى.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                OutlinedButton(onClick = onBack) { Text("رجوع") }
-            }
+            TeswaFocusedHeader(title = "الناس", onBack = onBack)
         }
 
         item {
-            Card {
-                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = queryDraft,
-                        onValueChange = onQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("دور على شخص") },
-                        placeholder = { Text("اسم، @username، مدينة أو منطقة") },
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = TeswaLayout.ScreenHorizontal),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            ) {
+                TeswaTraceNote("الشخص هنا مهم بقدر ما يساعدك تفهم مين ورا الحاجة، وإيه الدليل اللي اتكوّن من تبديلات حقيقية.")
+                TeswaSearchField(
+                    query = queryDraft,
+                    onQueryChange = onQueryChange,
+                    onSearch = onSearch,
+                    placeholder = "اسم، username، مدينة أو منطقة",
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                    TeswaPrimaryAction(
+                        text = "دور",
+                        onClick = onSearch,
+                        modifier = Modifier.weight(1f),
+                        icon = TeswaIcons.Search,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onSearch) { Text("بحث") }
-                        if (queryDraft.isNotBlank()) OutlinedButton(onClick = onClear) { Text("مسح") }
-                        OutlinedButton(enabled = !refreshing, onClick = onRefresh) {
-                            Text(if (refreshing) "بنحدّث…" else "تحديث")
-                        }
+                    if (queryDraft.isNotBlank()) {
+                        TeswaSecondaryAction(
+                            text = "امسح",
+                            onClick = onClear,
+                            modifier = Modifier.weight(1f),
+                            icon = TeswaIcons.Clear,
+                        )
                     }
+                    TeswaSecondaryAction(
+                        text = if (refreshing) "بنحدّث…" else "حدّث",
+                        onClick = onRefresh,
+                        modifier = Modifier.weight(1f),
+                        icon = TeswaIcons.Refresh,
+                        enabled = !refreshing,
+                    )
                 }
             }
         }
 
         when (state) {
-            PeopleUiState.Loading -> item { PeopleCenter("بنحضّر ناس تِسوى…", loading = true) }
-            is PeopleUiState.Error -> item { PeopleCenter(state.message) }
-            is PeopleUiState.Empty -> item {
-                PeopleCenter(
-                    if (state.query.isBlank()) "لسه مفيش ملفات متاحة للاستكشاف دلوقتي."
-                    else "مفيش حد مطابق لـ «${state.query}» دلوقتي.",
+            PeopleUiState.Loading -> item {
+                TeswaInlineLoading(
+                    "بندور على الناس…",
+                    Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                 )
             }
+
+            is PeopleUiState.Error -> item {
+                TeswaInlineMessage(
+                    title = "الناس مش متاحة دلوقتي",
+                    body = state.message,
+                    icon = TeswaIcons.Refresh,
+                    emphasis = TeswaEmphasis.Strong,
+                    actionLabel = "حاول تاني",
+                    onAction = onRefresh,
+                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                )
+            }
+
+            is PeopleUiState.Empty -> item {
+                TeswaEmptyField(
+                    title = "مفيش حد مطابق",
+                    body = if (state.query.isBlank()) {
+                        "لسه مفيش ملفات ظاهرة في النطاق الحالي."
+                    } else {
+                        "ملقيناش حد مطابق لـ «${state.query}» دلوقتي."
+                    },
+                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                )
+            }
+
             is PeopleUiState.Content -> {
                 item {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text(
-                                if (state.query.isBlank()) "اكتشف المجتمع" else "نتائج «${state.query}»",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                "${state.entries.size} ملف ظاهر دلوقتي",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                    TeswaSectionHeader(
+                        title = if (state.query.isBlank()) "هويات وأثر من التعامل" else "نتائج «${state.query}»",
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    )
                 }
 
                 items(state.entries, key = { it.id }) { person ->
-                    PersonDirectoryCard(person, onOpenProfile)
+                    PersonIdentityMoment(
+                        person = person,
+                        onOpenProfile = onOpenProfile,
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    )
                 }
 
                 state.loadMoreError?.let { message ->
                     item {
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = .45f),
-                        ) {
-                            Text(message, Modifier.fillMaxWidth().padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
-                        }
+                        TeswaInlineMessage(
+                            title = "باقي الناس ما ظهروش",
+                            body = message,
+                            emphasis = TeswaEmphasis.Quiet,
+                            actionLabel = "حاول تاني",
+                            onAction = onLoadMore,
+                            modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                        )
                     }
                 }
 
                 if (state.hasMore) {
                     item {
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.loadingMore,
+                        TeswaPrimaryAction(
+                            text = "هات ناس أكتر",
+                            loading = state.loadingMore,
                             onClick = onLoadMore,
-                        ) {
-                            if (state.loadingMore) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                            else Text("هات ناس أكتر")
-                        }
+                            modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                        )
                     }
                 }
             }
@@ -157,69 +170,41 @@ internal fun PeopleDirectoryContent(
 }
 
 @Composable
-private fun PersonDirectoryCard(person: PeopleEntry, onOpenProfile: (String) -> Unit) {
-    Card(onClick = { onOpenProfile(person.id) }) {
-        Column(Modifier.fillMaxWidth()) {
-            Box(Modifier.fillMaxWidth().height(104.dp)) {
-                NetworkImage(person.coverUrl, "غلاف ${person.displayName}", Modifier.fillMaxSize())
-                NetworkImage(
-                    person.avatarUrl,
-                    person.displayName,
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 14.dp, bottom = 10.dp)
-                        .size(64.dp)
-                        .clip(CircleShape),
-                )
-            }
-            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(person.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("@${person.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    }
-                    val place = listOfNotNull(person.city, person.area).joinToString(" • ")
-                    if (place.isNotBlank()) Text(place, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                }
-                (person.profileTagline ?: person.bio)?.let {
-                    Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PersonStat("${person.activeItemsCount}", "عناصر", Modifier.weight(1f))
-                    PersonStat("${person.successfulSwapsCount}", "تبديلات", Modifier.weight(1f))
-                    PersonStat(person.responseRate?.let { "${it.toInt()}%" } ?: "—", "معدل الرد", Modifier.weight(1f))
-                }
-                Text(
-                    "افتح الملف وشوف التفاصيل والحاجات النشطة",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
+private fun PersonIdentityMoment(
+    person: PeopleEntry,
+    onOpenProfile: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val place = listOfNotNull(person.city, person.area)
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
 
-@Composable
-private fun PersonStat(value: String, label: String, modifier: Modifier) {
-    Surface(modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f)) {
-        Column(Modifier.padding(9.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
-@Composable
-private fun PeopleCenter(message: String, loading: Boolean = false) {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 36.dp, horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onOpenProfile(person.id) }
+            .padding(vertical = TeswaSpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
     ) {
-        if (loading) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(12.dp))
-        }
-        Text(message, textAlign = TextAlign.Center)
+        TeswaPersonIdentity(
+            name = person.displayName,
+            avatarUrl = person.avatarUrl,
+            supporting = "@${person.username}" + if (place.isBlank()) "" else " · $place",
+            evidence = person.profileTagline?.takeIf { it.isNotBlank() }
+                ?: person.bio?.takeIf { it.isNotBlank() },
+        )
+        TeswaEvidenceLine(
+            icon = TeswaIcons.Trust,
+            text = "${person.successfulSwapsCount} تبديل مكتمل",
+            supporting = buildList {
+                add("${person.activeItemsCount} حاجة في اللعب")
+                person.responseRate?.let { add("بيرد بنسبة ${it.toInt()}%") }
+            }.joinToString(" · "),
+        )
+        Text(
+            text = "افتح الملف وشوف الحاجات والدليل في سياقهم",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
