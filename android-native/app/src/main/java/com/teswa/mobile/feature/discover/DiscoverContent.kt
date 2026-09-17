@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.discover
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -7,31 +8,31 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaObjectStage
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaScreenHeading
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSearchField
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
 
 @Composable
 fun DiscoverList(
@@ -61,56 +62,86 @@ fun DiscoverList(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(
+            horizontal = TeswaLayout.ScreenHorizontal,
+            vertical = TeswaLayout.ScreenVertical,
+        ),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("اكتشف", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "مش قائمة منتجات؛ دي مساحة تلاقي فيها حاجات وناس وفرص تبديل ليها معنى.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            TeswaScreenHeading(
+                title = "دور جوه الاحتمالات",
+                eyebrow = "اكتشف",
+                supporting = "ابحث بالاسم أو التصنيف أو المدينة، وبعدها ضيّق النطاق على قد القرار اللي بتحاول تاخده.",
+            )
         }
 
         item {
-            Card {
-                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = queryDraft,
-                        onValueChange = onQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("دور على حاجة") },
-                        placeholder = { Text("اسم، تصنيف، مدينة…") },
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            ) {
+                TeswaSearchField(
+                    query = queryDraft,
+                    onQueryChange = onQueryChange,
+                    onSearch = onApplyQuery,
+                    placeholder = "اسم حاجة، تصنيف، مدينة…",
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TeswaChoiceChip(
+                        label = when {
+                            holder.locationWorking -> "بنحدد القريب…"
+                            holder.nearbyLocation != null -> "قريب مني"
+                            else -> "الأقرب لي"
+                        },
+                        selected = holder.nearbyLocation != null,
+                        onClick = if (holder.nearbyLocation == null) onNearby else onDisableNearby,
+                        leadingIcon = TeswaIcons.Location,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onApplyQuery) { Text("بحث") }
-                        if (holder.filters.activeCount > 0) OutlinedButton(onClick = onClearFilters) { Text("مسح الفلاتر") }
+                    if (holder.filters.activeCount > 0) {
+                        TeswaChoiceChip(
+                            label = "امسح ${holder.filters.activeCount} فلتر",
+                            selected = true,
+                            onClick = onClearFilters,
+                            leadingIcon = TeswaIcons.Clear,
+                        )
                     }
+                }
+                holder.message?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
 
         if (categories.isNotEmpty()) {
             item {
-                Text("التصنيفات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TeswaSectionHeader("التصنيفات")
+                Spacer(Modifier.padding(top = TeswaSpacing.xxs))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
                     item {
-                        FilterChip(
+                        TeswaChoiceChip(
+                            label = "الكل",
                             selected = holder.filters.category == null,
                             onClick = { onSelectCategory(null) },
-                            label = { Text("الكل") },
                         )
                     }
                     items(categories, key = { it.id }) { category ->
-                        FilterChip(
+                        TeswaChoiceChip(
+                            label = category.nameAr,
                             selected = holder.filters.category == category.nameAr,
-                            onClick = { onSelectCategory(if (holder.filters.category == category.nameAr) null else category.nameAr) },
-                            label = { Text(category.nameAr) },
+                            onClick = {
+                                onSelectCategory(
+                                    if (holder.filters.category == category.nameAr) null else category.nameAr,
+                                )
+                            },
                         )
                     }
                 }
@@ -118,9 +149,9 @@ fun DiscoverList(
         }
 
         item {
-            Text("الحالة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TeswaSectionHeader("الحالة")
+            Spacer(Modifier.padding(top = TeswaSpacing.xxs))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
                 item { ConditionChip("الكل", null, holder.filters.condition, onSelectCondition) }
                 item { ConditionChip("شبه جديد", "almost_new", holder.filters.condition, onSelectCondition) }
                 item { ConditionChip("حالة جيدة", "good_used", holder.filters.condition, onSelectCondition) }
@@ -130,183 +161,179 @@ fun DiscoverList(
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (holder.nearbyLocation == null) {
-                    OutlinedButton(enabled = !holder.locationWorking, onClick = onNearby) {
-                        Text(if (holder.locationWorking) "بنحدد موقعك…" else "الأقرب لي")
-                    }
-                } else {
-                    Button(enabled = !holder.locationWorking, onClick = onDisableNearby) { Text("قريب مني · إلغاء") }
-                }
-                OutlinedButton(onClick = onRefresh) { Text("تحديث") }
-            }
-            holder.message?.let {
-                Spacer(Modifier.height(6.dp))
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        item { StoriesEntryCard(onOpenStories) }
-
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("ناس تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("شوف الشخص قبل ما تشوف عرضه.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                TextButton(onClick = onOpenPeople) { Text("عرض الكل") }
-            }
+            TeswaSectionHeader(
+                title = "ناس ممكن يفرقوا في القرار",
+                actionLabel = "كل الناس",
+                onAction = onOpenPeople,
+            )
             if (people.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Spacer(Modifier.padding(top = TeswaSpacing.xs))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.lg)) {
                     items(people, key = { it.id }) { person ->
-                        PersonPreviewCard(person, onOpenProfile)
+                        Column(
+                            modifier = Modifier
+                                .fillParentMaxWidth(.72f)
+                                .clickable { onOpenProfile(person.id) },
+                            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                        ) {
+                            val place = listOfNotNull(person.city, person.area)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" • ")
+                            TeswaPersonIdentity(
+                                name = person.displayName,
+                                avatarUrl = person.avatarUrl,
+                                supporting = buildString {
+                                    append("@${person.username}")
+                                    if (place.isNotBlank()) append(" · $place")
+                                },
+                                evidence = "${person.successfulSwapsCount} تبديلات مكتملة · ${person.activeItemsCount} حاجات في اللعب",
+                            )
+                        }
                     }
                 }
             } else {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.padding(top = TeswaSpacing.xs))
                 Text(
-                    "افتح دليل ناس تِسوى ودور بالاسم أو المدينة.",
+                    text = "مفيش ناس ظاهرة في النطاق الحالي. تقدر تفتح الدليل وتدور بالاسم أو المدينة.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        item { MotionEntryCard(onOpenMotion) }
+        item {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+            ) {
+                TeswaSectionHeader("سياق حوالي الحاجة")
+                Text(
+                    text = "الحكايات والنبض هنا أدوات سياق، مش عالم منفصل عن التبديل.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    TeswaSecondaryAction(
+                        text = "الحكايات",
+                        onClick = onOpenStories,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TeswaSecondaryAction(
+                        text = "النبض",
+                        onClick = onOpenMotion,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
 
         item {
-            Text("حاجات ممكن تناسبك", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            TeswaSectionHeader(
+                title = "النتائج",
+                actionLabel = "حدّث",
+                onAction = onRefresh,
+            )
             if (holder.filters.activeCount > 0) {
-                Text("${holder.filters.activeCount} فلتر نشط", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = "${holder.filters.activeCount} فلتر نشط",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
 
         emptyMessage?.let { message ->
             item {
-                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)) {
-                    Text(message, Modifier.fillMaxWidth().padding(22.dp))
-                }
+                TeswaInlineMessage(
+                    title = "ملقيناش تطابق واضح",
+                    body = message,
+                    actionLabel = if (holder.filters.activeCount > 0) "امسح الفلاتر" else null,
+                    onAction = if (holder.filters.activeCount > 0) onClearFilters else null,
+                )
             }
         }
 
         if (items.isEmpty() && hasMore) {
             item {
-                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)) {
-                    Text("لسه مفيش تطابق في أول مجموعة قريبة. كمّل عشان ندور في نطاق أكبر من النتائج.", Modifier.fillMaxWidth().padding(18.dp))
-                }
+                TeswaInlineMessage(
+                    title = "أول نطاق مفيهوش تطابق",
+                    body = "نقدر نوسّع البحث ونشوف احتمالات أبعد شوية.",
+                    actionLabel = "وسّع البحث",
+                    onAction = onLoadMore,
+                )
             }
         }
 
-        items(items, key = { it.id }) { item -> DiscoverItemCard(item, onOpenItem) }
+        items(items, key = { it.id }) { item ->
+            DiscoverObject(
+                item = item,
+                onOpen = { onOpenItem(item.id) },
+            )
+        }
 
         if (hasMore) {
             item {
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !loadingMore,
+                TeswaPrimaryAction(
+                    text = "هات نتائج أكتر",
+                    loading = loadingMore,
                     onClick = onLoadMore,
-                ) {
-                    if (loadingMore) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else Text("هات أكتر")
-                }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ConditionChip(label: String, value: String?, selectedValue: String?, onSelect: (String?) -> Unit) {
-    FilterChip(
+private fun ConditionChip(
+    label: String,
+    value: String?,
+    selectedValue: String?,
+    onSelect: (String?) -> Unit,
+) {
+    TeswaChoiceChip(
+        label = label,
         selected = selectedValue == value,
         onClick = { onSelect(if (selectedValue == value && value != null) null else value) },
-        label = { Text(label) },
     )
 }
 
 @Composable
-private fun PersonPreviewCard(person: DiscoverPersonPreview, onOpenProfile: (String) -> Unit) {
-    Card(onClick = { onOpenProfile(person.id) }, modifier = Modifier.size(width = 210.dp, height = 138.dp)) {
-        Row(Modifier.fillMaxSize().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(
-                url = person.avatarUrl,
-                contentDescription = person.displayName,
-                modifier = Modifier.size(54.dp).clip(CircleShape),
+private fun DiscoverObject(
+    item: DiscoverItem,
+    onOpen: () -> Unit,
+) {
+    val meta = buildList {
+        item.condition?.takeIf { it.isNotBlank() }?.let(::add)
+        item.city?.takeIf { it.isNotBlank() }?.let(::add)
+        item.distanceKm?.let { add(String.format(java.util.Locale.US, "%.1f كم", it)) }
+    }.joinToString(" • ")
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        TeswaObjectStage(
+            item = TeswaObjectIdentity(
+                title = item.title,
+                imageUrl = item.imageUrl,
+                meta = meta.takeIf { it.isNotBlank() },
+                owner = item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { "عند $it" },
+            ),
+            eyebrow = item.category?.takeIf { it.isNotBlank() },
+        )
+        item.description?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.size(10.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(person.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text("@${person.username}", style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                val place = listOfNotNull(person.city, person.area).joinToString(" • ")
-                if (place.isNotBlank()) Text(place, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                Text("${person.activeItemsCount} عناصر · ${person.successfulSwapsCount} تبديلات", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun StoriesEntryCard(onOpenStories: () -> Unit) {
-    Card(onClick = onOpenStories) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("حكايات تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "ادخل على الحكايات النشطة وشوف الناس بتحكي عن حاجاتها قبل التبديل.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            OutlinedButton(onClick = onOpenStories) { Text("شوف") }
-        }
-    }
-}
-
-@Composable
-private fun MotionEntryCard(onOpen: () -> Unit) {
-    Card(onClick = onOpen) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("نبض تِسوى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "شوف العناصر اللي بدأت تتحرك، الحكايات، لقطات الفيديو، ونبض مدينتك في مساحة مستقلة.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            Spacer(Modifier.size(10.dp))
-            OutlinedButton(onClick = onOpen) { Text("افتح") }
-        }
-    }
-}
-
-@Composable
-private fun DiscoverItemCard(item: DiscoverItem, onOpenItem: (String) -> Unit) {
-    Card(onClick = { onOpenItem(item.id) }) {
-        Column {
-            NetworkImage(item.imageUrl, item.title, Modifier.fillMaxWidth().height(205.dp))
-            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                val meta = listOfNotNull(item.category, item.condition, item.city).joinToString(" • ")
-                if (meta.isNotBlank()) Text(meta, style = MaterialTheme.typography.bodySmall)
-                item.description?.let { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium) }
-                val footer = buildList {
-                    item.ownerDisplayName?.let(::add)
-                    item.distanceKm?.let { add(String.format(java.util.Locale.US, "%.1f كم", it)) }
-                }.joinToString(" · ")
-                if (footer.isNotBlank()) Text(footer, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
         }
     }
 }
@@ -319,18 +346,22 @@ fun DiscoverCentered(
     action: Pair<String, () -> Unit>? = null,
 ) {
     Column(
-        modifier.fillMaxSize().padding(28.dp),
+        modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         if (loading) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(14.dp))
-        }
-        Text(message)
-        action?.let {
-            Spacer(Modifier.height(14.dp))
-            Button(onClick = it.second) { Text(it.first) }
+            TeswaInlineLoading(message)
+        } else {
+            TeswaInlineMessage(
+                title = "الاكتشاف وقف هنا",
+                body = message,
+                emphasis = TeswaEmphasis.Strong,
+                actionLabel = action?.first,
+                onAction = action?.second,
+            )
         }
     }
 }
