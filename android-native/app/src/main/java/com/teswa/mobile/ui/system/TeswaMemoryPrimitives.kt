@@ -219,10 +219,11 @@ fun TeswaWardrobeSection(
 fun TeswaExchangeMemoryPair(
     requestedTitle: String,
     requestedImageUrl: String?,
-    offeredTitle: String,
+    offeredTitle: String?,
     offeredImageUrl: String?,
     modifier: Modifier = Modifier,
     state: String? = null,
+    emptyOfferedLabel: String = "حاجة من دولابك",
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -253,11 +254,18 @@ fun TeswaExchangeMemoryPair(
                     )
                 }
             }
-            MiniObjectMemory(
-                title = offeredTitle,
-                imageUrl = offeredImageUrl,
-                modifier = Modifier.weight(1f),
-            )
+            if (offeredTitle != null) {
+                MiniObjectMemory(
+                    title = offeredTitle,
+                    imageUrl = offeredImageUrl,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                EmptyObjectMemory(
+                    label = emptyOfferedLabel,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
@@ -284,6 +292,42 @@ private fun MiniObjectMemory(
             text = title,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun EmptyObjectMemory(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f),
+                    shape = RoundedCornerShape(TeswaRadius.md),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            TeswaMarkIcon(
+                mark = TeswaMark.Mine,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = 34.dp,
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
