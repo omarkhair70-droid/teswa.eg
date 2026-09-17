@@ -21,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,6 +45,7 @@ import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaActionSheet
 import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
@@ -766,28 +766,27 @@ private fun DolabItemDetail(
     }
 
     if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("نشيل الحاجة؟") },
-            text = { Text("هتتمسح الحاجة وسياقها من الدولاب. لو حالتها العامة مرتبطة بتاريخ تبديل، السيرفر هو اللي هيحدد لو الحذف مسموح.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDelete = false
-                        scope.launch {
-                            if (holder.delete(item)) onDeleted()
-                        }
-                    },
-                ) {
-                    Text("حذف", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) {
-                    Text("رجوع")
-                }
-            },
-        )
+        TeswaActionSheet(
+            title = "نشيل الحاجة؟",
+            supporting = "هتتمسح الحاجة وسياقها من الدولاب. لو الحاجة مرتبطة بتاريخ تبديل، هنحافظ على السجل ومش هنسمح بحذف يقطعه.",
+            onDismiss = { confirmDelete = false },
+        ) {
+            TextButton(
+                onClick = {
+                    confirmDelete = false
+                    scope.launch {
+                        if (holder.delete(item)) onDeleted()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("حذف نهائي", color = MaterialTheme.colorScheme.error)
+            }
+            TeswaSecondaryAction(
+                text = "رجوع",
+                onClick = { confirmDelete = false },
+            )
+        }
     }
 }
 
@@ -932,47 +931,41 @@ private fun DolabCreateDialog(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("احفظ حاجة في دولابك") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
-                Text(
-                    text = "مش لازم تبقى جاهزة للنشر أو التبديل. احفظها الأول وخلي القرار عندك.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TeswaTextField(
-                    value = title,
-                    onValueChange = { title = it.take(160) },
-                    label = "اسم بسيط",
-                )
-                TeswaTextField(
-                    value = description,
-                    onValueChange = { description = it.take(4_000) },
-                    label = "ملاحظة أو فكرة",
-                    singleLine = false,
-                    minLines = 2,
-                    maxLines = 5,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
+    TeswaActionSheet(
+        title = "احفظ حاجة في دولابك",
+        supporting = "مش لازم تبقى جاهزة للنشر أو التبديل. احفظها الأول وخلي القرار عندك.",
+        onDismiss = onDismiss,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+            TeswaTextField(
+                value = title,
+                onValueChange = { title = it.take(160) },
+                label = "اسم بسيط",
+                enabled = !busy,
+            )
+            TeswaTextField(
+                value = description,
+                onValueChange = { description = it.take(4_000) },
+                label = "ملاحظة أو فكرة",
+                singleLine = false,
+                minLines = 2,
+                maxLines = 5,
+                enabled = !busy,
+            )
+            TeswaPrimaryAction(
+                text = "حفظ في دولابي",
                 onClick = { onCreate(DolabItemDraft(title = title, description = description)) },
                 enabled = !busy && (title.isNotBlank() || description.isNotBlank()),
-            ) {
-                Text(if (busy) "بنحفظ…" else "حفظ")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) {
-                Text("رجوع")
-            }
-        },
-    )
+                loading = busy,
+            )
+            TeswaSecondaryAction(
+                text = "رجوع",
+                onClick = onDismiss,
+                enabled = !busy,
+            )
+        }
+    }
 }
-
 @Composable
 private fun DolabMessage(
     value: String,
