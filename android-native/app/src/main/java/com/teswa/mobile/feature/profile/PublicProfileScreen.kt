@@ -1,7 +1,7 @@
 package com.teswa.mobile.feature.profile
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,17 +13,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,8 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
@@ -46,20 +40,24 @@ import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaActionSheet
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEmptyField
 import com.teswa.mobile.ui.system.TeswaEvidenceLine
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
 import com.teswa.mobile.ui.system.TeswaIcons
-import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
-import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
+import com.teswa.mobile.ui.system.TeswaObjectMoment
+import com.teswa.mobile.ui.system.TeswaObjectMomentVariant
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTraceNote
 import kotlinx.coroutines.launch
 
 @Composable
@@ -80,6 +78,7 @@ fun PublicProfileScreen(
     var confirmBlock by remember { mutableStateOf<Boolean?>(null) }
     var connectionsMode by remember(profileId) { mutableStateOf<ProfileConnectionsMode?>(null) }
     var nestedProfileId by remember(profileId) { mutableStateOf<String?>(null) }
+
     BackHandler {
         when {
             nestedProfileId != null -> nestedProfileId = null
@@ -127,97 +126,146 @@ fun PublicProfileScreen(
 
     when (val state = holder.state) {
         PublicProfileUiState.Loading -> PublicCenter("بنحضّر الملف…", modifier, true)
-        is PublicProfileUiState.Error -> PublicCenter(state.message, modifier, primary = "حاول تاني" to { scope.launch { holder.load() } }, secondary = "رجوع" to onBack)
+        is PublicProfileUiState.Error -> PublicCenter(
+            state.message,
+            modifier,
+            primary = "حاول تاني" to { scope.launch { holder.load() } },
+            secondary = "رجوع" to onBack,
+        )
         is PublicProfileUiState.Ready -> {
             val profile = state.overview.profile
+            val location = listOfNotNull(profile.area, profile.city)
+                .filter { it.isNotBlank() }
+                .joinToString("، ")
             Column(modifier.fillMaxSize()) {
                 TeswaFocusedHeader(
-                    title = "ملف شخص",
+                    title = "شخص على تِسوى",
                     onBack = onBack,
                     actionIcon = if (profile.id != holder.session.user.id) TeswaIcons.Report else null,
                     actionDescription = if (profile.id != holder.session.user.id) "الإبلاغ عن المستخدم" else null,
-                    onAction = if (profile.id != holder.session.user.id) ({ onReport(ReportTarget.User(profile.id, profile.displayName)) }) else null,
+                    onAction = if (profile.id != holder.session.user.id) {
+                        ({ onReport(ReportTarget.User(profile.id, profile.displayName)) })
+                    } else null,
                 )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = TeswaLayout.FocusedContentPadding,
                     verticalArrangement = Arrangement.spacedBy(TeswaLayout.SectionGap),
                 ) {
-                item {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        profile.coverUrl?.let { NetworkImage(it, "غلاف ${profile.displayName}", Modifier.fillMaxWidth().height(TeswaLayout.ProfileCoverHeight)) }
-                        NetworkImage(profile.avatarUrl, profile.displayName, Modifier.size(TeswaLayout.ProfileAvatarLarge).clip(CircleShape))
-                        Spacer(Modifier.height(TeswaSpacing.xs))
-                        Text(profile.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Text("@${profile.username}", color = MaterialTheme.colorScheme.primary)
-                        profile.profileTagline?.let { Text(it, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium) }
-                        val location = listOfNotNull(profile.area, profile.city).joinToString("، ")
-                        if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.height(TeswaSpacing.sm))
-                        TeswaEvidenceLine(
-                            icon = TeswaIcons.Trust,
-                            text = "${profile.successfulSwapsCount} تبديل مكتمل",
-                            supporting = "دليل ناتج عن تبديلات أكدها الطرفان",
+                    item {
+                        PublicIdentityArchive(
+                            displayName = profile.displayName,
+                            username = profile.username,
+                            avatarUrl = profile.avatarUrl,
+                            coverUrl = profile.coverUrl,
+                            tagline = profile.profileTagline,
+                            location = location,
+                            completed = profile.successfulSwapsCount,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
-                            TextButton(onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWERS }) {
-                                Text("${state.overview.follow.followerCount} متابع")
+                    }
+
+                    holder.message?.let { message ->
+                        item {
+                            TeswaInlineMessage(
+                                title = "الحالة ما اتحدثتش",
+                                body = message,
+                                emphasis = TeswaEmphasis.Strong,
+                            )
+                        }
+                    }
+
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                                TeswaPrimaryAction(
+                                    text = "اطلب كلام",
+                                    icon = TeswaIcons.Conversation,
+                                    onClick = {
+                                        onMessage(
+                                            DirectComposeTarget(
+                                                userId = profile.id,
+                                                displayName = profile.displayName,
+                                                username = profile.username,
+                                                avatarUrl = profile.avatarUrl,
+                                            ),
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
+                                )
+                                TeswaSecondaryAction(
+                                    text = if (state.overview.follow.followingByMe) "إلغاء المتابعة" else "متابعة",
+                                    onClick = { scope.launch { holder.toggleFollow() } },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
+                                )
                             }
-                            TextButton(onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWING }) {
-                                Text("يتابع ${state.overview.follow.followingCount}")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                            ) {
+                                TextButton(
+                                    onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWERS },
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("${state.overview.follow.followerCount} متابع") }
+                                TextButton(
+                                    onClick = { connectionsMode = ProfileConnectionsMode.FOLLOWING },
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("يتابع ${state.overview.follow.followingCount}") }
+                                TextButton(
+                                    onClick = { confirmBlock = !state.overview.blockedByMe },
+                                    enabled = holder.workingAction == null,
+                                    modifier = Modifier.weight(1f),
+                                ) { Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر") }
+                            }
+                            if (state.overview.blockedMe) {
+                                Text(
+                                    "الحساب ده قافل التفاعل معاك.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                             }
                         }
                     }
-                }
-                holder.message?.let { message -> item { TeswaInlineMessage("الحالة ما اتحدثتش", message, emphasis = TeswaEmphasis.Strong) } }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
-                        TeswaPrimaryAction(
-                            text = "اطلب كلام",
-                            icon = TeswaIcons.Conversation,
-                            onClick = {
-                                onMessage(
-                                    DirectComposeTarget(
-                                        userId = profile.id,
-                                        displayName = profile.displayName,
-                                        username = profile.username,
-                                        avatarUrl = profile.avatarUrl,
-                                    ),
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
-                        )
-                        TeswaSecondaryAction(
-                            text = if (state.overview.follow.followingByMe) "إلغاء المتابعة" else "متابعة",
-                            onClick = { scope.launch { holder.toggleFollow() } },
-                            modifier = Modifier.weight(1f),
-                            enabled = holder.workingAction == null && !state.overview.blockedByMe && !state.overview.blockedMe,
-                        )
+
+                    item {
+                        TrustSummary(state.overview.trust, state.overview.badges)
                     }
-                    TextButton(
-                        onClick = { confirmBlock = !state.overview.blockedByMe },
-                        enabled = holder.workingAction == null,
-                    ) { Text(if (state.overview.blockedByMe) "فك الحظر" else "حظر المستخدم") }
-                    if (state.overview.blockedMe) Text("الحساب ده قافل التفاعل معاك.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+
+                    profile.bio?.takeIf { it.isNotBlank() }?.let { bio ->
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                                TeswaSectionHeader("أثر عن الشخص")
+                                TeswaTraceNote(bio)
+                            }
+                        }
+                    }
+
+                    item { TeswaSectionHeader("حاجاته في اللعب") }
+                    if (state.overview.listings.isEmpty()) {
+                        item {
+                            TeswaEmptyField(
+                                title = "مفيش حاجات نشطة",
+                                body = "لما يفتح حاجة لاحتمال جديد هتظهر هنا.",
+                            )
+                        }
+                    } else {
+                        items(state.overview.listings, key = { it.id }) { listing ->
+                            TeswaObjectMoment(
+                                title = listing.title,
+                                imageUrl = listing.imageUrl,
+                                meta = listing.category?.takeIf { it.isNotBlank() },
+                                owner = listOfNotNull(
+                                    "عند ${profile.displayName}",
+                                    listing.city?.takeIf { it.isNotBlank() },
+                                ).joinToString(" · "),
+                                archiveLabel = listing.city?.takeIf { it.isNotBlank() } ?: "في اللعب",
+                                variant = TeswaObjectMomentVariant.Full,
+                                onClick = { onOpenItem(listing.id) },
+                            )
+                        }
+                    }
                 }
-                item { TrustSummary(state.overview.trust, state.overview.badges) }
-                profile.bio?.let { bio -> item { Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) { TeswaSectionHeader("عن الشخص"); Text(bio) } } }
-                item { TeswaSectionHeader("حاجاته النشطة") }
-                if (state.overview.listings.isEmpty()) item { TeswaEmptyField("مفيش حاجات نشطة", "لما يحط حاجة في اللعب هتظهر هنا.") }
-                else items(state.overview.listings, key = { it.id }) { listing ->
-                    TeswaObjectRow(
-                        item = TeswaObjectIdentity(
-                            title = listing.title,
-                            imageUrl = listing.imageUrl,
-                            meta = listOfNotNull(listing.category, listing.city).joinToString(" · "),
-                        ),
-                        state = "في اللعب",
-                        stateEmphasis = TeswaEmphasis.Strong,
-                        onClick = { onOpenItem(listing.id) },
-                    )
-                }
-            }
             }
         }
     }
@@ -225,7 +273,11 @@ fun PublicProfileScreen(
     confirmBlock?.let { block ->
         TeswaActionSheet(
             title = if (block) "حظر المستخدم؟" else "إلغاء الحظر؟",
-            supporting = if (block) "هيتقفل التفاعل الجديد بين الحسابين وتختفي علاقات المتابعة." else "هيبقى التفاعل متاح من جديد حسب إعدادات الخصوصية.",
+            supporting = if (block) {
+                "هيتقفل التفاعل الجديد بين الحسابين وتختفي علاقات المتابعة."
+            } else {
+                "هيبقى التفاعل متاح من جديد حسب إعدادات الخصوصية."
+            },
             onDismiss = { confirmBlock = null },
         ) {
             TeswaPrimaryAction(
@@ -233,7 +285,158 @@ fun PublicProfileScreen(
                 icon = if (block) TeswaIcons.Block else TeswaIcons.Trust,
                 onClick = { confirmBlock = null; scope.launch { holder.toggleBlock() } },
             )
-            TextButton(onClick = { confirmBlock = null }, modifier = Modifier.fillMaxWidth()) { Text("رجوع") }
+            TextButton(onClick = { confirmBlock = null }, modifier = Modifier.fillMaxWidth()) {
+                Text("رجوع")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PublicIdentityArchive(
+    displayName: String,
+    username: String,
+    avatarUrl: String?,
+    coverUrl: String?,
+    tagline: String?,
+    location: String,
+    completed: Int,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(228.dp),
+        ) {
+            if (coverUrl != null) {
+                NetworkImage(
+                    url = coverUrl,
+                    contentDescription = "غلاف $displayName",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(166.dp)
+                        .clip(RoundedCornerShape(TeswaLayout.ProfileCoverRadius)),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(166.dp)
+                        .clip(RoundedCornerShape(TeswaLayout.ProfileCoverRadius))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                ),
+                            ),
+                        ),
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.Me,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = .6f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(TeswaSpacing.lg),
+                        size = 42.dp,
+                    )
+                    TeswaArchiveLabel(
+                        text = "PERSON / TESWA",
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(TeswaSpacing.md),
+                        tone = MaterialTheme.colorScheme.surface.copy(alpha = .88f),
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = TeswaSpacing.md),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = .96f),
+                tonalElevation = 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(TeswaSpacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    NetworkImage(
+                        url = avatarUrl,
+                        contentDescription = displayName,
+                        modifier = Modifier
+                            .size(TeswaLayout.ProfileAvatarLarge)
+                            .clip(CircleShape),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+                    ) {
+                        Text(
+                            displayName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text("@$username", color = MaterialTheme.colorScheme.primary)
+                        if (location.isNotBlank()) {
+                            Text(
+                                location,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        tagline?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .24f),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(TeswaSpacing.lg),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaMarkIcon(
+                    mark = TeswaMark.Me,
+                    color = MaterialTheme.colorScheme.secondary,
+                    size = 26.dp,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "$completed تبديل مكتمل",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "أثر اتبنى من تبديلات أكدها الطرفان، مش رقم اجتماعي.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -312,7 +515,14 @@ private fun trustLevelDescription(key: String) = when (key) {
     else -> "الثقة مبنية على نشاط حقيقي داخل تِسوى."
 }
 
-@Composable private fun PublicCenter(message: String, modifier: Modifier, loading: Boolean = false, primary: Pair<String, () -> Unit>? = null, secondary: Pair<String, () -> Unit>? = null) {
+@Composable
+private fun PublicCenter(
+    message: String,
+    modifier: Modifier,
+    loading: Boolean = false,
+    primary: Pair<String, () -> Unit>? = null,
+    secondary: Pair<String, () -> Unit>? = null,
+) {
     Column(
         modifier.fillMaxSize().padding(TeswaLayout.ScreenHorizontal),
         verticalArrangement = Arrangement.Center,
