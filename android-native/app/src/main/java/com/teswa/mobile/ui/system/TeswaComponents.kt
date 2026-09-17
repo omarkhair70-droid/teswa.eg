@@ -7,13 +7,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,10 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 
 /**
- * Small production primitives shared by Teswa screens.
+ * Production primitives shared by Teswa screens.
  * They intentionally avoid turning every section into a card.
  */
 @Composable
@@ -59,7 +63,7 @@ fun TeswaScreenHeading(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                maxLines = 2,
+                maxLines = TeswaLayout.MaxTitleLines,
                 overflow = TextOverflow.Ellipsis,
             )
             if (actionLabel != null && onAction != null) {
@@ -71,6 +75,8 @@ fun TeswaScreenHeading(
                 text = it,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = TeswaLayout.MaxSupportingLines,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -126,8 +132,8 @@ fun TeswaStatePill(
         shape = RoundedCornerShape(999.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier.padding(horizontal = TeswaSpacing.sm, vertical = TeswaSpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             icon?.let {
@@ -149,26 +155,123 @@ fun TeswaPrimaryAction(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    loading: Boolean = false,
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(54.dp),
-        enabled = enabled,
+        modifier = modifier.fillMaxWidth().height(TeswaSize.actionHeight),
+        enabled = enabled && !loading,
         shape = RoundedCornerShape(TeswaRadius.md),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ),
     ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
+        when {
+            loading -> CircularProgressIndicator(
                 modifier = Modifier.size(TeswaSize.icon),
+                strokeWidth = TeswaSpacing.xxs / 2,
+                color = MaterialTheme.colorScheme.onPrimary,
             )
+            icon != null -> {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(TeswaSize.icon),
+                )
+                Spacer(Modifier.size(TeswaSpacing.xs))
+            }
+        }
+        if (!loading) Text(text, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+fun TeswaSecondaryAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().height(TeswaSize.compactActionHeight),
+        enabled = enabled,
+        shape = RoundedCornerShape(TeswaRadius.md),
+    ) {
+        icon?.let {
+            Icon(it, contentDescription = null, modifier = Modifier.size(TeswaSize.iconCompact))
             Spacer(Modifier.size(TeswaSpacing.xs))
         }
         Text(text, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+fun TeswaIconAction(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(TeswaSize.minTouch),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(TeswaSize.icon),
+        )
+    }
+}
+
+@Composable
+fun TeswaBottomCommitBar(
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    modifier: Modifier = Modifier,
+    primaryIcon: ImageVector? = null,
+    primaryEnabled: Boolean = true,
+    primaryLoading: Boolean = false,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = TeswaSpacing.xxs,
+    ) {
+        Column(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(
+                    horizontal = TeswaLayout.BottomCommitHorizontal,
+                    vertical = TeswaLayout.BottomCommitVertical,
+                ),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+        ) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(TeswaSpacing.xxs))
+            TeswaPrimaryAction(
+                text = primaryLabel,
+                icon = primaryIcon,
+                enabled = primaryEnabled,
+                loading = primaryLoading,
+                onClick = onPrimary,
+            )
+            if (secondaryLabel != null && onSecondary != null) {
+                TextButton(
+                    onClick = onSecondary,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(secondaryLabel)
+                }
+            }
+        }
     }
 }
 
