@@ -12,6 +12,7 @@ object TeswaLayout {
     val SectionGap = 24.dp
     val ContentGap = 12.dp
     val TightGap = 8.dp
+    val HeroGap = 32.dp
 
     val RootContentPadding = PaddingValues(
         horizontal = ScreenHorizontal,
@@ -28,6 +29,7 @@ object TeswaLayout {
 
     const val MaxTitleLines = 2
     const val MaxSupportingLines = 3
+    const val MaxCompactMetaLines = 1
 }
 
 enum class TeswaContentDensity {
