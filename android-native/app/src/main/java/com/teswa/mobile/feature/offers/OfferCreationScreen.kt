@@ -1,28 +1,17 @@
 package com.teswa.mobile.feature.offers
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,28 +22,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
-import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaActionSheet
 import com.teswa.mobile.ui.system.TeswaBottomCommitBar
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEmptyField
-import com.teswa.mobile.ui.system.TeswaExchangePair
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
-import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaHapticEvent
+import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaObjectRow
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
 import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
@@ -103,17 +89,24 @@ fun OfferCreationScreen(
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = TeswaLayout.FocusedContentPadding,
-                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
                 ) {
                     item {
-                        TeswaExchangePair(
-                            requested = state.context.requestedItem.toIdentity(),
-                            offered = selected?.toIdentity(),
-                            state = "عرض جديد",
-                            stateEmphasis = TeswaEmphasis.Strong,
-                            emptyOfferedLabel = "اختار حاجة من دولابك",
-                            onChooseOffered = if (state.context.myActiveItems.isEmpty()) null else ({ showSelector = true }),
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                            TeswaExchangeMemoryPair(
+                                requestedTitle = state.context.requestedItem.title,
+                                requestedImageUrl = state.context.requestedItem.imageUrl,
+                                offeredTitle = selected?.title,
+                                offeredImageUrl = selected?.imageUrl,
+                                state = "عرض جديد",
+                                emptyOfferedLabel = "اختار حاجة من دولابك",
+                            )
+                            if (state.context.myActiveItems.isNotEmpty()) {
+                                androidx.compose.material3.TextButton(onClick = { showSelector = true }) {
+                                    Text(if (selected == null) "اختار الحاجة التانية" else "غيّر الحاجة اللي هتقدمها")
+                                }
+                            }
+                        }
                     }
                     if (state.context.myActiveItems.isEmpty()) {
                         item {
@@ -126,12 +119,8 @@ fun OfferCreationScreen(
                             )
                         }
                     } else {
-                        if (selected != null) {
-                            item {
-                                androidx.compose.material3.TextButton(onClick = { showSelector = true }) {
-                                    Text("غيّر الحاجة اللي هتقدمها")
-                                }
-                            }
+                        item {
+                            TeswaTraceNote("العرض هنا علاقة بين حاجتين، مش سعر ولا تقييم عدالة. كل حاجة تفضل محتفظة بهويتها.")
                         }
                         item {
                             TeswaTextField(
@@ -149,7 +138,7 @@ fun OfferCreationScreen(
                         item {
                             TeswaInlineMessage(
                                 title = "إيه اللي هيحصل؟",
-                                body = "ده عرض واضح بين حاجتين. القبول بعد كده هيعمل صفقة مستقلة؛ مش معناه إن التبديل حصل.",
+                                body = "القبول هيحوّل العلاقة دي لصفقة مشتركة للتنسيق. مش معناه إن التبديل حصل في الواقع.",
                                 icon = TeswaIcons.Exchange,
                             )
                         }
@@ -182,7 +171,7 @@ fun OfferCreationScreen(
             if (showSelector) {
                 TeswaActionSheet(
                     title = "اختار حاجة واحدة من دولابك",
-                    supporting = "الاختيارات دي هي حاجاتك النشطة المؤهلة للعرض دلوقتي.",
+                    supporting = "دي حاجاتك النشطة المؤهلة تدخل العلاقة دلوقتي.",
                     onDismiss = { showSelector = false },
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
@@ -213,7 +202,7 @@ private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
 @Composable
 private fun OfferSentState(modifier: Modifier, onOfferSent: () -> Unit) {
     CreationCenter(
-        "عرضك اتبعت. هتلاقي حالته في مركز الرسائل والعروض.",
+        "عرضك اتبعت. العلاقة هتفضل ظاهرة في بيننا لحد ما الطرف التاني يقرر.",
         modifier = modifier,
         primary = "متابعة العرض" to onOfferSent,
     )
