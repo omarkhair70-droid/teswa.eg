@@ -8,11 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,9 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.system.TeswaActionSheet
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaBottomCommitBar
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEmptyField
@@ -34,10 +32,15 @@ import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
 import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaTextField
 import com.teswa.mobile.ui.system.TeswaTraceNote
@@ -70,9 +73,13 @@ fun OfferCreationScreen(
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
     when (val state = holder.state) {
-        OfferCreationUiState.Loading -> CreationCenter("بنجهز عرض التبديل…", loading = true, modifier = modifier)
+        OfferCreationUiState.Loading -> CreationCenter(
+            message = "بنجيب الحاجتين اللي هيبدأ بينهم العرض…",
+            loading = true,
+            modifier = modifier,
+        )
         is OfferCreationUiState.Error -> CreationCenter(
-            state.message,
+            message = state.message,
             modifier = modifier,
             primary = "حاول تاني" to { scope.launch { holder.load() } },
             secondary = "رجوع" to onBack,
@@ -102,7 +109,7 @@ fun OfferCreationScreen(
                                 emptyOfferedLabel = "اختار حاجة من دولابك",
                             )
                             if (state.context.myActiveItems.isNotEmpty()) {
-                                androidx.compose.material3.TextButton(onClick = { showSelector = true }) {
+                                TextButton(onClick = { showSelector = true }) {
                                     Text(if (selected == null) "اختار الحاجة التانية" else "غيّر الحاجة اللي هتقدمها")
                                 }
                             }
@@ -200,12 +207,39 @@ private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
 )
 
 @Composable
-private fun OfferSentState(modifier: Modifier, onOfferSent: () -> Unit) {
-    CreationCenter(
-        "عرضك اتبعت. العلاقة هتفضل ظاهرة في بيننا لحد ما الطرف التاني يقرر.",
-        modifier = modifier,
-        primary = "متابعة العرض" to onOfferSent,
-    )
+private fun OfferSentState(
+    modifier: Modifier,
+    onOfferSent: () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        TeswaMarkIcon(
+            mark = TeswaMark.BetweenUs,
+            color = MaterialTheme.colorScheme.primary,
+            size = TeswaSpacing.xxl + TeswaSpacing.xxl,
+        )
+        Spacer(Modifier.height(TeswaSpacing.lg))
+        TeswaArchiveLabel("العرض خرج من عندك")
+        Spacer(Modifier.height(TeswaSpacing.lg))
+        Text(
+            text = "بقت فيه علاقة مستنية قرار الطرف التاني",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(TeswaSpacing.sm))
+        TeswaTraceNote("العرض هيفضل في «بيننا». القبول بس هو اللي ينقله لصفقة؛ لسه مفيش تبديل حصل في الواقع.")
+        Spacer(Modifier.height(TeswaSpacing.xl))
+        TeswaPrimaryAction(
+            text = "روح للعلاقة",
+            icon = TeswaIcons.Exchange,
+            onClick = onOfferSent,
+        )
+    }
 }
 
 @Composable
@@ -217,13 +251,29 @@ private fun CreationCenter(
     secondary: Pair<String, () -> Unit>? = null,
 ) {
     Column(
-        modifier.fillMaxSize().padding(28.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(14.dp)) }
-        Text(message, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-        primary?.let { (label, action) -> Spacer(Modifier.height(18.dp)); Button(onClick = action, modifier = Modifier.fillMaxWidth()) { Text(label) } }
-        secondary?.let { (label, action) -> Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = action, modifier = Modifier.fillMaxWidth()) { Text(label) } }
+        if (loading) {
+            TeswaInlineLoading(message)
+        } else {
+            TeswaInlineMessage(
+                title = "العرض وقف هنا",
+                body = message,
+                emphasis = TeswaEmphasis.Strong,
+                actionLabel = primary?.first,
+                onAction = primary?.second,
+            )
+            secondary?.let {
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = it.first,
+                    onClick = it.second,
+                )
+            }
+        }
     }
 }
