@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
@@ -57,15 +59,20 @@ import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
+import com.teswa.mobile.ui.system.TeswaIcons
 import kotlinx.coroutines.launch
 
-private enum class AppTab(val label: String, val showInBottomBar: Boolean = true) {
-    HOME("الرئيسية"),
-    DISCOVER("اكتشف"),
-    ADD("إضافة"),
-    MESSAGES("الرسائل"),
-    NOTIFICATIONS("تنبيهات", showInBottomBar = false),
-    PROFILE("حسابي"),
+private enum class AppTab(
+    val label: String,
+    val icon: ImageVector,
+    val showInBottomBar: Boolean = true,
+) {
+    HOME("الرئيسية", TeswaIcons.Explore),
+    DISCOVER("اكتشف", TeswaIcons.Search),
+    ADD("حط حاجة", TeswaIcons.PutIntoPlay),
+    MESSAGES("بيننا", TeswaIcons.BetweenUs),
+    NOTIFICATIONS("تنبيهات", TeswaIcons.Notifications, showInBottomBar = false),
+    PROFILE("أنا", TeswaIcons.Me),
 }
 
 @Composable
@@ -175,7 +182,12 @@ fun AppShell(
                     NavigationBarItem(
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
-                        icon = { Text(tabGlyph(tab)) },
+                        icon = {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = tab.label,
+                            )
+                        },
                         label = { Text(tab.label) },
                     )
                 }
@@ -345,13 +357,4 @@ fun AppShell(
             onDismiss = { reportTarget = null },
         )
     }
-}
-
-private fun tabGlyph(tab: AppTab): String = when (tab) {
-    AppTab.HOME -> "⌂"
-    AppTab.DISCOVER -> "⌕"
-    AppTab.ADD -> "+"
-    AppTab.MESSAGES -> "✉"
-    AppTab.NOTIFICATIONS -> "◉"
-    AppTab.PROFILE -> "●"
 }
