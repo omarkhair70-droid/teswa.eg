@@ -36,18 +36,20 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -eu
             adb install -r android-native/app/build/outputs/apk/debug/app-debug.apk
             mkdir -p artifacts/p2
-
-            for direction in PairObject Crossing Tension; do
-              adb shell am force-stop com.teswa.mobile
-              adb shell am start -W \
-                -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity \
-                --es direction "$direction"
-              sleep 1
-              adb exec-out screencap -p > "artifacts/p2/${direction}.png"
-            done
+            adb shell am force-stop com.teswa.mobile
+            adb shell am start -W -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity --es direction PairObject
+            sleep 1
+            adb exec-out screencap -p > artifacts/p2/PairObject.png
+            adb shell am force-stop com.teswa.mobile
+            adb shell am start -W -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity --es direction Crossing
+            sleep 1
+            adb exec-out screencap -p > artifacts/p2/Crossing.png
+            adb shell am force-stop com.teswa.mobile
+            adb shell am start -W -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity --es direction Tension
+            sleep 1
+            adb exec-out screencap -p > artifacts/p2/Tension.png
 
       - name: Upload rendered P2 screenshots
         uses: actions/upload-artifact@v4
