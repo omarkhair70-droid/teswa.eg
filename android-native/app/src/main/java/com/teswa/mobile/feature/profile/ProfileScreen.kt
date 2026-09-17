@@ -661,5 +661,5 @@ private fun actionButton(action: ListingAction) = when (action) {
 private fun actionDescription(action: ListingAction, title: String) = when (action) {
     ListingAction.ARCHIVE -> "هيختفي «$title» من المساحة العامة، وتقدر ترجعه لاحقًا لو مفيش عروض مفتوحة."
     ListingAction.REACTIVATE -> "«$title» هيرجع ظاهر للناس ويستقبل عروض جديدة."
-    ListingAction.DELETE_ARCHIVED -> "الحذف النهائي ما ينفعش يتراجع، وOracle هيرفضه لو للعنصر تاريخ تبديل."
+    ListingAction.DELETE_ARCHIVED -> "الحذف النهائي ما ينفعش يتراجع، ولو للحاجة تاريخ تبديل هنحافظ على السجل ومش هنحذفها."
 }
