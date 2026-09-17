@@ -3,6 +3,7 @@ package com.teswa.mobile.shell
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
@@ -169,6 +170,20 @@ fun AppShell(
     val signOutAndDisable: suspend () -> Unit = {
         nativePushManager.disable(session)
         onSignOut()
+    }
+
+    // Intercept back only while the user is inside a focused shell state. Root states
+    // remain owned by Android so the system back-to-home behavior stays intact.
+    BackHandler(
+        enabled = overlay != null ||
+            (selectedRoot == TeswaRootDestination.POSSIBLE && possibleMode == PossibleMode.SEARCH),
+    ) {
+        when {
+            overlay != null -> overlay = null
+            selectedRoot == TeswaRootDestination.POSSIBLE && possibleMode == PossibleMode.SEARCH -> {
+                possibleMode = PossibleMode.FEED
+            }
+        }
     }
 
     LaunchedEffect(launchRoute) {
