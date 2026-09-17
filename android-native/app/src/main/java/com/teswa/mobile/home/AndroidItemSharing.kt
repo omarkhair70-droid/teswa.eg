@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -88,7 +89,10 @@ private fun createShareImage(context: Context, item: ItemDetail): Uri {
     val image = item.images.firstOrNull()?.let(::downloadBitmap)
     if (image != null) {
         canvas.save()
-        canvas.clipRoundRect(photo, 32f, 32f)
+        val clipPath = Path().apply {
+            addRoundRect(photo, 32f, 32f, Path.Direction.CW)
+        }
+        canvas.clipPath(clipPath)
         drawCenterCrop(canvas, image, photo)
         canvas.restore()
         image.recycle()
