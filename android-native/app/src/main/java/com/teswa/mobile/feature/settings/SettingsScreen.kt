@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -7,21 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -36,12 +29,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
-import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,39 +65,52 @@ fun SettingsScreen(
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
     when (val state = holder.state) {
-        SettingsUiState.Loading -> SettingsCenter("بنحمّل اختيارات حسابك…", modifier, loading = true)
-        is SettingsUiState.Error -> SettingsCenter(
-            state.message,
-            modifier,
-            primary = "حاول تاني" to { scope.launch { holder.load() } },
-            secondary = "رجوع" to onBack,
+        SettingsUiState.Loading -> SettingsCenter(
+            message = "بنحمّل اختيارات حسابك…",
+            modifier = modifier,
+            loading = true,
+            onBack = onBack,
         )
+
+        is SettingsUiState.Error -> SettingsCenter(
+            message = state.message,
+            modifier = modifier,
+            primary = "حاول تاني" to { scope.launch { holder.load() } },
+            onBack = onBack,
+            error = true,
+        )
+
         is SettingsUiState.Ready -> LazyColumn(
             modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = TeswaSpacing.xxl),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
         ) {
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = onBack) { Text("رجوع") }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("مركز التحكم", style = MaterialTheme.typography.bodySmall)
-                        Text("الإعدادات", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    }
+                TeswaFocusedHeader(
+                    title = "الإعدادات",
+                    onBack = onBack,
+                )
+            }
+
+            holder.message?.let { message ->
+                item {
+                    TeswaInlineMessage(
+                        title = "اتحدثت الإعدادات",
+                        body = message,
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    )
                 }
             }
-            holder.message?.let { message -> item { SettingsMessage(message) } }
+
             item {
                 SettingsSection(
                     title = "خصوصية الرسائل",
                     description = "مين يقدر يبدأ طلب مراسلة جديد. المحادثات الموجودة مش بتتغير.",
                 ) {
                     DirectMessagePrivacy.entries.forEach { option ->
-                        val selected = state.overview.privacy == option
                         PrivacyRow(
                             option = option,
-                            selected = selected,
+                            selected = state.overview.privacy == option,
                             enabled = holder.savingPrivacy == null,
                             saving = holder.savingPrivacy == option,
                             onSelect = { scope.launch { holder.setPrivacy(option) } },
@@ -107,12 +118,15 @@ fun SettingsScreen(
                     }
                 }
             }
+
             item {
                 SettingsSection(
                     title = "الإشعارات",
                     description = if (state.overview.notifications.quietHoursEnabled) {
                         "وضع الهدوء من ${state.overview.notifications.quietHoursStart} إلى ${state.overview.notifications.quietHoursEnd}."
-                    } else "اختار التنبيهات المهمة واقفل الضوضاء غير الضرورية.",
+                    } else {
+                        "اختار تغييرات الحالة اللي تستاهل تقاطعك، واقفل الضوضاء اللي ملهاش قرار."
+                    },
                 ) {
                     NotificationToggle.entries.forEach { toggle ->
                         NotificationRow(
@@ -125,15 +139,30 @@ fun SettingsScreen(
                     }
                 }
             }
+
             item {
-                Text("قائمة الحظر", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("إلغاء الحظر يسمح بالتفاعل من جديد حسب خصوصيتك الحالية.", style = MaterialTheme.typography.bodySmall)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    TeswaSectionHeader("قائمة الحظر")
+                    Text(
+                        text = "إلغاء الحظر يسمح بالتفاعل من جديد حسب خصوصيتك الحالية.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+
             if (state.overview.blockedUsers.isEmpty()) {
                 item {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .45f)) {
-                        Text("قائمة الحظر فاضية.", Modifier.fillMaxWidth().padding(18.dp), textAlign = TextAlign.Center)
-                    }
+                    TeswaInlineMessage(
+                        title = "قائمة الحظر فاضية",
+                        body = "مفيش حسابات محظورة عندك دلوقتي.",
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    )
                 }
             } else {
                 items(state.overview.blockedUsers, key = { it.id }) { user ->
@@ -142,24 +171,30 @@ fun SettingsScreen(
                         working = holder.unblockingUserId == user.id,
                         enabled = holder.unblockingUserId == null,
                         onUnblock = { blockedConfirmation = user },
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                     )
                 }
             }
+
             item {
                 SettingsSection(
                     title = "الحساب والأمان",
-                    description = "شكل التطبيق بيتبع جهازك تلقائيًا. اختيارات الحساب الحساسة هنا فقط.",
+                    description = "شكل التطبيق بيتبع جهازك تلقائيًا. القرارات الحساسة المتعلقة بالحساب موجودة هنا فقط.",
                 ) {
-                    OutlinedButton(
+                    TeswaSecondaryAction(
+                        text = "تسجيل الخروج من الجهاز",
                         onClick = { scope.launch { onSignOut() } },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("تسجيل الخروج من الجهاز") }
-                    Spacer(Modifier.height(8.dp))
+                    )
                     TextButton(
                         onClick = { deleteConfirmation = true },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !holder.deletingAccount,
-                    ) { Text("حذف حساب تِسوى نهائيًا", color = MaterialTheme.colorScheme.error) }
+                    ) {
+                        Text(
+                            text = "حذف حساب تِسوى نهائيًا",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         }
@@ -169,24 +204,38 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { blockedConfirmation = null },
             title = { Text("إلغاء الحظر؟") },
-            text = { Text("${user.displayName ?: user.username ?: "الحساب"} هيقدر يتفاعل معاك من جديد حسب إعداد خصوصية الرسائل.") },
-            confirmButton = {
-                Button(onClick = {
-                    blockedConfirmation = null
-                    scope.launch { holder.unblock(user) }
-                }) { Text("إلغاء الحظر") }
+            text = {
+                Text("${user.displayName ?: user.username ?: "الحساب"} هيقدر يتفاعل معاك من جديد حسب إعداد خصوصية الرسائل.")
             },
-            dismissButton = { TextButton(onClick = { blockedConfirmation = null }) { Text("رجوع") } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        blockedConfirmation = null
+                        scope.launch { holder.unblock(user) }
+                    },
+                ) {
+                    Text("إلغاء الحظر")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { blockedConfirmation = null }) {
+                    Text("رجوع")
+                }
+            },
         )
     }
 
     if (deleteConfirmation) {
         AlertDialog(
-            onDismissRequest = { if (!holder.deletingAccount) deleteConfirmation = false },
+            onDismissRequest = {
+                if (!holder.deletingAccount) deleteConfirmation = false
+            },
             title = { Text("حذف الحساب نهائيًا؟") },
-            text = { Text("هيتم حذف الحساب وبياناته ووسائطه المرتبطة. الخطوة دي لا يمكن التراجع عنها، ولو تنظيف الوسائط فشل Oracle هيحتفظ بالهوية بدل حذف جزئي.") },
+            text = {
+                Text("هيتم حذف الحساب وبياناته ووسائطه المرتبطة. الخطوة دي لا يمكن التراجع عنها، ولو تنظيف الوسائط فشل Oracle هيحتفظ بالهوية بدل حذف جزئي.")
+            },
             confirmButton = {
-                Button(
+                TextButton(
                     onClick = {
                         scope.launch {
                             if (holder.deleteAccount()) {
@@ -196,24 +245,44 @@ fun SettingsScreen(
                         }
                     },
                     enabled = !holder.deletingAccount,
-                ) { Text(if (holder.deletingAccount) "جاري الحذف…" else "احذف حسابي") }
+                ) {
+                    Text(
+                        text = if (holder.deletingAccount) "جاري الحذف…" else "احذف حسابي",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             },
             dismissButton = {
-                TextButton(onClick = { deleteConfirmation = false }, enabled = !holder.deletingAccount) { Text("إلغاء") }
+                TextButton(
+                    onClick = { deleteConfirmation = false },
+                    enabled = !holder.deletingAccount,
+                ) {
+                    Text("إلغاء")
+                }
             },
         )
     }
 }
 
 @Composable
-private fun SettingsSection(title: String, description: String, content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(description, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(12.dp))
-            content()
-        }
+private fun SettingsSection(
+    title: String,
+    description: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TeswaLayout.ScreenHorizontal),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        TeswaSectionHeader(title)
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        content()
     }
 }
 
@@ -225,23 +294,46 @@ private fun PrivacyRow(
     saving: Boolean,
     onSelect: () -> Unit,
 ) {
-    Card(
-        onClick = onSelect,
-        enabled = enabled,
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .65f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .35f),
-        ),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    val container = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = .58f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .32f)
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onSelect),
+        color = container,
+        shape = MaterialTheme.shapes.medium,
     ) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = selected, onClick = null, enabled = enabled)
-            Spacer(Modifier.width(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(TeswaSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+        ) {
+            RadioButton(
+                selected = selected,
+                onClick = null,
+                enabled = enabled,
+            )
             Column(Modifier.weight(1f)) {
-                Text(privacyTitle(option), style = MaterialTheme.typography.titleMedium)
-                Text(privacyDescription(option), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = privacyTitle(option),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = privacyDescription(option),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            if (saving) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            if (saving) {
+                TeswaInlineLoading("بنحفظ…", modifier = Modifier.weight(.45f))
+            }
         }
     }
 }
@@ -255,43 +347,65 @@ private fun NotificationRow(
     onChange: (Boolean) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 9.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = TeswaSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(notificationTitle(toggle), style = MaterialTheme.typography.titleMedium)
-            Text(notificationDescription(toggle), style = MaterialTheme.typography.bodySmall)
-        }
-        if (saving) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-        else Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
-    }
-    if (toggle != NotificationToggle.QUIET_HOURS) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
-}
-
-@Composable
-private fun BlockedUserRow(user: BlockedUser, working: Boolean, enabled: Boolean, onUnblock: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(
-                user.avatarUrl,
-                user.displayName ?: user.username ?: "مستخدم",
-                Modifier.size(52.dp).clip(CircleShape),
+            Text(
+                text = notificationTitle(toggle),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(user.displayName ?: "مستخدم تِسوى", style = MaterialTheme.typography.titleMedium)
-                user.username?.let { Text("@$it", style = MaterialTheme.typography.bodySmall) }
-            }
-            if (working) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-            else OutlinedButton(onClick = onUnblock, enabled = enabled) { Text("إلغاء الحظر") }
+            Text(
+                text = notificationDescription(toggle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
+        if (saving) {
+            Text(
+                text = "بنحفظ…",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else {
+            Switch(
+                checked = checked,
+                onCheckedChange = onChange,
+                enabled = enabled,
+            )
+        }
+    }
+    if (toggle != NotificationToggle.QUIET_HOURS) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
     }
 }
 
 @Composable
-private fun SettingsMessage(message: String) {
-    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .45f)) {
-        Text(message, Modifier.fillMaxWidth().padding(13.dp), color = MaterialTheme.colorScheme.onPrimaryContainer)
+private fun BlockedUserRow(
+    user: BlockedUser,
+    working: Boolean,
+    enabled: Boolean,
+    onUnblock: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+    ) {
+        TeswaPersonIdentity(
+            name = user.displayName ?: "مستخدم تِسوى",
+            avatarUrl = user.avatarUrl,
+            supporting = user.username?.let { "@$it" },
+        )
+        TeswaSecondaryAction(
+            text = if (working) "بنفك الحظر…" else "إلغاء الحظر",
+            enabled = enabled && !working,
+            onClick = onUnblock,
+        )
     }
 }
 
@@ -301,17 +415,38 @@ private fun SettingsCenter(
     modifier: Modifier,
     loading: Boolean = false,
     primary: Pair<String, () -> Unit>? = null,
-    secondary: Pair<String, () -> Unit>? = null,
+    onBack: () -> Unit,
+    error: Boolean = false,
 ) {
-    Column(
-        modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(12.dp)) }
-        Text(message, textAlign = TextAlign.Center)
-        primary?.let { Spacer(Modifier.height(16.dp)); Button(onClick = it.second) { Text(it.first) } }
-        secondary?.let { Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = it.second) { Text(it.first) } }
+    Column(modifier.fillMaxSize()) {
+        TeswaFocusedHeader(
+            title = "الإعدادات",
+            onBack = onBack,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(TeswaLayout.RootContentPadding),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (loading) {
+                TeswaInlineLoading(message)
+            } else {
+                TeswaInlineMessage(
+                    title = if (error) "الإعدادات ما ظهرتش" else "مفيش إعدادات لسه",
+                    body = message,
+                    emphasis = if (error) TeswaEmphasis.Strong else TeswaEmphasis.Quiet,
+                    actionLabel = primary?.first,
+                    onAction = primary?.second,
+                )
+                Spacer(Modifier.size(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = "ارجع",
+                    onClick = onBack,
+                )
+            }
+        }
     }
 }
 
@@ -329,7 +464,7 @@ private fun privacyDescription(value: DirectMessagePrivacy) = when (value) {
 
 private fun notificationTitle(value: NotificationToggle) = when (value) {
     NotificationToggle.OFFERS -> "العروض"
-    NotificationToggle.DEALS -> "تحديثات الصفقات"
+    NotificationToggle.DEALS -> "تحديثات التبديلات"
     NotificationToggle.MESSAGES -> "الرسائل"
     NotificationToggle.SOCIAL -> "المتابعات والتفاعل"
     NotificationToggle.SMART_REMINDERS -> "تذكيرات مفيدة"
@@ -339,9 +474,9 @@ private fun notificationTitle(value: NotificationToggle) = when (value) {
 
 private fun notificationDescription(value: NotificationToggle) = when (value) {
     NotificationToggle.OFFERS -> "عرض جديد أو تغيير حالته."
-    NotificationToggle.DEALS -> "إنشاء الصفقة وخطوات إتمامها."
+    NotificationToggle.DEALS -> "بدء التبديل وخطوات إتمامه."
     NotificationToggle.MESSAGES -> "رسائل التنسيق الجديدة."
-    NotificationToggle.SOCIAL -> "نشاط المجتمع المرتبط بحسابك."
+    NotificationToggle.SOCIAL -> "نشاط الناس المرتبط بحسابك."
     NotificationToggle.SMART_REMINDERS -> "تذكير في الوقت المناسب من غير إزعاج."
     NotificationToggle.MARKETING -> "ميزات وحملات اختيارية."
     NotificationToggle.QUIET_HOURS -> "تأجيل التنبيهات غير العاجلة خلال وقت الراحة."
