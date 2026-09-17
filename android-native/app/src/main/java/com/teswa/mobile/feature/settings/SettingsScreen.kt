@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -31,12 +30,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.ui.system.TeswaActionSheet
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
 import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSpacing
@@ -95,7 +97,7 @@ fun SettingsScreen(
             holder.message?.let { message ->
                 item {
                     TeswaInlineMessage(
-                        title = "اتحدثت الإعدادات",
+                        title = "الإعدادات اتحدثت",
                         body = message,
                         modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                     )
@@ -105,7 +107,7 @@ fun SettingsScreen(
             item {
                 SettingsSection(
                     title = "خصوصية الرسائل",
-                    description = "مين يقدر يبدأ طلب مراسلة جديد. المحادثات الموجودة مش بتتغير.",
+                    description = "مين يقدر يبدأ طلب كلام جديد. المحادثات الموجودة مش بتتغير.",
                 ) {
                     DirectMessagePrivacy.entries.forEach { option ->
                         PrivacyRow(
@@ -179,7 +181,7 @@ fun SettingsScreen(
             item {
                 SettingsSection(
                     title = "الحساب والأمان",
-                    description = "شكل التطبيق بيتبع جهازك تلقائيًا. القرارات الحساسة المتعلقة بالحساب موجودة هنا فقط.",
+                    description = "شكل التطبيق بيتبع جهازك تلقائيًا. القرارات الحساسة المتعلقة بالحساب موجودة هنا بس.",
                 ) {
                     TeswaSecondaryAction(
                         text = "تسجيل الخروج من الجهاز",
@@ -201,66 +203,53 @@ fun SettingsScreen(
     }
 
     blockedConfirmation?.let { user ->
-        AlertDialog(
-            onDismissRequest = { blockedConfirmation = null },
-            title = { Text("إلغاء الحظر؟") },
-            text = {
-                Text("${user.displayName ?: user.username ?: "الحساب"} هيقدر يتفاعل معاك من جديد حسب إعداد خصوصية الرسائل.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        blockedConfirmation = null
-                        scope.launch { holder.unblock(user) }
-                    },
-                ) {
-                    Text("إلغاء الحظر")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { blockedConfirmation = null }) {
-                    Text("رجوع")
-                }
-            },
-        )
+        TeswaActionSheet(
+            title = "نلغي الحظر؟",
+            supporting = "${user.displayName ?: user.username ?: "الحساب"} هيقدر يتفاعل معاك من جديد حسب إعداد خصوصية الرسائل عندك.",
+            onDismiss = { blockedConfirmation = null },
+        ) {
+            TeswaPrimaryAction(
+                text = "إلغاء الحظر",
+                onClick = {
+                    blockedConfirmation = null
+                    scope.launch { holder.unblock(user) }
+                },
+            )
+            TextButton(
+                onClick = { blockedConfirmation = null },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("سيبه محظور") }
+        }
     }
 
     if (deleteConfirmation) {
-        AlertDialog(
-            onDismissRequest = {
+        TeswaActionSheet(
+            title = "حذف الحساب نهائيًا؟",
+            supporting = "الحساب وبياناته ووسائطه المرتبطة هتتحذف. الخطوة دي ما ينفعش ترجع عنها. لو الحذف ما اكتملش بأمان، مش هنسيب الحساب في حالة حذف جزئي وتقدر تحاول تاني.",
+            onDismiss = {
                 if (!holder.deletingAccount) deleteConfirmation = false
             },
-            title = { Text("حذف الحساب نهائيًا؟") },
-            text = {
-                Text("هيتم حذف الحساب وبياناته ووسائطه المرتبطة. الخطوة دي لا يمكن التراجع عنها، ولو تنظيف الوسائط فشل Oracle هيحتفظ بالهوية بدل حذف جزئي.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            if (holder.deleteAccount()) {
-                                deleteConfirmation = false
-                                onSignOut()
-                            }
+        ) {
+            TeswaPrimaryAction(
+                text = if (holder.deletingAccount) "بنحذف الحساب…" else "احذف حسابي",
+                icon = TeswaIcons.Delete,
+                loading = holder.deletingAccount,
+                enabled = !holder.deletingAccount,
+                onClick = {
+                    scope.launch {
+                        if (holder.deleteAccount()) {
+                            deleteConfirmation = false
+                            onSignOut()
                         }
-                    },
-                    enabled = !holder.deletingAccount,
-                ) {
-                    Text(
-                        text = if (holder.deletingAccount) "جاري الحذف…" else "احذف حسابي",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { deleteConfirmation = false },
-                    enabled = !holder.deletingAccount,
-                ) {
-                    Text("إلغاء")
-                }
-            },
-        )
+                    }
+                },
+            )
+            TextButton(
+                onClick = { deleteConfirmation = false },
+                enabled = !holder.deletingAccount,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("رجوع") }
+        }
     }
 }
 
@@ -332,7 +321,11 @@ private fun PrivacyRow(
                 )
             }
             if (saving) {
-                TeswaInlineLoading("بنحفظ…", modifier = Modifier.weight(.45f))
+                Text(
+                    text = "بنحفظ…",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
