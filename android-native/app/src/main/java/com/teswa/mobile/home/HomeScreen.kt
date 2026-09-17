@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,26 +17,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.additem.EditListingRepository
@@ -50,7 +44,19 @@ import com.teswa.mobile.feature.stories.StoryManageScreen
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.stories.StoryStateHolder
 import com.teswa.mobile.feature.stories.StoryViewerScreen
-import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaIconAction
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaObjectStage
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaScreenHeading
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,6 +73,7 @@ fun HomeScreen(
     onSessionUpdated: (AuthSession) -> Unit = {},
     onOfferCreated: () -> Unit = {},
     onAddItem: () -> Unit = {},
+    onSearch: () -> Unit = {},
     onNotifications: () -> Unit = {},
     externalItemId: String? = null,
     onExternalItemConsumed: () -> Unit = {},
@@ -204,86 +211,115 @@ fun HomeScreen(
 
     when (val current = holder.state) {
         HomeUiState.Loading -> {
-            Column(
+            Box(
                 modifier = modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(14.dp))
-                Text("جاري تحميل الرئيسية…")
+                TeswaInlineLoading("بنفتح الاحتمالات حواليك…")
             }
         }
 
         is HomeUiState.Empty -> {
             Column(
-                modifier = modifier.fillMaxSize().padding(24.dp),
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(TeswaLayout.RootContentPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text("تِسوى", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                Text(current.message)
-                Spacer(Modifier.height(18.dp))
-                Button(onClick = { scope.launch { holder.load() } }) { Text("تحديث") }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { scope.launch { onSignOut() } }) { Text("تسجيل الخروج") }
+                TeswaInlineMessage(
+                    title = "مفيش حاجات ظاهرة دلوقتي",
+                    body = current.message,
+                    actionLabel = "حدّث",
+                    onAction = { scope.launch { holder.load() } },
+                )
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = "تسجيل الخروج",
+                    onClick = { scope.launch { onSignOut() } },
+                )
             }
         }
 
         is HomeUiState.Error -> {
             Column(
-                modifier = modifier.fillMaxSize().padding(24.dp),
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(TeswaLayout.RootContentPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text("تعذر تحميل الرئيسية", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(10.dp))
-                Text(current.message)
-                Spacer(Modifier.height(18.dp))
-                Button(onClick = { scope.launch { holder.load() } }) { Text("إعادة المحاولة") }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { scope.launch { onSignOut() } }) { Text("تسجيل الخروج") }
+                TeswaInlineMessage(
+                    title = "الاحتمالات ما ظهرتش",
+                    body = current.message,
+                    emphasis = TeswaEmphasis.Strong,
+                    actionLabel = "حاول تاني",
+                    onAction = { scope.launch { holder.load() } },
+                )
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = "تسجيل الخروج",
+                    onClick = { scope.launch { onSignOut() } },
+                )
             }
         }
 
         is HomeUiState.Content -> {
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    horizontal = TeswaLayout.ScreenHorizontal,
+                    vertical = TeswaLayout.ScreenVertical,
+                ),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
             ) {
                 item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                            verticalAlignment = Alignment.Top,
                         ) {
-                            Column {
-                                Text("تِسوى", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                                Text("آخر الحاجات المعروضة للتبادل", style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = onNotifications) { Text("تنبيهات") }
-                                OutlinedButton(onClick = { scope.launch { holder.load() } }) { Text("تحديث") }
-                            }
+                            TeswaScreenHeading(
+                                title = "اكتشف",
+                                supporting = "حاجات أصحابها حطّوها في اللعب وفتحوها لاحتمال جديد.",
+                                modifier = Modifier.weight(1f),
+                            )
+                            TeswaIconAction(
+                                icon = TeswaIcons.Search,
+                                contentDescription = "بحث",
+                                onClick = onSearch,
+                            )
+                            TeswaIconAction(
+                                icon = TeswaIcons.Notifications,
+                                contentDescription = "التنبيهات",
+                                onClick = onNotifications,
+                            )
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (holder.nearbyLocation == null) {
-                                OutlinedButton(enabled = !holder.locationWorking, onClick = ::requestNearby) {
-                                    Text(if (holder.locationWorking) "بنحدد موقعك…" else "الأقرب لي")
-                                }
-                            } else {
-                                Button(enabled = !holder.locationWorking, onClick = { scope.launch { holder.disableNearby() } }) {
-                                    Text("قريب مني · إلغاء")
-                                }
-                            }
-                        }
+
+                        TeswaChoiceChip(
+                            label = when {
+                                holder.locationWorking -> "بنحدد القريب…"
+                                holder.nearbyLocation != null -> "قريب مني"
+                                else -> "الأقرب لي"
+                            },
+                            selected = holder.nearbyLocation != null,
+                            onClick = {
+                                if (holder.nearbyLocation == null) requestNearby()
+                                else scope.launch { holder.disableNearby() }
+                            },
+                            leadingIcon = TeswaIcons.Location,
+                        )
+
                         holder.notice?.let {
-                            Spacer(Modifier.height(8.dp))
-                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -297,29 +333,30 @@ fun HomeScreen(
                 }
 
                 items(current.items, key = { it.id }) { item ->
-                    HomeFeedCard(item = item, onOpen = { holder.openItem(item.id) })
+                    HomeFeedObject(
+                        item = item,
+                        onOpen = { holder.openItem(item.id) },
+                    )
                 }
 
                 if (current.items.isEmpty()) {
                     item {
-                        Text(
-                            "مفيش عناصر قريبة في النطاق ده حاليًا. جرّب ترجع لكل العناصر.",
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                            style = MaterialTheme.typography.bodyLarge,
+                        TeswaInlineMessage(
+                            title = "مفيش حاجات قريبة في النطاق ده",
+                            body = "اقفل فلتر القريب وارجع لكل الاحتمالات المتاحة.",
+                            actionLabel = "اعرض الكل",
+                            onAction = { scope.launch { holder.disableNearby() } },
                         )
                     }
                 }
 
                 if (current.hasMore) {
                     item {
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !current.loadingMore,
+                        TeswaPrimaryAction(
+                            text = "هات احتمالات أكتر",
+                            loading = current.loadingMore,
                             onClick = { scope.launch { holder.loadMore() } },
-                        ) {
-                            if (current.loadingMore) CircularProgressIndicator(modifier = Modifier.height(22.dp))
-                            else Text("تحميل عناصر أكتر")
-                        }
+                        )
                     }
                 }
             }
@@ -328,36 +365,38 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeFeedCard(item: HomeFeedItem, onOpen: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
-        Column {
-            NetworkImage(
-                url = item.coverImageUrl,
-                contentDescription = item.title,
-                modifier = Modifier.fillMaxWidth().height(210.dp),
+private fun HomeFeedObject(
+    item: HomeFeedItem,
+    onOpen: () -> Unit,
+) {
+    val meta = listOfNotNull(item.condition, item.city)
+        .filter { it.isNotBlank() }
+        .joinToString(" • ")
+        .ifBlank { item.category.orEmpty() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        TeswaObjectStage(
+            item = TeswaObjectIdentity(
+                title = item.title,
+                imageUrl = item.coverImageUrl,
+                meta = meta.takeIf { it.isNotBlank() },
+                owner = item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { "عند $it" },
+            ),
+            eyebrow = item.category?.takeIf { it.isNotBlank() },
+        )
+        item.description?.takeIf { it.isNotBlank() }?.let { description ->
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val meta = listOfNotNull(item.category, item.condition, item.city).joinToString(" • ")
-                if (meta.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(meta, style = MaterialTheme.typography.bodySmall)
-                }
-                item.description?.takeIf { it.isNotBlank() }?.let { description ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(description, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
-                item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { owner ->
-                    Spacer(Modifier.height(10.dp))
-                    Text("بواسطة $owner", style = MaterialTheme.typography.labelMedium)
-                }
-            }
         }
     }
 }
