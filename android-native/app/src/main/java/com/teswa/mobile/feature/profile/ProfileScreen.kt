@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,6 +39,7 @@ import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.settings.SettingsScreen
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaActionSheet
 import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEvidenceLine
@@ -225,33 +225,36 @@ fun ProfileScreen(
     }
 
     listingConfirmation?.let { (listing, action) ->
-        AlertDialog(
-            onDismissRequest = { listingConfirmation = null },
-            title = { Text(actionTitle(action)) },
-            text = { Text(actionDescription(action, listing.title)) },
-            confirmButton = {
+        TeswaActionSheet(
+            title = actionTitle(action),
+            supporting = actionDescription(action, listing.title),
+            onDismiss = { listingConfirmation = null },
+        ) {
+            if (action == ListingAction.DELETE_ARCHIVED) {
                 TextButton(
                     onClick = {
                         listingConfirmation = null
                         scope.launch { holder.actOnListing(listing, action) }
                     },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        text = actionButton(action),
-                        color = if (action == ListingAction.DELETE_ARCHIVED) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                    )
+                    Text(actionButton(action), color = MaterialTheme.colorScheme.error)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { listingConfirmation = null }) {
-                    Text("رجوع")
-                }
-            },
-        )
+            } else {
+                TeswaPrimaryAction(
+                    text = actionButton(action),
+                    icon = if (action == ListingAction.ARCHIVE) TeswaIcons.Archive else TeswaIcons.Refresh,
+                    onClick = {
+                        listingConfirmation = null
+                        scope.launch { holder.actOnListing(listing, action) }
+                    },
+                )
+            }
+            TeswaSecondaryAction(
+                text = "رجوع",
+                onClick = { listingConfirmation = null },
+            )
+        }
     }
 }
 
