@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.teswa.mobile.ui.system.TeswaActionSheet
 import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
