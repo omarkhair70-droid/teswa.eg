@@ -3,8 +3,11 @@ package com.teswa.mobile.feature.dolab
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,9 +16,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,10 +41,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
@@ -47,15 +54,16 @@ import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
-import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
-import com.teswa.mobile.ui.system.TeswaScreenHeading
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaStatePill
 import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
+import com.teswa.mobile.ui.system.TeswaWardrobeSection
 import kotlinx.coroutines.launch
 
 @Composable
@@ -137,38 +145,48 @@ private fun DolabShelf(
         ),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
     ) {
-        item {
-            TeswaScreenHeading(
-                title = "دولابي",
-                eyebrow = "حاجاتي",
-                supporting = "مساحتك الخاصة. الحاجة تبدأ هنا عندك قبل ما تختار تحطها في اللعب.",
-            )
-        }
-
-        item {
-            TeswaInlineMessage(
-                title = "هنا الحاجة لسه بتاعتك إنت",
-                body = "احفظ صورة أو فكرة أو ملاحظة، جهّز الحاجة براحتك، وبعدها إنت اللي تقرر إمتى تبقى احتمال بينك وبين حد تاني.",
-                emphasis = TeswaEmphasis.Normal,
-                icon = TeswaIcons.Mine,
-                actionLabel = "احفظ حاجة",
-                onAction = onCreate,
-            )
-        }
-
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-            ) {
-                DolabFilter.entries.forEach { filter ->
-                    TeswaChoiceChip(
-                        label = filterLabel(filter),
-                        selected = holder.filter == filter,
-                        onClick = { holder.selectFilter(filter) },
+        item(key = "dolab-masthead") {
+            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.Mine,
+                        color = MaterialTheme.colorScheme.primary,
+                        size = 30.dp,
                     )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "دولابي",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "حاجاتك وهي لسه عندك، قبل ما تختار تطلع واحدة للّعب.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = onCreate) {
+                        Text("احفظ حاجة")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    DolabFilter.entries.forEach { filter ->
+                        TeswaChoiceChip(
+                            label = filterLabel(filter),
+                            selected = holder.filter == filter,
+                            onClick = { holder.selectFilter(filter) },
+                        )
+                    }
                 }
             }
         }
@@ -195,42 +213,50 @@ private fun DolabShelf(
             }
 
             is DolabUiState.Empty -> item {
-                TeswaInlineMessage(
-                    title = "الدولاب فاضي دلوقتي",
-                    body = "ابدأ بحاجة واحدة حتى لو لسه مش ناوي تعرضها. الدولاب مكان تجهيز وذاكرة قبل النشر.",
-                    actionLabel = "احفظ أول حاجة",
-                    onAction = onCreate,
-                )
+                TeswaWardrobeSection(
+                    title = "أول رف لسه فاضي",
+                    supporting = "احفظ حاجة حتى لو لسه مش عارف هتبدّلها ولا لأ. الدولاب مكان الذاكرة قبل النشر.",
+                ) {
+                    TeswaPrimaryAction(
+                        text = "احفظ أول حاجة",
+                        onClick = onCreate,
+                    )
+                }
             }
 
             is DolabUiState.Ready -> {
                 val visible = holder.visibleItems()
                 if (visible.isEmpty()) {
                     item {
-                        TeswaInlineMessage(
-                            title = "مفيش حاجة في الجزء ده",
-                            body = "غيّر الفلتر أو ارجع للكل عشان تشوف باقي دولابك.",
-                        )
+                        TeswaWardrobeSection(
+                            title = "الجزء ده فاضي",
+                            supporting = "غيّر الفلتر أو ارجع للكل عشان تشوف باقي حاجاتك.",
+                        ) {
+                            Text(
+                                text = "كل حاجة محفوظة تفضل جزء من دولابك حتى لو خرجت للّعب أو اتأرشفت.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 } else {
                     item {
-                        TeswaSectionHeader(
-                            title = when (holder.filter) {
-                                DolabFilter.ALL -> "كل حاجاتك"
-                                DolabFilter.IN_PROGRESS -> "لسه بتجهزها"
-                                DolabFilter.READY -> "جاهزة للخطوة الجاية"
-                                DolabFilter.PUBLISHED -> "خرجت للّعب"
-                                DolabFilter.ARCHIVED -> "الأرشيف"
-                            },
-                        )
-                    }
-                    items(visible, key = { it.id }) { item ->
-                        DolabItemRow(
-                            item = item,
-                            mediaCount = workspace?.mediaFor(item.id)?.size ?: 0,
-                            notesCount = workspace?.notesFor(item.id)?.size ?: 0,
-                            onOpen = { onOpen(item) },
-                        )
+                        TeswaWardrobeSection(
+                            title = wardrobeTitle(holder.filter),
+                            supporting = wardrobeSupporting(holder.filter),
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg)) {
+                                visible.forEach { item ->
+                                    DolabShelfObject(
+                                        holder = holder,
+                                        item = item,
+                                        media = workspace?.mediaFor(item.id).orEmpty(),
+                                        notesCount = workspace?.notesFor(item.id)?.size ?: 0,
+                                        onOpen = { onOpen(item) },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -250,40 +276,93 @@ private fun DolabShelf(
 }
 
 @Composable
-private fun DolabItemRow(
+private fun DolabShelfObject(
+    holder: DolabStateHolder,
     item: DolabItem,
-    mediaCount: Int,
+    media: List<DolabMedia>,
     notesCount: Int,
     onOpen: () -> Unit,
 ) {
-    val meta = buildList {
-        item.category?.takeIf { it.isNotBlank() }?.let(::add)
-        if (mediaCount > 0) add("$mediaCount ميديا")
-        if (notesCount > 0) add("$notesCount ملاحظات")
-    }.joinToString(" • ")
+    val firstImage = media.firstOrNull { it.mediaType == "image" }
+    var imageUrl by remember(firstImage?.id, firstImage?.storagePath) { mutableStateOf<String?>(null) }
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+    LaunchedEffect(firstImage?.id, firstImage?.storagePath) {
+        imageUrl = if (firstImage != null) holder.mediaUrl(firstImage) else null
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TeswaObjectRow(
-            item = TeswaObjectIdentity(
-                title = item.title?.takeIf { it.isNotBlank() } ?: "حاجة من غير اسم",
-                meta = meta.takeIf { it.isNotBlank() },
-            ),
-            state = statusLabel(item.status),
-            stateEmphasis = statusEmphasis(item.status),
-            onClick = onOpen,
-        )
-        item.description?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = TeswaSpacing.xxl + TeswaSpacing.xxl + TeswaSpacing.sm),
+        if (imageUrl != null) {
+            NetworkImage(
+                url = imageUrl,
+                contentDescription = item.title ?: "حاجة من دولابك",
+                modifier = Modifier
+                    .size(96.dp)
+                    .clip(RoundedCornerShape(TeswaLayout.ProfileCoverRadius)),
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = .85f),
+                        shape = RoundedCornerShape(TeswaLayout.ProfileCoverRadius),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                TeswaMarkIcon(
+                    mark = TeswaMark.Mine,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = .7f),
+                    size = 36.dp,
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = item.title?.takeIf { it.isNotBlank() } ?: "حاجة من غير اسم",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                TeswaArchiveLabel(statusLabel(item.status))
+            }
+            item.description?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val trace = buildList {
+                item.category?.takeIf { it.isNotBlank() }?.let(::add)
+                if (media.isNotEmpty()) add("${media.size} ميديا")
+                if (notesCount > 0) add("$notesCount ملاحظات")
+            }.joinToString(" · ")
+            if (trace.isNotBlank()) {
+                Text(
+                    text = trace,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }
@@ -372,21 +451,34 @@ private fun DolabItemDetail(
                     .padding(horizontal = TeswaLayout.ScreenHorizontal),
                 verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
             ) {
-                TeswaStatePill(
-                    text = statusLabel(item.status),
-                    emphasis = statusEmphasis(item.status),
-                )
-                TeswaInlineMessage(
-                    title = "ذاكرة الحاجة في مكان واحد",
-                    body = buildString {
-                        append("${media.size} ميديا • ${notes.size} ملاحظة")
-                        if (item.status == DolabItemStatus.READY) {
-                            append(". جاهزة تتحول لحاجة منشورة من نفس السياق.")
-                        }
+                TeswaWardrobeSection(
+                    title = "ذاكرة الحاجة",
+                    supporting = buildString {
+                        append("${media.size} ميديا · ${notes.size} ملاحظة")
+                        if (item.status == DolabItemStatus.READY) append(" · جاهزة للخطوة الجاية")
                     },
-                    emphasis = TeswaEmphasis.Quiet,
-                    icon = TeswaIcons.Mine,
-                )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TeswaStatePill(
+                            text = statusLabel(item.status),
+                            emphasis = statusEmphasis(item.status),
+                        )
+                        item.exchangeIntent?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                text = it,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -446,23 +538,28 @@ private fun DolabItemDetail(
 
         if (item.status == DolabItemStatus.READY && onContinueAsListing != null) {
             item {
-                TeswaPrimaryAction(
-                    text = if (continueWorking) "بنجهزها للنشر…" else "حطّها في اللعب",
-                    icon = TeswaIcons.PutIntoPlay,
-                    loading = continueWorking,
-                    enabled = !busy,
-                    onClick = {
-                        if (!continueWorking) {
-                            scope.launch {
-                                continueWorking = true
-                                val error = onContinueAsListing(item)
-                                continueWorking = false
-                                if (error != null) holder.showError(error)
-                            }
-                        }
-                    },
+                Column(
                     modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
-                )
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                ) {
+                    TeswaTraceNote("الخطوة دي هي اللحظة اللي الحاجة بتعدّي فيها من مساحتك الخاصة للمجال العام.")
+                    TeswaPrimaryAction(
+                        text = if (continueWorking) "بنجهزها للنشر…" else "حطّها في اللعب",
+                        icon = TeswaIcons.PutIntoPlay,
+                        loading = continueWorking,
+                        enabled = !busy,
+                        onClick = {
+                            if (!continueWorking) {
+                                scope.launch {
+                                    continueWorking = true
+                                    val error = onContinueAsListing(item)
+                                    continueWorking = false
+                                    if (error != null) holder.showError(error)
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
 
@@ -888,6 +985,22 @@ private fun DolabMessage(
         emphasis = if (error) TeswaEmphasis.Strong else TeswaEmphasis.Normal,
         modifier = modifier,
     )
+}
+
+private fun wardrobeTitle(filter: DolabFilter): String = when (filter) {
+    DolabFilter.ALL -> "الرفوف كلها"
+    DolabFilter.IN_PROGRESS -> "لسه بتجهزها"
+    DolabFilter.READY -> "جاهزة تخرج"
+    DolabFilter.PUBLISHED -> "خرجت للّعب"
+    DolabFilter.ARCHIVED -> "اللي اتحفظ في الأرشيف"
+}
+
+private fun wardrobeSupporting(filter: DolabFilter): String = when (filter) {
+    DolabFilter.ALL -> "كل حاجة تفضل واضحة كجزء من تاريخها: مسودة، جاهزة، في اللعب، أو مؤرشفة."
+    DolabFilter.IN_PROGRESS -> "حاجات لسه خاصة بيك ومش مطالبة تبقى جاهزة للناس."
+    DolabFilter.READY -> "مكتملة عندك، لكن قرار خروجها للمجال العام لسه بإيدك."
+    DolabFilter.PUBLISHED -> "الحاجات اللي خرجت من حدود الدولاب وبقت احتمالات بينك وبين ناس تانية."
+    DolabFilter.ARCHIVED -> "متشالت من الواجهة العامة، لكن أثرها وسياقها لسه موجودين."
 }
 
 private fun filterLabel(filter: DolabFilter): String = when (filter) {
