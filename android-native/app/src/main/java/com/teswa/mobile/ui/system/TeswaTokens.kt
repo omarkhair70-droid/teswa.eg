@@ -30,12 +30,31 @@ object TeswaRadius {
 
 object TeswaSize {
     val minTouch = 48.dp
+    val actionHeight = 54.dp
+    val compactActionHeight = 48.dp
     val iconCompact = 20.dp
     val icon = 24.dp
     val iconHero = 28.dp
     val thumbCompact = 56.dp
     val thumb = 72.dp
+    val avatarCompact = 36.dp
     val avatar = 48.dp
+    val avatarLarge = 72.dp
+    val objectHeroMinHeight = 260.dp
+}
+
+object TeswaMedia {
+    /** Default discovery/object media ratio: 4:3. */
+    const val Object = 4f / 3f
+
+    /** Immersive story/media ratio: 9:16. */
+    const val Story = 9f / 16f
+
+    /** Compact portrait object preview: 3:4. */
+    const val PortraitObject = 3f / 4f
+
+    /** Square identity/avatar and compact object crop. */
+    const val Square = 1f
 }
 
 object TeswaPalette {
