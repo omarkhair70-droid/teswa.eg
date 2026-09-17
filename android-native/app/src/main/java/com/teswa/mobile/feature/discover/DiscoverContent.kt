@@ -12,26 +12,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
-import com.teswa.mobile.ui.system.TeswaObjectStage
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
+import com.teswa.mobile.ui.system.TeswaObjectMoment
+import com.teswa.mobile.ui.system.TeswaObjectMomentVariant
 import com.teswa.mobile.ui.system.TeswaPersonIdentity
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
-import com.teswa.mobile.ui.system.TeswaScreenHeading
-import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSearchField
-import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSpacing
 
 @Composable
@@ -66,15 +67,33 @@ fun DiscoverList(
         ),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
     ) {
-        item {
-            TeswaScreenHeading(
-                title = "دور جوه الاحتمالات",
-                eyebrow = "اكتشف",
-                supporting = "ابحث بالاسم أو التصنيف أو المدينة، وبعدها ضيّق النطاق على قد القرار اللي بتحاول تاخده.",
-            )
+        item(key = "discover-search-masthead") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaMarkIcon(
+                    mark = TeswaMark.Possible,
+                    color = MaterialTheme.colorScheme.primary,
+                    size = androidx.compose.ui.unit.Dp(28f),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "دور جوه الاحتمالات",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "ابدأ بحاجة في دماغك وسيب النتائج تفتح احتمالات حواليها.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
-        item {
+        item(key = "discover-search") {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
@@ -87,25 +106,48 @@ fun DiscoverList(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TeswaChoiceChip(
-                        label = when {
-                            holder.locationWorking -> "بنحدد القريب…"
-                            holder.nearbyLocation != null -> "قريب مني"
-                            else -> "الأقرب لي"
-                        },
-                        selected = holder.nearbyLocation != null,
-                        onClick = if (holder.nearbyLocation == null) onNearby else onDisableNearby,
-                        leadingIcon = TeswaIcons.Location,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = if (holder.nearbyLocation == null) onNearby else onDisableNearby)
+                            .padding(vertical = TeswaSpacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = TeswaIcons.Location,
+                            contentDescription = null,
+                            tint = if (holder.nearbyLocation != null) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        Text(
+                            text = when {
+                                holder.locationWorking -> "بنحدد القريب…"
+                                holder.nearbyLocation != null -> "النتائج الأقرب ليك"
+                                else -> "قرّب النتائج منك"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (holder.nearbyLocation != null) {
+                                MaterialTheme.colorScheme.secondary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
                     if (holder.filters.activeCount > 0) {
-                        TeswaChoiceChip(
-                            label = "امسح ${holder.filters.activeCount} فلتر",
-                            selected = true,
-                            onClick = onClearFilters,
-                            leadingIcon = TeswaIcons.Clear,
+                        Text(
+                            text = "امسح ${holder.filters.activeCount}",
+                            modifier = Modifier
+                                .clickable(onClick = onClearFilters)
+                                .padding(TeswaSpacing.xs),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -120,8 +162,8 @@ fun DiscoverList(
         }
 
         if (categories.isNotEmpty()) {
-            item {
-                TeswaSectionHeader("التصنيفات")
+            item(key = "discover-categories") {
+                TeswaSectionHeader("إيه نوع الحاجة؟")
                 Spacer(Modifier.padding(top = TeswaSpacing.xxs))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
                     item {
@@ -146,8 +188,8 @@ fun DiscoverList(
             }
         }
 
-        item {
-            TeswaSectionHeader("الحالة")
+        item(key = "discover-condition") {
+            TeswaSectionHeader("حالَتها")
             Spacer(Modifier.padding(top = TeswaSpacing.xxs))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
                 item { ConditionChip("الكل", null, holder.filters.condition, onSelectCondition) }
@@ -158,13 +200,13 @@ fun DiscoverList(
             }
         }
 
-        item {
-            TeswaSectionHeader(
-                title = "ناس ممكن يفرقوا في القرار",
-                actionLabel = "كل الناس",
-                onAction = onOpenPeople,
-            )
-            if (people.isNotEmpty()) {
+        if (people.isNotEmpty()) {
+            item(key = "discover-people") {
+                TeswaSectionHeader(
+                    title = "ناس حوالين الاحتمال",
+                    actionLabel = "كل الناس",
+                    onAction = onOpenPeople,
+                )
                 Spacer(Modifier.padding(top = TeswaSpacing.xs))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.lg)) {
                     items(people, key = { it.id }) { person ->
@@ -176,7 +218,7 @@ fun DiscoverList(
                         ) {
                             val place = listOfNotNull(person.city, person.area)
                                 .filter { it.isNotBlank() }
-                                .joinToString(" • ")
+                                .joinToString(" · ")
                             TeswaPersonIdentity(
                                 name = person.displayName,
                                 avatarUrl = person.avatarUrl,
@@ -189,26 +231,35 @@ fun DiscoverList(
                         }
                     }
                 }
-            } else {
-                Spacer(Modifier.padding(top = TeswaSpacing.xs))
-                Text(
-                    text = "مفيش ناس ظاهرة في النطاق الحالي. تقدر تفتح الدليل وتدور بالاسم أو المدينة.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
 
-        item {
-            TeswaSectionHeader(
-                title = "النتائج",
-                actionLabel = "حدّث",
-                onAction = onRefresh,
-            )
-            if (holder.filters.activeCount > 0) {
+        item(key = "discover-results-header") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "الحاجات اللي ظهرت",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (holder.filters.activeCount > 0) {
+                        Text(
+                            text = "${holder.filters.activeCount} فلتر نشط",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
                 Text(
-                    text = "${holder.filters.activeCount} فلتر نشط",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "حدّث",
+                    modifier = Modifier
+                        .clickable(onClick = onRefresh)
+                        .padding(TeswaSpacing.xs),
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -276,35 +327,25 @@ private fun DiscoverObject(
 ) {
     val meta = buildList {
         item.condition?.takeIf { it.isNotBlank() }?.let(::add)
+        item.category?.takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(" · ")
+    val place = buildList {
         item.city?.takeIf { it.isNotBlank() }?.let(::add)
         item.distanceKm?.let { add(String.format(java.util.Locale.US, "%.1f كم", it)) }
-    }.joinToString(" • ")
+    }.joinToString(" · ")
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen),
-        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-    ) {
-        TeswaObjectStage(
-            item = TeswaObjectIdentity(
-                title = item.title,
-                imageUrl = item.imageUrl,
-                meta = meta.takeIf { it.isNotBlank() },
-                owner = item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { "عند $it" },
-            ),
-            eyebrow = item.category?.takeIf { it.isNotBlank() },
-        )
-        item.description?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    TeswaObjectMoment(
+        title = item.title,
+        imageUrl = item.imageUrl,
+        meta = meta.takeIf { it.isNotBlank() },
+        owner = item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { name ->
+            listOfNotNull("عند $name", item.city?.takeIf { it.isNotBlank() }).joinToString(" · ")
+        },
+        trace = item.description?.takeIf { it.isNotBlank() },
+        archiveLabel = place.takeIf { it.isNotBlank() },
+        variant = TeswaObjectMomentVariant.Full,
+        onClick = onOpen,
+    )
 }
 
 @Composable
