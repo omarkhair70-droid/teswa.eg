@@ -1,3 +1,4 @@
+# Retry after Google Play confirmed versionCode 26 was already used.
 name: Teswa Native Internal Upload Once
 
 on:
