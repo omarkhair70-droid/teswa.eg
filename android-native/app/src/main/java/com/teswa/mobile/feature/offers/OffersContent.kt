@@ -39,16 +39,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaExchangePair
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
 
 @Composable
 fun OffersContent(
     holder: OffersStateHolder,
     onOpenDeal: (String) -> Unit,
+    initialDirection: OfferDirection = OfferDirection.INCOMING,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    var direction by remember { mutableStateOf(OfferDirection.INCOMING) }
+    var direction by remember(initialDirection) { mutableStateOf(initialDirection) }
     var confirmation by remember { mutableStateOf<Pair<String, OfferAction>?>(null) }
 
     Column(modifier.fillMaxSize()) {
@@ -118,29 +130,22 @@ fun OffersContent(
 @Composable
 private fun DirectionPicker(selected: OfferDirection, onSelect: (OfferDirection) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
     ) {
-        DirectionChip("مستنية ردّي", selected == OfferDirection.INCOMING, Modifier.weight(1f)) {
-            onSelect(OfferDirection.INCOMING)
-        }
-        DirectionChip("عروض بعتها", selected == OfferDirection.SENT, Modifier.weight(1f)) {
-            onSelect(OfferDirection.SENT)
-        }
-    }
-}
-
-@Composable
-private fun DirectionChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = CircleShape,
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        TeswaChoiceChip(
+            label = "محتاجاني",
+            selected = selected == OfferDirection.INCOMING,
+            onClick = { onSelect(OfferDirection.INCOMING) },
+            modifier = Modifier.weight(1f),
+            leadingIcon = TeswaIcons.Exchange,
+        )
+        TeswaChoiceChip(
+            label = "مستني رد",
+            selected = selected == OfferDirection.SENT,
+            onClick = { onSelect(OfferDirection.SENT) },
+            modifier = Modifier.weight(1f),
+            leadingIcon = TeswaIcons.Waiting,
         )
     }
 }
@@ -152,68 +157,59 @@ private fun OfferCard(
     onAction: (OfferAction) -> Unit,
     onOpenDeal: () -> Unit,
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OfferItem(offer.requestedItem, "المطلوب", Modifier.weight(1f))
-                Text("↔", modifier = Modifier.padding(horizontal = 10.dp), color = MaterialTheme.colorScheme.primary)
-                OfferItem(offer.offeredItem, "المعروض", Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (offer.status == "accepted") MaterialTheme.colorScheme.secondaryContainer
-                    else MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Text(
-                        offerStatusLabel(offer.status),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        style = MaterialTheme.typography.labelMedium,
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+        TeswaExchangePair(
+            requested = offer.requestedItem.toIdentity(),
+            offered = offer.offeredItem.toIdentity(),
+            state = offerStatusLabel(offer.status),
+            stateEmphasis = when (offer.status) {
+                "accepted" -> TeswaEmphasis.Commitment
+                "thinking" -> TeswaEmphasis.Normal
+                "soft_rejected", "withdrawn", "expired", "cancelled_after_accept" -> TeswaEmphasis.Quiet
+                else -> TeswaEmphasis.Strong
+            },
+        )
+        offer.message?.takeIf { it.isNotBlank() }?.let { message ->
+            TeswaInlineMessage(
+                title = if (offer.direction == OfferDirection.INCOMING) "رسالة مع العرض" else "رسالتك مع العرض",
+                body = message,
+                icon = TeswaIcons.Conversation,
+            )
+        }
+        when {
+            working -> TeswaInlineLoading("بنحدّث حالة العرض…")
+            offer.direction == OfferDirection.INCOMING && offer.status in setOf("pending", "thinking") -> {
+                TeswaPrimaryAction(
+                    text = "موافق — ابدأوا صفقة",
+                    icon = TeswaIcons.Accepted,
+                    onClick = { onAction(OfferAction.ACCEPT) },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                    TeswaSecondaryAction(
+                        text = "هفكر",
+                        icon = TeswaIcons.Waiting,
+                        onClick = { onAction(OfferAction.THINKING) },
+                        modifier = Modifier.weight(1f),
                     )
+                    TextButton(
+                        onClick = { onAction(OfferAction.SOFT_REJECT) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("مش مناسب") }
                 }
-                Text(if (offer.direction == OfferDirection.INCOMING) "عرض وارد" else "عرض مرسل", style = MaterialTheme.typography.labelMedium)
             }
-            offer.message?.let { message ->
-                Spacer(Modifier.height(10.dp))
-                Text(message, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            }
-            if (working) {
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.width(20.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp)); Text("جاري تحديث العرض…", style = MaterialTheme.typography.bodySmall)
-                }
-            } else if (offer.direction == OfferDirection.INCOMING && offer.status in setOf("pending", "thinking")) {
-                Spacer(Modifier.height(12.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onAction(OfferAction.ACCEPT) }, modifier = Modifier.fillMaxWidth()) { Text("قبول وبدء التنسيق") }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { onAction(OfferAction.THINKING) }, modifier = Modifier.weight(1f)) { Text("محتاج أفكر") }
-                        TextButton(onClick = { onAction(OfferAction.SOFT_REJECT) }, modifier = Modifier.weight(1f)) { Text("مش مناسب") }
-                    }
-                }
-            } else if (offer.dealId != null) {
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = onOpenDeal, modifier = Modifier.fillMaxWidth()) { Text("افتح محادثة الصفقة") }
-            }
+            offer.dealId != null -> TeswaSecondaryAction(
+                text = "افتح الصفقة",
+                icon = TeswaIcons.Accepted,
+                onClick = onOpenDeal,
+            )
         }
     }
 }
 
-@Composable
-private fun OfferItem(item: OfferItemSummary, label: String, modifier: Modifier) {
-    Column(modifier) {
-        NetworkImage(
-            url = item.imageUrl,
-            contentDescription = item.title,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1.25f).clip(MaterialTheme.shapes.small),
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-    }
-}
+private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
+    title = title,
+    imageUrl = imageUrl,
+)
 
 @Composable
 private fun OfferCenterState(message: String, loading: Boolean = false, action: (() -> Unit)? = null) {

@@ -26,8 +26,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +40,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaActionSheet
+import com.teswa.mobile.ui.system.TeswaBottomCommitBar
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaExchangePair
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
 import kotlinx.coroutines.launch
 
 @Composable
@@ -72,86 +88,116 @@ fun OfferCreationScreen(
             secondary = "رجوع" to onBack,
         )
         is OfferCreationUiState.Sent -> OfferSentState(modifier, onOfferSent)
-        is OfferCreationUiState.Ready -> LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = onBack) { Text("رجوع") }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("قدّم عرض تبديل", style = MaterialTheme.typography.headlineSmall)
-                        Text("اختار حاجة واحدة من عندك", style = MaterialTheme.typography.bodySmall)
+        is OfferCreationUiState.Ready -> {
+            var showSelector by remember { mutableStateOf(false) }
+            val selected = state.context.myActiveItems.firstOrNull { it.id == holder.selectedItemId }
+            Column(modifier.fillMaxSize()) {
+                TeswaFocusedHeader(title = "قدّم عرض", onBack = onBack)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = TeswaLayout.FocusedContentPadding,
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                ) {
+                    item {
+                        TeswaExchangePair(
+                            requested = state.context.requestedItem.toIdentity(),
+                            offered = selected?.toIdentity(),
+                            state = "عرض جديد",
+                            stateEmphasis = TeswaEmphasis.Strong,
+                            emptyOfferedLabel = "اختار حاجة من دولابك",
+                            onChooseOffered = if (state.context.myActiveItems.isEmpty()) null else ({ showSelector = true }),
+                        )
                     }
+                    if (state.context.myActiveItems.isEmpty()) {
+                        item {
+                            TeswaEmptyField(
+                                title = "مفيش حاجة نشطة تقدمها",
+                                body = "العرض لازم يربط حاجة واحدة نشطة من دولابك بالحاجة اللي اخترتها.",
+                                actionLabel = "روح لدولابي",
+                                actionIcon = TeswaIcons.Mine,
+                                onAction = onAddItem,
+                            )
+                        }
+                    } else {
+                        if (selected != null) {
+                            item {
+                                androidx.compose.material3.TextButton(onClick = { showSelector = true }) {
+                                    Text("غيّر الحاجة اللي هتقدمها")
+                                }
+                            }
+                        }
+                        item {
+                            TeswaTextField(
+                                value = holder.message,
+                                onValueChange = holder::updateMessage,
+                                label = "سياق إضافي — اختياري",
+                                placeholder = "مثلاً: حالتها ممتازة ومتاح أقابلك في…",
+                                supportingText = "${holder.message.length} / 500",
+                                singleLine = false,
+                                minLines = 3,
+                                maxLines = 5,
+                                enabled = !holder.submitting,
+                            )
+                        }
+                        item {
+                            TeswaInlineMessage(
+                                title = "إيه اللي هيحصل؟",
+                                body = "ده عرض واضح بين حاجتين. القبول بعد كده هيعمل صفقة مستقلة؛ مش معناه إن التبديل حصل.",
+                                icon = TeswaIcons.Exchange,
+                            )
+                        }
+                        holder.submitError?.let { error ->
+                            item {
+                                TeswaInlineMessage(
+                                    title = "العرض ما اتبعتش",
+                                    body = error,
+                                    icon = TeswaIcons.Refresh,
+                                    emphasis = TeswaEmphasis.Strong,
+                                )
+                            }
+                        }
+                    }
+                }
+                if (state.context.myActiveItems.isNotEmpty()) {
+                    TeswaBottomCommitBar(
+                        primaryLabel = "ابعت العرض",
+                        primaryIcon = TeswaIcons.Send,
+                        primaryEnabled = holder.selectedItemId != null,
+                        primaryLoading = holder.submitting,
+                        onPrimary = { scope.launch { holder.submit() } },
+                    )
                 }
             }
-            item { RequestedItemCard(state.context.requestedItem) }
-            if (state.context.myActiveItems.isEmpty()) {
-                item {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
-                        Column(Modifier.padding(18.dp)) {
-                            Text("محتاج تعرض حاجة الأول", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(6.dp))
-                            Text("عرض التبديل لازم يربط بين عنصر نشط من عندك والعنصر اللي اخترته.")
-                            Spacer(Modifier.height(14.dp))
-                            Button(onClick = onAddItem, modifier = Modifier.fillMaxWidth()) { Text("اعرض عنصر جديد") }
+
+            if (showSelector) {
+                TeswaActionSheet(
+                    title = "اختار حاجة واحدة من دولابك",
+                    supporting = "الاختيارات دي هي حاجاتك النشطة المؤهلة للعرض دلوقتي.",
+                    onDismiss = { showSelector = false },
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                        state.context.myActiveItems.forEach { item ->
+                            TeswaObjectRow(
+                                item = item.toIdentity(),
+                                state = if (item.id == holder.selectedItemId) "اختيارك" else null,
+                                stateEmphasis = TeswaEmphasis.Strong,
+                                onClick = {
+                                    holder.select(item.id)
+                                    showSelector = false
+                                },
+                            )
                         }
                     }
-                }
-            } else {
-                item {
-                    Text("هتقدم إيه؟", style = MaterialTheme.typography.titleLarge)
-                    Text("اختيارك مش نهائي غير بعد الضغط على إرسال.", style = MaterialTheme.typography.bodySmall)
-                }
-                items(state.context.myActiveItems, key = { it.id }) { item ->
-                    SelectableOfferItem(item, selected = holder.selectedItemId == item.id) { holder.select(item.id) }
-                }
-                item {
-                    OutlinedTextField(
-                        value = holder.message,
-                        onValueChange = holder::updateMessage,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("رسالة قصيرة — اختياري") },
-                        placeholder = { Text("مثلاً: حالته ممتازة ومتاح أقابلك في…") },
-                        minLines = 3,
-                        maxLines = 5,
-                        supportingText = { Text("${holder.message.length} / 500") },
-                    )
-                }
-                holder.submitError?.let { error ->
-                    item {
-                        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.error.copy(alpha = .1f)) {
-                            Text(error, Modifier.fillMaxWidth().padding(14.dp), color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-                item {
-                    Button(
-                        onClick = { scope.launch { holder.submit() } },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = holder.selectedItemId != null && !holder.submitting,
-                    ) {
-                        if (holder.submitting) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Text(if (holder.submitting) "جاري الإرسال…" else "إرسال عرض التبديل")
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "العرض رسمي لكنه مش قبول تلقائي؛ صاحب العنصر يقدر يقبل أو يطلب وقت أو يرفض.",
-                        modifier = Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }
     }
 }
+
+private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
+    title = title,
+    imageUrl = imageUrl,
+)
 
 @Composable
 private fun RequestedItemCard(item: OfferItemSummary) {

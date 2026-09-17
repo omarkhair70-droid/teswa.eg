@@ -426,6 +426,7 @@ fun AppShell(
                         externalContextualId = null
                     },
                     onReport = { reportTarget = it },
+                    onFocusedStateChanged = { suppressRootChrome = it },
                 )
 
                 TeswaRootDestination.ME -> ProfileScreen(

@@ -1,5 +1,6 @@
 package com.teswa.mobile.feature.direct
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,18 @@ import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
+import com.teswa.mobile.ui.system.TeswaTextField
 import kotlinx.coroutines.launch
 
 @Composable
@@ -32,18 +45,25 @@ fun DirectContent(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { holder.load() }
     holder.composeTarget?.let { DirectFirstMessage(holder, it, dolabBridge, modifier); return }
     holder.selected?.let { DirectThread(holder, it, voiceMediaRepository, dolabBridge, onReport, modifier); return }
     when (val state = holder.state) {
-        DirectUiState.Loading -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        is DirectUiState.Error -> Column(modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
-            Text(state.message)
-            Button(onClick = { scope.launch { holder.load() } }) { Text("حاول تاني") }
-        }
+        DirectUiState.Loading -> TeswaInlineLoading("بنحمّل الكلام المباشر…", modifier.padding(TeswaLayout.ScreenHorizontal))
+        is DirectUiState.Error -> TeswaInlineMessage(
+            title = "الكلام المباشر مش متاح",
+            body = state.message,
+            icon = TeswaIcons.Refresh,
+            actionLabel = "حاول تاني",
+            onAction = { scope.launch { holder.load() } },
+            modifier = modifier.padding(TeswaLayout.ScreenHorizontal),
+        )
         is DirectUiState.Ready -> if (state.items.isEmpty()) {
-            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("طلبات ومحادثات الناس هتظهر هنا.") }
-        } else LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp)) {
+            TeswaEmptyField(
+                title = "مفيش كلام مباشر",
+                body = "طلب الكلام بيبدأ من شخص واضح، والطرف التاني يختار يقبله أو يتجاهله.",
+                modifier = modifier.padding(TeswaLayout.ScreenHorizontal),
+            )
+        } else LazyColumn(modifier.fillMaxSize(), contentPadding = TeswaLayout.RootContentPadding) {
             items(state.items, key = { it.id }) { value -> DirectConversationCard(value) { scope.launch { holder.open(value) } } }
         }
     }
@@ -59,45 +79,31 @@ private fun DirectFirstMessage(
     val scope = rememberCoroutineScope()
     val name = target.displayName ?: target.username ?: "مستخدم تِسوى"
     Column(modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(onClick = holder::close) { Text("رجوع") }
-            Spacer(Modifier.width(12.dp))
-            NetworkImage(target.avatarUrl, name, Modifier.size(44.dp).clip(CircleShape))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("أول رسالة تبدأ طلب المراسلة", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        TeswaFocusedHeader(title = "طلب كلام", onBack = holder::close)
         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
         Column(
-            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+            Modifier.weight(1f).fillMaxWidth().padding(TeswaLayout.ScreenHorizontal),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
         ) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
-                Text("✉", Modifier.padding(18.dp), style = MaterialTheme.typography.headlineMedium)
-            }
-            Spacer(Modifier.height(14.dp))
-            Text("ابدأ برسالة لها معنى", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(7.dp))
-            Text(
-                "فتح الشاشة لا يرسل طلبًا. الطلب يتسجل فقط لما تضغط إرسال.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            TeswaPersonIdentity(
+                name = name,
+                avatarUrl = target.avatarUrl,
+                supporting = "أول رسالة هتبدأ طلب الكلام",
+            )
+            TeswaInlineMessage(
+                title = "ابدأ برسالة لها معنى",
+                body = "فتح الشاشة لوحده مش بيبعت حاجة. الطلب بيتسجل بس لما تضغط إرسال.",
+                icon = TeswaIcons.Conversation,
             )
             holder.message?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    it,
-                    color = if (holder.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                TeswaInlineMessage(
+                    title = if (holder.messageIsError) "الطلب ما اتبعتش" else "تم",
+                    body = it,
+                    emphasis = if (holder.messageIsError) TeswaEmphasis.Strong else TeswaEmphasis.Normal,
                 )
             }
         }
-        Surface(shadowElevation = 8.dp) {
+        Surface(tonalElevation = 2.dp) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 DolabPickerButton(holder, dolabBridge, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
@@ -106,18 +112,22 @@ private fun DirectFirstMessage(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OutlinedTextField(
+                    TeswaTextField(
                         value = holder.composer,
                         onValueChange = holder::compose,
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("اكتب أول رسالة…") },
+                        label = "أول رسالة",
+                        placeholder = "قول ليه حابب تبدأ كلام…",
+                        singleLine = false,
                         minLines = 1,
-                        maxLines = 4,
+                        maxLines = 3,
                     )
-                    Button(
+                    com.teswa.mobile.ui.system.TeswaIconAction(
+                        icon = TeswaIcons.Send,
+                        contentDescription = "إرسال طلب الكلام",
                         onClick = { scope.launch { holder.sendFirst() } },
                         enabled = holder.composer.isNotBlank() && !holder.working,
-                    ) { Text(if (holder.working) "…" else "إرسال") }
+                    )
                 }
             }
         }
@@ -126,23 +136,22 @@ private fun DirectFirstMessage(
 
 @Composable
 private fun DirectConversationCard(value: DirectConversation, onOpen: () -> Unit) {
-    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
-        Column(Modifier.padding(14.dp)) {
-            Row {
-                Text(
-                    value.otherDisplayName ?: value.otherUsername ?: "مستخدم تِسوى",
-                    Modifier.weight(1f),
-                    fontWeight = if (value.unreadCount > 0) FontWeight.Bold else FontWeight.Medium,
-                )
-                if (value.requiresAction) Text("محتاج رد", color = MaterialTheme.colorScheme.primary)
-            }
-            Text(
-                value.lastMessageBody ?: if (value.status == "requested") "طلب مراسلة جديد" else "ابدأوا الكلام",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = TeswaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        TeswaPersonIdentity(
+            name = value.otherDisplayName ?: value.otherUsername ?: "مستخدم تِسوى",
+            avatarUrl = value.otherAvatarUrl,
+            supporting = value.lastMessageBody ?: if (value.status == "requested") "طلب كلام جديد" else "محادثة مباشرة",
+            evidence = if (value.unreadCount > 0) "${value.unreadCount} جديد" else null,
+            modifier = Modifier.weight(1f),
+        )
+        TeswaStatePill(
+            text = if (value.requiresAction) "محتاج ردك" else if (value.status == "accepted") "مباشر" else "طلب كلام",
+            emphasis = if (value.requiresAction) TeswaEmphasis.Strong else TeswaEmphasis.Quiet,
+        )
     }
 }
 
@@ -157,14 +166,13 @@ private fun DirectThread(
 ) {
     val scope = rememberCoroutineScope()
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = holder::close) { Text("رجوع") }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(value.otherDisplayName ?: value.otherUsername ?: "مستخدم تِسوى", fontWeight = FontWeight.Bold)
-                Text(if (value.status == "requested") "طلب مراسلة" else "محادثة مباشرة", style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        TeswaFocusedHeader(title = "كلام مباشر", onBack = holder::close)
+        TeswaPersonIdentity(
+            name = value.otherDisplayName ?: value.otherUsername ?: "مستخدم تِسوى",
+            avatarUrl = value.otherAvatarUrl,
+            supporting = if (value.status == "requested") "طلب كلام" else "محادثة مباشرة",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.xs),
+        )
         holder.message?.let {
             Text(
                 it,
@@ -172,13 +180,27 @@ private fun DirectThread(
                 color = if (holder.messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             )
         }
-        if (value.requiresAction) Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
-            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("الشخص ده طالب يبدأ كلام معاك.")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { scope.launch { holder.act(true) } }, enabled = !holder.working) { Text("قبول") }
-                    OutlinedButton(onClick = { scope.launch { holder.act(false) } }, enabled = !holder.working) { Text("تجاهل") }
-                }
+        if (value.requiresAction) Column(
+            Modifier.fillMaxWidth().padding(horizontal = TeswaLayout.ScreenHorizontal),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+        ) {
+            TeswaInlineMessage(
+                title = "طلب كلام مستنيك",
+                body = "اقبل لو حابب تفتح محادثة مباشرة. التجاهل يقفل الطلب من غير فتح الرسائل.",
+                icon = TeswaIcons.Conversation,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                TeswaPrimaryAction(
+                    text = "اقبل الطلب",
+                    onClick = { scope.launch { holder.act(true) } },
+                    enabled = !holder.working,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedButton(
+                    onClick = { scope.launch { holder.act(false) } },
+                    enabled = !holder.working,
+                    modifier = Modifier.weight(1f),
+                ) { Text("تجاهل") }
             }
         }
         LazyColumn(
@@ -295,18 +317,22 @@ private fun DirectComposer(holder: DirectStateHolder, dolabBridge: DolabDirectMe
                 onError = holder::showMessage,
             )
             Spacer(Modifier.width(8.dp))
-            OutlinedTextField(
-                holder.composer,
-                holder::compose,
-                Modifier.weight(1f),
-                placeholder = { Text("اكتب رسالة…") },
+            TeswaTextField(
+                value = holder.composer,
+                onValueChange = holder::compose,
+                modifier = Modifier.weight(1f),
+                label = "رسالة مباشرة",
+                placeholder = "اكتب رسالة…",
+                singleLine = false,
                 maxLines = 4,
             )
             Spacer(Modifier.width(8.dp))
-            Button(
+            com.teswa.mobile.ui.system.TeswaIconAction(
+                icon = TeswaIcons.Send,
+                contentDescription = "إرسال الرسالة",
                 onClick = { scope.launch { holder.send() } },
                 enabled = holder.composer.isNotBlank() && !holder.working,
-            ) { Text("إرسال") }
+            )
         }
     }
 }
