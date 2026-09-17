@@ -69,61 +69,117 @@ private fun createShareImage(context: Context, item: ItemDetail): Uri {
     val height = 1500
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    canvas.drawColor(Color.rgb(251, 248, 243))
 
-    val imageBottom = 820f
+    val paper = Color.rgb(251, 248, 243)
+    val surface = Color.rgb(255, 253, 252)
+    val ink = Color.rgb(33, 26, 23)
+    val clay = Color.rgb(147, 72, 47)
+    val sage = Color.rgb(70, 102, 91)
+    val muted = Color.rgb(242, 232, 226)
+    val outline = Color.rgb(136, 115, 106)
+    canvas.drawColor(paper)
+
+    // The share artifact behaves like one found object/photo on paper rather than a marketplace card.
+    val photoPaper = RectF(54f, 54f, width - 54f, 874f)
+    val photoPaperPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = surface }
+    canvas.drawRoundRect(photoPaper, 42f, 42f, photoPaperPaint)
+
+    val photo = RectF(84f, 84f, width - 84f, 806f)
     val image = item.images.firstOrNull()?.let(::downloadBitmap)
     if (image != null) {
-        drawCenterCrop(canvas, image, RectF(0f, 0f, width.toFloat(), imageBottom))
+        canvas.save()
+        canvas.clipRoundRect(photo, 32f, 32f)
+        drawCenterCrop(canvas, image, photo)
+        canvas.restore()
         image.recycle()
     } else {
-        val fieldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(242, 232, 226) }
-        canvas.drawRect(0f, 0f, width.toFloat(), imageBottom, fieldPaint)
+        val fieldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = muted }
+        canvas.drawRoundRect(photo, 32f, 32f, fieldPaint)
+        drawPossibleMark(canvas, left = 130f, top = 210f, size = 170f, color = clay)
         drawText(
             canvas = canvas,
-            text = "احتمال جديد لحاجة موجودة فعلًا",
-            left = 96,
-            top = 330,
-            width = width - 192,
-            textSize = 54f,
-            color = Color.rgb(70, 102, 91),
+            text = "الحاجة موجودة حتى لو الصورة مش موجودة",
+            left = 130,
+            top = 420,
+            width = width - 260,
+            textSize = 48f,
+            color = sage,
             bold = true,
             maxLines = 2,
         )
     }
 
-    val clay = Color.rgb(147, 72, 47)
-    drawText(canvas, "تِسوى", 84, 858, width - 168, 46f, clay, true, 1)
+    // One archive label only: a trace, not a row of metadata pills.
+    val place = listOfNotNull(item.city, item.area)
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .joinToString(" · ")
+    val traceLabel = place.takeIf(String::isNotEmpty)
+        ?: item.condition?.trim()?.takeIf(String::isNotEmpty)
+        ?: "POSSIBILITY / TESWA"
+    drawArchiveLabel(
+        canvas = canvas,
+        text = traceLabel,
+        left = 108f,
+        top = 770f,
+        maxWidth = 640f,
+        background = surface,
+        ink = ink,
+        outline = outline,
+    )
+
+    // Small authored opening mark + wordmark anchors the artifact without turning it into an ad banner.
+    drawPossibleMark(canvas, left = 84f, top = 918f, size = 66f, color = clay)
+    drawText(canvas, "تِسوى", 172, 920, width - 256, 42f, clay, true, 1)
     drawText(
         canvas,
         item.title.trim().ifBlank { "حاجة على تِسوى" },
         84,
-        930,
+        1000,
         width - 168,
-        72f,
-        Color.rgb(33, 26, 23),
+        68f,
+        ink,
         true,
         2,
     )
 
-    val meta = listOfNotNull(
+    val ownerLine = item.ownerDisplayName?.trim()?.takeIf(String::isNotEmpty)?.let { owner ->
+        if (place.isNotBlank()) "عند $owner · $place" else "عند $owner"
+    } ?: place
+    if (ownerLine.isNotBlank()) {
+        drawText(canvas, ownerLine, 84, 1168, width - 168, 34f, Color.rgb(83, 67, 60), false, 1)
+    }
+
+    val presentMeta = listOfNotNull(
         item.condition?.trim()?.takeIf(String::isNotEmpty),
         item.category?.trim()?.takeIf(String::isNotEmpty),
-        listOfNotNull(item.city, item.area)
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .joinToString(" · ")
-            .takeIf(String::isNotEmpty),
-    ).joinToString("  •  ")
-    if (meta.isNotBlank()) {
-        drawText(canvas, meta, 84, 1110, width - 168, 38f, Color.rgb(93, 79, 72), false, 2)
+    ).joinToString(" · ")
+    if (presentMeta.isNotBlank()) {
+        drawText(canvas, presentMeta, 84, 1224, width - 168, 32f, clay, false, 1)
     }
 
     val exchangeCopy = item.desireText?.trim()?.takeIf(String::isNotEmpty)
-        ?.let { "مفتوحة للتبديل: $it" }
-        ?: "حاجة عامة مفتوحة لاحتمال تبديل واضح"
-    drawText(canvas, exchangeCopy, 84, 1240, width - 168, 40f, Color.rgb(70, 102, 91), true, 2)
-    drawText(canvas, "الحاجة أولًا · العرض هو لحظة الالتزام", 84, 1410, width - 168, 30f, clay, false, 1)
+        ?.let { "مفتوحة لـ: $it" }
+        ?: "مفتوحة لاحتمال جديد مع حاجة تانية"
+    val tracePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = clay
+        strokeWidth = 5f
+        strokeCap = Paint.Cap.ROUND
+    }
+    canvas.drawLine(86f, 1310f, 148f, 1310f, tracePaint)
+    drawText(canvas, exchangeCopy, 172, 1282, width - 256, 38f, sage, true, 2)
+
+    drawText(
+        canvas,
+        "OBJECT WITH A PAST · OBJECT WITH A NEXT",
+        84,
+        1435,
+        width - 168,
+        24f,
+        Color.rgb(112, 92, 83),
+        false,
+        1,
+    )
 
     val directory = File(context.cacheDir, "item-share").apply { mkdirs() }
     directory.listFiles()?.filter { it.name.startsWith("teswa-item-") }?.forEach { old ->
@@ -136,6 +192,59 @@ private fun createShareImage(context: Context, item: ItemDetail): Uri {
     }
     bitmap.recycle()
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", output)
+}
+
+private fun drawArchiveLabel(
+    canvas: Canvas,
+    text: String,
+    left: Float,
+    top: Float,
+    maxWidth: Float,
+    background: Int,
+    ink: Int,
+    outline: Int,
+) {
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ink
+        textSize = 27f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    val measured = textPaint.measureText(text).coerceAtMost(maxWidth - 44f)
+    val rect = RectF(left, top, left + measured + 44f, top + 58f)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = background }
+    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(80, Color.red(outline), Color.green(outline), Color.blue(outline))
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+    canvas.drawRoundRect(rect, 14f, 14f, fill)
+    canvas.drawRoundRect(rect, 14f, 14f, stroke)
+    canvas.drawText(text, left + 22f, top + 38f, textPaint)
+}
+
+private fun drawPossibleMark(canvas: Canvas, left: Float, top: Float, size: Float, color: Int) {
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.STROKE
+        strokeWidth = (size * .055f).coerceAtLeast(3f)
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    val x0 = left + size * .08f
+    val x1 = left + size * .55f
+    val y0 = top + size * .16f
+    val y1 = top + size * .84f
+    canvas.drawLine(x0, y0, x0, y1, paint)
+    canvas.drawLine(x0, y0, x1, y0, paint)
+    canvas.drawLine(x0, y1, x1, y1, paint)
+    val objectRect = RectF(
+        left + size * .42f,
+        top + size * .36f,
+        left + size * .76f,
+        top + size * .70f,
+    )
+    canvas.drawRoundRect(objectRect, size * .07f, size * .07f, paint)
+    canvas.drawLine(left + size * .62f, top + size * .53f, left + size * .92f, top + size * .53f, paint)
 }
 
 private fun downloadBitmap(value: String): Bitmap? {
