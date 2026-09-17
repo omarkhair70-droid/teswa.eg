@@ -6,11 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
@@ -34,7 +29,7 @@ import com.teswa.mobile.feature.discover.DiscoverScreen
 import com.teswa.mobile.feature.dolab.AndroidDolabAddItemHandoff
 import com.teswa.mobile.feature.dolab.DolabAddItemHandoffResult
 import com.teswa.mobile.feature.dolab.DolabRepository
-import com.teswa.mobile.feature.dolab.ProfileDolabHost
+import com.teswa.mobile.feature.dolab.DolabScreen
 import com.teswa.mobile.feature.messages.MessagingRepository
 import com.teswa.mobile.feature.messages.MessagingScreen
 import com.teswa.mobile.feature.motion.MotionLocationResolver
@@ -48,6 +43,7 @@ import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.people.PeopleRepository
 import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
+import com.teswa.mobile.feature.profile.ProfileScreen
 import com.teswa.mobile.feature.profile.PublicProfileRepository
 import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.feature.safety.ReportTarget
@@ -59,20 +55,18 @@ import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.home.HomeScreen
 import com.teswa.mobile.home.OracleHomeClient
-import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaRootDestination
+import com.teswa.mobile.ui.system.TeswaRootNavigationBar
 import kotlinx.coroutines.launch
 
-private enum class AppTab(
-    val label: String,
-    val icon: ImageVector,
-    val showInBottomBar: Boolean = true,
-) {
-    HOME("الرئيسية", TeswaIcons.Explore),
-    DISCOVER("اكتشف", TeswaIcons.Search),
-    ADD("حط حاجة", TeswaIcons.PutIntoPlay),
-    MESSAGES("بيننا", TeswaIcons.BetweenUs),
-    NOTIFICATIONS("تنبيهات", TeswaIcons.Notifications, showInBottomBar = false),
-    PROFILE("أنا", TeswaIcons.Me),
+private enum class ShellOverlay {
+    ADD_ITEM,
+    NOTIFICATIONS,
+}
+
+private enum class PossibleMode {
+    FEED,
+    SEARCH,
 }
 
 @Composable
@@ -109,7 +103,9 @@ fun AppShell(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var session by remember(initialSession.user.id) { mutableStateOf(initialSession) }
-    var selectedTab by remember { mutableStateOf(AppTab.HOME) }
+    var selectedRoot by remember { mutableStateOf(TeswaRootDestination.POSSIBLE) }
+    var possibleMode by remember { mutableStateOf(PossibleMode.FEED) }
+    var overlay by remember { mutableStateOf<ShellOverlay?>(null) }
     var externalItemId by remember { mutableStateOf<String?>(null) }
     var externalDealId by remember { mutableStateOf<String?>(null) }
     var openOffers by remember { mutableStateOf(false) }
@@ -129,6 +125,20 @@ fun AppShell(
         }
     }
 
+    fun selectRoot(destination: TeswaRootDestination) {
+        overlay = null
+        selectedRoot = destination
+        if (destination == TeswaRootDestination.POSSIBLE) possibleMode = PossibleMode.FEED
+    }
+
+    fun openAddItem() {
+        overlay = ShellOverlay.ADD_ITEM
+    }
+
+    fun openNotifications() {
+        overlay = ShellOverlay.NOTIFICATIONS
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -145,9 +155,9 @@ fun AppShell(
         }
     }
 
-    LaunchedEffect(selectedTab) {
+    LaunchedEffect(overlay) {
         if (
-            selectedTab == AppTab.NOTIFICATIONS &&
+            overlay == ShellOverlay.NOTIFICATIONS &&
             Build.VERSION.SDK_INT >= 33 &&
             !notificationPermissionRequested &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -163,13 +173,39 @@ fun AppShell(
 
     LaunchedEffect(launchRoute) {
         when (val route = NativeRouteParser.parse(launchRoute)) {
-            is NativeRoute.Item -> { externalItemId = route.id; selectedTab = AppTab.HOME }
-            is NativeRoute.Deal -> { externalDealId = route.id; selectedTab = AppTab.MESSAGES }
-            is NativeRoute.Offer -> { openOffers = true; selectedTab = AppTab.MESSAGES }
-            is NativeRoute.Profile -> { externalProfileId = route.id; selectedTab = AppTab.HOME }
-            is NativeRoute.Direct -> { externalDirectId = route.id; selectedTab = AppTab.MESSAGES }
-            is NativeRoute.Contextual -> { externalContextualId = route.id; selectedTab = AppTab.MESSAGES }
-            NativeRoute.Notifications -> selectedTab = AppTab.NOTIFICATIONS
+            is NativeRoute.Item -> {
+                overlay = null
+                selectedRoot = TeswaRootDestination.POSSIBLE
+                possibleMode = PossibleMode.FEED
+                externalItemId = route.id
+            }
+            is NativeRoute.Deal -> {
+                overlay = null
+                selectedRoot = TeswaRootDestination.BETWEEN_US
+                externalDealId = route.id
+            }
+            is NativeRoute.Offer -> {
+                overlay = null
+                selectedRoot = TeswaRootDestination.BETWEEN_US
+                openOffers = true
+            }
+            is NativeRoute.Profile -> {
+                overlay = null
+                selectedRoot = TeswaRootDestination.POSSIBLE
+                possibleMode = PossibleMode.FEED
+                externalProfileId = route.id
+            }
+            is NativeRoute.Direct -> {
+                overlay = null
+                selectedRoot = TeswaRootDestination.BETWEEN_US
+                externalDirectId = route.id
+            }
+            is NativeRoute.Contextual -> {
+                overlay = null
+                selectedRoot = TeswaRootDestination.BETWEEN_US
+                externalContextualId = route.id
+            }
+            NativeRoute.Notifications -> openNotifications()
             null -> Unit
         }
         if (launchRoute != null) onLaunchRouteConsumed()
@@ -177,173 +213,184 @@ fun AppShell(
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                AppTab.entries.filter { it.showInBottomBar }.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.label,
-                            )
-                        },
-                        label = { Text(tab.label) },
-                    )
-                }
+            if (overlay == null) {
+                TeswaRootNavigationBar(
+                    selected = selectedRoot,
+                    onSelect = ::selectRoot,
+                )
             }
         },
     ) { padding ->
-        when (selectedTab) {
-            AppTab.HOME -> HomeScreen(
-                initialSession = session,
-                client = homeClient,
-                editListingRepository = editListingRepository,
-                locationProvider = locationProvider,
-                offersRepository = offersRepository,
-                publicProfileRepository = publicProfileRepository,
-                storyRepository = storyRepository,
-                onSessionUpdated = { session = it },
-                onSignOut = signOutAndDisable,
-                modifier = Modifier.padding(padding),
-                onOfferCreated = { selectedTab = AppTab.MESSAGES },
-                onAddItem = { selectedTab = AppTab.ADD },
-                onNotifications = { selectedTab = AppTab.NOTIFICATIONS },
-                externalItemId = externalItemId,
-                onExternalItemConsumed = { externalItemId = null },
-                externalProfileId = externalProfileId,
-                onExternalProfileConsumed = { externalProfileId = null },
-                onStartDirect = { target ->
-                    externalDirectTarget = target
-                    selectedTab = AppTab.MESSAGES
-                },
-                onStoryReplyOpened = { conversationId ->
-                    externalContextualId = conversationId
-                    selectedTab = AppTab.MESSAGES
-                },
-                onReport = { reportTarget = it },
-            )
-
-            AppTab.DISCOVER -> DiscoverScreen(
-                initialSession = session,
-                repository = discoverRepository,
-                peopleRepository = peopleRepository,
-                motionRepository = motionRepository,
-                motionLocationResolver = motionLocationResolver,
-                locationProvider = locationProvider,
-                onSessionUpdated = { session = it },
-                onSessionExpired = signOutAndDisable,
-                onOpenItem = { itemId ->
-                    externalItemId = itemId
-                    selectedTab = AppTab.HOME
-                },
-                onOpenProfile = { profileId ->
-                    externalProfileId = profileId
-                    selectedTab = AppTab.HOME
-                },
-                onOpenStories = { selectedTab = AppTab.HOME },
-                modifier = Modifier.padding(padding),
-            )
-
-            AppTab.ADD -> AddItemScreen(
+        val contentModifier = Modifier.padding(padding)
+        when (overlay) {
+            ShellOverlay.ADD_ITEM -> AddItemScreen(
                 initialSession = session,
                 repository = addItemRepository,
                 locationProvider = locationProvider,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
-                onPublished = { selectedTab = AppTab.HOME },
-                modifier = Modifier.padding(padding),
-            )
-
-            AppTab.MESSAGES -> MessagingScreen(
-                modifier = Modifier.padding(padding),
-                initialSession = session,
-                repository = messagingRepository,
-                offersRepository = offersRepository,
-                directRepository = directRepository,
-                contextualRepository = contextualRepository,
-                dolabRepository = dolabRepository,
-                voiceMediaRepository = voiceMediaRepository,
-                reviewRepository = reviewRepository,
-                onSessionUpdated = { session = it },
-                onSessionExpired = signOutAndDisable,
-                initialDealId = externalDealId,
-                initialOffers = openOffers,
-                initialDirectId = externalDirectId,
-                initialDirectTarget = externalDirectTarget,
-                initialContextualId = externalContextualId,
-                onExternalTargetConsumed = {
-                    externalDealId = null
-                    openOffers = false
-                    externalDirectId = null
-                    externalDirectTarget = null
-                    externalContextualId = null
+                onPublished = {
+                    overlay = null
+                    selectedRoot = TeswaRootDestination.MINE
                 },
-                onReport = { reportTarget = it },
+                modifier = contentModifier,
             )
 
-            AppTab.NOTIFICATIONS -> NotificationsScreen(
-                modifier = Modifier.padding(padding),
+            ShellOverlay.NOTIFICATIONS -> NotificationsScreen(
+                modifier = contentModifier,
                 initialSession = session,
                 repository = notificationsRepository,
                 onSessionUpdated = { session = it },
                 onSessionExpired = signOutAndDisable,
-                onBack = { selectedTab = AppTab.HOME },
+                onBack = { overlay = null },
                 onDestination = { destination ->
+                    overlay = null
                     when (destination) {
                         is NotificationDestination.Item -> {
+                            selectedRoot = TeswaRootDestination.POSSIBLE
+                            possibleMode = PossibleMode.FEED
                             externalItemId = destination.id
-                            selectedTab = AppTab.HOME
                         }
                         is NotificationDestination.Deal -> {
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
                             externalDealId = destination.id
-                            selectedTab = AppTab.MESSAGES
                         }
                         is NotificationDestination.Offer -> {
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
                             openOffers = true
-                            selectedTab = AppTab.MESSAGES
                         }
                         is NotificationDestination.Profile -> {
+                            selectedRoot = TeswaRootDestination.POSSIBLE
+                            possibleMode = PossibleMode.FEED
                             externalProfileId = destination.id
-                            selectedTab = AppTab.HOME
                         }
                         is NotificationDestination.Direct -> {
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
                             externalDirectId = destination.route.substringAfterLast('/').takeIf { it.length == 36 }
-                            selectedTab = AppTab.MESSAGES
                         }
                         is NotificationDestination.Contextual -> {
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
                             externalContextualId = destination.id
-                            selectedTab = AppTab.MESSAGES
                         }
                     }
                 },
             )
 
-            AppTab.PROFILE -> ProfileDolabHost(
-                modifier = Modifier.padding(padding),
-                initialSession = session,
-                profileRepository = profileRepository,
-                profileImageRepository = profileImageRepository,
-                settingsRepository = settingsRepository,
-                dolabRepository = dolabRepository,
-                onSessionUpdated = { session = it },
-                onSessionExpired = signOutAndDisable,
-                onAddItem = { selectedTab = AppTab.ADD },
-                onContinueAsListing = { item ->
-                    when (val result = dolabAddItemHandoff.prepareAndPersist(session, item)) {
-                        is DolabAddItemHandoffResult.Success -> {
-                            session = result.session
-                            selectedTab = AppTab.ADD
-                            null
+            null -> when (selectedRoot) {
+                TeswaRootDestination.POSSIBLE -> when (possibleMode) {
+                    PossibleMode.FEED -> HomeScreen(
+                        initialSession = session,
+                        client = homeClient,
+                        editListingRepository = editListingRepository,
+                        locationProvider = locationProvider,
+                        offersRepository = offersRepository,
+                        publicProfileRepository = publicProfileRepository,
+                        storyRepository = storyRepository,
+                        onSessionUpdated = { session = it },
+                        onSignOut = signOutAndDisable,
+                        modifier = contentModifier,
+                        onOfferCreated = { selectedRoot = TeswaRootDestination.BETWEEN_US },
+                        onAddItem = ::openAddItem,
+                        onSearch = { possibleMode = PossibleMode.SEARCH },
+                        onNotifications = ::openNotifications,
+                        externalItemId = externalItemId,
+                        onExternalItemConsumed = { externalItemId = null },
+                        externalProfileId = externalProfileId,
+                        onExternalProfileConsumed = { externalProfileId = null },
+                        onStartDirect = { target ->
+                            externalDirectTarget = target
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
+                        },
+                        onStoryReplyOpened = { conversationId ->
+                            externalContextualId = conversationId
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
+                        },
+                        onReport = { reportTarget = it },
+                    )
+
+                    PossibleMode.SEARCH -> DiscoverScreen(
+                        initialSession = session,
+                        repository = discoverRepository,
+                        peopleRepository = peopleRepository,
+                        motionRepository = motionRepository,
+                        motionLocationResolver = motionLocationResolver,
+                        locationProvider = locationProvider,
+                        onSessionUpdated = { session = it },
+                        onSessionExpired = signOutAndDisable,
+                        onOpenItem = { itemId ->
+                            externalItemId = itemId
+                            possibleMode = PossibleMode.FEED
+                        },
+                        onOpenProfile = { profileId ->
+                            externalProfileId = profileId
+                            possibleMode = PossibleMode.FEED
+                        },
+                        onOpenStories = { possibleMode = PossibleMode.FEED },
+                        modifier = contentModifier,
+                    )
+                }
+
+                TeswaRootDestination.MINE -> DolabScreen(
+                    initialSession = session,
+                    repository = dolabRepository,
+                    onSessionUpdated = { session = it },
+                    onSessionExpired = signOutAndDisable,
+                    onBack = { selectedRoot = TeswaRootDestination.POSSIBLE },
+                    modifier = contentModifier,
+                    onContinueAsListing = { item ->
+                        when (val result = dolabAddItemHandoff.prepareAndPersist(session, item)) {
+                            is DolabAddItemHandoffResult.Success -> {
+                                session = result.session
+                                openAddItem()
+                                null
+                            }
+                            is DolabAddItemHandoffResult.Failure -> {
+                                result.session?.let { session = it }
+                                result.message
+                            }
                         }
-                        is DolabAddItemHandoffResult.Failure -> {
-                            result.session?.let { session = it }
-                            result.message
-                        }
-                    }
-                },
-                onSignOut = signOutAndDisable,
-            )
+                    },
+                )
+
+                TeswaRootDestination.BETWEEN_US -> MessagingScreen(
+                    modifier = contentModifier,
+                    initialSession = session,
+                    repository = messagingRepository,
+                    offersRepository = offersRepository,
+                    directRepository = directRepository,
+                    contextualRepository = contextualRepository,
+                    dolabRepository = dolabRepository,
+                    voiceMediaRepository = voiceMediaRepository,
+                    reviewRepository = reviewRepository,
+                    onSessionUpdated = { session = it },
+                    onSessionExpired = signOutAndDisable,
+                    initialDealId = externalDealId,
+                    initialOffers = openOffers,
+                    initialDirectId = externalDirectId,
+                    initialDirectTarget = externalDirectTarget,
+                    initialContextualId = externalContextualId,
+                    onExternalTargetConsumed = {
+                        externalDealId = null
+                        openOffers = false
+                        externalDirectId = null
+                        externalDirectTarget = null
+                        externalContextualId = null
+                    },
+                    onReport = { reportTarget = it },
+                )
+
+                TeswaRootDestination.ME -> ProfileScreen(
+                    initialSession = session,
+                    repository = profileRepository,
+                    imageRepository = profileImageRepository,
+                    settingsRepository = settingsRepository,
+                    onSessionUpdated = { session = it },
+                    onSessionExpired = signOutAndDisable,
+                    onAddItem = ::openAddItem,
+                    onSignOut = signOutAndDisable,
+                    modifier = contentModifier,
+                )
+            }
         }
     }
 
