@@ -107,6 +107,7 @@ fun AppShell(
     var selectedRoot by remember { mutableStateOf(TeswaRootDestination.POSSIBLE) }
     var possibleMode by remember { mutableStateOf(PossibleMode.FEED) }
     var overlay by remember { mutableStateOf<ShellOverlay?>(null) }
+    var suppressRootChrome by remember { mutableStateOf(false) }
     var externalItemId by remember { mutableStateOf<String?>(null) }
     var externalDealId by remember { mutableStateOf<String?>(null) }
     var openOffers by remember { mutableStateOf(false) }
@@ -128,6 +129,7 @@ fun AppShell(
 
     fun selectRoot(destination: TeswaRootDestination) {
         overlay = null
+        suppressRootChrome = false
         selectedRoot = destination
         if (destination == TeswaRootDestination.POSSIBLE) possibleMode = PossibleMode.FEED
     }
@@ -172,8 +174,6 @@ fun AppShell(
         onSignOut()
     }
 
-    // Intercept back only while the user is inside a focused shell state. Root states
-    // remain owned by Android so the system back-to-home behavior stays intact.
     BackHandler(
         enabled = overlay != null ||
             (selectedRoot == TeswaRootDestination.POSSIBLE && possibleMode == PossibleMode.SEARCH),
@@ -182,6 +182,7 @@ fun AppShell(
             overlay != null -> overlay = null
             selectedRoot == TeswaRootDestination.POSSIBLE && possibleMode == PossibleMode.SEARCH -> {
                 possibleMode = PossibleMode.FEED
+                suppressRootChrome = false
             }
         }
     }
@@ -190,33 +191,39 @@ fun AppShell(
         when (val route = NativeRouteParser.parse(launchRoute)) {
             is NativeRoute.Item -> {
                 overlay = null
+                suppressRootChrome = false
                 selectedRoot = TeswaRootDestination.POSSIBLE
                 possibleMode = PossibleMode.FEED
                 externalItemId = route.id
             }
             is NativeRoute.Deal -> {
                 overlay = null
+                suppressRootChrome = false
                 selectedRoot = TeswaRootDestination.BETWEEN_US
                 externalDealId = route.id
             }
             is NativeRoute.Offer -> {
                 overlay = null
+                suppressRootChrome = false
                 selectedRoot = TeswaRootDestination.BETWEEN_US
                 openOffers = true
             }
             is NativeRoute.Profile -> {
                 overlay = null
+                suppressRootChrome = false
                 selectedRoot = TeswaRootDestination.POSSIBLE
                 possibleMode = PossibleMode.FEED
                 externalProfileId = route.id
             }
             is NativeRoute.Direct -> {
                 overlay = null
+                suppressRootChrome = false
                 selectedRoot = TeswaRootDestination.BETWEEN_US
                 externalDirectId = route.id
             }
             is NativeRoute.Contextual -> {
                 overlay = null
+                suppressRootChrome = false
                 selectedRoot = TeswaRootDestination.BETWEEN_US
                 externalContextualId = route.id
             }
@@ -226,9 +233,11 @@ fun AppShell(
         if (launchRoute != null) onLaunchRouteConsumed()
     }
 
+    val searchFocused = selectedRoot == TeswaRootDestination.POSSIBLE && possibleMode == PossibleMode.SEARCH
+
     Scaffold(
         bottomBar = {
-            if (overlay == null) {
+            if (overlay == null && !suppressRootChrome && !searchFocused) {
                 TeswaRootNavigationBar(
                     selected = selectedRoot,
                     onSelect = ::selectRoot,
@@ -246,6 +255,7 @@ fun AppShell(
                 onSessionExpired = signOutAndDisable,
                 onPublished = {
                     overlay = null
+                    suppressRootChrome = false
                     selectedRoot = TeswaRootDestination.MINE
                 },
                 modifier = contentModifier,
@@ -260,6 +270,7 @@ fun AppShell(
                 onBack = { overlay = null },
                 onDestination = { destination ->
                     overlay = null
+                    suppressRootChrome = false
                     when (destination) {
                         is NotificationDestination.Item -> {
                             selectedRoot = TeswaRootDestination.POSSIBLE
@@ -304,19 +315,28 @@ fun AppShell(
                         onSessionUpdated = { session = it },
                         onSignOut = signOutAndDisable,
                         modifier = contentModifier,
-                        onOfferCreated = { selectedRoot = TeswaRootDestination.BETWEEN_US },
+                        onOfferCreated = {
+                            suppressRootChrome = false
+                            selectedRoot = TeswaRootDestination.BETWEEN_US
+                        },
                         onAddItem = ::openAddItem,
-                        onSearch = { possibleMode = PossibleMode.SEARCH },
+                        onSearch = {
+                            suppressRootChrome = false
+                            possibleMode = PossibleMode.SEARCH
+                        },
                         onNotifications = ::openNotifications,
+                        onFocusedStateChanged = { suppressRootChrome = it },
                         externalItemId = externalItemId,
                         onExternalItemConsumed = { externalItemId = null },
                         externalProfileId = externalProfileId,
                         onExternalProfileConsumed = { externalProfileId = null },
                         onStartDirect = { target ->
+                            suppressRootChrome = false
                             externalDirectTarget = target
                             selectedRoot = TeswaRootDestination.BETWEEN_US
                         },
                         onStoryReplyOpened = { conversationId ->
+                            suppressRootChrome = false
                             externalContextualId = conversationId
                             selectedRoot = TeswaRootDestination.BETWEEN_US
                         },
@@ -333,14 +353,19 @@ fun AppShell(
                         onSessionUpdated = { session = it },
                         onSessionExpired = signOutAndDisable,
                         onOpenItem = { itemId ->
+                            suppressRootChrome = false
                             externalItemId = itemId
                             possibleMode = PossibleMode.FEED
                         },
                         onOpenProfile = { profileId ->
+                            suppressRootChrome = false
                             externalProfileId = profileId
                             possibleMode = PossibleMode.FEED
                         },
-                        onOpenStories = { possibleMode = PossibleMode.FEED },
+                        onOpenStories = {
+                            suppressRootChrome = false
+                            possibleMode = PossibleMode.FEED
+                        },
                         modifier = contentModifier,
                     )
                 }
