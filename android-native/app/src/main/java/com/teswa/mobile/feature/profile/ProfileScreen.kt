@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,13 +31,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.settings.SettingsScreen
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEvidenceLine
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
@@ -44,15 +48,17 @@ import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaObjectRow
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
-import com.teswa.mobile.ui.system.TeswaScreenHeading
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaStatePill
 import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
 import kotlinx.coroutines.launch
 
 @Composable
@@ -129,15 +135,11 @@ fun ProfileScreen(
             verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
         ) {
             item {
-                TeswaScreenHeading(
-                    title = "أنا",
-                    eyebrow = "هويتك ودليلك",
-                    supporting = "اللي حصل فعلًا في تبديلاتك أهم هنا من عدادات اجتماعية ملهاش علاقة بالقرار.",
-                )
+                ProfileMasthead(onSettings = { showingSettings = true })
             }
 
             item {
-                ProfileIdentityBlock(state.overview.profile)
+                ProfileIdentityArchive(state.overview.profile)
             }
 
             item {
@@ -146,7 +148,7 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
                 ) {
                     TeswaSecondaryAction(
-                        text = "تعديل الملف",
+                        text = "تعديل هويتي",
                         icon = TeswaIcons.Edit,
                         onClick = holder::beginEdit,
                         modifier = Modifier.weight(1f),
@@ -168,40 +170,28 @@ fun ProfileScreen(
 
             state.overview.profile.bio?.takeIf { it.isNotBlank() }?.let { bio ->
                 item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                    ) {
-                        TeswaSectionHeader("عنّي")
-                        Text(
-                            text = bio,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                        TeswaSectionHeader("أثر صغير عنّي")
+                        TeswaTraceNote(bio)
                     }
                 }
             }
 
             item {
                 TeswaSectionHeader(
-                    title = "الحاجات المنشورة",
+                    title = "الحاجات اللي خرجت للّعب",
                     actionLabel = "حط حاجة",
                     onAction = onAddItem,
-                )
-                Text(
-                    text = "الإدارة دي موجودة هنا مؤقتًا لحد ما كل قواعد العناصر المنشورة تنتقل بالكامل لدولابي من غير ما نفقد أرشفة أو إعادة نشر أو حذف مسموح.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             if (state.overview.listings.isEmpty()) {
                 item {
                     TeswaInlineMessage(
-                        title = "مفيش حاجة منشورة دلوقتي",
-                        body = "ابدأ من دولابك، جهّز الحاجة، وبعدها إنت اللي تقرر تحطها في اللعب.",
+                        title = "لسه مفيش حاجة منشورة",
+                        body = "الحاجة تبدأ في دولابك، ولما تختار تفتحها لاحتمال جديد هتسيب أثرها هنا.",
                         icon = TeswaIcons.Mine,
-                        actionLabel = "حط حاجة",
+                        actionLabel = "ابدأ من دولابي",
                         onAction = onAddItem,
                     )
                 }
@@ -217,7 +207,7 @@ fun ProfileScreen(
 
             item {
                 TeswaSecondaryAction(
-                    text = "حدّث البيانات",
+                    text = "حدّث الأثر",
                     icon = TeswaIcons.Refresh,
                     onClick = { scope.launch { holder.load(silent = true) } },
                 )
@@ -266,82 +256,193 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileIdentityBlock(profile: MyProfile) {
+private fun ProfileMasthead(onSettings: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TeswaMarkIcon(
+            mark = TeswaMark.Me,
+            color = MaterialTheme.colorScheme.primary,
+            size = 28.dp,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text("أنا", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                "هويتك زي ما بناها اللي حصل فعلًا",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        com.teswa.mobile.ui.system.TeswaIconAction(
+            icon = TeswaIcons.Settings,
+            contentDescription = "الإعدادات",
+            onClick = onSettings,
+        )
+    }
+}
+
+@Composable
+private fun ProfileIdentityArchive(profile: MyProfile) {
+    val location = listOfNotNull(profile.area, profile.city)
+        .filter { it.isNotBlank() }
+        .joinToString("، ")
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
     ) {
-        if (profile.coverUrl != null) {
-            NetworkImage(
-                url = profile.coverUrl,
-                contentDescription = "غلاف ${profile.displayName}",
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(228.dp),
+        ) {
+            if (profile.coverUrl != null) {
+                NetworkImage(
+                    url = profile.coverUrl,
+                    contentDescription = "غلاف ${profile.displayName}",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(166.dp)
+                        .clip(RoundedCornerShape(TeswaLayout.ProfileCoverRadius)),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(166.dp)
+                        .clip(RoundedCornerShape(TeswaLayout.ProfileCoverRadius))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                ),
+                            ),
+                        ),
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.Me,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = .55f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(TeswaSpacing.lg),
+                        size = 42.dp,
+                    )
+                    TeswaArchiveLabel(
+                        text = "IDENTITY / TESWA",
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(TeswaSpacing.md),
+                        tone = MaterialTheme.colorScheme.surface.copy(alpha = .88f),
+                    )
+                }
+            }
+
+            Surface(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(TeswaLayout.ProfileCoverHeight)
-                    .clip(MaterialTheme.shapes.extraLarge),
+                    .padding(horizontal = TeswaSpacing.md),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = .96f),
+                tonalElevation = 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(TeswaSpacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    NetworkImage(
+                        url = profile.avatarUrl,
+                        contentDescription = profile.displayName,
+                        modifier = Modifier
+                            .size(TeswaLayout.ProfileAvatarLarge)
+                            .clip(CircleShape),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+                    ) {
+                        Text(
+                            text = profile.displayName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "@${profile.username}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        if (location.isNotBlank()) {
+                            Text(
+                                text = location,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        profile.profileTagline?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
-            verticalAlignment = Alignment.CenterVertically,
+        EvidenceArchive(profile)
+    }
+}
+
+@Composable
+private fun EvidenceArchive(profile: MyProfile) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .26f),
+        shape = MaterialTheme.shapes.large,
+        tonalElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
         ) {
-            NetworkImage(
-                url = profile.avatarUrl,
-                contentDescription = profile.displayName,
-                modifier = Modifier
-                    .size(TeswaLayout.ProfileAvatarLarge)
-                    .clip(CircleShape),
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = profile.displayName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                TeswaMarkIcon(
+                    mark = TeswaMark.Me,
+                    color = MaterialTheme.colorScheme.secondary,
+                    size = 24.dp,
                 )
-                Text(
-                    text = "@${profile.username}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                profile.profileTagline?.takeIf { it.isNotBlank() }?.let {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("الأثر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                val location = listOfNotNull(profile.area, profile.city)
-                    .filter { it.isNotBlank() }
-                    .joinToString("، ")
-                if (location.isNotBlank()) {
-                    Text(
-                        text = location,
+                        "دليل ناتج عن علاقات حصلت، مش عدادات اجتماعية.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-        }
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-        ) {
             TeswaEvidenceLine(
                 icon = TeswaIcons.Accepted,
                 text = "${profile.successfulSwapsCount} تبديلات مكتملة",
-                supporting = "نتائج حصلت فعلًا وبتبني الدليل مع الوقت.",
+                supporting = "كل واحدة منها وصلت من اتفاق رقمي لحاجة حصلت في الواقع.",
             )
             TeswaEvidenceLine(
                 icon = TeswaIcons.Conversation,
                 text = profile.responseRate?.let { "معدل الرد $it%" } ?: "معدل الرد لسه مش متاح",
-                supporting = "إشارة مساعدة وقت ما شخص يفكر يبدأ تواصل أو عرض.",
+                supporting = "إشارة مساعدة وقت ما حد يفكر يبدأ علاقة جديدة معاك.",
             )
         }
     }
