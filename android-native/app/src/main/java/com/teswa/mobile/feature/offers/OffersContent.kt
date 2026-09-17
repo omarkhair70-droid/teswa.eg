@@ -1,5 +1,9 @@
 package com.teswa.mobile.feature.offers
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,13 +48,16 @@ import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaExchangePair
 import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMotion
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
 @Composable
@@ -60,6 +68,7 @@ fun OffersContent(
     initialDirection: OfferDirection = OfferDirection.INCOMING,
 ) {
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     var direction by remember(initialDirection) { mutableStateOf(initialDirection) }
     var confirmation by remember { mutableStateOf<Pair<String, OfferAction>?>(null) }
 
@@ -117,8 +126,17 @@ fun OffersContent(
                     confirmation = null
                     scope.launch {
                         val offer = (holder.state as? OffersUiState.Content)?.inbox?.incoming?.firstOrNull { it.id == offerId }
-                        if (offer != null) holder.act(offer, action)
-                        holder.consumeAcceptedDeal()?.let(onOpenDeal)
+                        if (offer != null) {
+                            holder.act(offer, action)
+                            val dealId = holder.consumeAcceptedDeal()
+                            when {
+                                dealId != null -> haptics.performTeswa(TeswaHapticEvent.Success)
+                                holder.message == null && action == OfferAction.SOFT_REJECT -> {
+                                    haptics.performTeswa(TeswaHapticEvent.Reject)
+                                }
+                            }
+                            dealId?.let(onOpenDeal)
+                        }
                     }
                 }) { Text(if (action == OfferAction.ACCEPT) "اقبل وافتح المحادثة" else "ارفض") }
             },
@@ -158,17 +176,25 @@ private fun OfferCard(
     onOpenDeal: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
-        TeswaExchangePair(
-            requested = offer.requestedItem.toIdentity(),
-            offered = offer.offeredItem.toIdentity(),
-            state = offerStatusLabel(offer.status),
-            stateEmphasis = when (offer.status) {
-                "accepted" -> TeswaEmphasis.Commitment
-                "thinking" -> TeswaEmphasis.Normal
-                "soft_rejected", "withdrawn", "expired", "cancelled_after_accept" -> TeswaEmphasis.Quiet
-                else -> TeswaEmphasis.Strong
+        AnimatedContent(
+            targetState = offer.status,
+            transitionSpec = {
+                fadeIn(TeswaMotion.standard()) togetherWith fadeOut(TeswaMotion.standard())
             },
-        )
+            label = "offer-state",
+        ) { status ->
+            TeswaExchangePair(
+                requested = offer.requestedItem.toIdentity(),
+                offered = offer.offeredItem.toIdentity(),
+                state = offerStatusLabel(status),
+                stateEmphasis = when (status) {
+                    "accepted" -> TeswaEmphasis.Commitment
+                    "thinking" -> TeswaEmphasis.Normal
+                    "soft_rejected", "withdrawn", "expired", "cancelled_after_accept" -> TeswaEmphasis.Quiet
+                    else -> TeswaEmphasis.Strong
+                },
+            )
+        }
         offer.message?.takeIf { it.isNotBlank() }?.let { message ->
             TeswaInlineMessage(
                 title = if (offer.direction == OfferDirection.INCOMING) "رسالة مع العرض" else "رسالتك مع العرض",

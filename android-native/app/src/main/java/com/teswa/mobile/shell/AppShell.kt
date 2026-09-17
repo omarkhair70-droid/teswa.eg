@@ -355,8 +355,6 @@ fun AppShell(
                         initialSession = session,
                         repository = discoverRepository,
                         peopleRepository = peopleRepository,
-                        motionRepository = motionRepository,
-                        motionLocationResolver = motionLocationResolver,
                         locationProvider = locationProvider,
                         onSessionUpdated = { session = it },
                         onSessionExpired = signOutAndDisable,
@@ -368,10 +366,6 @@ fun AppShell(
                         onOpenProfile = { profileId ->
                             suppressRootChrome = false
                             externalProfileId = profileId
-                            possibleMode = PossibleMode.FEED
-                        },
-                        onOpenStories = {
-                            suppressRootChrome = false
                             possibleMode = PossibleMode.FEED
                         },
                         modifier = contentModifier,

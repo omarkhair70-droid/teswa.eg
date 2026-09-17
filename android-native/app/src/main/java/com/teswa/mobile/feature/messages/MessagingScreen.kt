@@ -1,5 +1,9 @@
 package com.teswa.mobile.feature.messages
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,9 +75,11 @@ import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEvidenceLine
 import com.teswa.mobile.ui.system.TeswaExchangePair
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMotion
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaPersonIdentity
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
@@ -80,6 +87,7 @@ import com.teswa.mobile.ui.system.TeswaScreenHeading
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaStatePill
 import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -541,19 +549,26 @@ private fun DealThreadScreen(
 @Composable
 private fun DealCompletionCard(holder: MessagingStateHolder, conversation: DealConversation) {
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val mine = holder.session.user.id in holder.confirmationUserIds
     val other = conversation.otherParticipantId in holder.confirmationUserIds
     Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
-        TeswaInlineMessage(
-            title = dealStatusTitle(conversation.status),
-            body = dealStatusDescription(conversation.status),
-            icon = when (conversation.status) {
-                "completed" -> TeswaIcons.Accepted
-                "cancelled", "disputed" -> TeswaIcons.Safety
-                else -> TeswaIcons.Waiting
-            },
-            emphasis = if (conversation.status == "completed") TeswaEmphasis.Normal else TeswaEmphasis.Quiet,
-        )
+        AnimatedContent(
+            targetState = conversation.status,
+            transitionSpec = { fadeIn(TeswaMotion.emphasized()) togetherWith fadeOut(TeswaMotion.standard()) },
+            label = "deal-completion-state",
+        ) { status ->
+            TeswaInlineMessage(
+                title = dealStatusTitle(status),
+                body = dealStatusDescription(status),
+                icon = when (status) {
+                    "completed" -> TeswaIcons.Accepted
+                    "cancelled", "disputed" -> TeswaIcons.Safety
+                    else -> TeswaIcons.Waiting
+                },
+                emphasis = if (status == "completed") TeswaEmphasis.Normal else TeswaEmphasis.Quiet,
+            )
+        }
         if (conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
             TeswaEvidenceLine(
                 icon = if (mine) TeswaIcons.Accepted else TeswaIcons.Waiting,
@@ -567,7 +582,11 @@ private fun DealCompletionCard(holder: MessagingStateHolder, conversation: DealC
             TeswaPrimaryAction(
                 text = if (mine) "تم تسجيل تأكيدك" else "أكد إن التبديل تم",
                 icon = TeswaIcons.Accepted,
-                onClick = { scope.launch { holder.confirmCompletion() } },
+                onClick = {
+                    scope.launch {
+                        if (holder.confirmCompletion()) haptics.performTeswa(TeswaHapticEvent.Success)
+                    }
+                },
                 enabled = !mine,
                 loading = holder.confirmingCompletion,
             )

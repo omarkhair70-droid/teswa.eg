@@ -22,14 +22,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,14 +35,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaHapticEvent
+import com.teswa.mobile.ui.system.TeswaIconAction
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSize
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
 @Composable
@@ -57,88 +71,72 @@ fun StoriesRail(
 ) {
     val scope = rememberCoroutineScope()
     when (val state = holder.homeState) {
-        StoryHomeState.Loading -> Row(
-            modifier.fillMaxWidth().padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        StoryHomeState.Loading -> TeswaInlineLoading("بنحضّر الحكايات…", modifier)
+        is StoryHomeState.Error -> TeswaInlineMessage(
+            title = "الحكايات مش متاحة دلوقتي",
+            body = state.message,
+            icon = TeswaIcons.Refresh,
+            emphasis = TeswaEmphasis.Quiet,
+            actionLabel = "حاول تاني",
+            onAction = { scope.launch { holder.load() } },
+            modifier = modifier,
+        )
+        is StoryHomeState.Ready -> Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
         ) {
-            CircularProgressIndicator(Modifier.size(22.dp))
-            Text("بنحضّر القصص…", style = MaterialTheme.typography.bodySmall)
-        }
-        is StoryHomeState.Error -> Surface(
-            modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = .45f),
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(state.message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = { scope.launch { holder.load() } }) { Text("إعادة") }
-            }
-        }
-        is StoryHomeState.Ready -> if (state.groups.isNotEmpty()) {
-            Column(modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("حكايات تِسوى", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    OutlinedButton(onClick = onManage) { Text("إدارة قصصي") }
-                }
-                Spacer(Modifier.height(10.dp))
+            TeswaSectionHeader(
+                title = "حكايات من الناس",
+                actionLabel = "إدارة",
+                onAction = onManage,
+            )
+            if (state.groups.isEmpty()) {
+                TeswaInlineMessage(
+                    title = "احكِ لحظة خفيفة",
+                    body = "صورة أو فيديو يختفي بعد 24 ساعة ويضيف سياق للناس، مش عالم جديد.",
+                    icon = TeswaIcons.Gallery,
+                    actionLabel = "أضف حكاية",
+                    onAction = onCreate,
+                )
+            } else {
                 LazyRow(
-                    contentPadding = PaddingValues(horizontal = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(13.dp),
+                    contentPadding = PaddingValues(horizontal = TeswaSpacing.xxs),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
                 ) {
-                    item {
-                        Column(
-                            Modifier.width(76.dp).clickable(onClick = onCreate),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Surface(
-                                Modifier.size(68.dp),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text("+", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                            Spacer(Modifier.height(5.dp))
-                            Text("قصتك", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
+                    item { StoryCreateBubble(onCreate) }
                     items(state.groups, key = { it.author.id }) { group ->
                         StoryAuthorBubble(group) { scope.launch { holder.open(group) } }
                     }
                 }
             }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(
-                    modifier.fillMaxWidth().clickable(onClick = onCreate),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .45f),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column {
-                            Text("شارك أول قصة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("صورة أو فيديو لمدة 24 ساعة", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Text("+", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                TextButton(onClick = onManage) { Text("إدارة قصصي") }
+        }
+    }
+}
+
+@Composable
+private fun StoryCreateBubble(onCreate: () -> Unit) {
+    Column(
+        Modifier
+            .width(72.dp)
+            .clickable(onClick = onCreate)
+            .semantics {
+                role = Role.Button
+                contentDescription = "أضف حكاية"
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(Modifier.size(60.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = TeswaIcons.PutIntoPlay,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(TeswaSize.iconHero),
+                )
             }
         }
+        Spacer(Modifier.height(TeswaSpacing.xxs))
+        Text("حكايتك", style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -146,30 +144,32 @@ fun StoriesRail(
 private fun StoryAuthorBubble(group: StoryGroup, onOpen: () -> Unit) {
     val name = group.author.displayName ?: group.author.username ?: "مستخدم"
     Column(
-        Modifier.width(76.dp).clickable(onClick = onOpen),
+        Modifier
+            .width(72.dp)
+            .clickable(onClick = onOpen)
+            .semantics {
+                role = Role.Button
+                contentDescription = "افتح حكايات $name"
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             Modifier
-                .size(68.dp)
+                .size(60.dp)
                 .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
                 .padding(3.dp),
         ) {
             NetworkImage(group.author.avatarUrl, name, Modifier.fillMaxSize().clip(CircleShape))
-            Surface(
-                Modifier.align(Alignment.BottomEnd),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-            ) {
+            Surface(Modifier.align(Alignment.BottomEnd), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
                 Text(
                     group.stories.size.toString(),
-                    Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                     color = MaterialTheme.colorScheme.onPrimary,
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
         }
-        Spacer(Modifier.height(5.dp))
+        Spacer(Modifier.height(TeswaSpacing.xxs))
         Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
     }
 }
@@ -184,6 +184,7 @@ fun StoryViewerScreen(
     val viewer = holder.viewer ?: return
     val slide = viewer.slides.getOrNull(holder.activeIndex) ?: return
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val mine = slide.story.userId == holder.session.user.id
     val name = viewer.group.author.displayName ?: viewer.group.author.username ?: "مستخدم تِسوى"
     BackHandler(onBack = holder::close)
@@ -202,8 +203,8 @@ fun StoryViewerScreen(
             }
         }
         Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = TeswaSpacing.sm, vertical = TeswaSpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
         ) {
             viewer.slides.forEachIndexed { index, _ ->
                 Box(
@@ -216,51 +217,58 @@ fun StoryViewerScreen(
             }
         }
         Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 14.dp, vertical = 24.dp),
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().zIndex(2f).padding(horizontal = TeswaSpacing.sm, vertical = TeswaSpacing.xl),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             NetworkImage(viewer.group.author.avatarUrl, name, Modifier.size(42.dp).clip(CircleShape))
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(TeswaSpacing.xs))
             Column(Modifier.weight(1f)) {
                 Text(name, color = Color.White, fontWeight = FontWeight.Bold)
-                Text("${holder.activeIndex + 1} من ${viewer.slides.size}", color = Color.White.copy(alpha = .72f), style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "${holder.activeIndex + 1} من ${viewer.slides.size}",
+                    color = Color.White.copy(alpha = .72f),
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
-            OutlinedButton(onClick = holder::close) { Text("إغلاق", color = Color.White) }
+            IconButton(onClick = holder::close, modifier = Modifier.size(TeswaSize.minTouch)) {
+                Icon(TeswaIcons.Clear, contentDescription = "إغلاق الحكاية", tint = Color.White)
+            }
         }
-        Row(Modifier.fillMaxSize()) {
-            Box(
-                Modifier.weight(1f).fillMaxHeight().clickable(enabled = holder.activeIndex > 0) {
-                    scope.launch { holder.move(-1) }
-                },
-            )
-            Box(
-                Modifier.weight(1f).fillMaxHeight().clickable(enabled = holder.activeIndex < viewer.slides.lastIndex) {
-                    scope.launch { holder.move(1) }
-                },
-            )
+        Row(Modifier.fillMaxSize().zIndex(1f)) {
+            StoryNavigationTarget(
+                label = "الحكاية السابقة",
+                enabled = holder.activeIndex > 0,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) { scope.launch { holder.move(-1) } }
+            StoryNavigationTarget(
+                label = "الحكاية التالية",
+                enabled = holder.activeIndex < viewer.slides.lastIndex,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) { scope.launch { holder.move(1) } }
         }
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().zIndex(2f).padding(TeswaSpacing.sm),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
         ) {
             slide.story.caption?.let {
-                Surface(
-                    color = Color.Black.copy(alpha = .55f),
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Text(it, Modifier.padding(horizontal = 14.dp, vertical = 9.dp), color = Color.White, textAlign = TextAlign.Center)
+                Surface(color = Color.Black.copy(alpha = .62f), shape = MaterialTheme.shapes.large) {
+                    Text(
+                        it,
+                        Modifier.padding(horizontal = TeswaSpacing.md, vertical = TeswaSpacing.xs),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                    )
                 }
-                Spacer(Modifier.height(9.dp))
             }
             holder.message?.let {
                 Text(it, color = Color(0xFFFFB4AB), style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(7.dp))
             }
             if (!mine) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
                 ) {
                     VoiceComposer(
                         enabled = holder.workingAction == null,
@@ -275,16 +283,27 @@ fun StoryViewerScreen(
                         },
                         onError = holder::showMessage,
                     )
-                    OutlinedTextField(
-                        value = holder.replyComposer,
-                        onValueChange = holder::composeReply,
+                    Surface(
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("رد على القصة…") },
-                        minLines = 1,
-                        maxLines = 3,
-                    )
-                    Button(
+                        shape = MaterialTheme.shapes.large,
+                        color = Color.White.copy(alpha = .94f),
+                    ) {
+                        TeswaTextField(
+                            value = holder.replyComposer,
+                            onValueChange = holder::composeReply,
+                            label = "رد على الحكاية",
+                            singleLine = false,
+                            minLines = 1,
+                            maxLines = 3,
+                            enabled = holder.workingAction == null,
+                        )
+                    }
+                    val canSend = holder.replyComposer.isNotBlank() && holder.workingAction == null
+                    IconButton(
+                        enabled = canSend,
+                        modifier = Modifier.size(TeswaSize.minTouch),
                         onClick = {
+                            haptics.performTeswa(TeswaHapticEvent.Commit)
                             scope.launch {
                                 holder.sendReply()?.let {
                                     holder.close()
@@ -292,34 +311,69 @@ fun StoryViewerScreen(
                                 }
                             }
                         },
-                        enabled = holder.replyComposer.isNotBlank() && holder.workingAction == null,
-                    ) { Text(if (holder.workingAction == "reply") "…" else "إرسال") }
-                    OutlinedButton(
-                        onClick = { scope.launch { holder.toggleLike() } },
+                    ) {
+                        Icon(
+                            TeswaIcons.Send,
+                            contentDescription = "إرسال الرد",
+                            tint = if (canSend) Color.White else Color.White.copy(alpha = .35f),
+                        )
+                    }
+                    IconButton(
                         enabled = holder.workingAction == null,
-                    ) { Text(if (slide.liked) "♥" else "♡") }
+                        modifier = Modifier.size(TeswaSize.minTouch),
+                        onClick = {
+                            haptics.performTeswa(if (slide.liked) TeswaHapticEvent.ToggleOff else TeswaHapticEvent.ToggleOn)
+                            scope.launch { holder.toggleLike() }
+                        },
+                    ) {
+                        Icon(
+                            if (slide.liked) TeswaIcons.Like else TeswaIcons.LikeOutline,
+                            contentDescription = if (slide.liked) "إلغاء الإعجاب" else "إعجاب بالحكاية",
+                            tint = Color.White,
+                        )
+                    }
                 }
-                TextButton(
+                IconButton(
                     onClick = { onReport(ReportTarget.Story(slide.story.id, "قصة $name")) },
                     enabled = holder.workingAction == null,
-                ) { Text("الإبلاغ عن القصة", color = Color.White) }
+                    modifier = Modifier.size(TeswaSize.minTouch),
+                ) {
+                    Icon(TeswaIcons.Report, contentDescription = "الإبلاغ عن الحكاية", tint = Color.White)
+                }
             } else {
-                Text("دي قصتك", color = Color.White.copy(alpha = .75f))
+                Text("دي حكايتك", color = Color.White.copy(alpha = .75f))
             }
         }
     }
 }
 
 @Composable
+private fun StoryNavigationTarget(
+    label: String,
+    enabled: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics {
+                role = Role.Button
+                contentDescription = label
+            },
+    )
+}
+
+@Composable
 private fun StoryMediaUnavailable() {
     Column(
-        Modifier.fillMaxSize().padding(28.dp),
+        Modifier.fillMaxSize().padding(TeswaSpacing.xxl),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("تعذر فتح وسائط القصة", color = Color.White, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
-        Text("تقدر تنتقل للقصة التالية أو تحاول لاحقًا.", color = Color.White.copy(alpha = .7f), textAlign = TextAlign.Center)
+        Text("تعذر فتح وسائط الحكاية", color = Color.White, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(TeswaSpacing.xs))
+        Text("تقدر تنتقل للحكاية التالية أو تحاول لاحقًا.", color = Color.White.copy(alpha = .7f), textAlign = TextAlign.Center)
     }
 }
 

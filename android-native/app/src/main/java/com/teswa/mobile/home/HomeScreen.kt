@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +54,7 @@ import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaIconAction
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMotion
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaObjectStage
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
@@ -202,20 +206,28 @@ fun HomeScreen(
     val selected = holder.selectedItemId
     if (selected != null) {
         Box(modifier = modifier.fillMaxSize()) {
-            ItemDetailScreen(
-                itemId = selected,
-                initialSession = holder.session,
-                client = client,
-                editListingRepository = editListingRepository,
-                offersRepository = offersRepository,
-                onSessionUpdated = holder::updateSession,
-                onSessionExpired = onSignOut,
-                onBack = holder::closeItem,
-                onOfferCreated = onOfferCreated,
-                onAddItem = onAddItem,
-                onOpenOwner = { selectedProfileId = it },
-                onReport = onReport,
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(TeswaMotion.emphasized()) + scaleIn(
+                    animationSpec = TeswaMotion.emphasized(),
+                    initialScale = .985f,
+                ),
+            ) {
+                ItemDetailScreen(
+                    itemId = selected,
+                    initialSession = holder.session,
+                    client = client,
+                    editListingRepository = editListingRepository,
+                    offersRepository = offersRepository,
+                    onSessionUpdated = holder::updateSession,
+                    onSessionExpired = onSignOut,
+                    onBack = holder::closeItem,
+                    onOfferCreated = onOfferCreated,
+                    onAddItem = onAddItem,
+                    onOpenOwner = { selectedProfileId = it },
+                    onReport = onReport,
+                )
+            }
         }
         return
     }
@@ -335,7 +347,16 @@ fun HomeScreen(
                     }
                 }
 
-                item {
+                current.items.firstOrNull()?.let { item ->
+                    item(key = item.id) {
+                        HomeFeedObject(
+                            item = item,
+                            onOpen = { holder.openItem(item.id) },
+                        )
+                    }
+                }
+
+                item(key = "stories-rail") {
                     StoriesRail(
                         storyHolder,
                         onCreate = { creatingStory = true },
@@ -343,7 +364,7 @@ fun HomeScreen(
                     )
                 }
 
-                items(current.items, key = { it.id }) { item ->
+                items(current.items.drop(1), key = { it.id }) { item ->
                     HomeFeedObject(
                         item = item,
                         onOpen = { holder.openItem(item.id) },

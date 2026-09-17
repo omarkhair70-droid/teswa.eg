@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,12 +48,14 @@ import com.teswa.mobile.ui.system.TeswaEmptyField
 import com.teswa.mobile.ui.system.TeswaExchangePair
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
 import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
 import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaObjectRow
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
 @Composable
@@ -71,6 +74,7 @@ fun OfferCreationScreen(
         OfferCreationStateHolder(initialSession, requestedItemId, repository)
     }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(requestedItemId, initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -87,7 +91,10 @@ fun OfferCreationScreen(
             primary = "حاول تاني" to { scope.launch { holder.load() } },
             secondary = "رجوع" to onBack,
         )
-        is OfferCreationUiState.Sent -> OfferSentState(modifier, onOfferSent)
+        is OfferCreationUiState.Sent -> {
+            LaunchedEffect(state) { haptics.performTeswa(TeswaHapticEvent.Success) }
+            OfferSentState(modifier, onOfferSent)
+        }
         is OfferCreationUiState.Ready -> {
             var showSelector by remember { mutableStateOf(false) }
             val selected = state.context.myActiveItems.firstOrNull { it.id == holder.selectedItemId }
@@ -164,7 +171,10 @@ fun OfferCreationScreen(
                         primaryIcon = TeswaIcons.Send,
                         primaryEnabled = holder.selectedItemId != null,
                         primaryLoading = holder.submitting,
-                        onPrimary = { scope.launch { holder.submit() } },
+                        onPrimary = {
+                            haptics.performTeswa(TeswaHapticEvent.Commit)
+                            scope.launch { holder.submit() }
+                        },
                     )
                 }
             }
@@ -183,6 +193,7 @@ fun OfferCreationScreen(
                                 stateEmphasis = TeswaEmphasis.Strong,
                                 onClick = {
                                     holder.select(item.id)
+                                    haptics.performTeswa(TeswaHapticEvent.Selection)
                                     showSelector = false
                                 },
                             )

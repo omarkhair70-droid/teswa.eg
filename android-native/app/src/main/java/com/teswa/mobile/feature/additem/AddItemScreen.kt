@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -59,9 +60,11 @@ import com.teswa.mobile.home.CurrentLocationProvider
 import com.teswa.mobile.ui.LocalContentImage
 import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaRadius
 import com.teswa.mobile.ui.system.TeswaSize
 import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
@@ -82,6 +85,7 @@ fun AddItemScreen(
         AddItemStateHolder(initialSession, repository, draftStore.load())
     }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     var publishJob by remember { mutableStateOf<Job?>(null) }
     var cameraTarget by remember { mutableStateOf<CameraTarget?>(null) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -124,7 +128,10 @@ fun AddItemScreen(
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
     LaunchedEffect(holder.draft) { draftStore.save(holder.draft) }
     LaunchedEffect(holder.submissionState) {
-        if (holder.submissionState is AddItemSubmissionState.Success) draftStore.clear()
+        if (holder.submissionState is AddItemSubmissionState.Success) {
+            draftStore.clear()
+            haptics.performTeswa(TeswaHapticEvent.Success)
+        }
     }
 
     val success = holder.submissionState as? AddItemSubmissionState.Success
@@ -184,7 +191,10 @@ fun AddItemScreen(
             submission = holder.submissionState,
             onBack = holder::previous,
             onNext = holder::next,
-            onPublish = { publishJob = scope.launch { holder.publish() } },
+            onPublish = {
+                haptics.performTeswa(TeswaHapticEvent.Commit)
+                publishJob = scope.launch { holder.publish() }
+            },
             onCancel = { publishJob?.cancel() },
         )
     }

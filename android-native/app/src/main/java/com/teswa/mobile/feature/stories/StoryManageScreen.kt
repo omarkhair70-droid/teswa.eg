@@ -14,11 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,12 +30,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaHapticEvent
+import com.teswa.mobile.ui.system.TeswaIconAction
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSize
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
 private sealed interface StoryManageUiState {
@@ -83,10 +96,11 @@ private class StoryManageStateHolder(
         }
     }
 
-    suspend fun delete(item: ManagedStory) {
-        if (deletingId != null) return
+    suspend fun delete(item: ManagedStory): Boolean {
+        if (deletingId != null) return false
         deletingId = item.story.id
         message = null
+        var deleted = false
         when (val result = repository.deleteOwned(session, item.story)) {
             is StoryResult.Success -> {
                 session = result.session
@@ -94,10 +108,12 @@ private class StoryManageStateHolder(
                 if (ready != null) state = ready.copy(stories = ready.stories.filterNot { it.story.id == item.story.id })
                 message = if (result.value.storageCleanupComplete) "تم حذف القصة."
                 else "تم حذف القصة، لكن تنظيف ملف الوسائط هيتعاد لاحقًا."
+                deleted = true
             }
             is StoryResult.Failure -> capture(result)
         }
         deletingId = null
+        return deleted
     }
 
     suspend fun openViewers(item: ManagedStory) {
@@ -138,6 +154,7 @@ fun StoryManageScreen(
 ) {
     val holder = remember(initialSession.user.id, repository) { StoryManageStateHolder(initialSession, repository) }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     var confirming by remember { mutableStateOf<ManagedStory?>(null) }
     BackHandler(onBack = onBack)
     LaunchedEffect(initialSession.accessToken) {
@@ -162,61 +179,50 @@ fun StoryManageScreen(
         )
         is StoryManageUiState.Ready -> LazyColumn(
             modifier.fillMaxSize(),
-            contentPadding = PaddingValues(18.dp),
-            verticalArrangement = Arrangement.spacedBy(13.dp),
+            contentPadding = PaddingValues(bottom = TeswaSpacing.xl),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
         ) {
             item {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("إدارة القصص", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Text("تابع المحتوى النشط واحذفه وقت ما تحب.", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    OutlinedButton(onClick = onBack) { Text("رجوع") }
-                }
+                TeswaFocusedHeader(title = "إدارة الحكايات", onBack = onBack)
             }
             holder.message?.let { feedback ->
                 item {
-                    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
-                        Text(feedback, Modifier.fillMaxWidth().padding(13.dp))
-                    }
+                    TeswaInlineMessage(
+                        title = "تحديث الحكايات",
+                        body = feedback,
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    )
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StoryManageStat(state.stories.size.toString(), "نشطة", Modifier.weight(1f))
-                    StoryManageStat(
-                        state.stories.mapNotNull { it.viewCount }.sum().toString().takeIf { state.stories.all { it.viewCount != null } } ?: "—",
-                        "مشاهدة",
-                        Modifier.weight(1f),
-                    )
-                    StoryManageStat(
-                        state.stories.mapNotNull { it.likeCount }.sum().toString().takeIf { state.stories.all { it.likeCount != null } } ?: "—",
-                        "إعجاب",
-                        Modifier.weight(1f),
-                    )
-                }
+                Text(
+                    "${state.stories.size} حكايات نشطة · تختفي تلقائيًا بعد 24 ساعة",
+                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            item { Button(onClick = onCreate, modifier = Modifier.fillMaxWidth()) { Text("إضافة قصة") } }
+            item {
+                TeswaPrimaryAction(
+                    text = "أضف حكاية",
+                    icon = TeswaIcons.PutIntoPlay,
+                    onClick = onCreate,
+                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                )
+            }
             if (state.stories.isEmpty()) {
                 item {
-                    Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text("مفيش قصص نشطة دلوقتي", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(7.dp))
-                            Text("شارك صورة أو فيديو وخلي ملفك حي.", textAlign = TextAlign.Center)
-                        }
-                    }
+                    TeswaInlineMessage(
+                        title = "مفيش حكايات نشطة دلوقتي",
+                        body = "شارك صورة أو فيديو يضيف سياق خفيف للناس.",
+                        icon = TeswaIcons.Gallery,
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    )
                 }
             } else {
                 items(state.stories, key = { it.story.id }) { item ->
                     StoryManageRow(
+                        modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                         item = item,
                         deleting = holder.deletingId == item.story.id,
                         onDelete = { confirming = item },
@@ -233,10 +239,12 @@ fun StoryManageScreen(
             title = { Text("حذف القصة؟") },
             text = { Text("القصة هتختفي فورًا ومش هتقدر ترجعها.") },
             confirmButton = {
-                Button(onClick = {
+                TextButton(onClick = {
                     confirming = null
-                    scope.launch { holder.delete(item) }
-                }) { Text("حذف") }
+                    scope.launch {
+                        if (holder.delete(item)) haptics.performTeswa(TeswaHapticEvent.Reject)
+                    }
+                }) { Text("حذف", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { confirming = null }) { Text("إلغاء") } },
         )
@@ -245,14 +253,15 @@ fun StoryManageScreen(
 
 @Composable
 private fun StoryManageRow(
+    modifier: Modifier = Modifier,
     item: ManagedStory,
     deleting: Boolean,
     onDelete: () -> Unit,
     onViewers: () -> Unit,
 ) {
-    Card {
+    Column(modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().padding(12.dp),
+            Modifier.fillMaxWidth().padding(vertical = TeswaSpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -265,7 +274,7 @@ private fun StoryManageRow(
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("▶", style = MaterialTheme.typography.headlineSmall)
+                        Icon(TeswaIcons.Play, contentDescription = null, modifier = Modifier.size(TeswaSize.iconHero))
                         Text("فيديو", style = MaterialTheme.typography.labelSmall)
                     }
                 }
@@ -283,15 +292,15 @@ private fun StoryManageRow(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            OutlinedButton(onClick = onDelete, enabled = !deleting) {
-                Text(if (deleting) "…" else "حذف")
-            }
+            if (deleting) CircularProgressIndicator(Modifier.size(TeswaSize.icon))
+            else TeswaIconAction(TeswaIcons.Delete, "حذف الحكاية", onDelete)
         }
         if ((item.viewCount ?: 0) > 0) {
             TextButton(onClick = onViewers, modifier = Modifier.fillMaxWidth()) {
                 Text("عرض المشاهدين")
             }
         }
+        HorizontalDivider()
     }
 }
 
@@ -317,7 +326,7 @@ private fun StoryViewersContent(
                     Text("مشاهدو القصة", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text(context.storyCaption ?: "قصة بدون تعليق", maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                OutlinedButton(onClick = onBack) { Text("رجوع") }
+                TeswaIconAction(TeswaIcons.Back, "رجوع", onBack)
             }
         }
         if (context.viewers.isEmpty()) {
@@ -348,16 +357,6 @@ private fun StoryViewersContent(
 }
 
 @Composable
-private fun StoryManageStat(value: String, label: String, modifier: Modifier) {
-    Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
-        Column(Modifier.padding(13.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
-@Composable
 private fun StoryManageCenter(
     message: String,
     modifier: Modifier,
@@ -370,18 +369,14 @@ private fun StoryManageCenter(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (loading) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(12.dp))
-        }
-        Text(message, textAlign = TextAlign.Center)
-        primary?.let {
-            Spacer(Modifier.height(14.dp))
-            Button(onClick = it.second) { Text(it.first) }
-        }
-        secondary?.let {
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = it.second) { Text(it.first) }
-        }
+        if (loading) TeswaInlineLoading(message)
+        else TeswaInlineMessage(
+            title = "الحكايات وقفت هنا",
+            body = message,
+            emphasis = TeswaEmphasis.Strong,
+            actionLabel = primary?.first,
+            onAction = primary?.second,
+        )
+        secondary?.let { TeswaSecondaryAction(text = it.first, onClick = it.second) }
     }
 }

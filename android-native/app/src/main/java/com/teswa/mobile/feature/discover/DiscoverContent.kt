@@ -53,10 +53,8 @@ fun DiscoverList(
     onNearby: () -> Unit,
     onDisableNearby: () -> Unit,
     onOpenPeople: () -> Unit,
-    onOpenMotion: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenItem: (String) -> Unit,
-    onOpenStories: () -> Unit,
     onLoadMore: () -> Unit = {},
     onRefresh: () -> Unit = {},
 ) {
@@ -198,35 +196,6 @@ fun DiscoverList(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-            ) {
-                TeswaSectionHeader("سياق حوالي الحاجة")
-                Text(
-                    text = "الحكايات والنبض هنا أدوات سياق، مش عالم منفصل عن التبديل.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                ) {
-                    TeswaSecondaryAction(
-                        text = "الحكايات",
-                        onClick = onOpenStories,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TeswaSecondaryAction(
-                        text = "النبض",
-                        onClick = onOpenMotion,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
             }
         }
 
