@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.ContextCompat
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.additem.EditListingRepository
@@ -47,18 +47,18 @@ import com.teswa.mobile.feature.stories.StoryManageScreen
 import com.teswa.mobile.feature.stories.StoryRepository
 import com.teswa.mobile.feature.stories.StoryStateHolder
 import com.teswa.mobile.feature.stories.StoryViewerScreen
-import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaIconAction
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaMotion
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
-import com.teswa.mobile.ui.system.TeswaObjectStage
+import com.teswa.mobile.ui.system.TeswaObjectMoment
+import com.teswa.mobile.ui.system.TeswaObjectMomentVariant
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
-import com.teswa.mobile.ui.system.TeswaScreenHeading
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
 import kotlinx.coroutines.launch
@@ -115,6 +115,11 @@ fun HomeScreen(
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (coarse || fine) scope.launch { holder.enableNearby(locationProvider) }
         else locationPermission.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+    }
+
+    fun toggleNearby() {
+        if (holder.nearbyLocation == null) requestNearby()
+        else scope.launch { holder.disableNearby() }
     }
 
     LaunchedEffect(initialSession.accessToken) {
@@ -296,61 +301,29 @@ fun HomeScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
             ) {
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            TeswaScreenHeading(
-                                title = "اكتشف",
-                                supporting = "حاجات أصحابها حطّوها في اللعب وفتحوها لاحتمال جديد.",
-                                modifier = Modifier.weight(1f),
-                            )
-                            TeswaIconAction(
-                                icon = TeswaIcons.Search,
-                                contentDescription = "بحث",
-                                onClick = onSearch,
-                            )
-                            TeswaIconAction(
-                                icon = TeswaIcons.Notifications,
-                                contentDescription = "التنبيهات",
-                                onClick = onNotifications,
-                            )
-                        }
-
-                        TeswaChoiceChip(
-                            label = when {
-                                holder.locationWorking -> "بنحدد القريب…"
-                                holder.nearbyLocation != null -> "قريب مني"
-                                else -> "الأقرب لي"
-                            },
-                            selected = holder.nearbyLocation != null,
-                            onClick = {
-                                if (holder.nearbyLocation == null) requestNearby()
-                                else scope.launch { holder.disableNearby() }
-                            },
-                            leadingIcon = TeswaIcons.Location,
+                item(key = "discover-masthead") {
+                    DiscoverMasthead(
+                        locationWorking = holder.locationWorking,
+                        nearbyActive = holder.nearbyLocation != null,
+                        onLocation = ::toggleNearby,
+                        onSearch = onSearch,
+                        onNotifications = onNotifications,
+                    )
+                    holder.notice?.let {
+                        Spacer(Modifier.height(TeswaSpacing.xs))
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-
-                        holder.notice?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                 }
 
                 current.items.firstOrNull()?.let { item ->
-                    item(key = item.id) {
+                    item(key = "hero:${item.id}") {
                         HomeFeedObject(
                             item = item,
+                            variant = TeswaObjectMomentVariant.Hero,
                             onOpen = { holder.openItem(item.id) },
                         )
                     }
@@ -364,18 +337,26 @@ fun HomeScreen(
                     )
                 }
 
-                items(current.items.drop(1), key = { it.id }) { item ->
-                    HomeFeedObject(
-                        item = item,
-                        onOpen = { holder.openItem(item.id) },
-                    )
+                if (holder.nearbyLocation != null) {
+                    item(key = "nearby-lens") {
+                        NearbyLens(onShowAll = ::toggleNearby)
+                    }
+                }
+
+                current.items.drop(1).chunked(3).forEachIndexed { clusterIndex, cluster ->
+                    item(key = "object-cluster:$clusterIndex:${cluster.joinToString { it.id }}") {
+                        HomeObjectCluster(
+                            items = cluster,
+                            onOpen = holder::openItem,
+                        )
+                    }
                 }
 
                 if (current.items.isEmpty()) {
                     item {
                         TeswaInlineMessage(
                             title = "مفيش حاجات قريبة في النطاق ده",
-                            body = "اقفل فلتر القريب وارجع لكل الاحتمالات المتاحة.",
+                            body = "اقفل القريب وارجع لكل الاحتمالات المتاحة.",
                             actionLabel = "اعرض الكل",
                             onAction = { scope.launch { holder.disableNearby() } },
                         )
@@ -397,38 +378,169 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeFeedObject(
-    item: HomeFeedItem,
-    onOpen: () -> Unit,
+private fun DiscoverMasthead(
+    locationWorking: Boolean,
+    nearbyActive: Boolean,
+    onLocation: () -> Unit,
+    onSearch: () -> Unit,
+    onNotifications: () -> Unit,
 ) {
-    val meta = listOfNotNull(item.condition, item.city)
-        .filter { it.isNotBlank() }
-        .joinToString(" • ")
-        .ifBlank { item.category.orEmpty() }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen),
-        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-    ) {
-        TeswaObjectStage(
-            item = TeswaObjectIdentity(
-                title = item.title,
-                imageUrl = item.coverImageUrl,
-                meta = meta.takeIf { it.isNotBlank() },
-                owner = item.ownerDisplayName?.takeIf { it.isNotBlank() }?.let { "عند $it" },
-            ),
-            eyebrow = item.category?.takeIf { it.isNotBlank() },
-        )
-        item.description?.takeIf { it.isNotBlank() }?.let { description ->
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TeswaMarkIcon(
+                mark = TeswaMark.Possible,
+                color = MaterialTheme.colorScheme.primary,
+            )
             Text(
-                text = description,
+                text = "اكتشف",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            TeswaIconAction(
+                icon = TeswaIcons.Search,
+                contentDescription = "بحث",
+                onClick = onSearch,
+            )
+            TeswaIconAction(
+                icon = TeswaIcons.Notifications,
+                contentDescription = "التنبيهات",
+                onClick = onNotifications,
+            )
+        }
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onLocation)
+                .padding(vertical = TeswaSpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = TeswaIcons.Location,
+                contentDescription = null,
+                tint = if (nearbyActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = when {
+                    locationWorking -> "بنحدد القريب…"
+                    nearbyActive -> "قريب منك"
+                    else -> "شوف الحاجات الأقرب ليك"
+                },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                color = if (nearbyActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
+}
+
+@Composable
+private fun NearbyLens(onShowAll: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onShowAll)
+            .padding(vertical = TeswaSpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = TeswaIcons.Nearby,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.secondary,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "قريب منك",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "الحاجات الظاهرة دلوقتي مترتبة حوالين إمكانية الوصول، مش حوالين ترند.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = "اعرض الكل",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun HomeObjectCluster(
+    items: List<HomeFeedItem>,
+    onOpen: (String) -> Unit,
+) {
+    if (items.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl)) {
+        if (items.size >= 2) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                verticalAlignment = Alignment.Top,
+            ) {
+                HomeFeedObject(
+                    item = items[0],
+                    variant = TeswaObjectMomentVariant.CompactPortrait,
+                    onOpen = { onOpen(items[0].id) },
+                    modifier = Modifier.weight(1.18f),
+                )
+                HomeFeedObject(
+                    item = items[1],
+                    variant = TeswaObjectMomentVariant.CompactSquare,
+                    onOpen = { onOpen(items[1].id) },
+                    modifier = Modifier.weight(.82f),
+                )
+            }
+        } else {
+            HomeFeedObject(
+                item = items[0],
+                variant = TeswaObjectMomentVariant.Full,
+                onOpen = { onOpen(items[0].id) },
+            )
+        }
+
+        items.getOrNull(2)?.let { item ->
+            HomeFeedObject(
+                item = item,
+                variant = TeswaObjectMomentVariant.Full,
+                onOpen = { onOpen(item.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeFeedObject(
+    item: HomeFeedItem,
+    variant: TeswaObjectMomentVariant,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val meta = listOfNotNull(item.condition, item.category)
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+        .takeIf { it.isNotBlank() }
+    val owner = item.ownerDisplayName
+        ?.takeIf { it.isNotBlank() }
+        ?.let { name -> listOfNotNull("عند $name", item.city?.takeIf { it.isNotBlank() }).joinToString(" · ") }
+    val label = item.city?.takeIf { it.isNotBlank() } ?: item.condition?.takeIf { it.isNotBlank() }
+
+    TeswaObjectMoment(
+        title = item.title,
+        imageUrl = item.coverImageUrl,
+        meta = meta,
+        owner = owner,
+        trace = item.description?.takeIf { it.isNotBlank() },
+        archiveLabel = label,
+        variant = variant,
+        onClick = onOpen,
+        modifier = modifier,
+    )
 }
