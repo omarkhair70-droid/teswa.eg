@@ -12,18 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,11 +33,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.settings.SettingsRepository
 import com.teswa.mobile.feature.settings.SettingsScreen
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEvidenceLine
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaScreenHeading
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
+import com.teswa.mobile.ui.system.TeswaTextField
 import kotlinx.coroutines.launch
 
 @Composable
@@ -58,6 +66,7 @@ fun ProfileScreen(
     onAddItem: () -> Unit,
     onSignOut: suspend () -> Unit,
     modifier: Modifier = Modifier,
+    onFocusedStateChanged: (Boolean) -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, repository, imageRepository) {
         ProfileStateHolder(initialSession, repository, imageRepository)
@@ -65,6 +74,11 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     var listingConfirmation by remember { mutableStateOf<Pair<MyListing, ListingAction>?>(null) }
     var showingSettings by remember { mutableStateOf(false) }
+    val focused = showingSettings || holder.editDraft != null
+
+    LaunchedEffect(focused) {
+        onFocusedStateChanged(focused)
+    }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -92,73 +106,128 @@ fun ProfileScreen(
     }
 
     when (val state = holder.state) {
-        ProfileUiState.Loading -> ProfileCenter("بنحمّل مساحتك…", modifier, loading = true)
+        ProfileUiState.Loading -> ProfileCenter(
+            message = "بنحمّل هويتك ودليل التبديلات…",
+            modifier = modifier,
+            loading = true,
+        )
+
         is ProfileUiState.Error -> ProfileCenter(
-            state.message,
-            modifier,
+            message = state.message,
+            modifier = modifier,
             primary = "حاول تاني" to { scope.launch { holder.load() } },
             secondary = "تسجيل الخروج" to { scope.launch { onSignOut() } },
+            error = true,
         )
+
         is ProfileUiState.Ready -> LazyColumn(
             modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(
+                horizontal = TeswaLayout.ScreenHorizontal,
+                vertical = TeswaLayout.ScreenVertical,
+            ),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
         ) {
             item {
-                Column(Modifier.fillMaxWidth()) {
-                    Text("مساحتك على تِسوى", style = MaterialTheme.typography.bodySmall)
-                    Text("ملفي", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                }
+                TeswaScreenHeading(
+                    title = "أنا",
+                    eyebrow = "هويتك ودليلك",
+                    supporting = "اللي حصل فعلًا في تبديلاتك أهم هنا من عدادات اجتماعية ملهاش علاقة بالقرار.",
+                )
             }
-            item { ProfileHero(state.overview.profile) }
+
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Button(onClick = holder::beginEdit, modifier = Modifier.weight(1f)) { Text("تعديل الملف") }
-                    OutlinedButton(onClick = { showingSettings = true }, modifier = Modifier.weight(1f)) { Text("الإعدادات") }
-                }
-                TextButton(onClick = { scope.launch { holder.load(silent = true) } }, modifier = Modifier.fillMaxWidth()) { Text("تحديث البيانات") }
+                ProfileIdentityBlock(state.overview.profile)
             }
-            holder.message?.let { message -> item { ProfileMessage(message, holder.messageIsError) } }
-            state.overview.profile.bio?.let { bio ->
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    TeswaSecondaryAction(
+                        text = "تعديل الملف",
+                        icon = TeswaIcons.Edit,
+                        onClick = holder::beginEdit,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TeswaSecondaryAction(
+                        text = "الإعدادات",
+                        icon = TeswaIcons.Settings,
+                        onClick = { showingSettings = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            holder.message?.let { message ->
                 item {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("عنّي", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(5.dp)); Text(bio, style = MaterialTheme.typography.bodyLarge)
-                        }
+                    ProfileMessage(message, holder.messageIsError)
+                }
+            }
+
+            state.overview.profile.bio?.takeIf { it.isNotBlank() }?.let { bio ->
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                    ) {
+                        TeswaSectionHeader("عنّي")
+                        Text(
+                            text = bio,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 }
             }
+
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("حاجتك", style = MaterialTheme.typography.titleLarge)
-                        Text("كل الحالات، من النشط للمؤرشف", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Button(onClick = onAddItem) { Text("إضافة") }
-                }
+                TeswaSectionHeader(
+                    title = "الحاجات المنشورة",
+                    actionLabel = "حط حاجة",
+                    onAction = onAddItem,
+                )
+                Text(
+                    text = "الإدارة دي موجودة هنا مؤقتًا لحد ما كل قواعد العناصر المنشورة تنتقل بالكامل لدولابي من غير ما نفقد أرشفة أو إعادة نشر أو حذف مسموح.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+
             if (state.overview.listings.isEmpty()) {
                 item {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .4f)) {
-                        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("لسه مفيش حاجة معروضة", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(5.dp)); Text("أول عنصر هيفتح لك باب عروض التبديل.")
-                            Spacer(Modifier.height(14.dp)); Button(onClick = onAddItem) { Text("اعرض أول عنصر") }
-                        }
-                    }
+                    TeswaInlineMessage(
+                        title = "مفيش حاجة منشورة دلوقتي",
+                        body = "ابدأ من دولابك، جهّز الحاجة، وبعدها إنت اللي تقرر تحطها في اللعب.",
+                        icon = TeswaIcons.Mine,
+                        actionLabel = "حط حاجة",
+                        onAction = onAddItem,
+                    )
                 }
             } else {
                 items(state.overview.listings, key = { it.id }) { listing ->
-                    MyListingCard(
-                        listing,
+                    MyListingRow(
+                        listing = listing,
                         working = holder.actingListingId == listing.id,
                         onAction = { action -> listingConfirmation = listing to action },
                     )
                 }
             }
+
             item {
-                OutlinedButton(onClick = { scope.launch { onSignOut() } }, modifier = Modifier.fillMaxWidth()) {
+                TeswaSecondaryAction(
+                    text = "حدّث البيانات",
+                    icon = TeswaIcons.Refresh,
+                    onClick = { scope.launch { holder.load(silent = true) } },
+                )
+            }
+
+            item {
+                TextButton(
+                    onClick = { scope.launch { onSignOut() } },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text("تسجيل الخروج")
                 }
             }
@@ -171,43 +240,163 @@ fun ProfileScreen(
             title = { Text(actionTitle(action)) },
             text = { Text(actionDescription(action, listing.title)) },
             confirmButton = {
-                Button(onClick = {
-                    listingConfirmation = null
-                    scope.launch { holder.actOnListing(listing, action) }
-                }) { Text(actionButton(action)) }
+                TextButton(
+                    onClick = {
+                        listingConfirmation = null
+                        scope.launch { holder.actOnListing(listing, action) }
+                    },
+                ) {
+                    Text(
+                        text = actionButton(action),
+                        color = if (action == ListingAction.DELETE_ARCHIVED) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    )
+                }
             },
-            dismissButton = { TextButton(onClick = { listingConfirmation = null }) { Text("رجوع") } },
+            dismissButton = {
+                TextButton(onClick = { listingConfirmation = null }) {
+                    Text("رجوع")
+                }
+            },
         )
     }
 }
 
 @Composable
-private fun ProfileHero(profile: MyProfile) {
-    Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
-        Column(Modifier.fillMaxWidth()) {
-            if (profile.coverUrl != null) {
-                NetworkImage(profile.coverUrl, "غلاف ${profile.displayName}", Modifier.fillMaxWidth().height(112.dp))
-            } else {
-                Box(Modifier.fillMaxWidth().height(112.dp).background(MaterialTheme.colorScheme.primaryContainer))
-            }
-            Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 18.dp)) {
-                Box(Modifier.size(84.dp).padding(top = 0.dp)) {
-                    NetworkImage(
-                        profile.avatarUrl,
-                        profile.displayName,
-                        Modifier.size(84.dp).clip(CircleShape),
+private fun ProfileIdentityBlock(profile: MyProfile) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+    ) {
+        if (profile.coverUrl != null) {
+            NetworkImage(
+                url = profile.coverUrl,
+                contentDescription = "غلاف ${profile.displayName}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(TeswaLayout.ProfileCoverHeight)
+                    .clip(MaterialTheme.shapes.extraLarge),
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NetworkImage(
+                url = profile.avatarUrl,
+                contentDescription = profile.displayName,
+                modifier = Modifier
+                    .size(TeswaLayout.ProfileAvatarLarge)
+                    .clip(CircleShape),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                Text(
+                    text = profile.displayName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "@${profile.username}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                profile.profileTagline?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(profile.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("@${profile.username}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
-                profile.profileTagline?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
-                val location = listOfNotNull(profile.area, profile.city).joinToString("، ")
-                if (location.isNotBlank()) Text(location, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Stat("${profile.successfulSwapsCount}", "تبديل ناجح", Modifier.weight(1f))
-                    Stat(profile.responseRate?.let { "$it%" } ?: "—", "معدل الرد", Modifier.weight(1f))
+                val location = listOfNotNull(profile.area, profile.city)
+                    .filter { it.isNotBlank() }
+                    .joinToString("، ")
+                if (location.isNotBlank()) {
+                    Text(
+                        text = location,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            TeswaEvidenceLine(
+                icon = TeswaIcons.Accepted,
+                text = "${profile.successfulSwapsCount} تبديلات مكتملة",
+                supporting = "نتائج حصلت فعلًا وبتبني الدليل مع الوقت.",
+            )
+            TeswaEvidenceLine(
+                icon = TeswaIcons.Conversation,
+                text = profile.responseRate?.let { "معدل الرد $it%" } ?: "معدل الرد لسه مش متاح",
+                supporting = "إشارة مساعدة وقت ما شخص يفكر يبدأ تواصل أو عرض.",
+            )
+        }
+    }
+}
+
+@Composable
+private fun MyListingRow(
+    listing: MyListing,
+    working: Boolean,
+    onAction: (ListingAction) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+    ) {
+        TeswaObjectRow(
+            item = TeswaObjectIdentity(
+                title = listing.title,
+                imageUrl = listing.imageUrl,
+                meta = listOfNotNull(listing.category, listing.city)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" • ")
+                    .takeIf { it.isNotBlank() },
+                owner = listing.openIncomingOffersCount.takeIf { it > 0 }?.let { "$it عروض مفتوحة" },
+            ),
+            state = listingStatus(listing.status),
+            stateEmphasis = listingEmphasis(listing.status),
+        )
+
+        if (working) {
+            TeswaInlineLoading("بنحدّث حالة الحاجة…")
+        } else {
+            when (listing.status) {
+                "active" -> TeswaSecondaryAction(
+                    text = "أرشفة",
+                    icon = TeswaIcons.Archive,
+                    onClick = { onAction(ListingAction.ARCHIVE) },
+                )
+
+                "archived" -> Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    TeswaSecondaryAction(
+                        text = "إعادة نشر",
+                        icon = TeswaIcons.Refresh,
+                        onClick = { onAction(ListingAction.REACTIVATE) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TeswaSecondaryAction(
+                        text = "حذف",
+                        icon = TeswaIcons.Delete,
+                        onClick = { onAction(ListingAction.DELETE_ARCHIVED) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
@@ -215,76 +404,60 @@ private fun ProfileHero(profile: MyProfile) {
 }
 
 @Composable
-private fun Stat(value: String, label: String, modifier: Modifier) {
-    Surface(modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface.copy(alpha = .75f)) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@Composable
-private fun MyListingCard(listing: MyListing, working: Boolean, onAction: (ListingAction) -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(listing.imageUrl, listing.title, Modifier.size(86.dp).clip(MaterialTheme.shapes.medium))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(listing.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(listing.category, listing.city).joinToString(" • "), style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(6.dp))
-                Text(listingStatus(listing.status), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                if (listing.openIncomingOffersCount > 0) {
-                    Text("${listing.openIncomingOffersCount} عروض مفتوحة", style = MaterialTheme.typography.bodySmall)
-                }
-                Spacer(Modifier.height(8.dp))
-                if (working) {
-                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                } else when (listing.status) {
-                    "active" -> OutlinedButton(onClick = { onAction(ListingAction.ARCHIVE) }) { Text("أرشفة") }
-                    "archived" -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { onAction(ListingAction.REACTIVATE) }) { Text("إعادة نشر") }
-                        TextButton(onClick = { onAction(ListingAction.DELETE_ARCHIVED) }) { Text("حذف") }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileEditContent(holder: ProfileStateHolder, draft: ProfileEditDraft, modifier: Modifier) {
+private fun ProfileEditContent(
+    holder: ProfileStateHolder,
+    draft: ProfileEditDraft,
+    modifier: Modifier,
+) {
     val scope = rememberCoroutineScope()
+
     LazyColumn(
-        modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = TeswaSpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = holder::cancelEdit, enabled = !holder.savingProfile) { Text("رجوع") }
-                Spacer(Modifier.width(12.dp)); Text("تعديل الملف", style = MaterialTheme.typography.headlineSmall)
-            }
+            TeswaFocusedHeader(
+                title = "تعديل الملف",
+                onBack = holder::cancelEdit,
+            )
         }
-        item { ProfileImageEditor(holder) }
-        item { EditField("الاسم", draft.displayName, 80) { holder.updateDraft(draft.copy(displayName = it)) } }
-        item { EditField("اسم المستخدم", draft.username, 30) { holder.updateDraft(draft.copy(username = it.lowercase())) } }
-        item { EditField("جملة تعريفية", draft.profileTagline, 160) { holder.updateDraft(draft.copy(profileTagline = it)) } }
-        item { EditField("نبذة", draft.bio, 1_000, 4) { holder.updateDraft(draft.copy(bio = it)) } }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EditField("المدينة", draft.city, 120, modifier = Modifier.weight(1f)) { holder.updateDraft(draft.copy(city = it)) }
-                EditField("المنطقة", draft.area, 120, modifier = Modifier.weight(1f)) { holder.updateDraft(draft.copy(area = it)) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = TeswaLayout.ScreenHorizontal),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+            ) {
+                ProfileImageEditor(holder)
+                EditField("الاسم", draft.displayName, 80) {
+                    holder.updateDraft(draft.copy(displayName = it))
+                }
+                EditField("اسم المستخدم", draft.username, 30) {
+                    holder.updateDraft(draft.copy(username = it.lowercase()))
+                }
+                EditField("جملة تعريفية", draft.profileTagline, 160) {
+                    holder.updateDraft(draft.copy(profileTagline = it))
+                }
+                EditField("نبذة", draft.bio, 1_000, minLines = 4) {
+                    holder.updateDraft(draft.copy(bio = it))
+                }
+                EditField("المدينة", draft.city, 120) {
+                    holder.updateDraft(draft.copy(city = it))
+                }
+                EditField("المنطقة", draft.area, 120) {
+                    holder.updateDraft(draft.copy(area = it))
+                }
+                holder.message?.let {
+                    ProfileMessage(it, holder.messageIsError)
+                }
+                TeswaPrimaryAction(
+                    text = "حفظ التغييرات",
+                    loading = holder.savingProfile,
+                    enabled = !holder.savingProfile,
+                    onClick = { scope.launch { holder.saveProfile() } },
+                )
             }
-        }
-        holder.message?.let { item { ProfileMessage(it, holder.messageIsError) } }
-        item {
-            Button(
-                onClick = { scope.launch { holder.saveProfile() } },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !holder.savingProfile,
-            ) { Text(if (holder.savingProfile) "جاري الحفظ…" else "حفظ التغييرات") }
         }
     }
 }
@@ -295,26 +468,29 @@ private fun EditField(
     value: String,
     max: Int,
     minLines: Int = 1,
-    modifier: Modifier = Modifier.fillMaxWidth(),
     onValue: (String) -> Unit,
 ) {
-    OutlinedTextField(
+    TeswaTextField(
         value = value,
         onValueChange = { onValue(it.take(max)) },
-        modifier = modifier,
-        label = { Text(label) },
+        label = label,
+        supportingText = "${value.length} / $max",
+        singleLine = minLines == 1,
         minLines = minLines,
         maxLines = maxOf(minLines, 5),
-        supportingText = { Text("${value.length} / $max") },
     )
 }
 
 @Composable
-private fun ProfileMessage(message: String, isError: Boolean) {
-    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = .1f)) {
-        Text(message, Modifier.fillMaxWidth().padding(14.dp), color = color)
-    }
+private fun ProfileMessage(
+    message: String,
+    isError: Boolean,
+) {
+    TeswaInlineMessage(
+        title = if (isError) "التحديث مكملش" else "اتحدث",
+        body = message,
+        emphasis = if (isError) TeswaEmphasis.Strong else TeswaEmphasis.Normal,
+    )
 }
 
 @Composable
@@ -324,21 +500,49 @@ private fun ProfileCenter(
     loading: Boolean = false,
     primary: Pair<String, () -> Unit>? = null,
     secondary: Pair<String, () -> Unit>? = null,
+    error: Boolean = false,
 ) {
-    Column(modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(12.dp)) }
-        Text(message, textAlign = TextAlign.Center)
-        primary?.let { Spacer(Modifier.height(16.dp)); Button(onClick = it.second, modifier = Modifier.fillMaxWidth()) { Text(it.first) } }
-        secondary?.let { Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = it.second, modifier = Modifier.fillMaxWidth()) { Text(it.first) } }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (loading) {
+            TeswaInlineLoading(message)
+        } else {
+            TeswaInlineMessage(
+                title = if (error) "ملفك ما ظهرش" else "مفيش بيانات لسه",
+                body = message,
+                emphasis = if (error) TeswaEmphasis.Strong else TeswaEmphasis.Quiet,
+                actionLabel = primary?.first,
+                onAction = primary?.second,
+            )
+            secondary?.let {
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = it.first,
+                    onClick = it.second,
+                )
+            }
+        }
     }
 }
 
 private fun listingStatus(value: String) = when (value) {
-    "active" -> "نشط"
-    "reserved" -> "محجوز لصفقة"
-    "swapped" -> "تم تبديله"
+    "active" -> "في اللعب"
+    "reserved" -> "مرتبط بتبديل"
+    "swapped" -> "اتبدّل"
     "archived" -> "مؤرشف"
     else -> value
+}
+
+private fun listingEmphasis(value: String): TeswaEmphasis = when (value) {
+    "active" -> TeswaEmphasis.Strong
+    "reserved" -> TeswaEmphasis.Normal
+    "swapped" -> TeswaEmphasis.Commitment
+    else -> TeswaEmphasis.Quiet
 }
 
 private fun actionTitle(action: ListingAction) = when (action) {
@@ -354,7 +558,7 @@ private fun actionButton(action: ListingAction) = when (action) {
 }
 
 private fun actionDescription(action: ListingAction, title: String) = when (action) {
-    ListingAction.ARCHIVE -> "هيختفي «$title» من السوق، وتقدر تعيد نشره لاحقًا لو مفيش عروض مفتوحة."
+    ListingAction.ARCHIVE -> "هيختفي «$title» من المساحة العامة، وتقدر ترجعه لاحقًا لو مفيش عروض مفتوحة."
     ListingAction.REACTIVATE -> "«$title» هيرجع ظاهر للناس ويستقبل عروض جديدة."
-    ListingAction.DELETE_ARCHIVED -> "الحذف النهائي ما ينفعش يتراجع، وOracle هيرفضه لو للعنصر تاريخ صفقة."
+    ListingAction.DELETE_ARCHIVED -> "الحذف النهائي ما ينفعش يتراجع، وOracle هيرفضه لو للعنصر تاريخ تبديل."
 }
