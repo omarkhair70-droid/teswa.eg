@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -156,6 +154,11 @@ fun TeswaObjectStage(
     }
 }
 
+/**
+ * Backwards-compatible semantic pair primitive. The visual treatment is now the authored
+ * two-objects/one-relation grammar, so every existing offer/deal caller inherits V2 without
+ * creating a parallel component language.
+ */
 @Composable
 fun TeswaExchangePair(
     requested: TeswaObjectIdentity,
@@ -166,59 +169,57 @@ fun TeswaExchangePair(
     emptyOfferedLabel: String = "اختار حاجة من دولابك",
     onChooseOffered: (() -> Unit)? = null,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(TeswaRadius.lg),
-        tonalElevation = TeswaSpacing.xxs,
+    val interactive = if (offered == null && onChooseOffered != null) {
+        modifier.clickable(onClick = onChooseOffered)
+    } else {
+        modifier
+    }
+
+    Column(
+        modifier = interactive.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
     ) {
-        Column(
-            modifier = Modifier.padding(TeswaSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        TeswaExchangeMemoryPair(
+            requestedTitle = requested.title,
+            requestedImageUrl = requested.imageUrl,
+            offeredTitle = offered?.title,
+            offeredImageUrl = offered?.imageUrl,
+            state = state,
+            emptyOfferedLabel = emptyOfferedLabel,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "العرض",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                state?.let { TeswaStatePill(it, emphasis = stateEmphasis) }
-            }
-            Text("إنت عايز", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TeswaObjectRow(requested)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = TeswaIcons.Exchange,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(TeswaSize.icon),
-                )
-                Text(
-                    text = "قدامها",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+            val context = listOfNotNull(requested.meta, offered?.meta)
+                .filter { it.isNotBlank() }
+                .joinToString(" · ")
+            Text(
+                text = when {
+                    context.isNotBlank() -> context
+                    offered == null -> "الطرف التاني لسه ناقص من العلاقة"
+                    else -> "حاجتين، علاقة واحدة واضحة"
+                },
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            state?.let {
+                TeswaStatePill(
+                    text = it,
+                    emphasis = stateEmphasis,
                 )
             }
-            if (offered != null) {
-                TeswaObjectRow(offered)
-            } else {
-                TeswaEmptyField(
-                    title = emptyOfferedLabel,
-                    body = "لازم تختار حاجة واحدة نشطة من عندك عشان العرض يبقى واضح للطرفين.",
-                    actionLabel = if (onChooseOffered != null) "اختار من دولابي" else null,
-                    actionIcon = TeswaIcons.Mine,
-                    onAction = onChooseOffered,
-                )
-            }
+        }
+        if (offered == null && onChooseOffered != null) {
+            Text(
+                text = "اختار من دولابك",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
