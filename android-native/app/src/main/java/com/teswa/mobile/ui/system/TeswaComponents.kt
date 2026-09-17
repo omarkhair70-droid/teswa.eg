@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 
 /**
  * Production primitives shared by Teswa screens.
@@ -170,7 +171,7 @@ fun TeswaPrimaryAction(
         when {
             loading -> CircularProgressIndicator(
                 modifier = Modifier.size(TeswaSize.icon),
-                strokeWidth = TeswaSpacing.xxs / 2,
+                strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.onPrimary,
             )
             icon != null -> {
@@ -243,7 +244,7 @@ fun TeswaBottomCommitBar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = TeswaSpacing.xxs,
+        tonalElevation = 2.dp,
     ) {
         Column(
             modifier = Modifier
