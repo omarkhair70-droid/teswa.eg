@@ -4,7 +4,6 @@ import android.net.Uri
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,10 +50,11 @@ import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaHapticEvent
-import com.teswa.mobile.ui.system.TeswaIconAction
 import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSize
 import com.teswa.mobile.ui.system.TeswaSpacing
@@ -83,29 +83,44 @@ fun StoriesRail(
         )
         is StoryHomeState.Ready -> Column(
             modifier = modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
         ) {
             TeswaSectionHeader(
-                title = "حكايات من الناس",
+                title = "من عند الناس",
                 actionLabel = "إدارة",
                 onAction = onManage,
             )
             if (state.groups.isEmpty()) {
-                TeswaInlineMessage(
-                    title = "احكِ لحظة خفيفة",
-                    body = "صورة أو فيديو يختفي بعد 24 ساعة ويضيف سياق للناس، مش عالم جديد.",
-                    icon = TeswaIcons.Gallery,
-                    actionLabel = "أضف حكاية",
-                    onAction = onCreate,
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onCreate)
+                        .padding(vertical = TeswaSpacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.PutIntoPlay,
+                        color = MaterialTheme.colorScheme.primary,
+                        size = 34.dp,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("سيب أثر صغير", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "صورة أو فيديو يضيف سياق للحاجة أو للشخص، من غير ما يعمل عالم اجتماعي منفصل.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             } else {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = TeswaSpacing.xxs),
                     horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
                 ) {
-                    item { StoryCreateBubble(onCreate) }
+                    item { StoryCreatePostcard(onCreate) }
                     items(state.groups, key = { it.author.id }) { group ->
-                        StoryAuthorBubble(group) { scope.launch { holder.open(group) } }
+                        StoryAuthorPostcard(group) { scope.launch { holder.open(group) } }
                     }
                 }
             }
@@ -114,63 +129,83 @@ fun StoriesRail(
 }
 
 @Composable
-private fun StoryCreateBubble(onCreate: () -> Unit) {
-    Column(
-        Modifier
-            .width(72.dp)
+private fun StoryCreatePostcard(onCreate: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .width(82.dp)
+            .height(116.dp)
             .clickable(onClick = onCreate)
             .semantics {
                 role = Role.Button
                 contentDescription = "أضف حكاية"
             },
-        horizontalAlignment = Alignment.CenterHorizontally,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .7f),
+        tonalElevation = 0.dp,
     ) {
-        Surface(Modifier.size(60.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = TeswaIcons.PutIntoPlay,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(TeswaSize.iconHero),
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.sm),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start,
+        ) {
+            TeswaMarkIcon(
+                mark = TeswaMark.PutIntoPlay,
+                color = MaterialTheme.colorScheme.primary,
+                size = 30.dp,
+            )
+            Column {
+                Text("أضف", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "أثر",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        Spacer(Modifier.height(TeswaSpacing.xxs))
-        Text("حكايتك", style = MaterialTheme.typography.labelMedium)
     }
 }
 
 @Composable
-private fun StoryAuthorBubble(group: StoryGroup, onOpen: () -> Unit) {
+private fun StoryAuthorPostcard(group: StoryGroup, onOpen: () -> Unit) {
     val name = group.author.displayName ?: group.author.username ?: "مستخدم"
-    Column(
+    Box(
         Modifier
-            .width(72.dp)
+            .width(86.dp)
+            .height(118.dp)
+            .clip(MaterialTheme.shapes.large)
             .clickable(onClick = onOpen)
             .semantics {
                 role = Role.Button
                 contentDescription = "افتح حكايات $name"
             },
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier
-                .size(60.dp)
-                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                .padding(3.dp),
+        NetworkImage(
+            url = group.author.avatarUrl,
+            contentDescription = name,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            color = Color.Black.copy(alpha = .58f),
         ) {
-            NetworkImage(group.author.avatarUrl, name, Modifier.fillMaxSize().clip(CircleShape))
-            Surface(Modifier.align(Alignment.BottomEnd), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+            Column(Modifier.padding(horizontal = TeswaSpacing.xs, vertical = 6.dp)) {
                 Text(
-                    group.stories.size.toString(),
-                    Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "${group.stories.size} أثر",
                     style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = .72f),
                 )
             }
         }
-        Spacer(Modifier.height(TeswaSpacing.xxs))
-        Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
     }
 }
 
