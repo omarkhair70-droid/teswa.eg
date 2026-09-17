@@ -46,17 +46,20 @@ jobs:
           script: |
             adb install -r android-native/app/build/outputs/apk/debug/app-debug.apk
             mkdir -p artifacts/p2
+            adb shell settings put global hide_error_dialogs 1 || true
+            adb shell am force-stop com.google.android.apps.nexuslauncher || true
+            sleep 1
             adb shell am force-stop com.teswa.mobile
             adb shell am start -W -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity --es direction PairObject
-            sleep 1
+            sleep 2
             adb exec-out screencap -p > artifacts/p2/PairObject.png
             adb shell am force-stop com.teswa.mobile
             adb shell am start -W -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity --es direction Crossing
-            sleep 1
+            sleep 2
             adb exec-out screencap -p > artifacts/p2/Crossing.png
             adb shell am force-stop com.teswa.mobile
             adb shell am start -W -n com.teswa.mobile/.lab.offer.StructuredOfferLabActivity --es direction Tension
-            sleep 1
+            sleep 2
             adb exec-out screencap -p > artifacts/p2/Tension.png
 
       - name: Upload rendered P2 screenshots
