@@ -3,6 +3,7 @@ package com.teswa.mobile.feature.dolab
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,6 +18,7 @@ import com.teswa.mobile.feature.profile.ProfileImageRepository
 import com.teswa.mobile.feature.profile.ProfileRepository
 import com.teswa.mobile.feature.profile.ProfileScreen
 import com.teswa.mobile.feature.settings.SettingsRepository
+import com.teswa.mobile.ui.system.TeswaIcons
 
 @Composable
 fun ProfileDolabHost(
@@ -63,7 +65,12 @@ fun ProfileDolabHost(
             onClick = { showingDolab = true },
             modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
             text = { Text("دولابي") },
-            icon = { Text("◫") },
+            icon = {
+                Icon(
+                    imageVector = TeswaIcons.Mine,
+                    contentDescription = null,
+                )
+            },
         )
     }
 }
