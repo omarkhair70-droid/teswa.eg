@@ -3,8 +3,6 @@ package com.teswa.mobile.feature.additem
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,24 +13,16 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,8 +40,21 @@ import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.ui.LocalContentImage
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
+import com.teswa.mobile.ui.system.TeswaBottomCommitBar
 import com.teswa.mobile.ui.system.TeswaChoiceChip
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaRadius
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
 import kotlinx.coroutines.launch
 
 @Composable
@@ -101,88 +104,114 @@ fun EditListingScreen(
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
     when (val state = holder.state) {
-        EditListingUiState.Loading -> Column(
-            modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(12.dp))
-            Text("بنقرأ آخر نسخة من العنصر…")
-        }
+        EditListingUiState.Loading -> EditCenteredState(
+            title = "بنفتح نفس الحاجة…",
+            body = "بنقرأ آخر نسخة منشورة قبل أي تعديل.",
+            loading = true,
+            modifier = modifier,
+        )
 
-        is EditListingUiState.Error -> Column(
-            modifier.fillMaxSize().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(state.message, color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(14.dp))
-            Button(onClick = { scope.launch { holder.load() } }) { Text("حاول تاني") }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onBack) { Text("رجوع") }
-        }
+        is EditListingUiState.Error -> EditCenteredState(
+            title = "الحاجة ما فتحتش",
+            body = state.message,
+            modifier = modifier,
+            onRetry = { scope.launch { holder.load() } },
+            onBack = onBack,
+        )
 
         is EditListingUiState.Ready -> {
             val draft = holder.draft ?: return
             Column(modifier.fillMaxSize()) {
+                TeswaFocusedHeader(
+                    title = "عدّل الحاجة",
+                    onBack = onBack,
+                )
+
                 Column(
-                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                        .padding(horizontal = 18.dp, vertical = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(TeswaLayout.FocusedContentPadding),
+                    verticalArrangement = Arrangement.spacedBy(TeswaLayout.SectionGap),
                 ) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = onBack, enabled = !holder.saving) { Text("رجوع") }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("عدّل نفس العنصر", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TeswaArchiveLabel(
+                                text = if (state.status == "active") "في اللعب" else "مؤرشفة",
+                                tone = if (state.status == "active") {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            )
                             Text(
-                                if (state.status == "active") "نشط في السوق — التاريخ والتفاعلات هيفضلوا كما هم"
-                                else "مؤرشف — التعديل لا يعيد نشره تلقائيًا",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "نفس الحاجة · نفس التاريخ",
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        TeswaTraceNote(
+                            if (state.status == "active") {
+                                "التعديل يغيّر اللي الناس شايفاه، لكن ما يقطعش تاريخ الحاجة ولا عروضها الحالية."
+                            } else {
+                                "التعديل يحفظ النسخة الجديدة وهي مؤرشفة؛ مش بيرجعها للّعب تلقائيًا."
+                            },
+                        )
                     }
 
-                    holder.message?.let {
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (holder.messageIsError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Text(
-                                it,
-                                Modifier.fillMaxWidth().padding(14.dp),
-                                color = if (holder.messageIsError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
+                    holder.message?.let { message ->
+                        TeswaInlineMessage(
+                            title = if (holder.messageIsError) "التعديل مكملش" else "اتحفظ",
+                            body = message,
+                            emphasis = if (holder.messageIsError) TeswaEmphasis.Strong else TeswaEmphasis.Normal,
+                        )
                     }
 
-                    EditFormSection("الصور", "نفس ميديا Add Item: صور حالية + صور جديدة، والصف الأول هو الغلاف.") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
+                    EditMemorySection(
+                        title = "الصور اللي بتعرّف الحاجة",
+                        supporting = "الغلاف هو أول لقطة. الصور الجديدة بتدخل نفس السجل بدل ما تعمل نسخة جديدة من الحاجة.",
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                            TeswaSecondaryAction(
+                                text = "من الصور",
+                                icon = TeswaIcons.Gallery,
                                 enabled = !holder.saving && draft.images.size < AddItemDraft.MAX_IMAGES,
                                 onClick = { gallery.launch(AddItemDraft.SUPPORTED_IMAGE_TYPES.toTypedArray()) },
-                            ) { Text("اختار صور") }
-                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                            )
+                            TeswaSecondaryAction(
+                                text = "كاميرا",
+                                icon = TeswaIcons.Camera,
                                 enabled = !holder.saving && draft.images.size < AddItemDraft.MAX_IMAGES,
                                 onClick = {
                                     runCatching { resolver.createCameraTarget() }
                                         .onSuccess { target -> cameraTarget = target; camera.launch(target.uri) }
                                         .onFailure { holder.showError("تعذر فتح الكاميرا دلوقتي.") }
                                 },
-                            ) { Text("الكاميرا") }
+                                modifier = Modifier.weight(1f),
+                            )
                         }
-                        Spacer(Modifier.height(12.dp))
+
                         if (draft.images.isEmpty()) {
-                            Text("لازم صورة واحدة على الأقل.", color = MaterialTheme.colorScheme.error)
+                            TeswaInlineMessage(
+                                title = "الحاجة محتاجة صورة",
+                                body = "لازم تفضل فيه لقطة واحدة على الأقل عشان النسخة العامة تفضل مفهومة.",
+                                emphasis = TeswaEmphasis.Strong,
+                            )
                         } else {
                             Row(
-                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
                             ) {
                                 draft.images.forEachIndexed { index, image ->
-                                    EditImageCard(
+                                    EditImageMemory(
                                         image = image,
                                         index = index,
                                         count = draft.images.size,
@@ -195,150 +224,165 @@ fun EditListingScreen(
                                 }
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text("${draft.images.size} / ${AddItemDraft.MAX_IMAGES}", style = MaterialTheme.typography.labelMedium)
+
+                        Text(
+                            "${draft.images.size} من ${AddItemDraft.MAX_IMAGES} لقطات",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
-                    EditFormSection("الاسم والفئة", "نفس تعريف الحاجة، من غير ما نخلق إعلان جديد.") {
-                        OutlinedTextField(
+                    EditMemorySection(
+                        title = "اسمها ومكانها",
+                        supporting = "دي نفس هوية الحاجة اللي الناس عرفوها قبل كده.",
+                    ) {
+                        TeswaTextField(
                             value = draft.title,
                             onValueChange = { holder.updateBasics(title = it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("اسم العنصر") },
-                            singleLine = true,
-                            supportingText = { Text("${draft.title.length} / 160") },
+                            label = "اسم الحاجة",
+                            supportingText = "${draft.title.length} / 160",
                             enabled = !holder.saving,
                         )
-                        Spacer(Modifier.height(12.dp))
                         Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
                         ) {
                             state.categories.forEach { category ->
-                                EditChoicePill(
+                                TeswaChoiceChip(
                                     label = category.nameAr,
                                     selected = draft.categoryId == category.id,
                                     enabled = !holder.saving,
-                                ) { holder.updateBasics(categoryId = category.id) }
+                                    onClick = { holder.updateBasics(categoryId = category.id) },
+                                )
                             }
                         }
-                    }
-
-                    EditFormSection("الحالة والوصف", "الشفافية هنا أهم من تجميل الإعلان.") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ItemCondition.entries.forEach { condition ->
-                                EditChoiceCard(condition.label, draft.condition == condition, !holder.saving) {
-                                    holder.updateDetails(condition = condition)
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        EditLongField("ملاحظات الحالة", draft.conditionNotes, 1_000, !holder.saving) {
-                            holder.updateDetails(conditionNotes = it)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        EditLongField("الوصف", draft.description, 4_000, !holder.saving, minLines = 4) {
-                            holder.updateDetails(description = it)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(
+                        Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                            TeswaTextField(
                                 value = draft.city,
                                 onValueChange = { holder.updateDetails(city = it) },
-                                modifier = Modifier.weight(1f),
-                                label = { Text("المدينة") },
-                                singleLine = true,
+                                label = "المدينة",
                                 enabled = !holder.saving,
+                                modifier = Modifier.weight(1f),
                             )
-                            OutlinedTextField(
+                            TeswaTextField(
                                 value = draft.area,
                                 onValueChange = { holder.updateDetails(area = it) },
-                                modifier = Modifier.weight(1f),
-                                label = { Text("المنطقة") },
-                                singleLine = true,
+                                label = "المنطقة",
                                 enabled = !holder.saving,
+                                modifier = Modifier.weight(1f),
                             )
                         }
-                        Spacer(Modifier.height(5.dp))
                         Text(
-                            "الموقع التقريبي المحفوظ للعنصر لا يتغيّر من الشاشة دي.",
+                            "الموقع التقريبي المحفوظ نفسه مش بيتغيّر من الشاشة دي.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
 
-                    EditFormSection("إيه اللي يناسبك؟", "عدّل نية التبديل والسياق من غير ما نغيّر هوية العنصر.") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DesireMode.entries.forEach { mode ->
-                                EditChoiceCard(mode.label, draft.desireMode == mode, !holder.saving) {
-                                    holder.updateExchange(desireMode = mode)
-                                }
+                    EditMemorySection(
+                        title = "الأثر والحالة",
+                        supporting = "أي علامة استخدام حقيقية جزء من قرار التبديل، مش عيب لازم نخبّيه.",
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                            ItemCondition.entries.forEach { condition ->
+                                TeswaChoiceChip(
+                                    label = condition.label,
+                                    selected = draft.condition == condition,
+                                    enabled = !holder.saving,
+                                    onClick = { holder.updateDetails(condition = condition) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                         }
-                        Spacer(Modifier.height(10.dp))
-                        EditLongField(
+                        EditMemoryField("ملاحظات الحالة", draft.conditionNotes, 1_000, !holder.saving) {
+                            holder.updateDetails(conditionNotes = it)
+                        }
+                        EditMemoryField("الوصف", draft.description, 4_000, !holder.saving, minLines = 4) {
+                            holder.updateDetails(description = it)
+                        }
+                    }
+
+                    EditMemorySection(
+                        title = "إيه اللي مفتوحة له؟",
+                        supporting = "النية دي بتشرح الاحتمال الجاي، لكنها مش عقد ولا سعر ولا تقييم للعدل.",
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                            DesireMode.entries.forEach { mode ->
+                                TeswaChoiceChip(
+                                    label = mode.label,
+                                    selected = draft.desireMode == mode,
+                                    enabled = !holder.saving,
+                                    onClick = { holder.updateExchange(desireMode = mode) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                        EditMemoryField(
                             "تفاصيل المقابل${if (draft.desireMode == DesireMode.SPECIFIC) " *" else ""}",
                             draft.desireText,
                             1_000,
                             !holder.saving,
                         ) { holder.updateExchange(desireText = it) }
-                        Spacer(Modifier.height(10.dp))
-                        EditLongField("حكاية العنصر", draft.itemStory, 600, !holder.saving, minLines = 3) {
+                    }
+
+                    EditMemorySection(
+                        title = "أثر من حياتها",
+                        supporting = "اختياري. لو فيه سياق حقيقي خليه يفضل مع الحاجة؛ لو مفيش، سيب الواجهة هادية.",
+                    ) {
+                        EditMemoryField("حكاية الحاجة", draft.itemStory, 600, !holder.saving, minLines = 3) {
                             holder.updateExchange(itemStory = it)
                         }
-                        Spacer(Modifier.height(10.dp))
-                        EditLongField("ليه عايز تبدّله؟", draft.swapReason, 240, !holder.saving) {
+                        EditMemoryField("ليه عايز تبدّلها؟", draft.swapReason, 240, !holder.saving) {
                             holder.updateExchange(swapReason = it)
                         }
-                        Spacer(Modifier.height(10.dp))
-                        EditLongField("مناسب لمين؟", draft.goodFor, 240, !holder.saving) {
+                        EditMemoryField("مناسبة لمين؟", draft.goodFor, 240, !holder.saving) {
                             holder.updateExchange(goodFor = it)
                         }
                     }
 
-                    Surface(
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f),
+                    TeswaInlineMessage(
+                        title = "بتعدّل نفس الحاجة، مش بتخلق إعلان جديد",
+                        body = "الحفظ يثبت التغييرات على نفس itemId ونفس تاريخها. الصور الجديدة بس هي اللي بتترفع، والصور القديمة تفضل مرتبطة بنفس الحاجة حسب ترتيبك.",
+                        icon = TeswaIcons.Edit,
+                        emphasis = TeswaEmphasis.Quiet,
+                    )
+                }
+
+                holder.progress?.let { current ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = TeswaLayout.BottomCommitHorizontal),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
                     ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("مش بنبدأ من الصفر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(5.dp))
-                            Text(
-                                "الحفظ يحدّث نفس itemId ونفس تاريخ الإعلان. الصور الجديدة فقط هي اللي بترتفع، والصور القديمة تتفضل موجودة حسب ترتيبك.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text(
+                            when (current) {
+                                is EditListingProgress.Uploading -> "بنضيف لقطة جديدة ${current.current} من ${current.total} — ${current.percent}%"
+                                EditListingProgress.Saving -> "بنثبت التعديلات على نفس الحاجة…"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
 
-                Surface(shadowElevation = 10.dp) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp)) {
-                        holder.progress?.let { current ->
-                            LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                when (current) {
-                                    is EditListingProgress.Uploading -> "رفع صورة جديدة ${current.current} من ${current.total} — ${current.percent}%"
-                                    EditListingProgress.Saving -> "تثبيت التعديلات على نفس العنصر…"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !holder.saving,
-                            onClick = { scope.launch { holder.save() } },
-                        ) { Text(if (holder.saving) "جارٍ الحفظ…" else "حفظ التعديلات") }
-                    }
-                }
+                TeswaBottomCommitBar(
+                    primaryLabel = "احفظ نفس الحاجة",
+                    primaryIcon = TeswaIcons.Accepted,
+                    primaryEnabled = !holder.saving,
+                    primaryLoading = holder.saving,
+                    onPrimary = { scope.launch { holder.save() } },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun EditImageCard(
+private fun EditImageMemory(
     image: EditListingImageDraft,
     index: Int,
     count: Int,
@@ -348,85 +392,112 @@ private fun EditImageCard(
     onMoveAfter: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Card(Modifier.width(170.dp)) {
-        Column(Modifier.padding(10.dp)) {
-            when (image) {
-                is EditListingImageDraft.Existing -> NetworkImage(
-                    url = image.image.imageUrl,
-                    contentDescription = "صورة ${index + 1}",
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(14.dp)),
-                )
-                is EditListingImageDraft.New -> LocalContentImage(
-                    uri = image.image.uri,
-                    contentDescription = image.image.displayName,
-                    resolver = LocalContext.current.contentResolver,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(14.dp)),
+    Surface(
+        modifier = Modifier.width(174.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(TeswaRadius.lg),
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+        ) {
+            Box {
+                when (image) {
+                    is EditListingImageDraft.Existing -> NetworkImage(
+                        url = image.image.imageUrl,
+                        contentDescription = "لقطة ${index + 1}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(TeswaRadius.md)),
+                    )
+                    is EditListingImageDraft.New -> LocalContentImage(
+                        uri = image.image.uri,
+                        contentDescription = image.image.displayName,
+                        resolver = LocalContext.current.contentResolver,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(TeswaRadius.md)),
+                    )
+                }
+                TeswaArchiveLabel(
+                    text = when {
+                        index == 0 -> "الغلاف"
+                        image is EditListingImageDraft.New -> "جديدة"
+                        else -> "محفوظة"
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(TeswaSpacing.xs),
                 )
             }
-            Spacer(Modifier.height(7.dp))
-            Text(if (index == 0) "الغلاف" else "صورة ${index + 1}", fontWeight = FontWeight.SemiBold)
+
             Text(
-                if (image is EditListingImageDraft.New) "جديدة" else "موجودة",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = if (index == 0) "اللقطة الأساسية" else "لقطة ${index + 1}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(7.dp))
+
             if (index > 0) {
-                OutlinedButton(onClick = onPrimary, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("خليها الغلاف") }
+                TeswaSecondaryAction(
+                    text = "خليها الغلاف",
+                    enabled = enabled,
+                    onClick = onPrimary,
+                )
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                OutlinedButton(
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                TextButton(
                     onClick = onMoveBefore,
                     enabled = enabled && index > 0,
                     modifier = Modifier.weight(1f),
                 ) { Text("قبل") }
-                OutlinedButton(
+                TextButton(
                     onClick = onMoveAfter,
                     enabled = enabled && index < count - 1,
                     modifier = Modifier.weight(1f),
                 ) { Text("بعد") }
             }
-            OutlinedButton(onClick = onRemove, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text("حذف") }
+            TextButton(
+                onClick = onRemove,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("شيل اللقطة", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
 
 @Composable
-private fun EditFormSection(title: String, hint: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(TeswaSpacing.xxs))
-        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(TeswaSpacing.sm))
+private fun EditMemorySection(
+    title: String,
+    supporting: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        TeswaSectionHeader(title)
+        Text(
+            text = supporting,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         content()
     }
 }
 
 @Composable
-private fun EditChoiceCard(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    TeswaChoiceChip(
-        label = label,
-        selected = selected,
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = enabled,
-    )
-}
-
-@Composable
-private fun EditChoicePill(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick),
-        shape = CircleShape,
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Text(label, Modifier.padding(horizontal = 15.dp, vertical = 9.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-private fun EditLongField(
+private fun EditMemoryField(
     label: String,
     value: String,
     max: Int,
@@ -434,13 +505,54 @@ private fun EditLongField(
     minLines: Int = 2,
     onValue: (String) -> Unit,
 ) {
-    OutlinedTextField(
+    TeswaTextField(
         value = value,
         onValueChange = { onValue(it.take(max)) },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-        label = { Text(label) },
-        minLines = minLines,
-        supportingText = { Text("${value.length} / $max") },
+        label = label,
+        supportingText = "${value.length} / $max",
         enabled = enabled,
+        singleLine = false,
+        minLines = minLines,
+        maxLines = maxOf(minLines, 6),
     )
+}
+
+@Composable
+private fun EditCenteredState(
+    title: String,
+    body: String,
+    modifier: Modifier,
+    loading: Boolean = false,
+    onRetry: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (loading) {
+            TeswaInlineLoading(title)
+            Spacer(Modifier.height(TeswaSpacing.xs))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            TeswaInlineMessage(
+                title = title,
+                body = body,
+                emphasis = TeswaEmphasis.Strong,
+                actionLabel = if (onRetry != null) "حاول تاني" else null,
+                onAction = onRetry,
+            )
+            if (onBack != null) {
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(text = "رجوع", onClick = onBack)
+            }
+        }
+    }
 }
