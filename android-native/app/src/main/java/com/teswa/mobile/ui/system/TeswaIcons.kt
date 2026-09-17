@@ -1,9 +1,10 @@
 package com.teswa.mobile.ui.system
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Archive
-import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Report
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
@@ -51,7 +51,7 @@ object TeswaIcons {
     val PutIntoPlay: ImageVector = Icons.Rounded.AddCircle
     val Notifications: ImageVector = Icons.Rounded.NotificationsNone
 
-    val Back: ImageVector = Icons.Rounded.ArrowBack
+    val Back: ImageVector = Icons.AutoMirrored.Rounded.ArrowBack
     val More: ImageVector = Icons.Rounded.MoreVert
     val Clear: ImageVector = Icons.Rounded.Clear
     val Filter: ImageVector = Icons.Rounded.Tune
@@ -64,7 +64,7 @@ object TeswaIcons {
     val Camera: ImageVector = Icons.Rounded.PhotoCamera
     val Gallery: ImageVector = Icons.Rounded.Image
     val Voice: ImageVector = Icons.Rounded.Mic
-    val Send: ImageVector = Icons.Rounded.Send
+    val Send: ImageVector = Icons.AutoMirrored.Rounded.Send
     val Edit: ImageVector = Icons.Rounded.Edit
     val Archive: ImageVector = Icons.Rounded.Archive
     val Delete: ImageVector = Icons.Rounded.DeleteOutline
