@@ -11,23 +11,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,25 +31,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
-import com.teswa.mobile.ui.system.TeswaExchangePair
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
 import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaInlineLoading
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaMotion
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
+import com.teswa.mobile.ui.system.TeswaTraceNote
 import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
@@ -73,6 +66,7 @@ fun OffersContent(
     var confirmation by remember { mutableStateOf<Pair<String, OfferAction>?>(null) }
 
     Column(modifier.fillMaxSize()) {
+        OfferLaneHeader(direction)
         DirectionPicker(direction) { direction = it }
         holder.message?.let { OfferBanner(it) { scope.launch { holder.load(silent = true) } } }
         when (val state = holder.state) {
@@ -83,16 +77,19 @@ fun OffersContent(
                 val rows = if (direction == OfferDirection.INCOMING) state.inbox.incoming else state.inbox.sent
                 if (rows.isEmpty()) {
                     OfferCenterState(
-                        if (direction == OfferDirection.INCOMING) "مفيش عروض مستنية ردك." else "لسه ما بعتش عروض.",
+                        if (direction == OfferDirection.INCOMING) "مفيش علاقات مستنية قرارك دلوقتي." else "لسه ما بعتش عرض يربط حاجتين.",
                     )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(
+                            horizontal = TeswaLayout.ScreenHorizontal,
+                            vertical = TeswaSpacing.md,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
                     ) {
                         items(rows, key = { "${it.direction}:${it.id}" }) { offer ->
-                            OfferCard(
+                            OfferMoment(
                                 offer = offer,
                                 working = holder.actingOfferId == offer.id,
                                 onAction = { action ->
@@ -114,11 +111,14 @@ fun OffersContent(
     confirmation?.let { (offerId, action) ->
         AlertDialog(
             onDismissRequest = { confirmation = null },
-            title = { Text(if (action == OfferAction.ACCEPT) "قبول العرض؟" else "رفض العرض بلطف؟") },
+            title = { Text(if (action == OfferAction.ACCEPT) "تثبّت العلاقة دي كصفقة؟" else "تقفل العرض بلطف؟") },
             text = {
                 Text(
-                    if (action == OfferAction.ACCEPT) "هتتفتح محادثة صفقة عشان تنسقوا التبديل."
-                    else "العرض هيتقفل، وممكن الطرف التاني يبعت عرض مختلف بعدين.",
+                    if (action == OfferAction.ACCEPT) {
+                        "الحاجتين هيفضلوا مرتبطين في صفقة مشتركة عشان تنسقوا التبديل. القبول مش تأكيد إن التبديل حصل في الواقع."
+                    } else {
+                        "العرض هيتقفل كجزء من السجل، وممكن يبدأ عرض مختلف بعدين."
+                    },
                 )
             },
             confirmButton = {
@@ -138,10 +138,39 @@ fun OffersContent(
                             dealId?.let(onOpenDeal)
                         }
                     }
-                }) { Text(if (action == OfferAction.ACCEPT) "اقبل وافتح المحادثة" else "ارفض") }
+                }) { Text(if (action == OfferAction.ACCEPT) "موافق — افتح الصفقة" else "مش مناسب") }
             },
             dismissButton = { TextButton(onClick = { confirmation = null }) { Text("رجوع") } },
         )
+    }
+}
+
+@Composable
+private fun OfferLaneHeader(direction: OfferDirection) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TeswaMarkIcon(
+            mark = TeswaMark.BetweenUs,
+            color = MaterialTheme.colorScheme.primary,
+            size = 28.dp,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (direction == OfferDirection.INCOMING) "علاقات محتاجة قرارك" else "علاقات مستنية الطرف التاني",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "كل عرض هنا حاجتين اتقابلوا لأول مرة.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -156,26 +185,24 @@ private fun DirectionPicker(selected: OfferDirection, onSelect: (OfferDirection)
             selected = selected == OfferDirection.INCOMING,
             onClick = { onSelect(OfferDirection.INCOMING) },
             modifier = Modifier.weight(1f),
-            leadingIcon = TeswaIcons.Exchange,
         )
         TeswaChoiceChip(
             label = "مستني رد",
             selected = selected == OfferDirection.SENT,
             onClick = { onSelect(OfferDirection.SENT) },
             modifier = Modifier.weight(1f),
-            leadingIcon = TeswaIcons.Waiting,
         )
     }
 }
 
 @Composable
-private fun OfferCard(
+private fun OfferMoment(
     offer: OfferSummary,
     working: Boolean,
     onAction: (OfferAction) -> Unit,
     onOpenDeal: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
         AnimatedContent(
             targetState = offer.status,
             transitionSpec = {
@@ -183,24 +210,32 @@ private fun OfferCard(
             },
             label = "offer-state",
         ) { status ->
-            TeswaExchangePair(
-                requested = offer.requestedItem.toIdentity(),
-                offered = offer.offeredItem.toIdentity(),
-                state = offerStatusLabel(status),
-                stateEmphasis = when (status) {
-                    "accepted" -> TeswaEmphasis.Commitment
-                    "thinking" -> TeswaEmphasis.Normal
-                    "soft_rejected", "withdrawn", "expired", "cancelled_after_accept" -> TeswaEmphasis.Quiet
-                    else -> TeswaEmphasis.Strong
-                },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                TeswaExchangeMemoryPair(
+                    requestedTitle = offer.requestedItem.title,
+                    requestedImageUrl = offer.requestedItem.imageUrl,
+                    offeredTitle = offer.offeredItem.title,
+                    offeredImageUrl = offer.offeredItem.imageUrl,
+                    state = offerStatusLabel(status),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TeswaStatePill(
+                        text = offerStatusLabel(status),
+                        emphasis = when (status) {
+                            "accepted" -> TeswaEmphasis.Commitment
+                            "thinking" -> TeswaEmphasis.Normal
+                            "soft_rejected", "withdrawn", "expired", "cancelled_after_accept" -> TeswaEmphasis.Quiet
+                            else -> TeswaEmphasis.Strong
+                        },
+                    )
+                }
+            }
         }
         offer.message?.takeIf { it.isNotBlank() }?.let { message ->
-            TeswaInlineMessage(
-                title = if (offer.direction == OfferDirection.INCOMING) "رسالة مع العرض" else "رسالتك مع العرض",
-                body = message,
-                icon = TeswaIcons.Conversation,
-            )
+            TeswaTraceNote(message)
         }
         when {
             working -> TeswaInlineLoading("بنحدّث حالة العرض…")
@@ -224,18 +259,13 @@ private fun OfferCard(
                 }
             }
             offer.dealId != null -> TeswaSecondaryAction(
-                text = "افتح الصفقة",
+                text = "افتح العلاقة كصفقة",
                 icon = TeswaIcons.Accepted,
                 onClick = onOpenDeal,
             )
         }
     }
 }
-
-private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
-    title = title,
-    imageUrl = imageUrl,
-)
 
 @Composable
 private fun OfferCenterState(message: String, loading: Boolean = false, action: (() -> Unit)? = null) {
