@@ -75,6 +75,7 @@ fun HomeScreen(
     onAddItem: () -> Unit = {},
     onSearch: () -> Unit = {},
     onNotifications: () -> Unit = {},
+    onFocusedStateChanged: (Boolean) -> Unit = {},
     externalItemId: String? = null,
     onExternalItemConsumed: () -> Unit = {},
     externalProfileId: String? = null,
@@ -90,6 +91,16 @@ fun HomeScreen(
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
     var creatingStory by remember { mutableStateOf(false) }
     var managingStories by remember { mutableStateOf(false) }
+    val focusedState = creatingStory ||
+        managingStories ||
+        storyHolder.viewer != null ||
+        selectedProfileId != null ||
+        holder.selectedItemId != null
+
+    LaunchedEffect(focusedState) {
+        onFocusedStateChanged(focusedState)
+    }
+
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         if (grants.values.any { it }) scope.launch { holder.enableNearby(locationProvider) }
         else holder.showNotice("إذن الموقع اترفض. تقدر تكمل استخدام تِسوى عادي.")
