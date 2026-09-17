@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -12,7 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun TeswaRootNavigationBar(
@@ -22,13 +23,19 @@ fun TeswaRootNavigationBar(
 ) {
     NavigationBar(modifier = modifier) {
         TeswaNavigationPolicy.rootDestinations.forEach { destination ->
+            val isSelected = destination == selected
             NavigationBarItem(
-                selected = destination == selected,
+                selected = isSelected,
                 onClick = { onSelect(destination) },
                 icon = {
-                    Icon(
-                        imageVector = destination.icon,
-                        contentDescription = destination.accessibilityLabelAr,
+                    TeswaRootMark(
+                        destination = destination,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        size = 24.dp,
                     )
                 },
                 label = { Text(destination.labelAr) },
@@ -48,9 +55,10 @@ fun TeswaPutIntoPlayAction(
         containerColor = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
     ) {
-        Icon(
-            imageVector = TeswaIcons.PutIntoPlay,
-            contentDescription = TeswaNavigationPolicy.putIntoPlayLabelAr,
+        TeswaMarkIcon(
+            mark = TeswaMark.PutIntoPlay,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            size = 26.dp,
         )
     }
 }
@@ -60,7 +68,7 @@ fun TeswaFocusedHeader(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    actionIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    actionIcon: ImageVector? = null,
     actionDescription: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
