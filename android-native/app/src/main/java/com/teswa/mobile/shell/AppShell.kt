@@ -377,6 +377,7 @@ fun AppShell(
                     onSessionExpired = signOutAndDisable,
                     onBack = { selectedRoot = TeswaRootDestination.POSSIBLE },
                     modifier = contentModifier,
+                    onFocusedStateChanged = { suppressRootChrome = it },
                     onContinueAsListing = { item ->
                         when (val result = dolabAddItemHandoff.prepareAndPersist(session, item)) {
                             is DolabAddItemHandoffResult.Success -> {
@@ -429,6 +430,7 @@ fun AppShell(
                     onAddItem = ::openAddItem,
                     onSignOut = signOutAndDisable,
                     modifier = contentModifier,
+                    onFocusedStateChanged = { suppressRootChrome = it },
                 )
             }
         }
