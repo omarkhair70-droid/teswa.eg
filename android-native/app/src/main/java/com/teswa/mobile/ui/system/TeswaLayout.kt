@@ -27,9 +27,13 @@ object TeswaLayout {
     val BottomCommitHorizontal = 18.dp
     val BottomCommitVertical = 12.dp
 
-    // Fixed-height preview is intentionally limited to utility media inside a durable
-    // object workspace. Public object presentation uses TeswaMedia aspect ratios instead.
+    // Fixed-height utility media inside durable workspaces. Public object presentation
+    // uses TeswaMedia aspect ratios instead.
     val MediaPreviewHeight = 190.dp
+
+    // Identity geometry is shared across Me/edit/public identity surfaces.
+    val ProfileCoverHeight = 112.dp
+    val ProfileAvatarLarge = 84.dp
 
     const val MaxTitleLines = 2
     const val MaxSupportingLines = 3
