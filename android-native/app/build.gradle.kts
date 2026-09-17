@@ -44,7 +44,7 @@ android {
         applicationId = "com.teswa.mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 26
+        versionCode = 27
         versionName = "1.0.11"
 
         // Rehearsal remains the compile/test fallback only. A distributable release artifact
