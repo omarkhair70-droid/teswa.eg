@@ -134,7 +134,15 @@ fun AppShell(
         if (destination == TeswaRootDestination.POSSIBLE) possibleMode = PossibleMode.FEED
     }
 
+    fun goToMine() {
+        overlay = null
+        suppressRootChrome = false
+        selectedRoot = TeswaRootDestination.MINE
+    }
+
     fun openAddItem() {
+        // Publication is intentionally entered only after a Dolab item crosses the
+        // private -> public boundary through AndroidDolabAddItemHandoff.
         overlay = ShellOverlay.ADD_ITEM
     }
 
@@ -319,7 +327,7 @@ fun AppShell(
                             suppressRootChrome = false
                             selectedRoot = TeswaRootDestination.BETWEEN_US
                         },
-                        onAddItem = ::openAddItem,
+                        onAddItem = ::goToMine,
                         onSearch = {
                             suppressRootChrome = false
                             possibleMode = PossibleMode.SEARCH
@@ -427,7 +435,7 @@ fun AppShell(
                     settingsRepository = settingsRepository,
                     onSessionUpdated = { session = it },
                     onSessionExpired = signOutAndDisable,
-                    onAddItem = ::openAddItem,
+                    onAddItem = ::goToMine,
                     onSignOut = signOutAndDisable,
                     modifier = contentModifier,
                     onFocusedStateChanged = { suppressRootChrome = it },
