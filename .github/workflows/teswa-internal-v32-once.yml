@@ -1,0 +1,205 @@
+# One-shot release branch: Teswa real-device visual closure 01, versionCode 32.
+name: Teswa Native Internal v32 Once
+
+on:
+  push:
+    branches:
+      - 'release/teswa-internal-20260921-v32'
+    paths:
+      - '.github/workflows/teswa-internal-v32-once.yml'
+
+permissions:
+  contents: read
+
+env:
+  PACKAGE_NAME: com.teswa.mobile
+  AAB_PATH: android-native/app/build/outputs/bundle/release/app-release.aab
+  TESWA_RELEASE_API_BASE_URL: https://core01.tail6afd9b.ts.net
+  EXPECTED_UPLOAD_SHA256: 9E:CE:E2:66:79:C8:7D:4F:6F:51:39:F1:96:7F:ED:20:01:06:C6:C0:FE:42:49:A8:31:8E:F8:84:90:FC:B7:F1
+
+jobs:
+  upload-internal:
+    name: Build signed AAB and publish Teswa v32 to Internal
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v7
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Verify required release secrets
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.TESWA_RELEASE_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.TESWA_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.TESWA_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.TESWA_RELEASE_KEY_PASSWORD }}
+          PLAY_JSON_B64: ${{ secrets.TESWA_PLAY_SERVICE_ACCOUNT_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_B64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD PLAY_JSON_B64; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required release secret: $name"
+              exit 10
+            fi
+          done
+
+      - name: Materialize signing and Google Play credentials
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.TESWA_RELEASE_KEYSTORE_B64 }}
+          PLAY_JSON_B64: ${{ secrets.TESWA_PLAY_SERVICE_ACCOUNT_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/teswa-release"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/teswa-release/upload.jks"
+          printf '%s' "$PLAY_JSON_B64" | base64 --decode > "$RUNNER_TEMP/teswa-release/play-service-account.json"
+          chmod 600 "$RUNNER_TEMP/teswa-release/upload.jks" "$RUNNER_TEMP/teswa-release/play-service-account.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'teswa-release' / 'play-service-account.json'
+          data = json.loads(path.read_text(encoding='utf-8'))
+          if data.get('type') != 'service_account' or not data.get('client_email') or not data.get('private_key'):
+              raise SystemExit('Invalid Google Play service-account JSON')
+          print('Google Play service-account JSON parsed successfully.')
+          PY
+
+      - name: Verify Google Play upload key fingerprint
+        shell: bash
+        env:
+          TESWA_RELEASE_STORE_PASSWORD: ${{ secrets.TESWA_RELEASE_STORE_PASSWORD }}
+          TESWA_RELEASE_KEY_ALIAS: ${{ secrets.TESWA_RELEASE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/teswa-release/upload.jks"
+          ACTUAL="$(keytool -list -v \
+            -keystore "$KEYSTORE" \
+            -alias "$TESWA_RELEASE_KEY_ALIAS" \
+            -storepass:env TESWA_RELEASE_STORE_PASSWORD \
+            | sed -n 's/.*SHA256: //p' | head -n 1)"
+          normalize() { printf '%s' "$1" | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]'; }
+          if [[ "$(normalize "$ACTUAL")" != "$(normalize "$EXPECTED_UPLOAD_SHA256")" ]]; then
+            echo "Upload key fingerprint mismatch."
+            echo "Expected: $EXPECTED_UPLOAD_SHA256"
+            echo "Actual:   $ACTUAL"
+            exit 11
+          fi
+          echo "Upload key fingerprint matches Google Play."
+
+      - name: Run native unit tests
+        run: gradle -p android-native :app:testDebugUnitTest --stacktrace
+
+      - name: Compile native release Kotlin
+        run: gradle -p android-native :app:compileReleaseKotlin --stacktrace
+
+      - name: Run native release lint
+        run: gradle -p android-native :app:lintRelease --stacktrace
+
+      - name: Build signed native release AAB
+        shell: bash
+        env:
+          TESWA_RELEASE_STORE_FILE: ${{ runner.temp }}/teswa-release/upload.jks
+          TESWA_RELEASE_STORE_PASSWORD: ${{ secrets.TESWA_RELEASE_STORE_PASSWORD }}
+          TESWA_RELEASE_KEY_ALIAS: ${{ secrets.TESWA_RELEASE_KEY_ALIAS }}
+          TESWA_RELEASE_KEY_PASSWORD: ${{ secrets.TESWA_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle -p android-native :app:bundleRelease --stacktrace
+          test -f "$AAB_PATH"
+          jarsigner -verify "$AAB_PATH"
+          sha256sum "$AAB_PATH" | tee "$RUNNER_TEMP/teswa-release/aab.sha256"
+
+      - name: Upload signed AAB as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: teswa-native-internal-v32-${{ github.run_number }}
+          path: |
+            ${{ env.AAB_PATH }}
+            ${{ runner.temp }}/teswa-release/aab.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Install Google Play API client
+        run: python3 -m pip install --disable-pip-version-check --quiet google-api-python-client google-auth
+
+      - name: Publish AAB to Google Play Internal Testing
+        shell: bash
+        env:
+          PLAY_SERVICE_ACCOUNT_FILE: ${{ runner.temp }}/teswa-release/play-service-account.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          package_name = os.environ['PACKAGE_NAME']
+          aab_path = os.environ['AAB_PATH']
+          credentials = service_account.Credentials.from_service_account_file(
+              os.environ['PLAY_SERVICE_ACCOUNT_FILE'],
+              scopes=['https://www.googleapis.com/auth/androidpublisher'],
+          )
+          service = build('androidpublisher', 'v3', credentials=credentials, cache_discovery=False)
+          edit = service.edits().insert(packageName=package_name, body={}).execute()
+          edit_id = edit['id']
+          try:
+              bundle = service.edits().bundles().upload(
+                  packageName=package_name,
+                  editId=edit_id,
+                  media_body=MediaFileUpload(aab_path, mimetype='application/octet-stream', resumable=True),
+              ).execute()
+              version_code = str(bundle['versionCode'])
+              if version_code != '32':
+                  raise RuntimeError(f'Expected versionCode 32, Google Play parsed {version_code}')
+              service.edits().tracks().update(
+                  packageName=package_name,
+                  editId=edit_id,
+                  track='internal',
+                  body={
+                      'track': 'internal',
+                      'releases': [{
+                          'name': f'Teswa Native {version_code}',
+                          'versionCodes': [version_code],
+                          'status': 'completed',
+                      }],
+                  },
+              ).execute()
+              service.edits().commit(packageName=package_name, editId=edit_id).execute()
+          except Exception:
+              try:
+                  service.edits().delete(packageName=package_name, editId=edit_id).execute()
+              except Exception:
+                  pass
+              raise
+          print(f'PLAY_PUBLISH=PASS package={package_name} versionCode={version_code} track=internal status=completed')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env_file:
+              env_file.write(f'PLAY_VERSION_CODE={version_code}\n')
+          PY
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo '## Teswa Native Internal Testing — Dolab Production Closure'
+            echo ''
+            echo "- Package: `$PACKAGE_NAME`"
+            echo "- Version code: `${PLAY_VERSION_CODE:-unknown}`"
+            echo '- Version name: `1.0.16`'
+            echo '- Track: `internal`'
+            echo '- Status: `completed`'
+            echo "- Source commit: `${GITHUB_SHA}`"
+            echo "- API: `$TESWA_RELEASE_API_BASE_URL`"
+          } >> "$GITHUB_STEP_SUMMARY"
