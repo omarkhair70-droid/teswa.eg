@@ -1,10 +1,38 @@
 # TESWA DOLAB — PRODUCTION CLOSURE CONTRACT V1
 
 **Date:** 2026-09-21  
-**Status:** ACTIVE PRODUCT CLOSURE  
+**Status:** PRODUCTION CLOSED — v32 DEVICE ACCEPTED  
 **Root destination:** MINE / دولابي  
-**Baseline:** v30 real-device review  
-**Next candidate:** versionCode 31 / 1.0.15
+**Baseline:** v32 real-device acceptance  
+**Accepted build:** versionCode 32 / 1.0.16
+
+
+## Closure checkpoint — v32
+
+**Accepted source:** `298f8293bb2acee9863313bebbf78d012c47b5b3`  
+**Android Native Foundation:** #256 — **PASS**  
+**Google Play Internal run:** `35558552522` — **PASS**  
+**Package:** `com.teswa.mobile`  
+**Version:** **32 / 1.0.16**  
+**Track:** **internal**  
+**Real-device result:** user-tested and accepted as materially more polished and correct; tested flows were reported working, including the revised Dolab object experience and the voice persistence fix.
+
+### What is now closed
+
+- Dolab is a private object world, not a listings dashboard.
+- Object-first capture is the primary entry.
+- Lifecycle rail expresses preparation → ready → public → exchanged/archive.
+- Legacy/no-photo objects remain bounded instead of dominating the shelf.
+- Standalone private traces are separated from object semantics.
+- Voice is persisted as a linked private trace rather than a generic media tile.
+- Voice persistence is transactional: media upload + linked voice note, with rollback on note failure.
+- Private notes do not silently become public listing copy.
+- Publication returns to the same Dolab identity instead of creating a detached success experience.
+- Search, large-collection lazy loading, media memory, and public/private boundary behavior are preserved.
+- Release tests, release compile, lint, signed AAB and Internal Testing publication are green.
+
+The remaining production-gate list below stays as the permanent regression checklist. It is not a signal that this closure is still open; future regressions should reopen only the failed gate, not the product definition.
+
 
 ## Product definition
 
