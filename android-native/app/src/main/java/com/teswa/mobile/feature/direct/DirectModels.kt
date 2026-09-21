@@ -16,6 +16,25 @@ data class DirectConversation(
     val requiresAction: Boolean,
 )
 
+data class DirectAttachment(
+    val id: String?,
+    val kind: String,
+    val storagePath: String,
+    val storageBucket: String?,
+    val fileName: String?,
+    val mimeType: String?,
+    val sizeBytes: Long?,
+    val durationMs: Int?,
+    val width: Int?,
+    val height: Int?,
+)
+
+data class DirectReaction(
+    val reaction: String,
+    val userId: String,
+    val createdAt: String?,
+)
+
 data class DirectMessage(
     val id: String,
     val senderId: String,
@@ -27,6 +46,17 @@ data class DirectMessage(
     val audioDurationMs: Int? = null,
     val audioMimeType: String? = null,
     val audioSizeBytes: Long? = null,
+    val replyToMessageId: String? = null,
+    val replySenderId: String? = null,
+    val replyBody: String? = null,
+    val deletedAt: String? = null,
+    val attachments: List<DirectAttachment> = emptyList(),
+    val reactions: List<DirectReaction> = emptyList(),
+)
+
+data class DirectReactionToggle(
+    val enabled: Boolean,
+    val count: Int,
 )
 
 data class DirectComposeTarget(
