@@ -80,7 +80,7 @@ internal fun DolabPrivateMasthead(
     onCreate: () -> Unit,
     searchOpen: Boolean,
     onToggleSearch: () -> Unit,
-    onPrivateNote: () -> Unit,
+    onPrivateTools: () -> Unit,
 ) {
     val items = holder.objectItems()
     val ready = items.count { it.status == DolabItemStatus.READY }
@@ -118,7 +118,7 @@ internal fun DolabPrivateMasthead(
             TeswaIconAction(
                 icon = TeswaIcons.More,
                 contentDescription = "حاجات خاصة في دولابك",
-                onClick = onPrivateNote,
+                onClick = onPrivateTools,
             )
             TextButton(onClick = onCreate) {
                 Text("حط حاجة", fontWeight = FontWeight.SemiBold)

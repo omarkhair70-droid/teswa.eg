@@ -135,6 +135,7 @@ private fun DolabShelf(
     val workspace = holder.workspace()
     var searchOpen by remember { mutableStateOf(holder.query.isNotBlank()) }
     var showLooseTraces by remember { mutableStateOf(false) }
+    var showPrivateTools by remember { mutableStateOf(false) }
     var showLooseNoteComposer by remember { mutableStateOf(false) }
     var looseNote by remember { mutableStateOf("") }
 
@@ -155,7 +156,7 @@ private fun DolabShelf(
                     searchOpen = !searchOpen
                     if (!searchOpen) holder.updateQuery("")
                 },
-                onPrivateNote = { showLooseNoteComposer = true },
+                onPrivateTools = { showPrivateTools = true },
             )
         }
 
@@ -226,13 +227,30 @@ private fun DolabShelf(
             }
         }
 
-        if (workspace != null && holder.state !is DolabUiState.Loading) {
-            item {
+    }
+
+    if (showPrivateTools) {
+        TeswaActionSheet(
+            title = "حاجات خاصة",
+            supporting = "أفعال صغيرة لدولابك من غير ما نحول الشاشة لأقسام ولوحات تحكم.",
+            onDismiss = { showPrivateTools = false },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+                TeswaPrimaryAction(
+                    text = "سيب ملاحظة على جنب",
+                    onClick = {
+                        showPrivateTools = false
+                        showLooseNoteComposer = true
+                    },
+                )
                 TeswaSecondaryAction(
-                    text = if (holder.refreshing) "بنحدّث دولابك…" else "حدّث دولابي",
+                    text = if (holder.refreshing) "بنحدّث…" else "حدّث دولابي",
                     icon = TeswaIcons.Refresh,
                     enabled = !holder.refreshing,
-                    onClick = { scope.launch { holder.load(refresh = true) } },
+                    onClick = {
+                        showPrivateTools = false
+                        scope.launch { holder.load(refresh = true) }
+                    },
                 )
             }
         }
