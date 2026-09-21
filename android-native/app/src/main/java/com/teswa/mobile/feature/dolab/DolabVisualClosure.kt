@@ -155,6 +155,159 @@ private fun DolabLifecycleRail(
 
 
 
+
+@Composable
+internal fun DolabPrivateTraceRail(
+    item: DolabItem,
+    notes: List<DolabNote>,
+    media: List<DolabMedia>,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = dolabStatusLabel(item.status),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+
+            Text(
+                text = buildList {
+                    if (media.isNotEmpty()) add("${media.size} ميديا")
+                    if (notes.isNotEmpty()) add("${notes.size} ملاحظات")
+                }.joinToString(" · ").ifBlank { "لسه مفيش أثر إضافي" },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        item.description?.takeIf(String::isNotBlank)?.let { description ->
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        notes.firstOrNull()?.body?.takeIf(String::isNotBlank)?.let { note ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .34f),
+                shape = RoundedCornerShape(TeswaRadius.md),
+            ) {
+                Text(
+                    text = note,
+                    modifier = Modifier.padding(TeswaSpacing.md),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        item.exchangeIntent?.takeIf(String::isNotBlank)?.let { intent ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.Top,
+            ) {
+                TeswaMarkIcon(
+                    mark = TeswaMark.PutIntoPlay,
+                    color = MaterialTheme.colorScheme.primary,
+                    size = 22.dp,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "لو خرجت للّعب",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = intent,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DolabPublishThreshold(
+    working: Boolean,
+    enabled: Boolean,
+    onPublish: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .38f),
+        shape = RoundedCornerShape(TeswaRadius.hero),
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaMarkIcon(
+                    mark = TeswaMark.PutIntoPlay,
+                    color = MaterialTheme.colorScheme.primary,
+                    size = 34.dp,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "جاهزة تعدّي حدود دولابك",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "هتفضل نفس الحاجة، بس هتدخل المجال العام وتبقى احتمال بينك وبين حد تاني.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = .28f)),
+            )
+
+            TeswaPrimaryAction(
+                text = if (working) "بنجهزها للنشر…" else "حطّها في اللعب",
+                loading = working,
+                enabled = enabled,
+                onClick = onPublish,
+            )
+        }
+    }
+}
+
 @Composable
 internal fun DolabPrivateObjectPortrait(
     holder: DolabStateHolder,
