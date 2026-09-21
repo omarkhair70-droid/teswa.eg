@@ -137,8 +137,20 @@ fun BetweenUsOverview(
                 ConversationActivityRow(
                     title = conversation.other.displayName ?: conversation.other.username ?: "مستخدم تِسوى",
                     avatarUrl = conversation.other.avatarUrl,
-                    supporting = conversation.latestBody ?: "رد بدأ من قصة",
-                    contextLabel = "بدأ من قصة",
+                    supporting = conversation.latestBody
+                        ?: conversation.context.caption
+                        ?: when (conversation.context.mediaType) {
+                            "video" -> "كلام بدأ من فيديو"
+                            "image" -> "كلام بدأ من صورة"
+                            else -> "كلام بدأ من قصة"
+                        },
+                    contextLabel = when {
+                        !conversation.context.caption.isNullOrBlank() ->
+                            "من قصة: ${conversation.context.caption.take(28)}"
+                        conversation.context.mediaType == "video" -> "بدأ من فيديو"
+                        conversation.context.mediaType == "image" -> "بدأ من صورة"
+                        else -> "بدأ من قصة"
+                    },
                     state = "رد على قصة",
                     unreadCount = conversation.unreadCount,
                     onClick = { onOpenContextual(conversation) },
