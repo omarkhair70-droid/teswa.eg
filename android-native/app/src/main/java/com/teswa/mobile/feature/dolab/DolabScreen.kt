@@ -181,13 +181,16 @@ private fun DolabShelf(
                 val looseNotes = holder.visibleLooseNotes()
                 val legacyTraces = holder.visibleLegacyTraceItems()
                 val searching = holder.query.isNotBlank()
+                val hasTraces = looseNotes.isNotEmpty() || legacyTraces.isNotEmpty()
 
                 if (visible.isEmpty()) {
-                    item {
-                        when {
-                            searching -> DolabEmptySearchState()
-                            holder.filter == DolabFilter.ALL -> DolabEmptyPrivateShelf(onCreate = onCreate)
-                            else -> DolabEmptyLifecycleState(holder.filter)
+                    when {
+                        searching && !hasTraces -> item { DolabEmptySearchState() }
+                        !searching && holder.filter == DolabFilter.ALL -> item {
+                            DolabEmptyPrivateShelf(onCreate = onCreate)
+                        }
+                        holder.filter != DolabFilter.ALL -> item {
+                            DolabEmptyLifecycleState(holder.filter)
                         }
                     }
                 } else {
