@@ -396,8 +396,9 @@ private fun DolabItemDetail(
     val workspace = holder.workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
     val notes = workspace.notesFor(item.id)
     val media = workspace.mediaFor(item.id)
+    val traceMediaIds = notes.mapNotNull { it.mediaId }.toSet()
     val heroImageId = media.firstOrNull { it.mediaType == "image" }?.id
-    val supportingMedia = media.filterNot { it.id == heroImageId }
+    val supportingMedia = media.filterNot { it.id == heroImageId || it.id in traceMediaIds }
     val holderBusy = holder.workingId == item.id
     val busy = holderBusy || continueWorking
     val uploadProgress = holder.mediaUploadProgress?.takeIf { it.itemId == item.id }?.percent
@@ -620,29 +621,6 @@ private fun DolabItemDetail(
                             videoPicker.launch(DolabMediaResolver.SUPPORTED_VIDEO_TYPES.toTypedArray())
                         },
                     )
-                    VoiceComposer(
-                        enabled = !busy,
-                        sending = holderBusy && uploadProgress != null,
-                        uploadProgress = uploadProgress,
-                        onSend = { voice ->
-                            val pending = mediaResolver.resolveVoice(voice)
-                            if (pending == null) {
-                                holder.showError("التسجيل غير صالح أو لم يعد موجودًا.")
-                                false
-                            } else {
-                                holder.addMedia(item, pending)
-                            }
-                        },
-                        onError = holder::showError,
-                    )
-                    if (uploadProgress != null) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text(
-                            text = "بنحفظ الميديا… $uploadProgress%",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
         }
@@ -681,6 +659,46 @@ private fun DolabItemDetail(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        if (item.status.editable) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = TeswaLayout.ScreenHorizontal),
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    Text(
+                        text = "سجّل أثر صوتي",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    VoiceComposer(
+                        enabled = !busy,
+                        sending = holderBusy && uploadProgress != null,
+                        uploadProgress = uploadProgress,
+                        onSend = { voice ->
+                            val pending = mediaResolver.resolveVoice(voice)
+                            if (pending == null) {
+                                holder.showError("التسجيل غير صالح أو لم يعد موجودًا.")
+                                false
+                            } else {
+                                holder.addVoiceTrace(item, pending)
+                            }
+                        },
+                        onError = holder::showError,
+                    )
+                    if (uploadProgress != null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text(
+                            text = "بنحفظ التسجيل… $uploadProgress%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
 
