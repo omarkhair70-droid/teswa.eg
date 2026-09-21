@@ -21,6 +21,7 @@ sealed interface ReportTarget {
     data class Item(val itemId: String, override val fallbackSubject: String = "هذا العنصر") : ReportTarget { override val key = "item:$itemId" }
     data class Story(val storyId: String, override val fallbackSubject: String = "هذه القصة") : ReportTarget { override val key = "story:$storyId" }
     data class DirectMessage(val conversationId: String, val messageId: String, val reportedUserId: String, override val fallbackSubject: String = "هذه الرسالة") : ReportTarget { override val key = "direct:$conversationId:$messageId" }
+    data class ContextualMessage(val conversationId: String, val messageId: String, val reportedUserId: String, override val fallbackSubject: String = "هذه الرسالة") : ReportTarget { override val key = "contextual:$conversationId:$messageId" }
     data class Deal(val dealId: String, override val fallbackSubject: String = "هذه الصفقة") : ReportTarget { override val key = "deal:$dealId" }
     data class DealMessage(val dealId: String, val messageId: String, override val fallbackSubject: String = "هذه الرسالة") : ReportTarget { override val key = "deal-message:$dealId:$messageId" }
 }
@@ -31,7 +32,7 @@ fun reasonsFor(target: ReportTarget): List<ReportReason> = when (target) {
     is ReportTarget.Item -> listOf(ReportReason.MISLEADING_ITEM, ReportReason.INAPPROPRIATE_CONTENT, ReportReason.FRAUD, ReportReason.UNSAFE_BEHAVIOR, ReportReason.OTHER)
     is ReportTarget.User -> listOf(ReportReason.HARASSMENT, ReportReason.INAPPROPRIATE_CONTENT, ReportReason.FRAUD, ReportReason.UNSAFE_BEHAVIOR, ReportReason.OTHER)
     is ReportTarget.Story -> listOf(ReportReason.INAPPROPRIATE_CONTENT, ReportReason.HARASSMENT, ReportReason.FRAUD, ReportReason.UNSAFE_BEHAVIOR, ReportReason.OTHER)
-    is ReportTarget.DirectMessage -> listOf(ReportReason.HARASSMENT, ReportReason.SPAM_OFFER, ReportReason.FRAUD, ReportReason.UNSAFE_BEHAVIOR, ReportReason.INAPPROPRIATE_CONTENT, ReportReason.OTHER)
+    is ReportTarget.DirectMessage, is ReportTarget.ContextualMessage -> listOf(ReportReason.HARASSMENT, ReportReason.SPAM_OFFER, ReportReason.FRAUD, ReportReason.UNSAFE_BEHAVIOR, ReportReason.INAPPROPRIATE_CONTENT, ReportReason.OTHER)
     is ReportTarget.Deal, is ReportTarget.DealMessage -> listOf(ReportReason.NO_SHOW, ReportReason.HARASSMENT, ReportReason.FRAUD, ReportReason.UNSAFE_BEHAVIOR, ReportReason.SPAM_OFFER, ReportReason.OTHER)
 }
 
