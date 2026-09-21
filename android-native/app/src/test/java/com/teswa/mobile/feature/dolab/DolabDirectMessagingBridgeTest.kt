@@ -24,6 +24,14 @@ class DolabDirectMessagingBridgeTest {
                     exchangeIntent = null,
                     status = DolabItemStatus.ARCHIVED,
                 ),
+                item(
+                    id = "legacy-note",
+                    title = "رسالة منك لحد",
+                    description = "أثر قديم",
+                    exchangeIntent = null,
+                    status = DolabItemStatus.DRAFT,
+                    source = "note",
+                ),
             ),
             media = emptyList(),
             notes = listOf(
@@ -46,6 +54,7 @@ class DolabDirectMessagingBridgeTest {
         assertTrue(result.first().text.contains("نفسي أبدّلها بـ: كتاب تصوير"))
         assertEquals("ملاحظة — كاميرا فيلم", result.last().title)
         assertFalse(result.any { it.text.contains("ما يظهرش") })
+        assertFalse(result.any { it.text.contains("أثر قديم") })
     }
 
     @Test
@@ -93,6 +102,7 @@ class DolabDirectMessagingBridgeTest {
         description: String,
         exchangeIntent: String?,
         status: DolabItemStatus,
+        source: String = "manual",
     ) = DolabItem(
         id = id,
         title = title,
@@ -101,7 +111,7 @@ class DolabDirectMessagingBridgeTest {
         condition = null,
         exchangeIntent = exchangeIntent,
         status = status,
-        source = "manual",
+        source = source,
         publishedItemId = null,
         createdAt = null,
         updatedAt = null,

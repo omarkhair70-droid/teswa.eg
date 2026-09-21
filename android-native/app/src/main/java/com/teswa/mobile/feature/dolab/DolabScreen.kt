@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -124,6 +125,8 @@ private fun DolabShelf(
 ) {
     val scope = rememberCoroutineScope()
     val workspace = holder.workspace()
+    var searchOpen by remember { mutableStateOf(holder.query.isNotBlank()) }
+    var showLooseTraces by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -137,6 +140,11 @@ private fun DolabShelf(
             DolabPrivateMasthead(
                 holder = holder,
                 onCreate = onCreate,
+                searchOpen = searchOpen,
+                onToggleSearch = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) holder.updateQuery("")
+                },
             )
         }
 
@@ -167,9 +175,17 @@ private fun DolabShelf(
 
             is DolabUiState.Ready -> {
                 val visible = holder.visibleItems()
+                val looseNotes = holder.visibleLooseNotes()
+                val legacyTraces = holder.visibleLegacyTraceItems()
+                val searching = holder.query.isNotBlank()
+
                 if (visible.isEmpty()) {
                     item {
-                        DolabEmptyLifecycleState(holder.filter)
+                        when {
+                            searching -> DolabEmptySearchState()
+                            holder.filter == DolabFilter.ALL -> DolabEmptyPrivateShelf(onCreate = onCreate)
+                            else -> DolabEmptyLifecycleState(holder.filter)
+                        }
                     }
                 } else {
                     item {
@@ -177,6 +193,19 @@ private fun DolabShelf(
                             holder = holder,
                             items = visible,
                             onOpen = onOpen,
+                        )
+                    }
+                }
+
+                if (holder.filter == DolabFilter.ALL && (looseNotes.isNotEmpty() || legacyTraces.isNotEmpty())) {
+                    item {
+                        DolabLooseTracePreview(
+                            holder = holder,
+                            workspace = state.workspace,
+                            notes = looseNotes,
+                            legacyItems = legacyTraces,
+                            onOpenLegacy = onOpen,
+                            onOpenAll = { showLooseTraces = true },
                         )
                     }
                 }
@@ -191,6 +220,41 @@ private fun DolabShelf(
                     enabled = !holder.refreshing,
                     onClick = { scope.launch { holder.load(refresh = true) } },
                 )
+            }
+        }
+    }
+
+    if (showLooseTraces && workspace != null) {
+        val notes = holder.visibleLooseNotes()
+        val legacy = holder.visibleLegacyTraceItems()
+        TeswaActionSheet(
+            title = "على جنب",
+            supporting = "دي حاجات خاصة حفظتها لنفسك. مش عروض، ومش بتظهر للناس.",
+            onDismiss = { showLooseTraces = false },
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            ) {
+                items(notes, key = { "loose-note-${it.id}" }) { note ->
+                    DolabLooseNoteRow(
+                        holder = holder,
+                        workspace = workspace,
+                        note = note,
+                        onDelete = { scope.launch { holder.deleteNote(note) } },
+                    )
+                }
+                items(legacy, key = { "legacy-trace-${it.id}" }) { item ->
+                    DolabLegacyTraceRow(
+                        item = item,
+                        onOpen = {
+                            showLooseTraces = false
+                            onOpen(item)
+                        },
+                    )
+                }
             }
         }
     }

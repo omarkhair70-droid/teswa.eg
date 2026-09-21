@@ -24,7 +24,7 @@ interface DolabDirectMessagingBridge {
         session: AuthSession,
         conversation: DirectConversation,
         message: DirectMessage,
-    ): DolabResult<DolabItem>
+    ): DolabResult<Unit>
 }
 
 class AndroidDolabDirectMessagingBridge(
@@ -55,24 +55,27 @@ class AndroidDolabDirectMessagingBridge(
         session: AuthSession,
         conversation: DirectConversation,
         message: DirectMessage,
-    ): DolabResult<DolabItem> {
+    ): DolabResult<Unit> {
         val clean = message.body.trim()
         if (clean.isEmpty()) return DolabResult.Failure("الرسالة دي مفيهاش نص يتحفظ.", session)
-        return dolabRepository.createItem(
-            session,
-            DolabItemDraft(
-                title = messageTitle(session, conversation, message),
-                description = clean.take(4_000),
-                source = "note",
-            ),
-        )
+        return when (
+            val saved = dolabRepository.createNote(
+                session = session,
+                itemId = null,
+                body = clean.take(8_000),
+                noteType = "text",
+            )
+        ) {
+            is DolabResult.Success -> DolabResult.Success(Unit, saved.session)
+            is DolabResult.Failure -> saved
+        }
     }
 
     private suspend fun saveVoice(
         session: AuthSession,
         conversation: DirectConversation,
         message: DirectMessage,
-    ): DolabResult<DolabItem> {
+    ): DolabResult<Unit> {
         val storagePath = message.audioStoragePath
             ?: return DolabResult.Failure("التسجيل غير متاح للحفظ.", session)
         var activeSession = session
@@ -106,18 +109,6 @@ class AndroidDolabDirectMessagingBridge(
                 return DolabResult.Failure("التسجيل المحفوظ غير مكتمل.", activeSession)
             }
 
-            val created = dolabRepository.createItem(
-                activeSession,
-                DolabItemDraft(
-                    title = messageTitle(activeSession, conversation, message),
-                    description = "رسالة صوتية محفوظة من المحادثة المباشرة.",
-                    source = "voice",
-                ),
-            )
-            if (created is DolabResult.Failure) return created
-            created as DolabResult.Success
-            activeSession = created.session
-
             val media = DolabPendingMedia(
                 uri = target.toURI().toString(),
                 displayName = target.name,
@@ -130,26 +121,40 @@ class AndroidDolabDirectMessagingBridge(
             return when (
                 val uploaded = dolabRepository.uploadMedia(
                     session = activeSession,
-                    itemId = created.value.id,
+                    itemId = null,
                     media = media,
                     sortOrder = 0,
                     onProgress = {},
                 )
             ) {
-                is DolabResult.Success -> DolabResult.Success(created.value, uploaded.session)
-                is DolabResult.Failure -> {
-                    val rollbackSession = when (
-                        val rollback = dolabRepository.deleteItem(uploaded.session ?: activeSession, created.value.id)
+                is DolabResult.Failure -> uploaded
+                is DolabResult.Success -> {
+                    activeSession = uploaded.session
+                    when (
+                        val note = dolabRepository.createNote(
+                            session = activeSession,
+                            itemId = null,
+                            body = messageTitle(activeSession, conversation, message),
+                            noteType = "voice",
+                            mediaId = uploaded.value.id,
+                        )
                     ) {
-                        is DolabResult.Success -> rollback.session
-                        is DolabResult.Failure -> rollback.session ?: uploaded.session ?: activeSession
+                        is DolabResult.Success -> DolabResult.Success(Unit, note.session)
+                        is DolabResult.Failure -> {
+                            val rollbackSession = when (
+                                val rollback = dolabRepository.deleteMedia(note.session ?: activeSession, uploaded.value)
+                            ) {
+                                is DolabResult.Success -> rollback.session
+                                is DolabResult.Failure -> rollback.session ?: note.session ?: activeSession
+                            }
+                            DolabResult.Failure(
+                                note.message,
+                                rollbackSession,
+                                unauthorized = note.unauthorized,
+                                network = note.network,
+                            )
+                        }
                     }
-                    DolabResult.Failure(
-                        uploaded.message,
-                        rollbackSession,
-                        unauthorized = uploaded.unauthorized,
-                        network = uploaded.network,
-                    )
                 }
             }
         } finally {
@@ -208,7 +213,7 @@ fun buildDolabDirectShareables(workspace: DolabWorkspace): List<DolabDirectShare
 
     workspace.items
         .asSequence()
-        .filter { it.status != DolabItemStatus.ARCHIVED }
+        .filter { it.status != DolabItemStatus.ARCHIVED && it.source !in setOf("note", "voice") }
         .take(8)
         .forEach { item ->
             val title = item.title?.trim().takeUnless { it.isNullOrEmpty() } ?: "حاجة من دولابك"

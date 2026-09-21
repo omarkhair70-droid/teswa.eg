@@ -15,6 +15,8 @@ class DolabStateHolder(
         private set
     var filter by mutableStateOf(DolabFilter.ALL)
         private set
+    var query by mutableStateOf("")
+        private set
     var refreshing by mutableStateOf(false)
         private set
     var workingId by mutableStateOf<String?>(null)
@@ -40,6 +42,10 @@ class DolabStateHolder(
         filter = value
     }
 
+    fun updateQuery(value: String) {
+        query = value.take(120)
+    }
+
     fun clearMessage() {
         message = null
         messageIsError = false
@@ -51,15 +57,49 @@ class DolabStateHolder(
         else -> null
     }
 
-    fun visibleItems(): List<DolabItem> = workspace()?.items.orEmpty().filter { item ->
-        when (filter) {
-            DolabFilter.ALL -> true
-            DolabFilter.IN_PROGRESS -> item.status == DolabItemStatus.DRAFT
-            DolabFilter.READY -> item.status == DolabItemStatus.READY
-            DolabFilter.PUBLISHED -> item.status == DolabItemStatus.PUBLISHED || item.status == DolabItemStatus.EXCHANGED
-            DolabFilter.ARCHIVED -> item.status == DolabItemStatus.ARCHIVED
+    fun visibleItems(): List<DolabItem> {
+        val current = workspace() ?: return emptyList()
+        val needle = query.trim().lowercase()
+        return current.items.filter { item ->
+            val statusMatches = when (filter) {
+                DolabFilter.ALL -> true
+                DolabFilter.IN_PROGRESS -> item.status == DolabItemStatus.DRAFT
+                DolabFilter.READY -> item.status == DolabItemStatus.READY
+                DolabFilter.PUBLISHED -> item.status == DolabItemStatus.PUBLISHED || item.status == DolabItemStatus.EXCHANGED
+                DolabFilter.ARCHIVED -> item.status == DolabItemStatus.ARCHIVED
+            }
+            !item.isLegacyStandaloneTrace(current) && statusMatches && item.matches(needle)
         }
     }
+
+    fun visibleLooseNotes(): List<DolabNote> {
+        if (filter != DolabFilter.ALL) return emptyList()
+        val needle = query.trim().lowercase()
+        return workspace()?.notes.orEmpty()
+            .filter { it.dolabItemId == null }
+            .filter { needle.isBlank() || it.body.orEmpty().lowercase().contains(needle) }
+    }
+
+    fun visibleLegacyTraceItems(): List<DolabItem> {
+        if (filter != DolabFilter.ALL) return emptyList()
+        val current = workspace() ?: return emptyList()
+        val needle = query.trim().lowercase()
+        return current.items.filter { it.isLegacyStandaloneTrace(current) && it.matches(needle) }
+    }
+
+    fun hasSearchableContent(): Boolean {
+        val current = workspace() ?: return false
+        return current.items.size + current.notes.size + current.media.size > 4
+    }
+
+    private fun DolabItem.matches(needle: String): Boolean {
+        if (needle.isBlank()) return true
+        return listOf(title, description, category, condition, exchangeIntent)
+            .any { it.orEmpty().lowercase().contains(needle) }
+    }
+
+    private fun DolabItem.isLegacyStandaloneTrace(workspace: DolabWorkspace): Boolean =
+        source == "note" && workspace.mediaFor(id).isEmpty()
 
     suspend fun load(refresh: Boolean = false) {
         sessionExpired = false

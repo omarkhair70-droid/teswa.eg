@@ -42,17 +42,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.LocalContentImage
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaActionSheet
 import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaIconAction
+import com.teswa.mobile.ui.system.TeswaIcons
 import com.teswa.mobile.ui.system.TeswaInlineMessage
 import com.teswa.mobile.ui.system.TeswaLayout
 import com.teswa.mobile.ui.system.TeswaMark
 import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaRadius
+import com.teswa.mobile.ui.system.TeswaSearchField
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaTextField
@@ -68,6 +72,8 @@ import kotlinx.coroutines.launch
 internal fun DolabPrivateMasthead(
     holder: DolabStateHolder,
     onCreate: () -> Unit,
+    searchOpen: Boolean,
+    onToggleSearch: () -> Unit,
 ) {
     val items = holder.workspace()?.items.orEmpty()
     val ready = items.count { it.status == DolabItemStatus.READY }
@@ -95,9 +101,25 @@ internal fun DolabPrivateMasthead(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            if (holder.hasSearchableContent() || searchOpen) {
+                TeswaIconAction(
+                    icon = TeswaIcons.Search,
+                    contentDescription = if (searchOpen) "اقفل البحث" else "دور في دولابك",
+                    onClick = onToggleSearch,
+                )
+            }
             TextButton(onClick = onCreate) {
                 Text("حط حاجة", fontWeight = FontWeight.SemiBold)
             }
+        }
+
+        if (searchOpen) {
+            TeswaSearchField(
+                query = holder.query,
+                onQueryChange = holder::updateQuery,
+                onSearch = {},
+                placeholder = "دور في حاجاتك وملاحظاتك",
+            )
         }
 
         DolabLifecycleRail(
@@ -154,6 +176,149 @@ private fun DolabLifecycleRail(
 
 
 
+
+
+@Composable
+internal fun DolabLooseTracePreview(
+    holder: DolabStateHolder,
+    workspace: DolabWorkspace,
+    notes: List<DolabNote>,
+    legacyItems: List<DolabItem>,
+    onOpenLegacy: (DolabItem) -> Unit,
+    onOpenAll: () -> Unit,
+) {
+    val total = notes.size + legacyItems.size
+    if (total == 0) return
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(28.dp)
+                    .height(2.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = .7f)),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "على جنب",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "ملاحظات وآثار حفظتها من الكلام أو وإنت بتفكر.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (total > 3) {
+                TextButton(onClick = onOpenAll) { Text("شوف الكل") }
+            }
+        }
+
+        notes.take(3).forEach { note ->
+            DolabLooseNoteRow(holder, workspace, note)
+        }
+        if (notes.size < 3) {
+            legacyItems.take(3 - notes.size).forEach { item ->
+                DolabLegacyTraceRow(item = item, onOpen = { onOpenLegacy(item) })
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DolabLooseNoteRow(
+    holder: DolabStateHolder,
+    workspace: DolabWorkspace,
+    note: DolabNote,
+    modifier: Modifier = Modifier,
+    onDelete: (() -> Unit)? = null,
+) {
+    val linkedMedia = note.mediaId?.let { id -> workspace.media.firstOrNull { it.id == id } }
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .28f),
+        shape = RoundedCornerShape(TeswaRadius.md),
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = looseNoteLabel(note.noteType),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) { Text("شيل") }
+                }
+            }
+            note.body?.takeIf(String::isNotBlank)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (note.noteType == "voice" && linkedMedia != null) {
+                VoiceMessagePlayer(linkedMedia.durationMs?.toInt()) {
+                    holder.mediaUrl(linkedMedia)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DolabLegacyTraceRow(
+    item: DolabItem,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(vertical = TeswaSpacing.xs),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+    ) {
+        Text(
+            text = "محفوظة من نسخة أقدم",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = item.description?.takeIf(String::isNotBlank)
+                ?: item.title?.takeIf(String::isNotBlank)
+                ?: "أثر محفوظ في دولابك",
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun looseNoteLabel(type: String): String = when (type) {
+    "voice" -> "تسجيل محفوظ"
+    "idea" -> "فكرة"
+    "checklist" -> "قائمة"
+    else -> "ملاحظة محفوظة"
+}
 
 @Composable
 internal fun DolabPrivateTraceRail(
@@ -454,6 +619,28 @@ internal fun DolabEmptyPrivateShelf(
 }
 
 
+
+@Composable
+internal fun DolabEmptySearchState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = TeswaSpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        Text(
+            text = "ملقيناش حاجة بالاسم ده",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = "جرّب كلمة من اسم الحاجة، حالتها، أو ملاحظة محفوظة.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 internal fun DolabEmptyLifecycleState(
     filter: DolabFilter,
@@ -606,16 +793,20 @@ private fun DolabShelfSnapshot(
             )
 
             if (item.status == DolabItemStatus.PUBLISHED) {
-                Box(
+                Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = TeswaSpacing.md)
-                        .size(width = 42.dp, height = 3.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            RoundedCornerShape(999.dp),
-                        ),
-                )
+                        .padding(TeswaSpacing.sm),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .9f),
+                    shape = RoundedCornerShape(TeswaRadius.sm),
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.PutIntoPlay,
+                        color = MaterialTheme.colorScheme.primary,
+                        size = 30.dp,
+                        modifier = Modifier.padding(TeswaSpacing.xs),
+                    )
+                }
             }
         }
 

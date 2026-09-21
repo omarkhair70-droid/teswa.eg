@@ -25,11 +25,17 @@ interface DolabRepository {
     suspend fun createItem(session: AuthSession, draft: DolabItemDraft): DolabResult<DolabItem>
     suspend fun updateItem(session: AuthSession, item: DolabItem, draft: DolabItemDraft): DolabResult<DolabItem>
     suspend fun deleteItem(session: AuthSession, itemId: String): DolabResult<Unit>
-    suspend fun createNote(session: AuthSession, itemId: String, body: String): DolabResult<DolabNote>
+    suspend fun createNote(
+        session: AuthSession,
+        itemId: String?,
+        body: String,
+        noteType: String = "text",
+        mediaId: String? = null,
+    ): DolabResult<DolabNote>
     suspend fun deleteNote(session: AuthSession, noteId: String): DolabResult<Unit>
     suspend fun uploadMedia(
         session: AuthSession,
-        itemId: String,
+        itemId: String?,
         media: DolabPendingMedia,
         sortOrder: Int,
         onProgress: (Int) -> Unit,
@@ -86,21 +92,34 @@ class OracleDolabRepository(
             "تعذر حذف الحاجة من الدولاب.",
         )
 
-    override suspend fun createNote(session: AuthSession, itemId: String, body: String): DolabResult<DolabNote> {
+    override suspend fun createNote(
+        session: AuthSession,
+        itemId: String?,
+        body: String,
+        noteType: String,
+        mediaId: String?,
+    ): DolabResult<DolabNote> {
         val clean = body.trim()
         if (clean.isEmpty() || clean.length > 8_000) return DolabResult.Failure("الملاحظة لازم تكون من 1 إلى 8000 حرف.", session)
+        if (noteType !in setOf("text", "voice", "idea", "checklist")) {
+            return DolabResult.Failure("نوع الملاحظة غير مدعوم.", session)
+        }
         val request = OracleRequest(
             OracleHttpMethod.POST,
             "/v1/dolab/notes",
-            JSONObject().put("userId", session.user.id).put("body", clean).put("noteType", "text")
-                .put("dolabItemId", itemId).put("mediaId", JSONObject.NULL),
+            JSONObject()
+                .put("userId", session.user.id)
+                .put("body", clean)
+                .put("noteType", noteType)
+                .put("dolabItemId", itemId ?: JSONObject.NULL)
+                .put("mediaId", mediaId ?: JSONObject.NULL),
         )
         return when (val result = executor.execute(session, request)) {
             is AuthenticatedOracleResult.Response -> when (result.value.status) {
                 201 -> parseNote(result.value.body.optJSONObject("note"))?.let { DolabResult.Success(it, result.session) }
                     ?: DolabResult.Failure("الخادم رجّع ملاحظة غير مكتملة.", result.session)
                 401 -> expired(result.session)
-                404 -> DolabResult.Failure("الحاجة دي مش موجودة في دولابك.", result.session)
+                404 -> DolabResult.Failure("الحاجة أو الميديا المرتبطة بالملاحظة مش موجودة في دولابك.", result.session)
                 else -> DolabResult.Failure("تعذر إضافة الملاحظة (${result.value.status}).", result.session)
             }
             else -> result.failure("تعذر إضافة الملاحظة الآن.")
@@ -116,7 +135,7 @@ class OracleDolabRepository(
 
     override suspend fun uploadMedia(
         session: AuthSession,
-        itemId: String,
+        itemId: String?,
         media: DolabPendingMedia,
         sortOrder: Int,
         onProgress: (Int) -> Unit,
@@ -124,7 +143,7 @@ class OracleDolabRepository(
         media.validate()?.let { return DolabResult.Failure(it, session) }
         val objectRef = DolabMediaObject(
             purpose = "dolab_media",
-            objectKey = "${session.user.id}/$itemId/${UUID.randomUUID()}-${safeFileName(media.displayName)}",
+            objectKey = "${session.user.id}/${itemId ?: "loose"}/${UUID.randomUUID()}-${safeFileName(media.displayName)}",
             contentType = media.mimeType,
             sizeBytes = media.sizeBytes,
         )
@@ -262,13 +281,13 @@ class OracleDolabRepository(
 
     private suspend fun createMediaRow(
         session: AuthSession,
-        itemId: String,
+        itemId: String?,
         media: DolabPendingMedia,
         storagePath: String,
         sortOrder: Int,
     ): DolabResult<DolabMedia> {
         val input = JSONObject()
-            .put("dolabItemId", itemId)
+            .put("dolabItemId", itemId ?: JSONObject.NULL)
             .put("mediaType", media.mediaType)
             .put("storagePath", storagePath)
             .put("durationMs", media.durationMs ?: JSONObject.NULL)
