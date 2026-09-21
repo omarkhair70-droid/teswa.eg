@@ -29,10 +29,6 @@ class OffersStateHolder(
     var acceptedDealId by mutableStateOf<String?>(null)
         private set
 
-    internal fun stateForTest(inbox: OffersInbox) {
-        state = OffersUiState.Content(inbox)
-    }
-
     fun updateSession(updated: AuthSession) {
         if (updated.user.id == session.user.id && updated.accessToken != session.accessToken) session = updated
     }
