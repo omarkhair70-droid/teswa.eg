@@ -61,9 +61,19 @@ class StoryMediaAuthorizer:
     def __init__(self, db=None): self.db=db or PgWriteRunner()
     def can_read(self, user_id, key):
         if not isinstance(key,str) or not key or len(key)>1024: return False
-        result=self.db.query(user_id,"""SELECT json_build_object('allowed',EXISTS(
-          SELECT 1 FROM public.stories s WHERE s.expires_at>now()
-          AND %s IN(s.media_storage_path,s.media_thumbnail_storage_path)))""" % sql_text(key))
+        result=self.db.query(user_id,"""SELECT json_build_object('allowed',
+          EXISTS(
+            SELECT 1 FROM public.stories s
+            WHERE s.expires_at>now()
+              AND %s IN(s.media_storage_path,s.media_thumbnail_storage_path)
+          )
+          OR EXISTS(
+            SELECT 1 FROM public.contextual_conversations c
+            WHERE c.context_type='story_reply'
+              AND c.context_media_storage_path_snapshot=%s
+              AND '%s'::uuid IN(c.starter_id,c.recipient_id)
+          )
+        )""" % (sql_text(key),sql_text(key),user_id))
         return isinstance(result,dict) and result.get('allowed') is True
 
 
