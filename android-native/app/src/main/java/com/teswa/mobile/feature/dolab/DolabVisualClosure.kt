@@ -161,6 +161,7 @@ internal fun DolabPrivateObjectPortrait(
     item: DolabItem,
     media: List<DolabMedia>,
     notesCount: Int,
+    modifier: Modifier = Modifier,
 ) {
     val firstImage = media.firstOrNull { it.mediaType == "image" }
     var imageUrl by remember(firstImage?.id, firstImage?.storagePath) { mutableStateOf<String?>(null) }
@@ -170,7 +171,7 @@ internal fun DolabPrivateObjectPortrait(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
     ) {
         Box(
