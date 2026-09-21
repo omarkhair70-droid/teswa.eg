@@ -5,7 +5,6 @@ import com.teswa.mobile.auth.AuthUser
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OffersStateHolderTest {
@@ -17,11 +16,30 @@ class OffersStateHolderTest {
     @Test
     fun acceptedDealCanBeConsumedOnlyOnce() = runBlocking {
         val dealId = "66666666-6666-6666-6666-666666666666"
+        val offer = OfferSummary(
+            "22222222-2222-2222-2222-222222222222",
+            "pending",
+            null,
+            OfferItemSummary("33333333-3333-3333-3333-333333333333", "مطلوب", null),
+            OfferItemSummary("44444444-4444-4444-4444-444444444444", "معروض", null),
+            "55555555-5555-5555-5555-555555555555",
+            session.user.id,
+            null,
+            null,
+            OfferDirection.INCOMING,
+        )
         val repository = object : OffersRepository {
-            override suspend fun load(session: AuthSession) = OffersResult.Success(OffersInbox(emptyList(), emptyList()), session)
+            override suspend fun load(session: AuthSession) =
+                OffersResult.Success(OffersInbox(listOf(offer), emptyList()), session)
+
             override suspend fun act(session: AuthSession, offer: OfferSummary, action: OfferAction) =
                 OffersResult.Success(OfferActionOutcome(dealId), session)
-            override suspend fun loadCreation(session: AuthSession, requestedItemId: String): OffersResult<OfferCreationContext> = error("Not used")
+
+            override suspend fun loadCreation(
+                session: AuthSession,
+                requestedItemId: String,
+            ): OffersResult<OfferCreationContext> = error("Not used")
+
             override suspend fun create(
                 session: AuthSession,
                 requestedItemId: String,
@@ -32,15 +50,6 @@ class OffersStateHolderTest {
         }
         val holder = OffersStateHolder(session, repository)
         holder.load()
-
-        val offer = OfferSummary(
-                "22222222-2222-2222-2222-222222222222", "pending", null,
-                OfferItemSummary("33333333-3333-3333-3333-333333333333", "مطلوب", null),
-                OfferItemSummary("44444444-4444-4444-4444-444444444444", "معروض", null),
-                "55555555-5555-5555-5555-555555555555", session.user.id, null, null,
-                OfferDirection.INCOMING,
-            )
-        holder.stateForTest(OffersInbox(listOf(offer), emptyList()))
         holder.act(offer, OfferAction.ACCEPT)
 
         assertEquals(dealId, holder.consumeAcceptedDeal())
