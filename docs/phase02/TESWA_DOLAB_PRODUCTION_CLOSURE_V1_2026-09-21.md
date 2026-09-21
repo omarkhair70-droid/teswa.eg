@@ -1,10 +1,10 @@
 # TESWA DOLAB — PRODUCTION CLOSURE CONTRACT V1
 
 **Date:** 2026-09-21  
-**Status:** REOPENED — v33 DEVICE FINDINGS PATCH  
+**Status:** PRODUCT CLOSED — FINAL VISUAL RECHECK WAIVED BY USER  
 **Root destination:** MINE / دولابي  
 **Baseline:** v32 real-device acceptance  
-**Last accepted build:** versionCode 32 / 1.0.16
+**Product closure target:** versionCode 33 / 1.0.17
 
 
 ## Closure checkpoint — v32
@@ -263,3 +263,15 @@ Dolab is not closed until all are green:
 - final real-device visual pass.
 
 No next root surface gets called production-closed before this contract is satisfied.
+
+## Final closure decision
+
+The product owner explicitly waived an additional visual inspection after the v33 gallery/fullscreen/trace patch.
+
+This means Dolab is **product-closed** from this checkpoint forward.
+
+- no new Dolab product redesign is required before moving to BETWEEN US;
+- the v33 Internal Testing workflow may continue as technical release proof;
+- if v33 publication fails, fix only the failed technical/release gate;
+- reopen Dolab product design only for a concrete regression or broken behavior, not for speculative polish.
+
