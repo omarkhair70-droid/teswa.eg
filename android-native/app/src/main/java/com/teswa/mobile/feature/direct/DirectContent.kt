@@ -438,7 +438,7 @@ private fun DolabPickerButton(
     var pickerError by remember { mutableStateOf<String?>(null) }
 
     TeswaSecondaryAction(
-        text = if (loading) "بنفتح دولابك…" else "هات حاجة من دولابي",
+        text = if (loading) "بنفتح دولابك…" else "هات من دولابي",
         icon = TeswaIcons.Mine,
         modifier = modifier,
         enabled = !loading,
@@ -465,8 +465,8 @@ private fun DolabPickerButton(
 
     if (open) {
         TeswaActionSheet(
-            title = "اختار أثر من دولابك",
-            supporting = "هينزل كنص داخل الكلام المباشر، لكن الأصل يفضل محفوظ في دولابك.",
+            title = "هات حاجة أو ملاحظة من دولابك",
+            supporting = "إنت اللي بتختار إيه يطلع من مساحتك الخاصة. الاختيار بيتحط في الرسالة ومش بيتبعت غير لما تضغط إرسال.",
             onDismiss = { open = false },
         ) {
             when {
@@ -478,7 +478,7 @@ private fun DolabPickerButton(
                 )
                 options.isEmpty() -> TeswaEmptyField(
                     title = "مفيش حاجة مناسبة للمشاركة",
-                    body = "احفظ حاجة أو ملاحظة في دولابك الأول، وبعدها تقدر تجيب أثر منها للكلام.",
+                    body = "حط حاجة أو سيب ملاحظة في دولابك الأول، وبعدها اسحب اللي تحتاجه للكلام من هنا.",
                 )
                 else -> LazyColumn(
                     modifier = Modifier
