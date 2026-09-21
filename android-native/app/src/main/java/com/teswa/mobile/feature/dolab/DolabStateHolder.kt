@@ -70,7 +70,8 @@ class DolabStateHolder(
                 DolabFilter.ALL -> true
                 DolabFilter.IN_PROGRESS -> item.status == DolabItemStatus.DRAFT
                 DolabFilter.READY -> item.status == DolabItemStatus.READY
-                DolabFilter.PUBLISHED -> item.status == DolabItemStatus.PUBLISHED || item.status == DolabItemStatus.EXCHANGED
+                DolabFilter.PUBLISHED -> item.status == DolabItemStatus.PUBLISHED
+                DolabFilter.EXCHANGED -> item.status == DolabItemStatus.EXCHANGED
                 DolabFilter.ARCHIVED -> item.status == DolabItemStatus.ARCHIVED
             }
             !item.isLegacyStandaloneTrace(current) && statusMatches && item.matches(needle)

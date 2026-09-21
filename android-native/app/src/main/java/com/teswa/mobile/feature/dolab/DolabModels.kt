@@ -108,6 +108,7 @@ enum class DolabFilter {
     IN_PROGRESS,
     READY,
     PUBLISHED,
+    EXCHANGED,
     ARCHIVED,
 }
 

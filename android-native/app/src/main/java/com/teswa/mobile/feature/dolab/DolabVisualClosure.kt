@@ -136,6 +136,7 @@ internal fun DolabPrivateMasthead(
 
         DolabLifecycleRail(
             selected = holder.filter,
+            items = items,
             onSelect = holder::selectFilter,
         )
     }
@@ -144,8 +145,17 @@ internal fun DolabPrivateMasthead(
 @Composable
 private fun DolabLifecycleRail(
     selected: DolabFilter,
+    items: List<DolabItem>,
     onSelect: (DolabFilter) -> Unit,
 ) {
+    val filters = buildList {
+        add(DolabFilter.ALL)
+        add(DolabFilter.IN_PROGRESS)
+        add(DolabFilter.READY)
+        add(DolabFilter.PUBLISHED)
+        if (items.any { it.status == DolabItemStatus.EXCHANGED }) add(DolabFilter.EXCHANGED)
+        if (items.any { it.status == DolabItemStatus.ARCHIVED }) add(DolabFilter.ARCHIVED)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -153,7 +163,7 @@ private fun DolabLifecycleRail(
         horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
         verticalAlignment = Alignment.Bottom,
     ) {
-        DolabFilter.entries.forEach { filter ->
+        filters.forEach { filter ->
             val active = selected == filter
             Column(
                 modifier = Modifier
@@ -1293,6 +1303,7 @@ private fun dolabFilterLabel(filter: DolabFilter): String = when (filter) {
     DolabFilter.IN_PROGRESS -> "بجهزها"
     DolabFilter.READY -> "جاهزة"
     DolabFilter.PUBLISHED -> "في اللعب"
+    DolabFilter.EXCHANGED -> "اتبدّلت"
     DolabFilter.ARCHIVED -> "أرشيف"
 }
 
@@ -1301,6 +1312,7 @@ private fun dolabFilterHint(filter: DolabFilter): String = when (filter) {
     DolabFilter.IN_PROGRESS -> "لسه خاصة بيك وبتاخد شكلها."
     DolabFilter.READY -> "جاهزة، ولسه قرار خروجها بإيدك."
     DolabFilter.PUBLISHED -> "عدّت حدود الدولاب وبقت في اللعب."
+    DolabFilter.EXCHANGED -> "التبديل حصل، والحاجة بقت جزء من تاريخك."
     DolabFilter.ARCHIVED -> "متحفظة بهدوء، ولسه جزء من تاريخها."
 }
 
