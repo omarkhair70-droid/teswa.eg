@@ -331,6 +331,68 @@ class DolabStateHolder(
         }
     }
 
+    suspend fun addVoiceTrace(item: DolabItem, pending: DolabPendingMedia): Boolean {
+        if (workingId != null) return false
+        pending.validate()?.let { show(it, error = true); return false }
+        if (pending.mediaType != "audio") {
+            show("التسجيل الصوتي غير صالح.", error = true)
+            return false
+        }
+
+        workingId = item.id
+        mediaUploadProgress = DolabMediaUploadProgress(item.id, 0)
+        clearMessage()
+
+        val sortOrder = workspace()?.mediaFor(item.id)?.size ?: 0
+        val uploaded = repository.uploadMedia(session, item.id, pending, sortOrder) { percent ->
+            mediaUploadProgress = DolabMediaUploadProgress(item.id, percent)
+        }
+
+        if (uploaded is DolabResult.Failure) {
+            uploaded.session?.let { session = it }
+            workingId = null
+            mediaUploadProgress = null
+            sessionExpired = uploaded.unauthorized
+            show(uploaded.message, error = true)
+            return false
+        }
+
+        uploaded as DolabResult.Success
+        session = uploaded.session
+
+        val note = repository.createNote(
+            session = session,
+            itemId = item.id,
+            body = "تسجيل صوتي محفوظ مع الحاجة",
+            noteType = "voice",
+            mediaId = uploaded.value.id,
+        )
+
+        workingId = null
+        mediaUploadProgress = null
+
+        return when (note) {
+            is DolabResult.Success -> {
+                session = note.session
+                val current = workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
+                state = current.copy(
+                    media = current.media.filterNot { it.id == uploaded.value.id } + uploaded.value,
+                    notes = listOf(note.value) + current.notes.filterNot { it.id == note.value.id },
+                ).asUiState()
+                show("التسجيل اتحفظ مع الحاجة.")
+                true
+            }
+            is DolabResult.Failure -> {
+                note.session?.let { session = it }
+                val rollback = repository.deleteMedia(session, uploaded.value)
+                if (rollback is DolabResult.Success) session = rollback.session
+                sessionExpired = note.unauthorized
+                show(note.message, error = true)
+                false
+            }
+        }
+    }
+
     suspend fun addMedia(item: DolabItem, pending: DolabPendingMedia): Boolean {
         if (workingId != null) return false
         pending.validate()?.let { show(it, error = true); return false }
