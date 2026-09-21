@@ -1,10 +1,10 @@
-# TESWA BETWEEN US — INTERNAL v34 DEVICE HANDOFF
+# TESWA BETWEEN US — INTERNAL DEVICE HANDOFF
 
 **Date:** 2026-09-21  
 **Repository:** `omarkhair70-droid/teswa.eg`  
 **Active branch:** `audit/native-product-reality-20260917`  
 **Parent PR:** #526 — **Draft / Unmerged**  
-**Device candidate source:** `d311d8914b3b0476a6cca901af1b6850c993285f`
+**Current device candidate source:** `f7f8da10f98e3a4f7348d7923248c76eb12e59ed`
 
 ## Status
 
@@ -15,16 +15,30 @@ Do **not** add another feature slice before real-device acceptance.
 Android candidate:
 
 - package: `com.teswa.mobile`
-- versionCode: **34**
-- versionName: **1.0.18**
+- versionCode: **35**
+- versionName: **1.0.19**
 - track: **Google Play Internal Testing**
 - status: **published / completed**
 
 ## Candidate validation
 
-Source candidate:
+Previous v34 source candidate:
 
 `d311d8914b3b0476a6cca901af1b6850c993285f`
+
+v34 was published successfully, then real-device review found a concrete root navigation regression: tapping a waiting Offer from BETWEEN US did not open that specific relationship.
+
+Regression fix:
+
+- `6a3ae9b37d8928c800d50e26657a49f86ea8732d` — root Offer rows now pass the full Offer identity;
+- the selected Offer id + direction are preserved into the Offer drill-down;
+- the drill-down focuses the exact tapped Offer instead of only opening the generic incoming/sent lane;
+- Android Native Foundation #300 — SUCCESS;
+- Between Us Oracle Contracts #6 — SUCCESS.
+
+Current v35 source candidate:
+
+`f7f8da10f98e3a4f7348d7923248c76eb12e59ed`
 
 Validation on that SHA:
 
@@ -41,31 +55,31 @@ Validation on that SHA:
 
 ## Immutable Internal release
 
-Release branch:
+Current release branch:
 
-`release/teswa-internal-20260921-v34`
+`release/teswa-internal-20260921-v35`
 
 One-shot release commit:
 
-`de1d9d5c72428cc510471907b1babc0e8145739a`
+`ea264cd2511389411e7900b8c80856ef02f932b9`
 
 Google Play workflow:
 
 - name: **Teswa Native Internal v34 Once**
-- run id: `35591612222`
+- run id: `35594649979`
 - result: **SUCCESS**
-- signed AAB artifact: `teswa-native-internal-v34-1`
-- artifact id: `10634279386`
+- signed AAB artifact: `teswa-native-internal-v35-1`
+- artifact id: `10636720024`
 - AAB SHA-256:
-  `2548728b7b22cd8a78edb785acfdbe4631d5eff4f12bec6dd5d70906cb7cc9dc`
+  `67cb03470c7d1c7e87c43268ace4ef69237d3f3809b42accd4c87a1d5cede607`
 - release API:
   `https://core01.tail6afd9b.ts.net`
 
 Authoritative Play proof:
 
-`PLAY_PUBLISH=PASS package=com.teswa.mobile versionCode=34 track=internal status=completed`
+`PLAY_PUBLISH=PASS package=com.teswa.mobile versionCode=35 track=internal status=completed`
 
-The release branch is now an immutable release evidence branch. Do not add product changes to it.
+The v35 release branch is now an immutable release evidence branch. Do not add product changes to it.
 
 ## Release tooling correction included in v34 candidate
 
@@ -82,7 +96,7 @@ This prevents a valid future candidate from being mislabeled as non-acceptance s
 
 The next action is **real-device acceptance only**.
 
-1. Update the existing Teswa installation from Google Play Internal Testing to **34 / 1.0.18**.
+1. Update the existing Teswa installation from Google Play Internal Testing to **35 / 1.0.19**.
    - do not uninstall;
    - do not clear app data.
 2. From the repository root, run:

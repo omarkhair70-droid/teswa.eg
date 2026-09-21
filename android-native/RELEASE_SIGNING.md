@@ -47,13 +47,11 @@ Expected artifact:
 
 `android-native\app\build\outputs\bundle\release\app-release.aab`
 
-Current BETWEEN US Internal release candidate:
+Release identity:
 
 - package: `com.teswa.mobile`
-- versionCode: `34`
-- versionName: `1.0.18`
 
-The authoritative candidate version lives in `android-native/app/build.gradle.kts`. The release gate and device smoke helper read it from Gradle so future candidates cannot silently inherit a stale hardcoded acceptance version.
+The authoritative candidate version always lives in `android-native/app/build.gradle.kts`. The release gate and device smoke helper read versionCode/versionName from Gradle so the release documentation cannot silently become the acceptance source of truth.
 
 ## Manual certificate inspection
 
