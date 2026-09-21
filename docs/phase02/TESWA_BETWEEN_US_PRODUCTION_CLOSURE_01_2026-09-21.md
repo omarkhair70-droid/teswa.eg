@@ -1,7 +1,7 @@
 # TESWA BETWEEN US — PRODUCTION CLOSURE 01
 
 **Date:** 2026-09-21  
-**Status:** IMPLEMENTATION COMPLETE — VALIDATION / DEVICE CANDIDATE PENDING  
+**Status:** IMPLEMENTATION + CONTRACT VALIDATION COMPLETE — DEVICE CANDIDATE PENDING  
 **Parent anchor:** `TESWA_ANCHOR_03_BETWEEN_US_V1_2026-09-17.md`
 
 ## Product law
@@ -127,12 +127,25 @@ Reject any implementation that becomes:
 - Deal completion → root-state propagation test;
 - Contextual message reporting Android + Oracle tests.
 
-## Remaining gates before device candidate
+## Validation checkpoint — green
 
-1. latest exact-head **Android Native Foundation** must be green;
-2. **Between Us Oracle Contracts** must be green for media/contextual/moderation Python contracts;
-3. version bump to the next immutable candidate (**versionCode 34 / 1.0.18**);
-4. signed Internal Testing publication;
-5. real-device review of root → offer → deal → direct → contextual → history.
+**Validated checkpoint:** `e7e52020668c24999a01660458f806fdd84acb03`
 
-No speculative feature expansion should occur before these gates. Any new change must correspond to a concrete failing contract or real-device regression.
+- Android Native Foundation **#296** — **SUCCESS**
+  - run id: `35564210910`
+- Between Us Oracle Contracts **#2** — **SUCCESS**
+  - run id: `35564210864`
+- PR #526 remains **Draft / Unmerged** by design.
+
+The implementation itself is therefore code/contract-green. The remaining work is release/device proof, not more speculative product expansion.
+
+## Remaining gates before product closure
+
+1. bump to the next immutable candidate: **versionCode 34 / 1.0.18**;
+2. publish signed AAB to Google Play Internal Testing;
+3. real-device review:
+   root → offer → accepted deal → Deal Room → Direct → Contextual → history;
+4. fix only concrete device regressions;
+5. record final device-accepted checkpoint, then decide PR #526 closure/merge separately.
+
+Do not reopen product architecture unless a failing contract or real-device regression proves a real gap.
