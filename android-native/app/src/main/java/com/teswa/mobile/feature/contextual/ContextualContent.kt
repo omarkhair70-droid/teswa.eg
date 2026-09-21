@@ -1,5 +1,8 @@
 package com.teswa.mobile.feature.contextual
 
+import android.content.Intent
+import android.net.Uri
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,11 +20,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.teswa.mobile.feature.voice.VoiceComposer
+import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
@@ -102,12 +118,172 @@ fun ContextualContent(
                         TeswaPersonIdentity(
                             name = value.other.displayName ?: value.other.username ?: "مستخدم تِسوى",
                             avatarUrl = value.other.avatarUrl,
-                            supporting = value.latestBody ?: "الكلام بدأ من قصة",
-                            evidence = if (value.unreadCount > 0) "${value.unreadCount} جديد" else "سياق القصة محفوظ",
+                            supporting = value.latestBody
+                                ?: value.context.caption
+                                ?: if (value.context.mediaType == "video") "الكلام بدأ من فيديو" else "الكلام بدأ من قصة",
+                            evidence = if (value.unreadCount > 0) {
+                                "${value.unreadCount} جديد"
+                            } else {
+                                contextualOriginLabel(value.context)
+                            },
                             modifier = Modifier.weight(1f),
                         )
                         TeswaStatePill("من قصة", emphasis = TeswaEmphasis.Quiet)
                     }
+                }
+            }
+        }
+    }
+}
+
+private fun contextualOriginLabel(value: ContextualStoryContext): String = when {
+    !value.caption.isNullOrBlank() -> "من قصة: ${value.caption.take(42)}"
+    value.mediaType == "video" -> "بدأت من فيديو"
+    value.mediaType == "image" -> "بدأت من صورة"
+    else -> "سياق القصة محفوظ"
+}
+
+@Composable
+private fun ContextualOriginCard(
+    holder: ContextualStateHolder,
+    context: ContextualStoryContext,
+    mediaRepository: VoiceMediaRepository,
+) {
+    val androidContext = LocalContext.current
+    var signedUrl by remember(context.mediaStoragePath) { mutableStateOf<String?>(null) }
+    var mediaMissing by remember(context.mediaStoragePath) { mutableStateOf(false) }
+    var fullScreen by remember(context.storyId) { mutableStateOf(false) }
+
+    LaunchedEffect(context.mediaStoragePath) {
+        val path = context.mediaStoragePath
+        if (path.isNullOrBlank()) {
+            mediaMissing = true
+        } else {
+            when (val result = mediaRepository.signedUrl(holder.session, "story_media", path)) {
+                is VoiceMediaResult.Success -> {
+                    holder.updateSession(result.session)
+                    signedUrl = result.value
+                    mediaMissing = false
+                }
+                is VoiceMediaResult.Failure -> {
+                    result.session?.let(holder::updateSession)
+                    signedUrl = null
+                    mediaMissing = true
+                }
+            }
+        }
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .28f),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            Text(
+                text = "اللحظة اللي بدأت الكلام",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Bold,
+            )
+
+            if (context.mediaType == "image" && signedUrl != null) {
+                NetworkImage(
+                    url = signedUrl,
+                    contentDescription = context.caption ?: "القصة الأصلية",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clickable { fullScreen = true },
+                    contentScale = ContentScale.Crop,
+                )
+            } else if (context.mediaType == "video" && signedUrl != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            runCatching {
+                                androidContext.startActivity(
+                                    Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(Uri.parse(signedUrl), "video/*")
+                                    },
+                                )
+                            }.onFailure {
+                                holder.showMessage("مفيش تطبيق على الجهاز يفتح الفيديو ده.")
+                            }
+                        },
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .72f),
+                    shape = MaterialTheme.shapes.medium,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(TeswaSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                    ) {
+                        Text("فيديو من القصة", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "افتح الفيديو الأصلي",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = context.caption?.takeIf(String::isNotBlank)
+                    ?: when (context.mediaType) {
+                        "video" -> "القصة كانت فيديو"
+                        "image" -> "القصة كانت صورة"
+                        else -> "القصة الأصلية"
+                    },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            val trace = buildList {
+                context.createdAt?.take(10)?.takeIf(String::isNotBlank)?.let(::add)
+                if (mediaMissing && context.mediaStoragePath != null) add("الميديا نفسها لم تعد متاحة")
+            }.joinToString(" · ")
+            if (trace.isNotBlank()) {
+                Text(
+                    text = trace,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    if (fullScreen && signedUrl != null) {
+        Dialog(
+            onDismissRequest = { fullScreen = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+            ) {
+                NetworkImage(
+                    url = signedUrl,
+                    contentDescription = context.caption ?: "القصة الأصلية",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 64.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                TextButton(
+                    onClick = { fullScreen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(TeswaSpacing.lg),
+                ) {
+                    Text("إغلاق", color = Color.White)
                 }
             }
         }
@@ -131,12 +307,16 @@ private fun ContextualThreadContent(
             verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
         ) {
             TeswaArchiveLabel("CONTEXT / STORY")
+            ContextualOriginCard(
+                holder = holder,
+                context = thread.conversation.context,
+                mediaRepository = voiceMediaRepository,
+            )
             TeswaPersonIdentity(
                 name = thread.conversation.other.displayName ?: thread.conversation.other.username ?: "مستخدم تِسوى",
                 avatarUrl = thread.conversation.other.avatarUrl,
-                supporting = "الشخص اللي رد على اللحظة",
+                supporting = "الشخص اللي دخل الكلام من اللحظة دي",
             )
-            TeswaTraceNote("المحادثة دي موجودة لأن قصة سبقتها. السبب ده جزء من معناها، ومش بيتشال لما الرسائل تزيد.")
         }
 
         holder.message?.let { message ->
