@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +65,6 @@ import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaArchiveLabel
-import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaEvidenceLine
 import com.teswa.mobile.ui.system.TeswaExchangePair
@@ -132,11 +129,12 @@ fun MessagingScreen(
         contextualHolder.thread != null
 
     LaunchedEffect(focusedState) { onFocusedStateChanged(focusedState) }
-    BackHandler(enabled = focusedState) {
+    BackHandler(enabled = focusedState || mode != InboxMode.OVERVIEW) {
         when {
             holder.selectedConversation != null -> holder.closeThread()
             directHolder.selected != null || directHolder.composeTarget != null -> directHolder.close()
             contextualHolder.thread != null -> contextualHolder.close()
+            mode != InboxMode.OVERVIEW -> mode = InboxMode.OVERVIEW
         }
     }
 
@@ -220,7 +218,11 @@ fun MessagingScreen(
         BetweenUsMasthead(
             mode = mode,
             supporting = when (mode) {
-                InboxMode.OVERVIEW -> "كل حاجة مشتركة بدأت لأن طرفين لمسوا نفس الاحتمال."
+                InboxMode.OVERVIEW -> betweenUsRootSummary(
+                    holder.inboxState,
+                    offersHolder.state,
+                    directHolder.state,
+                )
                 InboxMode.MESSAGES -> unreadLabel(holder.inboxState)
                 InboxMode.OFFERS -> offerLabel(offersHolder.state)
                 InboxMode.DIRECT -> "كلام مباشر بدأ بطلب واضح، مش صندوق رسائل مفتوح."
@@ -243,7 +245,12 @@ fun MessagingScreen(
                 }
             },
         )
-        InboxModePicker(mode) { mode = it }
+        if (mode != InboxMode.OVERVIEW) {
+            BetweenUsDrillDownBack(
+                mode = mode,
+                onBack = { mode = InboxMode.OVERVIEW },
+            )
+        }
 
         if (mode == InboxMode.OVERVIEW) {
             BetweenUsOverview(
@@ -381,26 +388,60 @@ private fun BetweenUsMasthead(
                 onClick = onRefresh,
             )
         }
-        if (mode == InboxMode.OVERVIEW) {
-            TeswaTraceNote("العرض بداية علاقة، القبول يعمل صفقة، والصفقة ما تبقاش حقيقة إلا لما الطرفين يأكدوا اللي حصل برا الشاشة.")
-        }
     }
 }
 
 @Composable
-private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) {
+private fun BetweenUsDrillDownBack(
+    mode: InboxMode,
+    onBack: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+            .padding(horizontal = TeswaLayout.ScreenHorizontal),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TeswaChoiceChip("النشاط", selected == InboxMode.OVERVIEW, { onSelect(InboxMode.OVERVIEW) })
-        TeswaChoiceChip("العروض", selected == InboxMode.OFFERS, { onSelect(InboxMode.OFFERS) }, leadingIcon = TeswaIcons.Exchange)
-        TeswaChoiceChip("الصفقات", selected == InboxMode.MESSAGES, { onSelect(InboxMode.MESSAGES) }, leadingIcon = TeswaIcons.Accepted)
-        TeswaChoiceChip("مباشر", selected == InboxMode.DIRECT, { onSelect(InboxMode.DIRECT) }, leadingIcon = TeswaIcons.Conversation)
-        TeswaChoiceChip("ردود", selected == InboxMode.CONTEXTUAL, { onSelect(InboxMode.CONTEXTUAL) }, leadingIcon = TeswaIcons.Conversation)
+        TextButton(onClick = onBack) {
+            Text("رجوع لبيننا")
+        }
+        Text(
+            text = when (mode) {
+                InboxMode.MESSAGES -> "الصفقات"
+                InboxMode.OFFERS -> "العروض"
+                InboxMode.DIRECT -> "مباشر"
+                InboxMode.CONTEXTUAL -> "ردود"
+                InboxMode.OVERVIEW -> "بيننا"
+            },
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun betweenUsRootSummary(
+    dealsState: InboxUiState,
+    offersState: OffersUiState,
+    directState: DirectUiState,
+): String {
+    val deals = (dealsState as? InboxUiState.Content)?.items.orEmpty()
+    val offers = (offersState as? OffersUiState.Content)?.inbox
+    val direct = (directState as? DirectUiState.Ready)?.items.orEmpty()
+
+    val needsYou = offers?.incoming.orEmpty().count { it.status in setOf("pending", "thinking") } +
+        direct.count { it.requiresAction }
+    val active = deals.count { it.status in setOf("coordinating", "completed_pending_confirmation") }
+    val waiting = offers?.sent.orEmpty().count { it.status in setOf("pending", "thinking") }
+
+    return when {
+        needsYou == 1 -> "حاجة واحدة محتاجاك"
+        needsYou > 1 -> "$needsYou حاجات محتاجينك"
+        active == 1 -> "علاقة شغالة بينكم دلوقتي"
+        active > 1 -> "$active علاقات شغالة بينكم"
+        waiting == 1 -> "علاقة واحدة مستنية رد"
+        waiting > 1 -> "$waiting علاقات مستنية رد"
+        else -> "العلاقات اللي بتتكوّن بينك وبين الناس"
     }
 }
 
