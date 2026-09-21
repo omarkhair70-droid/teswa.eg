@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -87,11 +90,7 @@ internal fun DolabPrivateMasthead(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = when {
-                        items.isEmpty() -> "كل حاجة تبدأ هنا"
-                        ready > 0 -> "${items.size} حاجات عندك · ${ready} جاهزين للّعب"
-                        else -> "${items.size} حاجات عندك"
-                    },
+                    text = dolabMastheadSummary(items.size, ready),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -120,7 +119,7 @@ private fun DolabLifecycleRail(
         horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
         verticalAlignment = Alignment.Bottom,
     ) {
-        DolabFilter.entries.forEach { filter ->
+        DolabFilter.entries.reversed().forEach { filter ->
             val active = selected == filter
             Column(
                 modifier = Modifier
@@ -141,8 +140,8 @@ private fun DolabLifecycleRail(
                 )
                 Box(
                     modifier = Modifier
+                        .width(28.dp)
                         .height(2.dp)
-                        .fillMaxWidth()
                         .background(
                             if (active) MaterialTheme.colorScheme.primary else Color.Transparent,
                             RoundedCornerShape(999.dp),
@@ -566,6 +565,13 @@ private fun DolabShelfSnapshot(
         imageUrl = firstImage?.let { holder.mediaUrl(it) }
     }
 
+    val mediaHeight = when {
+        firstImage != null && large -> 248.dp
+        firstImage != null -> 156.dp
+        large -> 154.dp
+        else -> 112.dp
+    }
+
     Column(
         modifier = modifier.clickable(onClick = onOpen),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
@@ -573,7 +579,7 @@ private fun DolabShelfSnapshot(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (large) 248.dp else 156.dp)
+                .height(mediaHeight)
                 .clip(RoundedCornerShape(if (large) TeswaRadius.hero else TeswaRadius.lg))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)),
         ) {
@@ -581,7 +587,7 @@ private fun DolabShelfSnapshot(
                 NetworkImage(
                     url = imageUrl,
                     contentDescription = item.title ?: "حاجة من دولابك",
-                    modifier = Modifier.fillMaxWidth().height(if (large) 248.dp else 156.dp),
+                    modifier = Modifier.fillMaxWidth().height(mediaHeight),
                 )
             } else {
                 TeswaMarkIcon(
@@ -714,6 +720,7 @@ internal fun DolabObjectCaptureSheet(
     val context = LocalContext.current
     val resolver = remember(context) { DolabMediaResolver(context) }
     val scope = rememberCoroutineScope()
+    val sheetScroll = rememberScrollState()
 
     var pending by remember { mutableStateOf<DolabPendingMedia?>(null) }
     var title by remember { mutableStateOf("") }
@@ -771,8 +778,11 @@ internal fun DolabObjectCaptureSheet(
         supporting = if (pending == null) {
             "ابدأ بالحاجة نفسها. صورة الأول، والتفاصيل تيجي بعدها."
         } else {
-            "لسه خاصة بيك. سمّيها دلوقتي، وكمل أثرها براحتك بعد ما تدخل الدولاب."
+            "لسه خاصة بيك. سمّيها دلوقتي، وكمل أثرها بعد ما تدخل الدولاب."
         },
+        modifier = Modifier
+            .imePadding()
+            .verticalScroll(sheetScroll),
         onDismiss = { if (!holder.creating && holder.workingId == null) onDismiss() },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
@@ -827,7 +837,7 @@ internal fun DolabObjectCaptureSheet(
                     resolver = context.contentResolver,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(.92f)
+                        .aspectRatio(1.25f)
                         .clip(RoundedCornerShape(TeswaRadius.hero)),
                 )
 
@@ -836,12 +846,12 @@ internal fun DolabObjectCaptureSheet(
                     horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
                 ) {
                     TeswaSecondaryAction(
-                        text = "صورة تانية",
+                        text = "اختار صورة تانية",
                         onClick = { gallery.launch(DolabMediaResolver.SUPPORTED_IMAGE_TYPES.toTypedArray()) },
                         modifier = Modifier.weight(1f),
                     )
                     TeswaSecondaryAction(
-                        text = "صور من جديد",
+                        text = "صورها من جديد",
                         onClick = {
                             runCatching { resolver.createCameraTarget() }
                                 .onSuccess { target ->
@@ -917,6 +927,14 @@ internal fun DolabObjectCaptureSheet(
             }
         }
     }
+}
+
+private fun dolabMastheadSummary(total: Int, ready: Int): String = when {
+    total == 0 -> "كل حاجة تبدأ هنا"
+    ready <= 0 -> "$total حاجات عندك"
+    ready == 1 -> "$total حاجات عندك · 1 جاهزة للّعب"
+    ready == 2 -> "$total حاجات عندك · 2 جاهزين للّعب"
+    else -> "$total حاجات عندك · $ready جاهزين للّعب"
 }
 
 private fun dolabFilterLabel(filter: DolabFilter): String = when (filter) {
