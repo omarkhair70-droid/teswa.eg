@@ -500,7 +500,7 @@ private fun DealConversationRow(
                         conversation.latestMessage?.messageType == "voice" ->
                             "آخر أثر: رسالة صوتية"
                         !conversation.latestMessage?.body.isNullOrBlank() ->
-                            conversation.latestMessage!!.body
+                            conversation.latestMessage?.body.orEmpty()
                         else -> "لسه التنسيق بيبدأ"
                     },
                     modifier = Modifier.weight(1f),
