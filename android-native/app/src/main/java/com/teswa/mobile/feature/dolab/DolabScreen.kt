@@ -115,13 +115,12 @@ fun DolabScreen(
     }
 
     if (showCreate) {
-        DolabCreateDialog(
-            busy = holder.creating,
-            onDismiss = { if (!holder.creating) showCreate = false },
-            onCreate = { draft ->
-                scope.launch {
-                    if (holder.create(draft)) showCreate = false
-                }
+        DolabObjectCaptureSheet(
+            holder = holder,
+            onDismiss = { showCreate = false },
+            onCreated = { itemId ->
+                showCreate = false
+                selectedItemId = itemId
             },
         )
     }
@@ -146,49 +145,10 @@ private fun DolabShelf(
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
     ) {
         item(key = "dolab-masthead") {
-            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TeswaMarkIcon(
-                        mark = TeswaMark.Mine,
-                        color = MaterialTheme.colorScheme.primary,
-                        size = 30.dp,
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "دولابي",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = "حاجاتك وهي لسه عندك، قبل ما تختار تطلع واحدة للّعب.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    TextButton(onClick = onCreate) {
-                        Text("احفظ حاجة")
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                ) {
-                    DolabFilter.entries.forEach { filter ->
-                        TeswaChoiceChip(
-                            label = filterLabel(filter),
-                            selected = holder.filter == filter,
-                            onClick = { holder.selectFilter(filter) },
-                        )
-                    }
-                }
-            }
+            DolabPrivateMasthead(
+                holder = holder,
+                onCreate = onCreate,
+            )
         }
 
         holder.message?.let { value ->
@@ -230,10 +190,10 @@ private fun DolabShelf(
                     item {
                         TeswaWardrobeSection(
                             title = "الجزء ده فاضي",
-                            supporting = "غيّر الفلتر أو ارجع للكل عشان تشوف باقي حاجاتك.",
+                            supporting = "غيّر المرحلة أو ارجع للكل عشان تشوف باقي حاجاتك.",
                         ) {
                             Text(
-                                text = "كل حاجة محفوظة تفضل جزء من دولابك حتى لو خرجت للّعب أو اتأرشفت.",
+                                text = "الحاجات التانية لسه موجودة في دولابك.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -241,22 +201,11 @@ private fun DolabShelf(
                     }
                 } else {
                     item {
-                        TeswaWardrobeSection(
-                            title = wardrobeTitle(holder.filter),
-                            supporting = wardrobeSupporting(holder.filter),
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg)) {
-                                visible.forEach { item ->
-                                    DolabShelfObject(
-                                        holder = holder,
-                                        item = item,
-                                        media = workspace?.mediaFor(item.id).orEmpty(),
-                                        notesCount = workspace?.notesFor(item.id)?.size ?: 0,
-                                        onOpen = { onOpen(item) },
-                                    )
-                                }
-                            }
-                        }
+                        DolabPrivateCollection(
+                            holder = holder,
+                            items = visible,
+                            onOpen = onOpen,
+                        )
                     }
                 }
             }
