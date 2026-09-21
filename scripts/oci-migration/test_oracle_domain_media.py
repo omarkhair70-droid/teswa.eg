@@ -96,6 +96,7 @@ class MediaTests(unittest.TestCase):
             def can_read(self,user_id,object_key): return self.value and user_id==UID and object_key==self.expected
         for purpose,prefix,slot in (
             ('direct_voice','direct',4),
+            ('direct_chat_media','direct',4),
             ('contextual_voice','contextual',5),
         ):
             with self.subTest(purpose=purpose):
