@@ -397,8 +397,7 @@ private fun DolabItemDetail(
     val notes = workspace.notesFor(item.id)
     val media = workspace.mediaFor(item.id)
     val traceMediaIds = notes.mapNotNull { it.mediaId }.toSet()
-    val heroImageId = media.firstOrNull { it.mediaType == "image" }?.id
-    val supportingMedia = media.filterNot { it.id == heroImageId || it.id in traceMediaIds }
+    val supportingMedia = media.filterNot { it.mediaType == "image" || it.id in traceMediaIds }
     val holderBusy = holder.workingId == item.id
     val busy = holderBusy || continueWorking
     val uploadProgress = holder.mediaUploadProgress?.takeIf { it.itemId == item.id }?.percent
@@ -478,6 +477,10 @@ private fun DolabItemDetail(
                 item = item,
                 media = media,
                 notesCount = notes.size,
+                editable = item.status.editable,
+                onDeleteImage = { image ->
+                    scope.launch { holder.deleteMedia(image) }
+                },
                 modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
             )
         }
@@ -564,12 +567,12 @@ private fun DolabItemDetail(
                     .padding(horizontal = TeswaLayout.ScreenHorizontal),
                 verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
             ) {
-                TeswaSectionHeader("الميديا")
+                TeswaSectionHeader("صور وفيديوهات")
                 Text(
                     text = if (item.status.editable) {
-                        "صور الحاجة وصوتك جزء من ذاكرتها قبل ما تقرر تنشرها."
+                        "كل صور الحاجة فوق في نفس المعرض. من هنا زوّد صورة أو فيديو من غير ما يتحول كل ملف لكارت لوحده."
                     } else {
-                        "الميديا محفوظة كسياق للحاجة بعد خروجها من مرحلة التجهيز."
+                        "صور الحاجة فوق في معرض واحد، والفيديوهات تفضل محفوظة كسياق ليها."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -628,8 +631,8 @@ private fun DolabItemDetail(
         if (media.isEmpty()) {
             item {
                 TeswaInlineMessage(
-                    title = "لسه مفيش ميديا",
-                    body = "أضف صورة أو تسجيل لما يكون فيه حاجة تستاهل تفضل مرتبطة بالقطعة دي.",
+                    title = "لسه مفيش صورة أو فيديو",
+                    body = "أضف صورة أو فيديو للحاجة؛ التسجيلات والملاحظات مكانهم تحت في أثرها عندك.",
                     modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                 )
             }
@@ -655,7 +658,7 @@ private fun DolabItemDetail(
             ) {
                 TeswaSectionHeader("أثرها عندك")
                 Text(
-                    text = "ملاحظات وصوت مرتبطين بالحاجة نفسها؛ يفضلوا خاصين لحد ما تختار غير كده.",
+                    text = "دي ذاكرتها الخاصة: ملاحظات وتسجيلات ما بتتبعتش تلقائيًا لأي حد. لو احتجت حاجة في شات، افتح الشات واختار هات حاجة من دولابي.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
