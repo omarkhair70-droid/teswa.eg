@@ -47,11 +47,13 @@ Expected artifact:
 
 `android-native\app\build\outputs\bundle\release\app-release.aab`
 
-Release identity remains:
+Current BETWEEN US Internal release candidate:
 
 - package: `com.teswa.mobile`
-- versionCode: `26`
-- versionName: `1.0.11`
+- versionCode: `34`
+- versionName: `1.0.18`
+
+The authoritative candidate version lives in `android-native/app/build.gradle.kts`. The release gate and device smoke helper read it from Gradle so future candidates cannot silently inherit a stale hardcoded acceptance version.
 
 ## Manual certificate inspection
 
@@ -75,6 +77,6 @@ After the Internal update, run:
 powershell -ExecutionPolicy Bypass -File .\android-native\scripts\device-smoke.ps1
 ```
 
-The device helper does not install or replace the app. It checks the installed package/version, cold launch, the real `teswa://notifications` route, and captures evidence before printing the remaining manual critical-flow checklist.
+The device helper does not install or replace the app. It reads the expected candidate version from `android-native/app/build.gradle.kts`, checks the installed package/version, cold launch, the real `teswa://notifications` route, and captures evidence before printing the BETWEEN US real-device acceptance checklist.
 
 Do not remove the legacy Expo/Supabase mobile runtime until the physical-device, Play Internal update, and Oracle production acceptance gates are complete.

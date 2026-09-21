@@ -34,6 +34,17 @@ function Normalize-Fingerprint {
 }
 
 $androidRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+
+$buildGradlePath = Join-Path $androidRoot 'app\build.gradle.kts'
+$buildGradleText = Get-Content -LiteralPath $buildGradlePath -Raw
+$versionCodeMatch = [regex]::Match($buildGradleText, 'versionCode\s*=\s*(\d+)')
+$versionNameMatch = [regex]::Match($buildGradleText, 'versionName\s*=\s*"([^"]+)"')
+if (-not $versionCodeMatch.Success -or -not $versionNameMatch.Success) {
+    throw "Could not read Teswa versionCode/versionName from $buildGradlePath"
+}
+$candidateVersionCode = [int]$versionCodeMatch.Groups[1].Value
+$candidateVersionName = $versionNameMatch.Groups[1].Value
+
 $storeFile = Require-EnvironmentVariable 'TESWA_RELEASE_STORE_FILE'
 $storePassword = Require-EnvironmentVariable 'TESWA_RELEASE_STORE_PASSWORD'
 $keyAlias = Require-EnvironmentVariable 'TESWA_RELEASE_KEY_ALIAS'
@@ -65,7 +76,7 @@ $jarsigner = Resolve-JdkTool 'jarsigner'
 
 Write-Host 'Teswa native release gate'
 Write-Host 'Package: com.teswa.mobile'
-Write-Host 'Version: 1.0.11 (26)'
+Write-Host "Version: $candidateVersionName ($candidateVersionCode)"
 Write-Host "Release API: $releaseApiBaseUrl"
 Write-Host "Keystore: $storeFile"
 Write-Host "Alias: $keyAlias"

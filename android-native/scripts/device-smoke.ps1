@@ -56,6 +56,17 @@ function Invoke-Adb {
 }
 
 $androidRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+
+$buildGradlePath = Join-Path $androidRoot 'app\build.gradle.kts'
+$buildGradleText = Get-Content -LiteralPath $buildGradlePath -Raw
+$versionCodeMatch = [regex]::Match($buildGradleText, 'versionCode\s*=\s*(\d+)')
+$versionNameMatch = [regex]::Match($buildGradleText, 'versionName\s*=\s*"([^"]+)"')
+if (-not $versionCodeMatch.Success -or -not $versionNameMatch.Success) {
+    throw "Could not read Teswa versionCode/versionName from $buildGradlePath"
+}
+$candidateVersionCode = [int]$versionCodeMatch.Groups[1].Value
+$candidateVersionName = $versionNameMatch.Groups[1].Value
+
 $timestamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $evidenceDir = Join-Path $androidRoot "build\device-smoke\$timestamp"
 New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
@@ -74,9 +85,9 @@ if ($packageText -notmatch 'versionCode=(\d+)') {
 $versionCode = [int]$Matches[1]
 $versionName = if ($packageText -match 'versionName=([^\r\n]+)') { $Matches[1].Trim() } else { '<unknown>' }
 
-$versionAccepted = ($versionCode -eq 26)
+$versionAccepted = ($versionCode -eq $candidateVersionCode)
 if (-not $versionAccepted -and -not $AllowOtherVersionCode) {
-    Write-Warning "Installed Teswa versionCode is $versionCode, not native release versionCode 26. Evidence will still be collected, but this run is not release acceptance."
+    Write-Warning "Installed Teswa versionCode is $versionCode, not release candidate versionCode $candidateVersionCode. Evidence will still be collected, but this run is not release acceptance."
 }
 
 Invoke-Adb -Arguments @('logcat', '-c') | Out-Null
@@ -103,22 +114,34 @@ $logcat | Out-File -LiteralPath (Join-Path $evidenceDir 'logcat.txt') -Encoding 
 $packageDump | Out-File -LiteralPath (Join-Path $evidenceDir 'package-dump.txt') -Encoding utf8
 
 $checklist = @'
-MANUAL CRITICAL-FLOW CHECKLIST
-[ ] Existing-session restore after cold launch
-[ ] Email / Google auth path used for release
-[ ] Home / Discover / Add / Messages / Profile navigation
-[ ] Item Detail and Public Profile navigation
-[ ] Camera capture + gallery selection + media upload
-[ ] Location permission + Nearby result path
-[ ] Direct/contextual messages + voice record/playback
-[ ] Stories capture/view/upload
-[ ] Dolab save/media/voice + Add Item/Direct bridges
-[ ] Edit Listing keeps same item and handles reorder/remove/cover
-[ ] Reporting entry points + successful submission state
-[ ] Followers / Following navigation
-[ ] Notification permission + FCM token sync
-[ ] Background/killed-process notification delivery + tap route
-[ ] App remains signed/installed through Google Play Internal update without uninstall/data reset
+BETWEEN US — REAL-DEVICE RELEASE ACCEPTANCE
+[ ] Root: relationship hub renders active / waiting / needs-you / history correctly
+[ ] Incoming offer shows the requested/offered object pair
+[ ] Accept offer settles in place before navigation
+[ ] Accepted offer enters the same Deal relationship
+[ ] Deal header preserves both object images and relationship identity
+[ ] Deal text coordination send/receive
+[ ] Deal voice coordination record/send/playback
+[ ] One-side completion leaves the other side pending
+[ ] Two-side completion moves the Deal to quiet history
+[ ] Completed Deal exposes review as the forward action
+[ ] Direct request boundary works
+[ ] Accepted Direct opens the rich Direct thread
+[ ] Direct reply / reaction / typing / semantic delete
+[ ] Direct image attachment send/receive + full-screen viewer
+[ ] Direct video attachment send/receive + signed-url open
+[ ] Direct file attachment send/receive + signed-url open
+[ ] Direct attachment limits: max 5/message and max 50 MB/attachment
+[ ] Dolab pull/save bridges inside Direct
+[ ] Contextual story reply creates/opens the contextual relationship
+[ ] Contextual pinned story origin remains visible above the thread
+[ ] Contextual image origin opens full-screen
+[ ] Contextual video origin opens through signed private URL
+[ ] Contextual voice record/send/playback
+[ ] Message-level reporting works in Deal / Direct / Contextual
+[ ] Offline/network interruption spot check
+[ ] Session-expiry / refresh spot check
+[ ] Existing installation updated through Google Play Internal without uninstalling or clearing data
 '@
 $checklist | Out-File -LiteralPath (Join-Path $evidenceDir 'manual-checklist.txt') -Encoding utf8
 
@@ -131,7 +154,8 @@ $summary = @(
     "Package: $packageName",
     "Installed versionName: $versionName",
     "Installed versionCode: $versionCode",
-    "Expected native versionCode: 26",
+    "Expected release versionName: $candidateVersionName",
+    "Expected release versionCode: $candidateVersionCode",
     "Version code accepted: $versionAccepted",
     'Cold launch: executed',
     'Deep link teswa://notifications: executed',

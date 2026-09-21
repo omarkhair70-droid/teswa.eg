@@ -44,8 +44,8 @@ android {
         applicationId = "com.teswa.mobile"
         minSdk = 24
         targetSdk = 36
-        versionCode = 33
-        versionName = "1.0.17"
+        versionCode = 34
+        versionName = "1.0.18"
 
         // Rehearsal remains the compile/test fallback only. A distributable release artifact
         // requires an explicit TESWA_RELEASE_API_BASE_URL and overrides this value below.
