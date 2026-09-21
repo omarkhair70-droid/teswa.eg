@@ -169,16 +169,7 @@ private fun DolabShelf(
                 val visible = holder.visibleItems()
                 if (visible.isEmpty()) {
                     item {
-                        TeswaWardrobeSection(
-                            title = "الجزء ده فاضي",
-                            supporting = "غيّر المرحلة أو ارجع للكل عشان تشوف باقي حاجاتك.",
-                        ) {
-                            Text(
-                                text = "الحاجات التانية لسه موجودة في دولابك.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        DolabEmptyLifecycleState(holder.filter)
                     }
                 } else {
                     item {
@@ -227,6 +218,8 @@ private fun DolabItemDetail(
     val workspace = holder.workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
     val notes = workspace.notesFor(item.id)
     val media = workspace.mediaFor(item.id)
+    val heroImageId = media.firstOrNull { it.mediaType == "image" }?.id
+    val supportingMedia = media.filterNot { it.id == heroImageId }
     val holderBusy = holder.workingId == item.id
     val busy = holderBusy || continueWorking
     val uploadProgress = holder.mediaUploadProgress?.takeIf { it.itemId == item.id }?.percent
@@ -468,8 +461,8 @@ private fun DolabItemDetail(
                     modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                 )
             }
-        } else {
-            items(media, key = { "media-${it.id}" }) { entry ->
+        } else if (supportingMedia.isNotEmpty()) {
+            items(supportingMedia, key = { "media-${it.id}" }) { entry ->
                 DolabMediaCard(
                     holder = holder,
                     media = entry,

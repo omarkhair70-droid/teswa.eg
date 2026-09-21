@@ -454,6 +454,36 @@ internal fun DolabEmptyPrivateShelf(
     }
 }
 
+
+@Composable
+internal fun DolabEmptyLifecycleState(
+    filter: DolabFilter,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = TeswaSpacing.xl),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(.28f)
+                .height(2.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant),
+        )
+        Text(
+            text = "مفيش حاجات هنا دلوقتي",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = dolabFilterHint(filter).ifBlank { "كل حاجة محفوظة لسه جزء من دولابك." },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 internal fun DolabPrivateCollection(
     holder: DolabStateHolder,
