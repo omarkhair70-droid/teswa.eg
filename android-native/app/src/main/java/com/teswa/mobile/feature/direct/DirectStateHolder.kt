@@ -32,6 +32,10 @@ class DirectStateHolder(
         private set
     var voiceUploadProgress by mutableStateOf<Int?>(null)
         private set
+    var replyingTo by mutableStateOf<DirectMessage?>(null)
+        private set
+    var otherTyping by mutableStateOf(false)
+        private set
     var message by mutableStateOf<String?>(null)
         private set
     var messageIsError by mutableStateOf(true)
@@ -58,6 +62,8 @@ class DirectStateHolder(
         composeTarget = null
         selected = value
         composer = ""
+        replyingTo = null
+        otherTyping = false
         message = null
         messageIsError = true
         when (val result = repository.loadMessages(session, value.id)) {
@@ -98,6 +104,8 @@ class DirectStateHolder(
         selected = null
         messages = emptyList()
         composer = ""
+        replyingTo = null
+        otherTyping = false
         composeTarget = target
     }
 
@@ -106,8 +114,76 @@ class DirectStateHolder(
         composeTarget = null
         messages = emptyList()
         composer = ""
+        replyingTo = null
+        otherTyping = false
         message = null
         messageIsError = true
+    }
+
+    fun replyTo(value: DirectMessage) {
+        if (value.deletedAt == null) replyingTo = value
+    }
+
+    fun clearReply() {
+        replyingTo = null
+    }
+
+    suspend fun setTyping(active: Boolean) {
+        val conversation = selected ?: return
+        if (conversation.status != "accepted") return
+        when (val result = repository.setTyping(session, conversation.id, active)) {
+            is DirectResult.Success -> session = result.session
+            is DirectResult.Failure -> result.session?.let { session = it }
+        }
+    }
+
+    suspend fun refreshTyping() {
+        val conversation = selected ?: return
+        if (conversation.status != "accepted") {
+            otherTyping = false
+            return
+        }
+        when (val result = repository.loadTyping(session, conversation.id)) {
+            is DirectResult.Success -> {
+                session = result.session
+                otherTyping = conversation.otherUserId in result.value
+            }
+            is DirectResult.Failure -> result.session?.let { session = it }
+        }
+    }
+
+    suspend fun toggleReaction(value: DirectMessage, reaction: String) {
+        if (value.deletedAt != null) return
+        when (val result = repository.toggleReaction(session, value.id, reaction)) {
+            is DirectResult.Success -> {
+                session = result.session
+                reloadMessages()
+            }
+            is DirectResult.Failure -> fail(result)
+        }
+    }
+
+    suspend fun deleteMessage(value: DirectMessage) {
+        if (value.senderId != session.user.id || value.deletedAt != null) return
+        when (val result = repository.deleteMessage(session, value.id)) {
+            is DirectResult.Success -> {
+                session = result.session
+                if (replyingTo?.id == value.id) replyingTo = null
+                reloadMessages()
+            }
+            is DirectResult.Failure -> fail(result)
+        }
+    }
+
+    private suspend fun reloadMessages() {
+        val conversation = selected ?: return
+        when (val result = repository.loadMessages(session, conversation.id)) {
+            is DirectResult.Success -> {
+                session = result.session
+                messages = result.value
+            }
+            is DirectResult.Failure -> fail(result)
+        }
     }
 
     fun compose(value: String) {
@@ -142,11 +218,15 @@ class DirectStateHolder(
         val body = composer.trim()
         if (working || body.isEmpty()) return
         working = true
-        when (val result = repository.send(session, conversation, body)) {
+        val result = replyingTo?.let { target ->
+            repository.sendReply(session, conversation, body, target.id)
+        } ?: repository.send(session, conversation, body)
+        when (result) {
             is DirectResult.Success -> {
                 session = result.session
                 composer = ""
-                open(conversation)
+                replyingTo = null
+                reloadMessages()
             }
             is DirectResult.Failure -> fail(result)
         }
