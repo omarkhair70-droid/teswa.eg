@@ -296,7 +296,12 @@ fun MessagingScreen(
             return@Column
         }
         if (mode == InboxMode.CONTEXTUAL) {
-            ContextualContent(contextualHolder, voiceMediaRepository, Modifier.weight(1f))
+            ContextualContent(
+                holder = contextualHolder,
+                voiceMediaRepository = voiceMediaRepository,
+                onReport = onReport,
+                modifier = Modifier.weight(1f),
+            )
             return@Column
         }
 
