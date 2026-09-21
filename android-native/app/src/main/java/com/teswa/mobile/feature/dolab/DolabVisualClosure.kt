@@ -852,7 +852,6 @@ internal fun DolabObjectCaptureSheet(
                                 holder.create(
                                     DolabItemDraft(
                                         title = title.trim(),
-                                        description = note.trim(),
                                     ),
                                 )
                             ) {
@@ -862,10 +861,16 @@ internal fun DolabObjectCaptureSheet(
                             }
 
                             if (created != null) {
-                                if (holder.addMedia(created, current)) {
-                                    onCreated(created.id)
-                                } else {
-                                    localMessage = "الحاجة اتحفظت، لكن الصورة لسه ما اتحفظتش. حاول تاني من جوه الحاجة."
+                                val noteOk = note.isBlank() || holder.addNote(created.id, note.trim())
+                                val mediaOk = holder.addMedia(created, current)
+                                when {
+                                    !mediaOk -> {
+                                        localMessage = "الحاجة اتحفظت، لكن الصورة لسه ما اتحفظتش. حاول تاني من جوه الحاجة."
+                                    }
+                                    !noteOk -> {
+                                        localMessage = "الحاجة والصورة اتحفظوا، لكن ملاحظتك الخاصة لسه محتاجة تتحفظ من جوه الحاجة."
+                                    }
+                                    else -> onCreated(created.id)
                                 }
                             }
                         }
