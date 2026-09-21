@@ -13,7 +13,23 @@ class ContextualStateHolderTest {
     private val conversationId = "33333333-3333-3333-3333-333333333333"
     private val story = "44444444-4444-4444-4444-444444444444"
     private val session = AuthSession("token", "refresh", 9_999_999_999L, AuthUser(me, null, null, null, null))
-    private val conversation = ContextualConversation(conversationId, story, ContextualParticipant(other, "سلمى", null, null), null, null, 0, "now")
+    private val conversation = ContextualConversation(
+        id = conversationId,
+        storyId = story,
+        context = ContextualStoryContext(
+            storyId = story,
+            caption = "لحظة من القصة",
+            mediaType = "image",
+            mediaStoragePath = "22222222-2222-2222-2222-222222222222/story.jpg",
+            authorId = other,
+            createdAt = "2026-09-15T12:00:00Z",
+        ),
+        other = ContextualParticipant(other, "سلمى", null, null),
+        latestBody = null,
+        latestKind = null,
+        unreadCount = 0,
+        lastActivityAt = "now",
+    )
 
     @Test
     fun silentThreadReloadPreservesComposer() = runBlocking {
