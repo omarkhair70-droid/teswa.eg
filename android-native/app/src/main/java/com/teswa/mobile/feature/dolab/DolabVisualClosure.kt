@@ -81,7 +81,7 @@ internal fun DolabPrivateMasthead(
     searchOpen: Boolean,
     onToggleSearch: () -> Unit,
 ) {
-    val items = holder.workspace()?.items.orEmpty()
+    val items = holder.objectItems()
     val ready = items.count { it.status == DolabItemStatus.READY }
 
     Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
