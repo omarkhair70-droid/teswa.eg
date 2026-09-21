@@ -142,8 +142,7 @@ fun AddItemScreen(
     if (success != null) {
         AddItemSuccess(
             modifier = modifier,
-            onHome = onPublished,
-            onAnother = holder::reset,
+            onReturnToDolab = onPublished,
         )
         return
     }
@@ -637,7 +636,7 @@ private fun PublishSummary(draft: AddItemDraft) {
                                 .clip(RoundedCornerShape(TeswaRadius.hero)),
                         )
                         TeswaArchiveLabel(
-                            text = "PRIVATE → POSSIBLE",
+                            text = "من دولابي · في اللعب",
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(TeswaSpacing.sm),
@@ -735,7 +734,10 @@ private fun AddItemActions(
 }
 
 @Composable
-private fun AddItemSuccess(modifier: Modifier, onHome: () -> Unit, onAnother: () -> Unit) {
+private fun AddItemSuccess(
+    modifier: Modifier,
+    onReturnToDolab: () -> Unit,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -751,18 +753,23 @@ private fun AddItemSuccess(modifier: Modifier, onHome: () -> Unit, onAnother: ()
         Spacer(Modifier.height(TeswaSpacing.xl))
         TeswaArchiveLabel("في اللعب")
         Spacer(Modifier.height(TeswaSpacing.md))
-        Text("الحاجة خرجت للنور", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "عدّت حدود دولابك",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
         Spacer(Modifier.height(TeswaSpacing.xs))
         Text(
-            "نفس الحاجة اللي كانت في دولابك بقت دلوقتي احتمال يقدر حد تاني يدخل معاك فيه.",
+            "نفس الحاجة بقت دلوقتي احتمال عام، ودولابك لسه محتفظ بأصلها وأثرها.",
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(TeswaSpacing.xl))
-        TeswaPrimaryAction(text = "شوف الاحتمالات", onClick = onHome)
-        Spacer(Modifier.height(TeswaSpacing.xs))
-        TeswaSecondaryAction(text = "جهّز حاجة تانية", onClick = onAnother)
+        TeswaPrimaryAction(
+            text = "ارجع لدولابي",
+            onClick = onReturnToDolab,
+        )
     }
 }
 
