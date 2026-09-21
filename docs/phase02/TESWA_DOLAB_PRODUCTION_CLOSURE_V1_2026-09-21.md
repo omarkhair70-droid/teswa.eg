@@ -1,10 +1,10 @@
 # TESWA DOLAB — PRODUCTION CLOSURE CONTRACT V1
 
 **Date:** 2026-09-21  
-**Status:** PRODUCTION CLOSED — v32 DEVICE ACCEPTED  
+**Status:** REOPENED — v33 DEVICE FINDINGS PATCH  
 **Root destination:** MINE / دولابي  
 **Baseline:** v32 real-device acceptance  
-**Accepted build:** versionCode 32 / 1.0.16
+**Last accepted build:** versionCode 32 / 1.0.16
 
 
 ## Closure checkpoint — v32
@@ -32,6 +32,40 @@
 - Release tests, release compile, lint, signed AAB and Internal Testing publication are green.
 
 The remaining production-gate list below stays as the permanent regression checklist. It is not a signal that this closure is still open; future regressions should reopen only the failed gate, not the product definition.
+
+
+## Reopened device findings — gallery + trace boundary
+
+A later real-device pass exposed two remaining closure issues, so Dolab is explicitly reopened rather than pretending v32 was final:
+
+1. additional object images were rendered below the object as separate generic media cards instead of belonging to the same visual object gallery;
+2. the private-note / voice mental model needed to be made explicit: saving a trace to Dolab is not the same action as sending it to Direct.
+
+### Corrected product law
+
+**Object images**
+- all image media for one Dolab object belong to one gallery;
+- the detail hero can swipe across all images;
+- tapping an image opens a full-screen viewer with fit-to-screen rendering;
+- added images must never reappear as independent image cards lower in the page;
+- deletion acts on the current gallery image.
+
+**Private traces**
+- notes and recordings are private memory by default;
+- saving a note/voice does not send it anywhere;
+- Direct is a consuming context: when the user is inside a conversation, `هات من دولابي` explicitly pulls an object or supported note from Dolab;
+- nothing leaves the private space until the user explicitly chooses it in that consuming context and sends;
+- reusing stored voice in Direct is a Direct-media capability, not a reason to turn Dolab into an outbound composer.
+
+### v33 gate
+
+The next device candidate must prove:
+- multiple photos swipe in the object hero;
+- full-screen viewer shows the full image without crop;
+- newly added photos join the same gallery;
+- no duplicate image cards appear under the gallery;
+- private trace copy clearly explains the non-sharing boundary;
+- Direct pull copy makes the source/consumer relationship explicit.
 
 
 ## Product definition
