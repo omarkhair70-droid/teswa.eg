@@ -26,12 +26,24 @@ interface DirectRepository {
         body: String,
         replyToMessageId: String,
     ): DirectResult<Unit> = send(session, conversation, body)
+    suspend fun sendRich(
+        session: AuthSession,
+        conversation: DirectConversation,
+        body: String?,
+        replyToMessageId: String?,
+        attachments: List<DirectAttachment>,
+    ): DirectResult<Unit> = when {
+        attachments.isNotEmpty() -> DirectResult.Failure("إرسال المرفقات غير متاح الآن.", session)
+        replyToMessageId != null && !body.isNullOrBlank() -> sendReply(session, conversation, body, replyToMessageId)
+        !body.isNullOrBlank() -> send(session, conversation, body)
+        else -> DirectResult.Failure("الرسالة فاضية.", session)
+    }
     suspend fun toggleReaction(
         session: AuthSession,
         messageId: String,
         reaction: String,
     ): DirectResult<DirectReactionToggle> = DirectResult.Failure("التفاعل غير متاح الآن.", session)
-    suspend fun deleteMessage(session: AuthSession, messageId: String): DirectResult<Unit> =
+    suspend fun deleteMessage(session: AuthSession, messageId: String): DirectResult<DirectDeleteOutcome> =
         DirectResult.Failure("حذف الرسالة غير متاح الآن.", session)
     suspend fun setTyping(session: AuthSession, conversationId: String, isTyping: Boolean): DirectResult<Unit> =
         DirectResult.Failure("حالة الكتابة غير متاحة الآن.", session)
@@ -135,30 +147,60 @@ class OracleDirectRepository(
         session: AuthSession,
         conversation: DirectConversation,
         body: String,
-    ): DirectResult<Unit> = sendNative(session, conversation, body, null)
+    ): DirectResult<Unit> = sendNative(session, conversation, body, null, emptyList())
 
     override suspend fun sendReply(
         session: AuthSession,
         conversation: DirectConversation,
         body: String,
         replyToMessageId: String,
-    ): DirectResult<Unit> = sendNative(session, conversation, body, replyToMessageId)
+    ): DirectResult<Unit> = sendNative(session, conversation, body, replyToMessageId, emptyList())
+
+    override suspend fun sendRich(
+        session: AuthSession,
+        conversation: DirectConversation,
+        body: String?,
+        replyToMessageId: String?,
+        attachments: List<DirectAttachment>,
+    ): DirectResult<Unit> = sendNative(session, conversation, body, replyToMessageId, attachments)
 
     private suspend fun sendNative(
         session: AuthSession,
         conversation: DirectConversation,
-        body: String,
+        body: String?,
         replyToMessageId: String?,
+        attachments: List<DirectAttachment> = emptyList(),
     ): DirectResult<Unit> {
         val id = conversation.id.validId() ?: return DirectResult.Failure("معرّف المحادثة غير صالح.", session)
-        val clean = body.trim()
-        if (clean.isEmpty() || clean.length > 1_200) return DirectResult.Failure("الرسالة لازم تكون من 1 إلى 1200 حرف.", session)
+        val clean = body?.trim()?.takeIf(String::isNotEmpty)
+        if (clean != null && clean.length > 1_200) return DirectResult.Failure("الرسالة لازم تكون 1200 حرف أو أقل.", session)
+        if (clean == null && attachments.isEmpty()) return DirectResult.Failure("اكتب رسالة أو اختار مرفق.", session)
+        if (attachments.size > 5) return DirectResult.Failure("مسموح بحد أقصى 5 مرفقات.", session)
         val reply = replyToMessageId?.validId()
             ?: if (replyToMessageId == null) null else return DirectResult.Failure("الرسالة اللي بترد عليها غير صالحة.", session)
+        val attachmentJson = JSONArray()
+        attachments.forEach { attachment ->
+            if (attachment.kind !in setOf("image", "video", "file", "audio") || attachment.storagePath.isBlank()) {
+                return DirectResult.Failure("في مرفق غير صالح.", session)
+            }
+            attachmentJson.put(
+                JSONObject()
+                    .put("id", attachment.id ?: JSONObject.NULL)
+                    .put("kind", attachment.kind)
+                    .put("storagePath", attachment.storagePath)
+                    .put("storageBucket", attachment.storageBucket ?: "direct-chat-media")
+                    .put("fileName", attachment.fileName ?: JSONObject.NULL)
+                    .put("mimeType", attachment.mimeType ?: JSONObject.NULL)
+                    .put("sizeBytes", attachment.sizeBytes ?: JSONObject.NULL)
+                    .put("durationMs", attachment.durationMs ?: JSONObject.NULL)
+                    .put("width", attachment.width ?: JSONObject.NULL)
+                    .put("height", attachment.height ?: JSONObject.NULL),
+            )
+        }
         val payload = JSONObject()
-            .put("body", clean)
+            .put("body", clean ?: JSONObject.NULL)
             .put("replyToMessageId", reply ?: JSONObject.NULL)
-            .put("attachments", JSONArray())
+            .put("attachments", attachmentJson)
             .put("metadata", JSONObject())
         return when (val result = executor.execute(
             session,
@@ -208,14 +250,27 @@ class OracleDirectRepository(
         }
     }
 
-    override suspend fun deleteMessage(session: AuthSession, messageId: String): DirectResult<Unit> {
+    override suspend fun deleteMessage(
+        session: AuthSession,
+        messageId: String,
+    ): DirectResult<DirectDeleteOutcome> {
         val id = messageId.validId() ?: return DirectResult.Failure("الرسالة غير صالحة.", session)
-        return when (val result = executor.execute(
-            session,
-            OracleRequest(OracleHttpMethod.POST, "/v1/direct/messages/$id/delete", JSONObject()),
-        )) {
+        return when (
+            val result = executor.execute(
+                session,
+                OracleRequest(OracleHttpMethod.POST, "/v1/direct/messages/$id/delete", JSONObject()),
+            )
+        ) {
             is AuthenticatedOracleResult.Response -> when {
-                result.value.status == 200 && result.value.body.optBoolean("ok") -> DirectResult.Success(Unit, result.session)
+                result.value.status == 200 && result.value.body.optBoolean("ok") -> {
+                    val raw = result.value.body.optJSONArray("storagePaths") ?: JSONArray()
+                    val paths = buildList {
+                        for (index in 0 until raw.length()) {
+                            raw.optString(index).trim().takeIf(String::isNotEmpty)?.let(::add)
+                        }
+                    }
+                    DirectResult.Success(DirectDeleteOutcome(paths), result.session)
+                }
                 result.value.status == 401 -> expired(result.session)
                 else -> DirectResult.Failure("تعذر حذف الرسالة.", result.session)
             }
