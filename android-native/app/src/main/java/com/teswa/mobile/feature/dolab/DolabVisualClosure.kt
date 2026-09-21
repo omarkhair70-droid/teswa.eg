@@ -153,6 +153,71 @@ private fun DolabLifecycleRail(
     }
 }
 
+
+@Composable
+internal fun DolabEmptyPrivateShelf(
+    onCreate: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(250.dp)
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .26f),
+                    RoundedCornerShape(TeswaRadius.hero),
+                ),
+        ) {
+            TeswaMarkIcon(
+                mark = TeswaMark.Mine,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = .62f),
+                size = 72.dp,
+                modifier = Modifier.align(Alignment.Center),
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(.72f)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = TeswaSpacing.xl, bottom = TeswaSpacing.lg)
+                    .size(width = 58.dp, height = 72.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = .78f),
+                        RoundedCornerShape(TeswaRadius.md),
+                    ),
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+            Text(
+                text = "دولابك فاضي دلوقتي",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "حط أول حاجة عندك هنا. تفضل خاصة بيك لحد ما تقرر تطلعها للّعب.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        TeswaPrimaryAction(
+            text = "حط أول حاجة",
+            onClick = onCreate,
+        )
+    }
+}
+
 @Composable
 internal fun DolabPrivateCollection(
     holder: DolabStateHolder,
@@ -561,8 +626,11 @@ internal fun DolabObjectCaptureSheet(
                             }
 
                             if (created != null) {
-                                holder.addMedia(created, current)
-                                onCreated(created.id)
+                                if (holder.addMedia(created, current)) {
+                                    onCreated(created.id)
+                                } else {
+                                    localMessage = "الحاجة اتحفظت، لكن الصورة لسه ما اتحفظتش. حاول تاني من جوه الحاجة."
+                                }
                             }
                         }
                     },
