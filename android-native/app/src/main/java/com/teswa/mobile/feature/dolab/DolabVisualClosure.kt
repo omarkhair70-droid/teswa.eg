@@ -154,6 +154,86 @@ private fun DolabLifecycleRail(
 }
 
 
+
+@Composable
+internal fun DolabPrivateObjectPortrait(
+    holder: DolabStateHolder,
+    item: DolabItem,
+    media: List<DolabMedia>,
+    notesCount: Int,
+) {
+    val firstImage = media.firstOrNull { it.mediaType == "image" }
+    var imageUrl by remember(firstImage?.id, firstImage?.storagePath) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(firstImage?.id, firstImage?.storagePath) {
+        imageUrl = firstImage?.let { holder.mediaUrl(it) }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(318.dp)
+                .clip(RoundedCornerShape(TeswaRadius.hero))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .4f)),
+        ) {
+            if (imageUrl != null) {
+                NetworkImage(
+                    url = imageUrl,
+                    contentDescription = item.title ?: "حاجة من دولابك",
+                    modifier = Modifier.fillMaxWidth().height(318.dp),
+                )
+            } else {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.Mine,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = .62f),
+                        size = 68.dp,
+                    )
+                    Text(
+                        text = "لسه مستنية صورة",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            TeswaArchiveLabel(
+                text = dolabStatusLabel(item.status),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(TeswaSpacing.sm),
+            )
+        }
+
+        Text(
+            text = item.title?.takeIf(String::isNotBlank) ?: "حاجة من غير اسم",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
+
+        val trace = buildList {
+            item.category?.takeIf(String::isNotBlank)?.let(::add)
+            item.condition?.takeIf(String::isNotBlank)?.let(::add)
+            if (notesCount > 0) add("${notesCount} ملاحظات")
+        }.joinToString(" · ")
+        if (trace.isNotBlank()) {
+            Text(
+                text = trace,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 @Composable
 internal fun DolabEmptyPrivateShelf(
     onCreate: () -> Unit,
