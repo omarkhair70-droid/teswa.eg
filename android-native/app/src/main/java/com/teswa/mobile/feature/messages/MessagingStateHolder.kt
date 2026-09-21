@@ -246,7 +246,17 @@ class MessagingStateHolder(
             is MessagingResult.Success -> {
                 session = result.session
                 confirmationUserIds = confirmationUserIds + session.user.id
-                selectedConversation = conversation.copy(status = if (result.value) "completed" else "completed_pending_confirmation")
+                val nextStatus = if (result.value) "completed" else "completed_pending_confirmation"
+                val updated = conversation.copy(status = nextStatus)
+                selectedConversation = updated
+                val inbox = inboxState as? InboxUiState.Content
+                if (inbox != null) {
+                    inboxState = inbox.copy(
+                        items = inbox.items.map { item ->
+                            if (item.dealId == conversation.dealId) item.copy(status = nextStatus) else item
+                        },
+                    )
+                }
                 confirmed = true
             }
             is MessagingResult.Failure -> {
