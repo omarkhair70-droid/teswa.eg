@@ -588,6 +588,8 @@ internal fun DolabPrivateObjectPortrait(
         imageUrl = firstImage?.let { holder.mediaUrl(it) }
     }
 
+    val portraitHeight = if (firstImage != null) 318.dp else 196.dp
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
@@ -595,7 +597,7 @@ internal fun DolabPrivateObjectPortrait(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(318.dp)
+                .height(portraitHeight)
                 .clip(RoundedCornerShape(TeswaRadius.hero))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .4f)),
         ) {
@@ -603,25 +605,14 @@ internal fun DolabPrivateObjectPortrait(
                 NetworkImage(
                     url = imageUrl,
                     contentDescription = item.title ?: "حاجة من دولابك",
-                    modifier = Modifier.fillMaxWidth().height(318.dp),
+                    modifier = Modifier.fillMaxWidth().height(portraitHeight),
                 )
             } else {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-                ) {
-                    TeswaMarkIcon(
-                        mark = TeswaMark.Mine,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = .62f),
-                        size = 68.dp,
-                    )
-                    Text(
-                        text = "لسه مستنية صورة",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                DolabObjectSlotPlaceholder(
+                    status = item.status,
+                    large = true,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
 
             TeswaArchiveLabel(
