@@ -173,15 +173,7 @@ private fun DolabShelf(
             }
 
             is DolabUiState.Empty -> item {
-                TeswaWardrobeSection(
-                    title = "أول رف لسه فاضي",
-                    supporting = "احفظ حاجة حتى لو لسه مش عارف هتبدّلها ولا لأ. الدولاب مكان الذاكرة قبل النشر.",
-                ) {
-                    TeswaPrimaryAction(
-                        text = "احفظ أول حاجة",
-                        onClick = onCreate,
-                    )
-                }
+                DolabEmptyPrivateShelf(onCreate = onCreate)
             }
 
             is DolabUiState.Ready -> {
