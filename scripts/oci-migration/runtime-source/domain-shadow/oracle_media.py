@@ -198,7 +198,7 @@ class MediaApi:
             if purpose=='story_media' and user_id not in key.split('/'):
                 authorizer=self.story_authorizer or StoryMediaAuthorizer()
                 if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
-            if purpose=='direct_voice':
+            if purpose in ('direct_voice','direct_chat_media'):
                 authorizer=self.direct_authorizer or DirectVoiceMediaAuthorizer()
                 if not authorizer.can_read(user_id,key): raise ApiError(403,'media_not_authorized')
             if purpose=='contextual_voice':
