@@ -80,6 +80,7 @@ internal fun DolabPrivateMasthead(
     onCreate: () -> Unit,
     searchOpen: Boolean,
     onToggleSearch: () -> Unit,
+    onPrivateNote: () -> Unit,
 ) {
     val items = holder.objectItems()
     val ready = items.count { it.status == DolabItemStatus.READY }
@@ -114,6 +115,11 @@ internal fun DolabPrivateMasthead(
                     onClick = onToggleSearch,
                 )
             }
+            TeswaIconAction(
+                icon = TeswaIcons.More,
+                contentDescription = "حاجات خاصة في دولابك",
+                onClick = onPrivateNote,
+            )
             TextButton(onClick = onCreate) {
                 Text("حط حاجة", fontWeight = FontWeight.SemiBold)
             }
@@ -233,7 +239,12 @@ internal fun DolabLooseTracePreview(
         }
         if (notes.size < 3) {
             legacyItems.take(3 - notes.size).forEach { item ->
-                DolabLegacyTraceRow(item = item, onOpen = { onOpenLegacy(item) })
+                DolabLegacyTraceRow(
+                    holder = holder,
+                    workspace = workspace,
+                    item = item,
+                    onOpen = { onOpenLegacy(item) },
+                )
             }
         }
     }
@@ -292,6 +303,8 @@ internal fun DolabLooseNoteRow(
 
 @Composable
 internal fun DolabLegacyTraceRow(
+    holder: DolabStateHolder,
+    workspace: DolabWorkspace,
     item: DolabItem,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
@@ -316,6 +329,11 @@ internal fun DolabLegacyTraceRow(
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )
+        workspace.mediaFor(item.id).firstOrNull { it.mediaType == "audio" }?.let { audio ->
+            VoiceMessagePlayer(audio.durationMs?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()) {
+                holder.mediaUrl(audio)
+            }
+        }
     }
 }
 
@@ -426,6 +444,63 @@ internal fun DolabPrivateTraceRail(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DolabOutsidePrivateBoundary(
+    item: DolabItem,
+    onOpenPublished: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .26f),
+        shape = RoundedCornerShape(TeswaRadius.hero),
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaMarkIcon(
+                    mark = if (item.status == DolabItemStatus.EXCHANGED) TeswaMark.BetweenUs else TeswaMark.PutIntoPlay,
+                    color = MaterialTheme.colorScheme.primary,
+                    size = 38.dp,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (item.status == DolabItemStatus.EXCHANGED) {
+                            "بقت جزء من تاريخك"
+                        } else {
+                            "الحاجة دي في اللعب"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = if (item.status == DolabItemStatus.EXCHANGED) {
+                            "مش هنمسح أصلها من دولابك؛ العلاقة اللي حصلت بقت جزء من أثرها."
+                        } else {
+                            "عدّت الحدود، لكن أصلها وملاحظاتك الخاصة لسه محفوظين هنا."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            onOpenPublished?.let { open ->
+                TeswaSecondaryAction(
+                    text = "شوفها زي ما الناس شايفاها",
+                    icon = TeswaIcons.Explore,
+                    onClick = open,
+                )
             }
         }
     }

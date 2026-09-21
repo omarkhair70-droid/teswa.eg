@@ -68,6 +68,7 @@ fun DolabScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onContinueAsListing: (suspend (DolabItem) -> String?)? = null,
+    onOpenPublishedItem: (String) -> Unit = {},
     onFocusedStateChanged: (Boolean) -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, repository) { DolabStateHolder(initialSession, repository) }
@@ -96,6 +97,7 @@ fun DolabScreen(
             onBack = { selectedItemId = null },
             onDeleted = { selectedItemId = null },
             onContinueAsListing = onContinueAsListing,
+            onOpenPublishedItem = onOpenPublishedItem,
             modifier = modifier,
         )
     } else {
@@ -130,6 +132,8 @@ private fun DolabShelf(
     val workspace = holder.workspace()
     var searchOpen by remember { mutableStateOf(holder.query.isNotBlank()) }
     var showLooseTraces by remember { mutableStateOf(false) }
+    var showLooseNoteComposer by remember { mutableStateOf(false) }
+    var looseNote by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -148,6 +152,7 @@ private fun DolabShelf(
                     searchOpen = !searchOpen
                     if (!searchOpen) holder.updateQuery("")
                 },
+                onPrivateNote = { showLooseNoteComposer = true },
             )
         }
 
@@ -230,6 +235,40 @@ private fun DolabShelf(
         }
     }
 
+    if (showLooseNoteComposer) {
+        TeswaActionSheet(
+            title = "سيب حاجة على جنب",
+            supporting = "ملاحظة خاصة لنفسك. مش إعلان ومش بتظهر لحد.",
+            modifier = Modifier.imePadding(),
+            onDismiss = { if (holder.workingId == null) showLooseNoteComposer = false },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                TeswaTextField(
+                    value = looseNote,
+                    onValueChange = { looseNote = it.take(8_000) },
+                    label = "اكتب اللي عايز تفتكره",
+                    singleLine = false,
+                    minLines = 3,
+                    maxLines = 6,
+                    enabled = holder.workingId == null,
+                )
+                TeswaPrimaryAction(
+                    text = if (holder.workingId == "loose-note") "بنحفظ…" else "خليها على جنب",
+                    loading = holder.workingId == "loose-note",
+                    enabled = looseNote.isNotBlank() && holder.workingId == null,
+                    onClick = {
+                        scope.launch {
+                            if (holder.addLooseNote(looseNote)) {
+                                looseNote = ""
+                                showLooseNoteComposer = false
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+
     if (showLooseTraces && workspace != null) {
         val notes = holder.visibleLooseNotes()
         val legacy = holder.visibleLegacyTraceItems()
@@ -254,6 +293,8 @@ private fun DolabShelf(
                 }
                 items(legacy, key = { "legacy-trace-${it.id}" }) { item ->
                     DolabLegacyTraceRow(
+                        holder = holder,
+                        workspace = workspace,
                         item = item,
                         onOpen = {
                             showLooseTraces = false
@@ -275,6 +316,7 @@ private fun DolabItemDetail(
     onBack: () -> Unit,
     onDeleted: () -> Unit,
     onContinueAsListing: (suspend (DolabItem) -> String?)?,
+    onOpenPublishedItem: (String) -> Unit,
     modifier: Modifier,
 ) {
     val context = LocalContext.current
@@ -406,9 +448,9 @@ private fun DolabItemDetail(
             }
         } else {
             item {
-                TeswaInlineMessage(
-                    title = "الحاجة خرجت من مرحلة التجهيز",
-                    body = "الدولاب محتفظ بسياقها، لكن حالتها العامة بقت مرتبطة بما حصل برا مساحتك الخاصة.",
+                DolabOutsidePrivateBoundary(
+                    item = item,
+                    onOpenPublished = item.publishedItemId?.let { id -> { onOpenPublishedItem(id) } },
                     modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                 )
             }
@@ -579,18 +621,20 @@ private fun DolabItemDetail(
             }
         }
 
-        item {
-            TextButton(
-                onClick = { confirmDelete = true },
-                enabled = !busy,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TeswaLayout.ScreenHorizontal),
-            ) {
-                Text(
-                    text = "شيل الحاجة من الدولاب",
-                    color = MaterialTheme.colorScheme.error,
-                )
+        if (item.status.editable) {
+            item {
+                TextButton(
+                    onClick = { confirmDelete = true },
+                    enabled = !busy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = TeswaLayout.ScreenHorizontal),
+                ) {
+                    Text(
+                        text = "شيل الحاجة من الدولاب",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
         }
     }

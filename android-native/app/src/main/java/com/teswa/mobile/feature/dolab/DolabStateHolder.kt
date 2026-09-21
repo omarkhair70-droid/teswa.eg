@@ -104,7 +104,11 @@ class DolabStateHolder(
     }
 
     private fun DolabItem.isLegacyStandaloneTrace(workspace: DolabWorkspace): Boolean =
-        source == "note" && workspace.mediaFor(id).isEmpty()
+        when {
+            source == "note" -> true
+            source == "voice" && title.orEmpty().startsWith("رسالة") -> true
+            else -> false
+        }
 
     suspend fun load(refresh: Boolean = false) {
         sessionExpired = false
@@ -193,6 +197,31 @@ class DolabStateHolder(
                     notes = current.notes.filterNot { it.dolabItemId == item.id },
                 ).asUiState()
                 show("اتشالت من دولابك.")
+                true
+            }
+            is DolabResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                show(result.message, error = true)
+                false
+            }
+        }
+    }
+
+    suspend fun addLooseNote(body: String): Boolean {
+        if (workingId != null) return false
+        workingId = "loose-note"
+        clearMessage()
+        val result = repository.createNote(session, null, body, noteType = "text")
+        workingId = null
+        return when (result) {
+            is DolabResult.Success -> {
+                session = result.session
+                val current = workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
+                state = current.copy(
+                    notes = listOf(result.value) + current.notes.filterNot { it.id == result.value.id },
+                ).asUiState()
+                show("الملاحظة اتحفظت على جنب.")
                 true
             }
             is DolabResult.Failure -> {

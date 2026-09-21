@@ -380,6 +380,12 @@ fun AppShell(
                     onBack = { selectedRoot = TeswaRootDestination.POSSIBLE },
                     modifier = contentModifier,
                     onFocusedStateChanged = { suppressRootChrome = it },
+                    onOpenPublishedItem = { itemId ->
+                        suppressRootChrome = false
+                        selectedRoot = TeswaRootDestination.POSSIBLE
+                        possibleMode = PossibleMode.FEED
+                        externalItemId = itemId
+                    },
                     onContinueAsListing = { item ->
                         when (val result = dolabAddItemHandoff.prepareAndPersist(session, item)) {
                             is DolabAddItemHandoffResult.Success -> {
