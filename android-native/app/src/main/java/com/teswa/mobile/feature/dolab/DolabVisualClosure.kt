@@ -119,7 +119,7 @@ private fun DolabLifecycleRail(
         horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
         verticalAlignment = Alignment.Bottom,
     ) {
-        DolabFilter.entries.reversed().forEach { filter ->
+        DolabFilter.entries.forEach { filter ->
             val active = selected == filter
             Column(
                 modifier = Modifier
@@ -846,7 +846,7 @@ internal fun DolabObjectCaptureSheet(
                     horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
                 ) {
                     TeswaSecondaryAction(
-                        text = "اختار صورة تانية",
+                        text = "غيّر من الصور",
                         onClick = { gallery.launch(DolabMediaResolver.SUPPORTED_IMAGE_TYPES.toTypedArray()) },
                         modifier = Modifier.weight(1f),
                     )
