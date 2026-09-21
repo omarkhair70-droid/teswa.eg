@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.teswa.mobile.feature.safety.ReportTarget
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.feature.voice.VoiceMediaRepository
@@ -64,6 +65,7 @@ import kotlinx.coroutines.launch
 fun ContextualContent(
     holder: ContextualStateHolder,
     voiceMediaRepository: VoiceMediaRepository,
+    onReport: (ReportTarget) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -76,7 +78,7 @@ fun ContextualContent(
     }
 
     holder.thread?.let {
-        ContextualThreadContent(holder, it, voiceMediaRepository, modifier)
+        ContextualThreadContent(holder, it, voiceMediaRepository, onReport, modifier)
         return
     }
 
@@ -298,6 +300,7 @@ private fun ContextualThreadContent(
     holder: ContextualStateHolder,
     thread: ContextualThread,
     voiceMediaRepository: VoiceMediaRepository,
+    onReport: (ReportTarget) -> Unit,
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -345,30 +348,48 @@ private fun ContextualThreadContent(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
                 ) {
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    ) {
-                        if (value.kind == "voice" && value.mediaStoragePath != null) {
-                            VoiceMessagePlayer(value.durationMs) {
-                                when (val result = voiceMediaRepository.signedUrl(holder.session, "contextual_voice", value.mediaStoragePath)) {
-                                    is VoiceMediaResult.Success -> {
-                                        holder.updateSession(result.session)
-                                        result.value
-                                    }
-                                    is VoiceMediaResult.Failure -> {
-                                        result.session?.let(holder::updateSession)
-                                        holder.showMessage(result.message)
-                                        null
+                    Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            if (value.kind == "voice" && value.mediaStoragePath != null) {
+                                VoiceMessagePlayer(value.durationMs) {
+                                    when (val result = voiceMediaRepository.signedUrl(holder.session, "contextual_voice", value.mediaStoragePath)) {
+                                        is VoiceMediaResult.Success -> {
+                                            holder.updateSession(result.session)
+                                            result.value
+                                        }
+                                        is VoiceMediaResult.Failure -> {
+                                            result.session?.let(holder::updateSession)
+                                            holder.showMessage(result.message)
+                                            null
+                                        }
                                     }
                                 }
+                            } else {
+                                Text(
+                                    value.body,
+                                    Modifier.padding(TeswaSpacing.md),
+                                    color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        } else {
-                            Text(
-                                value.body,
-                                Modifier.padding(TeswaSpacing.md),
-                                color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        }
+                        if (!mine) {
+                            TextButton(
+                                onClick = {
+                                    onReport(
+                                        ReportTarget.ContextualMessage(
+                                            conversationId = thread.conversation.id,
+                                            messageId = value.id,
+                                            reportedUserId = value.senderId,
+                                            fallbackSubject = "رسالة من ${thread.conversation.other.displayName ?: thread.conversation.other.username ?: "مستخدم تِسوى"}",
+                                        ),
+                                    )
+                                },
+                            ) {
+                                Text("بلاغ")
+                            }
                         }
                     }
                 }
