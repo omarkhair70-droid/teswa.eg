@@ -1,7 +1,7 @@
 # TESWA REAL-DEVICE VISUAL CLOSURE 01 — DOLAB / ADD ITEM
 
 **Date:** 2026-09-21  
-**Status:** IMPLEMENTATION ACTIVE — DEVICE REVIEW NEXT  
+**Status:** INTERNAL v29 PUBLISHED — REAL DEVICE REVIEW NEXT  
 **Branch:** `audit/native-product-reality-20260917`  
 **Parent PR:** #526  
 **Baseline on device:** Internal Testing v28 / 1.0.12
@@ -108,3 +108,21 @@ Do not call this slice visually closed until a real-device build confirms:
 v28 remains the installed baseline.
 
 The first Play build carrying these real-device fixes must use **versionCode 29**.
+
+## Internal Testing checkpoint
+
+- app source candidate: `51bb564cd8da293c1233abd1c989617f932cfff5`
+- Android Native Foundation #231: **PASS**
+- release branch: `release/teswa-internal-20260921-v29`
+- one-shot release commit: `6e0978e0e12c6582c3af88193e2e4aa6f36606d2`
+- Google Play workflow run: `35551699553`
+- package: `com.teswa.mobile`
+- versionCode: **29**
+- versionName: **1.0.13**
+- track: **internal**
+- status: **completed**
+- release API: `https://core01.tail6afd9b.ts.net`
+- publish proof: `PLAY_PUBLISH=PASS package=com.teswa.mobile versionCode=29 track=internal status=completed`
+
+v28 remains the visual baseline only. v29 is now the device-review candidate for this slice.
+
