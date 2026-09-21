@@ -96,7 +96,8 @@ class DolabMediaResolver(private val context: Context) {
             uri = draft.file.toURI().toString(),
             displayName = draft.file.name,
             mediaType = "audio",
-            mimeType = draft.mimeType,
+            // MediaRecorder writes MPEG-4/AAC. Use the registered MIME type on the durable Dolab path.
+            mimeType = if (draft.mimeType == "audio/m4a") "audio/mp4" else draft.mimeType,
             sizeBytes = draft.sizeBytes,
             durationMs = draft.durationMs.toLong(),
             openStream = { draft.file.inputStream() },
