@@ -7,6 +7,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,11 +46,14 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.LocalContentImage
 import com.teswa.mobile.ui.NetworkImage
@@ -581,16 +586,27 @@ internal fun DolabPrivateObjectPortrait(
     item: DolabItem,
     media: List<DolabMedia>,
     notesCount: Int,
+    editable: Boolean = false,
+    onDeleteImage: ((DolabMedia) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val firstImage = media.firstOrNull { it.mediaType == "image" }
-    var imageUrl by remember(firstImage?.id, firstImage?.storagePath) { mutableStateOf<String?>(null) }
+    val images = remember(media) {
+        media.filter { it.mediaType == "image" }
+            .sortedBy { it.sortOrder }
+    }
+    val imageKey = images.joinToString("|") { "${it.id}:${it.storagePath}" }
+    var imageUrls by remember(imageKey) { mutableStateOf<Map<String, String?>>(emptyMap()) }
+    var fullScreenPage by remember(item.id) { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(firstImage?.id, firstImage?.storagePath) {
-        imageUrl = firstImage?.let { holder.mediaUrl(it) }
+    LaunchedEffect(imageKey) {
+        var loaded = emptyMap<String, String?>()
+        images.forEach { image ->
+            loaded = loaded + (image.id to holder.mediaUrl(image))
+            imageUrls = loaded
+        }
     }
 
-    val portraitHeight = if (firstImage != null) 318.dp else 196.dp
+    val portraitHeight = if (images.isNotEmpty()) 318.dp else 196.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -603,12 +619,41 @@ internal fun DolabPrivateObjectPortrait(
                 .clip(RoundedCornerShape(TeswaRadius.hero))
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .4f)),
         ) {
-            if (imageUrl != null) {
-                NetworkImage(
-                    url = imageUrl,
-                    contentDescription = item.title ?: "حاجة من دولابك",
-                    modifier = Modifier.fillMaxWidth().height(portraitHeight),
-                )
+            if (images.isNotEmpty()) {
+                val pagerState = rememberPagerState(pageCount = { images.size })
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    val image = images[page]
+                    NetworkImage(
+                        url = imageUrls[image.id],
+                        contentDescription = item.title ?: "حاجة من دولابك",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { fullScreenPage = page },
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+
+                if (images.size > 1) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(TeswaSpacing.sm),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = .88f),
+                        shape = RoundedCornerShape(TeswaRadius.sm),
+                    ) {
+                        Text(
+                            text = "${pagerState.currentPage + 1} / ${images.size}",
+                            modifier = Modifier.padding(
+                                horizontal = TeswaSpacing.sm,
+                                vertical = TeswaSpacing.xs,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
             } else {
                 DolabObjectSlotPlaceholder(
                     status = item.status,
@@ -625,6 +670,20 @@ internal fun DolabPrivateObjectPortrait(
             )
         }
 
+        if (images.size > 1) {
+            Text(
+                text = "اسحب بين الصور · دوس على أي صورة عشان تفتحها كاملة",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (images.size == 1) {
+            Text(
+                text = "دوس على الصورة عشان تفتحها كاملة",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Text(
             text = item.title?.takeIf(String::isNotBlank) ?: "حاجة من غير اسم",
             style = MaterialTheme.typography.headlineSmall,
@@ -634,6 +693,7 @@ internal fun DolabPrivateObjectPortrait(
         val trace = buildList {
             item.category?.takeIf(String::isNotBlank)?.let(::add)
             item.condition?.takeIf(String::isNotBlank)?.let(::add)
+            if (images.size > 1) add("${images.size} صور")
             if (notesCount > 0) add("${notesCount} ملاحظات")
         }.joinToString(" · ")
         if (trace.isNotBlank()) {
@@ -642,6 +702,100 @@ internal fun DolabPrivateObjectPortrait(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+
+    fullScreenPage?.let { initialPage ->
+        if (images.isNotEmpty()) {
+            DolabFullScreenGallery(
+                holder = holder,
+                item = item,
+                images = images,
+                imageUrls = imageUrls,
+                initialPage = initialPage.coerceIn(0, images.lastIndex),
+                editable = editable,
+                onDeleteImage = onDeleteImage,
+                onDismiss = { fullScreenPage = null },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DolabFullScreenGallery(
+    holder: DolabStateHolder,
+    item: DolabItem,
+    images: List<DolabMedia>,
+    imageUrls: Map<String, String?>,
+    initialPage: Int,
+    editable: Boolean,
+    onDeleteImage: ((DolabMedia) -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { images.size },
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                val image = images[page]
+                NetworkImage(
+                    url = imageUrls[image.id],
+                    contentDescription = item.title ?: "صورة من دولابك",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 72.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(TeswaSpacing.lg),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text("إغلاق", color = Color.White)
+                }
+                Text(
+                    text = "${pagerState.currentPage + 1} / ${images.size}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                )
+            }
+
+            if (editable && onDeleteImage != null) {
+                TextButton(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(TeswaSpacing.xl),
+                    onClick = {
+                        val target = images[pagerState.currentPage]
+                        onDismiss()
+                        onDeleteImage(target)
+                    },
+                ) {
+                    Text("شيل الصورة من الحاجة", color = MaterialTheme.colorScheme.error)
+                }
+            }
         }
     }
 }
