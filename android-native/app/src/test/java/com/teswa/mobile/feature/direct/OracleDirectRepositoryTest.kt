@@ -16,6 +16,35 @@ class OracleDirectRepositoryTest {
     private val auth=SessionAuthenticator{current,_->AuthResult.Success(current)}
     @Test fun parsesInboxAndRequestState()=runBlocking{val t=DirectQueue(response(200,JSONObject("""{"items":[{"conversationId":"$conversation","status":"requested","requestedBy":"$other","otherUserId":"$other","otherDisplayName":"سلمى","otherUsername":"salma","otherAvatarUrl":null,"lastMessageBody":"أهلاً","lastMessageSenderId":"$other","lastMessageAt":"2026-09-15T12:00:00Z","unreadCount":1,"requiresAction":true}]}""")));val r=OracleDirectRepository(auth,t).loadInbox(session) as DirectResult.Success;assertTrue(r.value.single().requiresAction);assertEquals("/v1/direct/conversations",t.requests.single().path)}
     @Test fun sendsExactTextBody()=runBlocking{val t=DirectQueue(response(200,JSONObject().put("ok",true).put("messageId",message).put("conversationId",conversation).put("createdAt","now")));val c=DirectConversation(conversation,"accepted",me,other,"سلمى",null,null,null,null,0,false);val r=OracleDirectRepository(auth,t).send(session,c,"  أهلاً  ");assertTrue(r is DirectResult.Success);val request=t.requests.single();assertEquals("/v1/direct/conversations/$conversation/native",request.path);val body=requireNotNull(request.body);assertEquals(setOf("body","replyToMessageId","attachments","metadata"),body.keys().asSequence().toSet());assertEquals("أهلاً",body.getString("body"));assertTrue(body.isNull("replyToMessageId"))}
+    @Test fun sendsRichAttachmentEnvelope()=runBlocking{
+        val t=DirectQueue(response(200,JSONObject().put("ok",true).put("messageId",message).put("conversationId",conversation).put("createdAt","now")))
+        val conversationValue=DirectConversation(conversation,"accepted",me,other,"سلمى",null,null,null,null,0,false)
+        val attachment=DirectAttachment(
+            id=null,
+            kind="image",
+            storagePath="direct/$conversation/$me/photo.jpg",
+            storageBucket="direct-chat-media",
+            fileName="photo.jpg",
+            mimeType="image/jpeg",
+            sizeBytes=42,
+            durationMs=null,
+            width=null,
+            height=null,
+        )
+        val result=OracleDirectRepository(auth,t).sendRich(session,conversationValue,null,null,listOf(attachment))
+        assertTrue(result is DirectResult.Success)
+        val request=t.requests.single()
+        assertEquals("/v1/direct/conversations/$conversation/native",request.path)
+        val body=requireNotNull(request.body)
+        assertTrue(body.isNull("body"))
+        val attachments=body.getJSONArray("attachments")
+        assertEquals(1,attachments.length())
+        val sent=attachments.getJSONObject(0)
+        assertEquals("image",sent.getString("kind"))
+        assertEquals("direct-chat-media",sent.getString("storageBucket"))
+        assertEquals("direct/$conversation/$me/photo.jpg",sent.getString("storagePath"))
+    }
+
     @Test fun startsWithFirstMessageUsingExactEnvelope()=runBlocking{val t=DirectQueue(response(200,JSONObject().put("ok",true).put("conversationId",conversation).put("messageId",message).put("status","requested").put("createdAt","now").put("message","تم إرسال الطلب")));val r=OracleDirectRepository(auth,t).startWithMessage(session,other,"  ممكن نتكلم؟  ") as DirectResult.Success;assertEquals(conversation,r.value.conversationId);val request=t.requests.single();assertEquals("/v1/direct/conversations/start-with-message",request.path);val body=requireNotNull(request.body);assertEquals(setOf("targetUserId","body"),body.keys().asSequence().toSet());assertEquals(other,body.getString("targetUserId"));assertEquals("ممكن نتكلم؟",body.getString("body"))}
     @Test fun loadsNativeRepliesAttachmentsAndReactions()=runBlocking{
         val attachmentId="77777777-7777-7777-7777-777777777777"
