@@ -396,41 +396,12 @@ private fun DolabItemDetail(
         }
 
         item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TeswaLayout.ScreenHorizontal),
-                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-            ) {
-                TeswaWardrobeSection(
-                    title = "ذاكرة الحاجة",
-                    supporting = buildString {
-                        append("${media.size} ميديا · ${notes.size} ملاحظة")
-                        if (item.status == DolabItemStatus.READY) append(" · جاهزة للخطوة الجاية")
-                    },
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TeswaStatePill(
-                            text = statusLabel(item.status),
-                            emphasis = statusEmphasis(item.status),
-                        )
-                        item.exchangeIntent?.takeIf { it.isNotBlank() }?.let {
-                            Text(
-                                text = it,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-            }
+            DolabPrivateTraceRail(
+                item = item,
+                notes = notes,
+                media = media,
+                modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+            )
         }
 
         holder.message?.let { value ->
@@ -489,28 +460,21 @@ private fun DolabItemDetail(
 
         if (item.status == DolabItemStatus.READY && onContinueAsListing != null) {
             item {
-                Column(
-                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
-                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-                ) {
-                    TeswaTraceNote("الخطوة دي هي اللحظة اللي الحاجة بتعدّي فيها من مساحتك الخاصة للمجال العام.")
-                    TeswaPrimaryAction(
-                        text = if (continueWorking) "بنجهزها للنشر…" else "حطّها في اللعب",
-                        icon = TeswaIcons.PutIntoPlay,
-                        loading = continueWorking,
-                        enabled = !busy,
-                        onClick = {
-                            if (!continueWorking) {
-                                scope.launch {
-                                    continueWorking = true
-                                    val error = onContinueAsListing(item)
-                                    continueWorking = false
-                                    if (error != null) holder.showError(error)
-                                }
+                DolabPublishThreshold(
+                    working = continueWorking,
+                    enabled = !busy,
+                    onPublish = {
+                        if (!continueWorking) {
+                            scope.launch {
+                                continueWorking = true
+                                val error = onContinueAsListing(item)
+                                continueWorking = false
+                                if (error != null) holder.showError(error)
                             }
-                        },
-                    )
-                }
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+                )
             }
         }
 
