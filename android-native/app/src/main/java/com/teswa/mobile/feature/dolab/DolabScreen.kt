@@ -3,24 +3,17 @@ package com.teswa.mobile.feature.dolab
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,15 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.voice.VoiceComposer
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaActionSheet
-import com.teswa.mobile.ui.system.TeswaArchiveLabel
-import com.teswa.mobile.ui.system.TeswaChoiceChip
 import com.teswa.mobile.ui.system.TeswaEmphasis
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
 import com.teswa.mobile.ui.system.TeswaIcons
@@ -60,7 +50,6 @@ import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
 import com.teswa.mobile.ui.system.TeswaSectionHeader
 import com.teswa.mobile.ui.system.TeswaSpacing
-import com.teswa.mobile.ui.system.TeswaStatePill
 import com.teswa.mobile.ui.system.TeswaTextField
 import com.teswa.mobile.ui.system.TeswaTraceNote
 import com.teswa.mobile.ui.system.TeswaWardrobeSection
@@ -216,97 +205,7 @@ private fun DolabShelf(
     }
 }
 
-@Composable
-private fun DolabShelfObject(
-    holder: DolabStateHolder,
-    item: DolabItem,
-    media: List<DolabMedia>,
-    notesCount: Int,
-    onOpen: () -> Unit,
-) {
-    val firstImage = media.firstOrNull { it.mediaType == "image" }
-    var imageUrl by remember(firstImage?.id, firstImage?.storagePath) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(firstImage?.id, firstImage?.storagePath) {
-        imageUrl = if (firstImage != null) holder.mediaUrl(firstImage) else null
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen),
-        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (imageUrl != null) {
-            NetworkImage(
-                url = imageUrl,
-                contentDescription = item.title ?: "حاجة من دولابك",
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(RoundedCornerShape(TeswaLayout.ProfileCoverRadius)),
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = .85f),
-                        shape = RoundedCornerShape(TeswaLayout.ProfileCoverRadius),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                TeswaMarkIcon(
-                    mark = TeswaMark.Mine,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = .7f),
-                    size = 36.dp,
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = item.title?.takeIf { it.isNotBlank() } ?: "حاجة من غير اسم",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                TeswaArchiveLabel(statusLabel(item.status))
-            }
-            item.description?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val trace = buildList {
-                item.category?.takeIf { it.isNotBlank() }?.let(::add)
-                if (media.isNotEmpty()) add("${media.size} ميديا")
-                if (notesCount > 0) add("$notesCount ملاحظات")
-            }.joinToString(" · ")
-            if (trace.isNotBlank()) {
-                Text(
-                    text = trace,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun DolabItemDetail(
@@ -837,50 +736,8 @@ private fun DolabEditFields(
     }
 }
 
-@Composable
-private fun DolabCreateDialog(
-    busy: Boolean,
-    onDismiss: () -> Unit,
-    onCreate: (DolabItemDraft) -> Unit,
-) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
 
-    TeswaActionSheet(
-        title = "احفظ حاجة في دولابك",
-        supporting = "مش لازم تبقى جاهزة للنشر أو التبديل. احفظها الأول وخلي القرار عندك.",
-        onDismiss = onDismiss,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
-            TeswaTextField(
-                value = title,
-                onValueChange = { title = it.take(160) },
-                label = "اسم بسيط",
-                enabled = !busy,
-            )
-            TeswaTextField(
-                value = description,
-                onValueChange = { description = it.take(4_000) },
-                label = "ملاحظة أو فكرة",
-                singleLine = false,
-                minLines = 2,
-                maxLines = 5,
-                enabled = !busy,
-            )
-            TeswaPrimaryAction(
-                text = "حفظ في دولابي",
-                onClick = { onCreate(DolabItemDraft(title = title, description = description)) },
-                enabled = !busy && (title.isNotBlank() || description.isNotBlank()),
-                loading = busy,
-            )
-            TeswaSecondaryAction(
-                text = "رجوع",
-                onClick = onDismiss,
-                enabled = !busy,
-            )
-        }
-    }
-}
+
 @Composable
 private fun DolabMessage(
     value: String,
@@ -895,47 +752,15 @@ private fun DolabMessage(
     )
 }
 
-private fun wardrobeTitle(filter: DolabFilter): String = when (filter) {
-    DolabFilter.ALL -> "الرفوف كلها"
-    DolabFilter.IN_PROGRESS -> "لسه بتجهزها"
-    DolabFilter.READY -> "جاهزة تخرج"
-    DolabFilter.PUBLISHED -> "خرجت للّعب"
-    DolabFilter.ARCHIVED -> "اللي اتحفظ في الأرشيف"
-}
 
-private fun wardrobeSupporting(filter: DolabFilter): String = when (filter) {
-    DolabFilter.ALL -> "كل حاجة تفضل واضحة كجزء من تاريخها: مسودة، جاهزة، في اللعب، أو مؤرشفة."
-    DolabFilter.IN_PROGRESS -> "حاجات لسه خاصة بيك ومش مطالبة تبقى جاهزة للناس."
-    DolabFilter.READY -> "مكتملة عندك، لكن قرار خروجها للمجال العام لسه بإيدك."
-    DolabFilter.PUBLISHED -> "الحاجات اللي خرجت من حدود الدولاب وبقت احتمالات بينك وبين ناس تانية."
-    DolabFilter.ARCHIVED -> "متشالت من الواجهة العامة، لكن أثرها وسياقها لسه موجودين."
-}
 
-private fun filterLabel(filter: DolabFilter): String = when (filter) {
-    DolabFilter.ALL -> "الكل"
-    DolabFilter.IN_PROGRESS -> "بجهزها"
-    DolabFilter.READY -> "جاهزة"
-    DolabFilter.PUBLISHED -> "في اللعب"
-    DolabFilter.ARCHIVED -> "أرشيف"
-}
 
-private fun statusLabel(status: DolabItemStatus): String = when (status) {
-    DolabItemStatus.DRAFT -> "لسه بتتجهز"
-    DolabItemStatus.READY -> "جاهزة"
-    DolabItemStatus.PUBLISHED -> "في اللعب"
-    DolabItemStatus.EXCHANGED -> "اتبدّلت"
-    DolabItemStatus.ARCHIVED -> "في الأرشيف"
-    DolabItemStatus.UNKNOWN -> "محفوظة"
-}
 
-private fun statusEmphasis(status: DolabItemStatus): TeswaEmphasis = when (status) {
-    DolabItemStatus.DRAFT -> TeswaEmphasis.Quiet
-    DolabItemStatus.READY -> TeswaEmphasis.Normal
-    DolabItemStatus.PUBLISHED -> TeswaEmphasis.Strong
-    DolabItemStatus.EXCHANGED -> TeswaEmphasis.Commitment
-    DolabItemStatus.ARCHIVED,
-    DolabItemStatus.UNKNOWN -> TeswaEmphasis.Quiet
-}
+
+
+
+
+
 
 private fun mediaTypeLabel(value: String): String = when (value) {
     "image" -> "صورة"
