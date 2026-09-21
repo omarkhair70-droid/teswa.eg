@@ -19,6 +19,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +53,8 @@ import com.teswa.mobile.ui.system.TeswaSpacing
 import com.teswa.mobile.ui.system.TeswaStatePill
 import com.teswa.mobile.ui.system.TeswaTextField
 import com.teswa.mobile.ui.system.TeswaTraceNote
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @Composable
@@ -223,6 +226,24 @@ private fun DirectThread(
 ) {
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(value.id) {
+        while (isActive) {
+            holder.refreshTyping()
+            delay(2_500)
+        }
+    }
+
+    LaunchedEffect(value.id, holder.composer) {
+        if (value.status == "accepted") {
+            val active = holder.composer.isNotBlank()
+            holder.setTyping(active)
+            if (active) {
+                delay(3_500)
+                holder.setTyping(false)
+            }
+        }
+    }
+
     Column(modifier.fillMaxSize()) {
         TeswaFocusedHeader(title = "كلام مباشر", onBack = holder::close)
         Column(
@@ -235,7 +256,11 @@ private fun DirectThread(
             TeswaPersonIdentity(
                 name = value.otherDisplayName ?: value.otherUsername ?: "مستخدم تِسوى",
                 avatarUrl = value.otherAvatarUrl,
-                supporting = if (value.status == "requested") "طلب كلام" else "المساحة المباشرة مفتوحة",
+                supporting = when {
+                    holder.otherTyping -> "بيكتب دلوقتي…"
+                    value.status == "requested" -> "طلب كلام"
+                    else -> "المساحة المباشرة مفتوحة"
+                },
             )
         }
 
@@ -311,76 +336,186 @@ private fun DirectMessageBubble(
 ) {
     val scope = rememberCoroutineScope()
     var saving by remember(message.id) { mutableStateOf(false) }
-    val canSave = message.body.isNotBlank() ||
-        (message.messageType == "voice" && !message.audioStoragePath.isNullOrBlank())
+    val deleted = message.deletedAt != null
+    val canSave = !deleted && (
+        (message.messageType == "voice" && !message.audioStoragePath.isNullOrBlank()) ||
+            (message.attachments.isEmpty() && message.body.isNotBlank())
+        )
 
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+        Column(
+            horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+            modifier = Modifier.fillMaxWidth(.86f),
+        ) {
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             ) {
-                if (message.messageType == "voice" && message.audioStoragePath != null) {
-                    VoiceMessagePlayer(message.audioDurationMs) {
-                        when (val result = voiceMediaRepository.signedUrl(holder.session, "direct_voice", message.audioStoragePath)) {
-                            is VoiceMediaResult.Success -> {
-                                holder.updateSession(result.session)
-                                result.value
-                            }
-                            is VoiceMediaResult.Failure -> {
-                                result.session?.let(holder::updateSession)
-                                holder.showMessage(result.message)
-                                null
+                Column(
+                    modifier = Modifier.padding(TeswaSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                ) {
+                    message.replyBody?.takeIf { !deleted }?.let { reply ->
+                        Surface(
+                            color = if (mine) {
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = .12f)
+                            } else {
+                                MaterialTheme.colorScheme.surface.copy(alpha = .72f)
+                            },
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Column(
+                                Modifier.padding(TeswaSpacing.xs),
+                                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+                            ) {
+                                Text(
+                                    text = "رد على رسالة",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = reply,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                         }
                     }
-                } else {
-                    Text(
-                        message.body,
-                        Modifier.padding(TeswaSpacing.md),
-                        color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+
+                    when {
+                        deleted -> Text(
+                            text = "تم حذف هذه الرسالة",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (mine) {
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = .72f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        message.messageType == "voice" && message.audioStoragePath != null -> {
+                            VoiceMessagePlayer(message.audioDurationMs) {
+                                when (
+                                    val result = voiceMediaRepository.signedUrl(
+                                        holder.session,
+                                        "direct_voice",
+                                        message.audioStoragePath,
+                                    )
+                                ) {
+                                    is VoiceMediaResult.Success -> {
+                                        holder.updateSession(result.session)
+                                        result.value
+                                    }
+                                    is VoiceMediaResult.Failure -> {
+                                        result.session?.let(holder::updateSession)
+                                        holder.showMessage(result.message)
+                                        null
+                                    }
+                                }
+                            }
+                        }
+                        message.attachments.isNotEmpty() -> {
+                            Text(
+                                text = directAttachmentSummary(message.attachments),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            message.body
+                                .takeIf { it.isNotBlank() && it !in setOf("صورة", "فيديو", "ملف", "رسالة صوتية") }
+                                ?.let { Text(it) }
+                            Text(
+                                text = "المرفقات موجودة في الرسالة — عارض الصور والفيديو والملفات بيتقفل في الـslice الجاية.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (mine) {
+                                    MaterialTheme.colorScheme.onPrimary.copy(alpha = .75f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
+                        else -> Text(message.body)
+                    }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs)) {
-                TextButton(
-                    enabled = canSave && !saving,
-                    onClick = {
-                        scope.launch {
-                            saving = true
-                            when (val result = dolabBridge.saveMessage(holder.session, conversation, message)) {
-                                is DolabResult.Success -> holder.applyExternalSuccess(result.session, "اتحفظت في دولابك.")
-                                is DolabResult.Failure -> holder.applyExternalFailure(
-                                    result.session,
-                                    result.message,
-                                    result.unauthorized,
-                                )
-                            }
-                            saving = false
+            val loveCount = message.reactions.count { it.reaction == "love" }
+            val likeCount = message.reactions.count { it.reaction == "thumbs_up" }
+            if (!deleted && (loveCount > 0 || likeCount > 0)) {
+                Text(
+                    text = buildList {
+                        if (loveCount > 0) add("❤️ $loveCount")
+                        if (likeCount > 0) add("👍 $likeCount")
+                    }.joinToString("  "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (!deleted) {
+                Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs)) {
+                    TextButton(onClick = { holder.replyTo(message) }) { Text("رد") }
+                    TextButton(onClick = { scope.launch { holder.toggleReaction(message, "love") } }) { Text("❤️") }
+                    TextButton(onClick = { scope.launch { holder.toggleReaction(message, "thumbs_up") } }) { Text("👍") }
+
+                    if (canSave) {
+                        TextButton(
+                            enabled = !saving,
+                            onClick = {
+                                scope.launch {
+                                    saving = true
+                                    when (val result = dolabBridge.saveMessage(holder.session, conversation, message)) {
+                                        is DolabResult.Success -> holder.applyExternalSuccess(result.session, "اتحفظت في دولابك.")
+                                        is DolabResult.Failure -> holder.applyExternalFailure(
+                                            result.session,
+                                            result.message,
+                                            result.unauthorized,
+                                        )
+                                    }
+                                    saving = false
+                                }
+                            },
+                        ) { Text(if (saving) "بنحفظ…" else "دولابي") }
+                    }
+
+                    if (mine && message.attachments.isEmpty()) {
+                        TextButton(onClick = { scope.launch { holder.deleteMessage(message) } }) {
+                            Text("حذف")
                         }
-                    },
-                ) { Text(if (saving) "بنحفظ…" else "احفظ في دولابي") }
-                if (!mine) {
-                    TextButton(
-                        onClick = {
-                            onReport(
-                                ReportTarget.DirectMessage(
-                                    conversationId = conversation.id,
-                                    messageId = message.id,
-                                    reportedUserId = message.senderId,
-                                    fallbackSubject = "رسالة من ${conversation.otherDisplayName ?: conversation.otherUsername ?: "مستخدم تِسوى"}",
-                                ),
-                            )
-                        },
-                    ) { Text("بلاغ") }
+                    } else if (!mine) {
+                        TextButton(
+                            onClick = {
+                                onReport(
+                                    ReportTarget.DirectMessage(
+                                        conversationId = conversation.id,
+                                        messageId = message.id,
+                                        reportedUserId = message.senderId,
+                                        fallbackSubject = "رسالة من ${conversation.otherDisplayName ?: conversation.otherUsername ?: "مستخدم تِسوى"}",
+                                    ),
+                                )
+                            },
+                        ) { Text("بلاغ") }
+                    }
                 }
             }
         }
     }
+}
+
+private fun directAttachmentSummary(values: List<DirectAttachment>): String {
+    val images = values.count { it.kind == "image" }
+    val videos = values.count { it.kind == "video" }
+    val files = values.count { it.kind == "file" }
+    val audio = values.count { it.kind == "audio" }
+    return buildList {
+        if (images > 0) add(if (images == 1) "صورة" else "$images صور")
+        if (videos > 0) add(if (videos == 1) "فيديو" else "$videos فيديوهات")
+        if (files > 0) add(if (files == 1) "ملف" else "$files ملفات")
+        if (audio > 0) add(if (audio == 1) "تسجيل" else "$audio تسجيلات")
+    }.joinToString(" · ").ifBlank { "مرفق" }
 }
 
 @Composable
@@ -395,10 +530,43 @@ private fun DirectComposer(
             .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.sm),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
     ) {
+        holder.replyingTo?.let { target ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f),
+                shape = MaterialTheme.shapes.small,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(TeswaSpacing.xs),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "بترد على",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = target.body.ifBlank {
+                                if (target.messageType == "voice") "رسالة صوتية" else directAttachmentSummary(target.attachments)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    TextButton(onClick = holder::clearReply) { Text("إلغاء") }
+                }
+            }
+        }
+
         DolabPickerButton(holder, dolabBridge, Modifier.fillMaxWidth())
+
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             VoiceComposer(
-                enabled = true,
+                enabled = holder.replyingTo == null && !holder.working,
                 sending = holder.working,
                 uploadProgress = holder.voiceUploadProgress,
                 onSend = holder::sendVoice,
@@ -409,15 +577,15 @@ private fun DirectComposer(
                 value = holder.composer,
                 onValueChange = holder::compose,
                 modifier = Modifier.weight(1f),
-                label = "رسالة مباشرة",
-                placeholder = "اكتب رسالة…",
+                label = if (holder.replyingTo == null) "رسالة مباشرة" else "ردك",
+                placeholder = if (holder.replyingTo == null) "اكتب رسالة…" else "كمّل ردك…",
                 singleLine = false,
                 maxLines = 4,
             )
             Spacer(Modifier.width(TeswaSpacing.xs))
             com.teswa.mobile.ui.system.TeswaIconAction(
                 icon = TeswaIcons.Send,
-                contentDescription = "إرسال الرسالة",
+                contentDescription = if (holder.replyingTo == null) "إرسال الرسالة" else "إرسال الرد",
                 onClick = { scope.launch { holder.send() } },
                 enabled = holder.composer.isNotBlank() && !holder.working,
             )
