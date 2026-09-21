@@ -59,6 +59,10 @@ data class DirectReactionToggle(
     val count: Int,
 )
 
+data class DirectDeleteOutcome(
+    val storagePaths: List<String>,
+)
+
 data class DirectComposeTarget(
     val userId: String,
     val displayName: String?,
