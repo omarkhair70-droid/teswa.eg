@@ -23,6 +23,7 @@ import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.AddItemScreen
 import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.direct.DirectAttachmentMediaRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
@@ -92,6 +93,7 @@ fun AppShell(
     notificationsRepository: NotificationsRepository,
     nativePushManager: NativePushManager,
     directRepository: DirectRepository,
+    directAttachmentMediaRepository: DirectAttachmentMediaRepository,
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
@@ -411,6 +413,7 @@ fun AppShell(
                     repository = messagingRepository,
                     offersRepository = offersRepository,
                     directRepository = directRepository,
+                    directAttachmentMediaRepository = directAttachmentMediaRepository,
                     contextualRepository = contextualRepository,
                     dolabRepository = dolabRepository,
                     voiceMediaRepository = voiceMediaRepository,
