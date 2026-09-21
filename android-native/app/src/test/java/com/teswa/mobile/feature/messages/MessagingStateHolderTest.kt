@@ -53,6 +53,25 @@ class MessagingStateHolderTest {
         assertTrue(holder.threadState is ThreadUiState.Content)
         assertEquals("الاتصال ضعيف", holder.banner)
     }
+    @Test
+    fun completionImmediatelyMovesDealStateInInbox() = runBlocking {
+        val repository = FakeMessagingRepository(session, listOf(conversation)).apply {
+            completionResult = MessagingResult.Success(true, session)
+        }
+        val holder = MessagingStateHolder(session, repository)
+        holder.load()
+        holder.open(conversation)
+
+        val confirmed = holder.confirmCompletion()
+
+        assertTrue(confirmed)
+        assertEquals("completed", holder.selectedConversation?.status)
+        assertEquals(
+            "completed",
+            (holder.inboxState as InboxUiState.Content).items.single().status,
+        )
+    }
+
 }
 
 private class FakeMessagingRepository(
@@ -60,6 +79,7 @@ private class FakeMessagingRepository(
     private val conversations: List<DealConversation>,
 ) : MessagingRepository {
     var messagesResult: MessagingResult<List<DealMessage>> = MessagingResult.Success(emptyList(), session)
+    var completionResult: MessagingResult<Boolean> = MessagingResult.Success(false, session)
     var markReadCalls = 0
 
     override suspend fun loadInbox(session: AuthSession, offset: Int, limit: Int) =
@@ -79,5 +99,5 @@ private class FakeMessagingRepository(
         MessagingResult.Success(emptySet(), this.session)
 
     override suspend fun confirmCompletion(session: AuthSession, conversation: DealConversation): MessagingResult<Boolean> =
-        MessagingResult.Success(false, this.session)
+        completionResult
 }
