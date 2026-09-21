@@ -222,9 +222,9 @@ private fun DealActivityMoment(
         ) {
             TeswaExchangeMemoryPair(
                 requestedTitle = deal.requestedItemTitle,
-                requestedImageUrl = null,
+                requestedImageUrl = deal.requestedItemImageUrl,
                 offeredTitle = deal.offeredItemTitle,
-                offeredImageUrl = null,
+                offeredImageUrl = deal.offeredItemImageUrl,
                 state = state,
             )
 

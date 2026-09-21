@@ -146,7 +146,6 @@ fun OffersContent(
                                     haptics.performTeswa(TeswaHapticEvent.Reject)
                                 }
                             }
-                            dealId?.let(onOpenDeal)
                         }
                     }
                 },
@@ -274,8 +273,21 @@ private fun OfferMoment(
                     ) { Text("مش مناسب") }
                 }
             }
+            offer.dealId != null && offer.status == "accepted" -> {
+                TeswaInlineMessage(
+                    title = "العلاقة اتثبتت",
+                    body = "نفس الحاجتين بقوا صفقة مشتركة. ادخلوا التنسيق من غير ما نبدأ سياق جديد.",
+                    icon = TeswaIcons.Accepted,
+                    emphasis = TeswaEmphasis.Normal,
+                )
+                TeswaPrimaryAction(
+                    text = "ادخلوا بينكم دلوقتي",
+                    icon = TeswaIcons.BetweenUs,
+                    onClick = onOpenDeal,
+                )
+            }
             offer.dealId != null -> TeswaSecondaryAction(
-                text = "افتح العلاقة كصفقة",
+                text = "افتح العلاقة",
                 icon = TeswaIcons.Accepted,
                 onClick = onOpenDeal,
             )

@@ -68,8 +68,7 @@ import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.ui.system.TeswaArchiveLabel
 import com.teswa.mobile.ui.system.TeswaEmphasis
-import com.teswa.mobile.ui.system.TeswaEvidenceLine
-import com.teswa.mobile.ui.system.TeswaExchangePair
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
 import com.teswa.mobile.ui.system.TeswaFocusedHeader
 import com.teswa.mobile.ui.system.TeswaHapticEvent
 import com.teswa.mobile.ui.system.TeswaIcons
@@ -79,7 +78,6 @@ import com.teswa.mobile.ui.system.TeswaLayout
 import com.teswa.mobile.ui.system.TeswaMark
 import com.teswa.mobile.ui.system.TeswaMarkIcon
 import com.teswa.mobile.ui.system.TeswaMotion
-import com.teswa.mobile.ui.system.TeswaObjectIdentity
 import com.teswa.mobile.ui.system.TeswaPersonIdentity
 import com.teswa.mobile.ui.system.TeswaPrimaryAction
 import com.teswa.mobile.ui.system.TeswaSecondaryAction
@@ -587,56 +585,21 @@ private fun DealThreadScreen(
                 CenterState(state.message, action = { scope.launch { holder.reloadThread() } })
             }
 
-            is ThreadUiState.Content -> LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(
-                    horizontal = TeswaLayout.ScreenHorizontal,
-                    vertical = TeswaSpacing.md,
-                ),
-                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
-            ) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TeswaArchiveLabel(
-                            text = dealStatusPill(conversation.status),
-                            tone = if (conversation.status == "completed") {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
-                        )
-                        Text(
-                            text = "DEAL / ${conversation.dealId.take(8)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                item {
-                    TeswaExchangePair(
-                        requested = TeswaObjectIdentity(conversation.requestedItemTitle),
-                        offered = TeswaObjectIdentity(conversation.offeredItemTitle),
-                        state = dealStatusPill(conversation.status),
-                        stateEmphasis = when (conversation.status) {
-                            "completed" -> TeswaEmphasis.Commitment
-                            "cancelled", "disputed" -> TeswaEmphasis.Quiet
-                            else -> TeswaEmphasis.Strong
-                        },
-                    )
-                }
-                item {
-                    TeswaPersonIdentity(
-                        name = conversation.otherDisplayName ?: "مستخدم تِسوى",
-                        avatarUrl = conversation.otherAvatarUrl,
-                        supporting = "الطرف التاني في العلاقة دي",
-                    )
-                }
-                item { DealCompletionCard(holder, conversation) }
+            is ThreadUiState.Content -> {
+                DealRelationshipHeader(
+                    conversation = conversation,
+                    holder = holder,
+                )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(
+                        horizontal = TeswaLayout.ScreenHorizontal,
+                        vertical = TeswaSpacing.md,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                ) {
+                    item { DealCompletionCard(holder, conversation) }
                 if (conversation.status == "completed") {
                     item {
                         TeswaTraceNote("العلاقة دي خرجت من الشاشة، حصلت في الواقع، واتقفلت بتأكيد الطرفين. من هنا بقت جزء من الدليل.")
@@ -652,16 +615,17 @@ private fun DealThreadScreen(
                     }
                 }
                 if (state.messages.isEmpty()) item { ThreadWelcome(conversation) }
-                items(state.messages, key = { it.id }) { message ->
-                    MessageBubble(
-                        message = message,
-                        mine = message.senderId == holder.session.user.id,
-                        holder = holder,
-                        voiceMediaRepository = voiceMediaRepository,
-                        dealId = conversation.dealId,
-                        otherDisplayName = conversation.otherDisplayName,
-                        onReport = onReport,
-                    )
+                    items(state.messages, key = { it.id }) { message ->
+                        MessageBubble(
+                            message = message,
+                            mine = message.senderId == holder.session.user.id,
+                            holder = holder,
+                            voiceMediaRepository = voiceMediaRepository,
+                            dealId = conversation.dealId,
+                            otherDisplayName = conversation.otherDisplayName,
+                            onReport = onReport,
+                        )
+                    }
                 }
             }
         }
@@ -705,6 +669,132 @@ private fun DealThreadScreen(
 }
 
 @Composable
+private fun DealRelationshipHeader(
+    conversation: DealConversation,
+    holder: MessagingStateHolder,
+) {
+    val mine = holder.session.user.id in holder.confirmationUserIds
+    val other = conversation.otherParticipantId in holder.confirmationUserIds
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = TeswaSpacing.xxs,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            TeswaExchangeMemoryPair(
+                requestedTitle = conversation.requestedItemTitle,
+                requestedImageUrl = conversation.requestedItemImageUrl,
+                offeredTitle = conversation.offeredItemTitle,
+                offeredImageUrl = conversation.offeredItemImageUrl,
+                state = dealStatusPill(conversation.status),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaPersonIdentity(
+                    name = conversation.otherDisplayName ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.otherAvatarUrl,
+                    supporting = dealRoomNextAction(conversation.status, mine, other),
+                    modifier = Modifier.weight(1f),
+                )
+                TeswaStatePill(
+                    text = dealStatusPill(conversation.status),
+                    emphasis = when (conversation.status) {
+                        "completed" -> TeswaEmphasis.Commitment
+                        "cancelled", "disputed" -> TeswaEmphasis.Quiet
+                        else -> TeswaEmphasis.Strong
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun dealRoomNextAction(status: String, mine: Boolean, other: Boolean): String = when (status) {
+    "coordinating" -> "اتفقوا على المكان والوقت، وبعد التنفيذ كل طرف يأكد"
+    "completed_pending_confirmation" -> when {
+        mine && !other -> "إنت أكدت · مستنيين الطرف التاني"
+        !mine && other -> "الطرف التاني أكد · محتاجين تأكيدك"
+        else -> "مستنيين التأكيدين"
+    }
+    "completed" -> "التبديل اتأكد من الطرفين وبقى جزء من السجل"
+    "cancelled" -> "العلاقة اتقفلت"
+    "disputed" -> "التنسيق متوقف لحين المراجعة"
+    else -> "شوف الخطوة الجاية في العلاقة"
+}
+
+@Composable
+private fun DealConfirmationBridge(
+    mineConfirmed: Boolean,
+    otherConfirmed: Boolean,
+    otherName: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.weight(1f),
+            color = if (mineConfirmed) {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .55f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)
+            },
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Column(
+                modifier = Modifier.padding(TeswaSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                Text("إنت", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    if (mineConfirmed) "أكدت" else "لسه",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        TeswaMarkIcon(
+            mark = TeswaMark.BetweenUs,
+            color = if (mineConfirmed && otherConfirmed) {
+                MaterialTheme.colorScheme.secondary
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+            size = 30.dp,
+        )
+        Surface(
+            modifier = Modifier.weight(1f),
+            color = if (otherConfirmed) {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .55f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)
+            },
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Column(
+                modifier = Modifier.padding(TeswaSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                Text(otherName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    if (otherConfirmed) "أكد" else "لسه",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DealCompletionCard(holder: MessagingStateHolder, conversation: DealConversation) {
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -729,14 +819,10 @@ private fun DealCompletionCard(holder: MessagingStateHolder, conversation: DealC
             )
         }
         if (conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
-            TeswaEvidenceLine(
-                icon = if (mine) TeswaIcons.Accepted else TeswaIcons.Waiting,
-                text = if (mine) "تأكيدك متسجل" else "لسه محتاج تأكيدك",
-                supporting = "التأكيد هنا معناه إن التبديل حصل فعلًا في الواقع.",
-            )
-            TeswaEvidenceLine(
-                icon = if (other) TeswaIcons.Accepted else TeswaIcons.Waiting,
-                text = if (other) "الطرف التاني أكد" else "مستنيين تأكيد الطرف التاني",
+            DealConfirmationBridge(
+                mineConfirmed = mine,
+                otherConfirmed = other,
+                otherName = conversation.otherDisplayName ?: "الطرف التاني",
             )
             TeswaPrimaryAction(
                 text = if (mine) "تم تسجيل تأكيدك" else "أكد إن التبديل تم",

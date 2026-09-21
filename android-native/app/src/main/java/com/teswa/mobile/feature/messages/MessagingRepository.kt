@@ -69,16 +69,20 @@ class OracleMessagingRepository(
             return MessagingResult.Success(DealInboxPage(rows, inbox.value.body.optBoolean("hasMore")), inbox.session)
         }
 
-        val summaries = loadItemTitles(inbox.session, itemIds.distinct())
+        val summaries = loadItemSummaries(inbox.session, itemIds.distinct())
         if (summaries is MessagingResult.Failure) return summaries
         summaries as MessagingResult.Success
-        val titleById = summaries.value
+        val summaryById = summaries.value
         return MessagingResult.Success(
             DealInboxPage(
                 items = rows.map { row ->
+                    val requested = summaryById[row.requestedItemTitle]
+                    val offered = summaryById[row.offeredItemTitle]
                     row.copy(
-                        requestedItemTitle = titleById[row.requestedItemTitle] ?: "عنصر مطلوب غير متاح",
-                        offeredItemTitle = titleById[row.offeredItemTitle] ?: "عنصر معروض غير متاح",
+                        requestedItemTitle = requested?.title ?: "عنصر مطلوب غير متاح",
+                        offeredItemTitle = offered?.title ?: "عنصر معروض غير متاح",
+                        requestedItemImageUrl = requested?.imageUrl,
+                        offeredItemImageUrl = offered?.imageUrl,
                     )
                 },
                 hasMore = inbox.value.body.optBoolean("hasMore"),
@@ -305,7 +309,15 @@ class OracleMessagingRepository(
         return MessagingResult.Success(completed, updatedSession)
     }
 
-    private suspend fun loadItemTitles(session: AuthSession, ids: List<String>): MessagingResult<Map<String, String>> {
+    private data class DealExchangeItemSummary(
+        val title: String,
+        val imageUrl: String?,
+    )
+
+    private suspend fun loadItemSummaries(
+        session: AuthSession,
+        ids: List<String>,
+    ): MessagingResult<Map<String, DealExchangeItemSummary>> {
         val value = ids.joinToString(",")
         return when (val result = executor.execute(
             session,
@@ -315,15 +327,17 @@ class OracleMessagingRepository(
                 200 -> {
                     val raw = result.value.body.optJSONArray("items")
                         ?: return MessagingResult.Failure("استجابة عناصر التبادل غير مكتملة.", result.session)
-                    val titles = buildMap {
+                    val summaries = buildMap {
                         for (index in 0 until raw.length()) {
                             val row = raw.optJSONObject(index) ?: continue
                             val id = row.optString("id").trim()
                             val title = row.optString("title").trim()
-                            if (id.isNotBlank() && title.isNotBlank()) put(id, title)
+                            if (id.isNotBlank() && title.isNotBlank()) {
+                                put(id, DealExchangeItemSummary(title, nullable(row, "imageUrl")))
+                            }
                         }
                     }
-                    MessagingResult.Success(titles, result.session)
+                    MessagingResult.Success(summaries, result.session)
                 }
                 401 -> expired(result.session)
                 else -> MessagingResult.Failure("تعذر تحميل عناصر التبادل.", result.session)
