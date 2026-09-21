@@ -393,8 +393,14 @@ internal fun DolabPrivateTraceRail(
 
             Text(
                 text = buildList {
-                    if (media.isNotEmpty()) add("${media.size} ميديا")
-                    if (notes.isNotEmpty()) add("${notes.size} ملاحظات")
+                    val imageCount = media.count { it.mediaType == "image" }
+                    val videoCount = media.count { it.mediaType == "video" }
+                    val voiceCount = notes.count { it.noteType == "voice" }
+                    val noteCount = notes.count { it.noteType != "voice" }
+                    if (imageCount > 0) add(if (imageCount == 1) "صورة" else "$imageCount صور")
+                    if (videoCount > 0) add(if (videoCount == 1) "فيديو" else "$videoCount فيديوهات")
+                    if (voiceCount > 0) add(if (voiceCount == 1) "تسجيل" else "$voiceCount تسجيلات")
+                    if (noteCount > 0) add(if (noteCount == 1) "ملاحظة" else "$noteCount ملاحظات")
                 }.joinToString(" · ").ifBlank { "لسه مفيش أثر إضافي" },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -694,7 +700,7 @@ internal fun DolabPrivateObjectPortrait(
             item.category?.takeIf(String::isNotBlank)?.let(::add)
             item.condition?.takeIf(String::isNotBlank)?.let(::add)
             if (images.size > 1) add("${images.size} صور")
-            if (notesCount > 0) add("${notesCount} ملاحظات")
+            if (notesCount > 0) add(if (notesCount == 1) "أثر واحد" else "${notesCount} آثار")
         }.joinToString(" · ")
         if (trace.isNotBlank()) {
             Text(
