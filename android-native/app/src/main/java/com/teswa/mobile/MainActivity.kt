@@ -24,6 +24,7 @@ import com.teswa.mobile.auth.AuthUiState
 import com.teswa.mobile.feature.additem.AddItemRepository
 import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.contextual.ContextualRepository
+import com.teswa.mobile.feature.direct.DirectAttachmentMediaRepository
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.discover.DiscoverRepository
 import com.teswa.mobile.feature.dolab.AndroidDolabAddItemHandoff
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
                         notificationsRepository = container.notificationsRepository,
                         nativePushManager = container.nativePushManager,
                         directRepository = container.directRepository,
+                        directAttachmentMediaRepository = container.directAttachmentMediaRepository,
                         contextualRepository = container.contextualRepository,
                         storyRepository = container.storyRepository,
                         voiceMediaRepository = container.voiceMediaRepository,
@@ -127,6 +129,7 @@ private fun TeswaAuthScreen(
     notificationsRepository: NotificationsRepository,
     nativePushManager: NativePushManager,
     directRepository: DirectRepository,
+    directAttachmentMediaRepository: DirectAttachmentMediaRepository,
     contextualRepository: ContextualRepository,
     storyRepository: StoryRepository,
     voiceMediaRepository: VoiceMediaRepository,
@@ -179,6 +182,7 @@ private fun TeswaAuthScreen(
                         notificationsRepository = notificationsRepository,
                         nativePushManager = nativePushManager,
                         directRepository = directRepository,
+                        directAttachmentMediaRepository = directAttachmentMediaRepository,
                         contextualRepository = contextualRepository,
                         storyRepository = storyRepository,
                         voiceMediaRepository = voiceMediaRepository,
