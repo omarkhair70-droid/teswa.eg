@@ -274,105 +274,191 @@ private fun BasicsSection(
     onCategory: (String) -> Unit,
     onRetryCategories: () -> Unit,
 ) {
-    FormSection("صورتها عندك", "مش كتالوج. صورة واضحة للحاجة زي ما هي دلوقتي.") {
-        Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
-            TeswaPrimaryAction(
-                text = "اختار صور",
-                icon = TeswaIcons.Gallery,
-                onClick = onGallery,
-                enabled = draft.images.size < AddItemDraft.MAX_IMAGES,
-                modifier = Modifier.weight(1f),
-            )
-            TeswaSecondaryAction(
-                text = "كاميرا",
-                icon = TeswaIcons.Camera,
-                onClick = onCamera,
-                enabled = draft.images.size < AddItemDraft.MAX_IMAGES,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        if (draft.images.isNotEmpty()) {
-            Spacer(Modifier.height(TeswaSpacing.md))
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
+    ) {
+        if (draft.images.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(286.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .34f),
+                        RoundedCornerShape(TeswaRadius.hero),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                ) {
+                    TeswaMarkIcon(
+                        mark = TeswaMark.PutIntoPlay,
+                        color = MaterialTheme.colorScheme.primary,
+                        size = 58.dp,
+                    )
+                    Text(
+                        text = "ابدأ بالحاجة نفسها",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "صورة واضحة الأول. باقي التفاصيل تيجي بعدها.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
             ) {
-                draft.images.forEachIndexed { index, image ->
-                    Column(modifier = Modifier.width(if (index == 0) 152.dp else 112.dp)) {
-                        Box {
+                TeswaPrimaryAction(
+                    text = "صورها",
+                    icon = TeswaIcons.Camera,
+                    onClick = onCamera,
+                    modifier = Modifier.weight(1f),
+                )
+                TeswaSecondaryAction(
+                    text = "من الصور",
+                    icon = TeswaIcons.Gallery,
+                    onClick = onGallery,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        } else {
+            val cover = draft.images.first()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(318.dp)
+                    .clip(RoundedCornerShape(TeswaRadius.hero)),
+            ) {
+                LocalContentImage(
+                    uri = cover.uri,
+                    contentDescription = draft.title.ifBlank { cover.displayName },
+                    resolver = context.contentResolver,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(TeswaSpacing.sm)
+                        .clickable { onRemoveImage(cover.uri) },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = .9f),
+                ) {
+                    Icon(
+                        imageVector = TeswaIcons.Clear,
+                        contentDescription = "شيل الصورة",
+                        modifier = Modifier.padding(TeswaSpacing.sm).size(18.dp),
+                    )
+                }
+                TeswaArchiveLabel(
+                    text = "الحاجة",
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(TeswaSpacing.sm),
+                )
+            }
+
+            if (draft.images.size > 1) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                ) {
+                    draft.images.drop(1).forEach { image ->
+                        Box(
+                            modifier = Modifier
+                                .size(92.dp)
+                                .clip(RoundedCornerShape(TeswaRadius.md)),
+                        ) {
                             LocalContentImage(
                                 uri = image.uri,
                                 contentDescription = image.displayName,
-                                resolver = LocalContext.current.contentResolver,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(if (index == 0) .82f else 1f)
-                                    .clip(RoundedCornerShape(if (index == 0) TeswaRadius.hero else TeswaRadius.md)),
+                                resolver = context.contentResolver,
+                                modifier = Modifier.fillMaxSize(),
                             )
                             Surface(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(TeswaSpacing.xs)
+                                    .padding(TeswaSpacing.xxs)
                                     .clickable { onRemoveImage(image.uri) },
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = .92f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = .9f),
                             ) {
                                 Icon(
                                     imageVector = TeswaIcons.Clear,
                                     contentDescription = "شيل الصورة",
-                                    modifier = Modifier.padding(TeswaSpacing.xs).size(18.dp),
-                                )
-                            }
-                            if (index == 0) {
-                                TeswaArchiveLabel(
-                                    text = "الغلاف",
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(TeswaSpacing.xs),
+                                    modifier = Modifier.padding(TeswaSpacing.xs).size(16.dp),
                                 )
                             }
                         }
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(TeswaSpacing.xs))
-        Text(
-            "${draft.images.size} / ${AddItemDraft.MAX_IMAGES} صور",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 
-    FormSection("اسمها ونوعها", "سمّي الحاجة زي ما إنت بتسميها، وبعدها حطها في أقرب نوع.") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            ) {
+                TeswaSecondaryAction(
+                    text = "صورة كمان",
+                    icon = TeswaIcons.Camera,
+                    onClick = onCamera,
+                    enabled = draft.images.size < AddItemDraft.MAX_IMAGES,
+                    modifier = Modifier.weight(1f),
+                )
+                TeswaSecondaryAction(
+                    text = "اختار صور",
+                    icon = TeswaIcons.Gallery,
+                    onClick = onGallery,
+                    enabled = draft.images.size < AddItemDraft.MAX_IMAGES,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
         TeswaTextField(
             value = draft.title,
             onValueChange = onTitle,
-            label = "اسم الحاجة",
+            label = "بتسميها إيه؟",
             supportingText = "${draft.title.length} / 160",
         )
-        Spacer(Modifier.height(TeswaSpacing.md))
-        when (categoriesState) {
-            AddItemCategoriesState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(TeswaSpacing.sm))
-                Text("بنجيب الأنواع…")
-            }
-            is AddItemCategoriesState.Error -> Column {
-                Text(categoriesState.message, color = MaterialTheme.colorScheme.error)
-                Spacer(Modifier.height(TeswaSpacing.sm))
-                TeswaSecondaryAction(text = "إعادة المحاولة", onClick = onRetryCategories)
-            }
-            is AddItemCategoriesState.Ready -> Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-            ) {
-                categoriesState.values.forEach { category ->
-                    TeswaChoiceChip(
-                        label = category.nameAr,
-                        selected = draft.categoryId == category.id,
-                        onClick = { onCategory(category.id) },
-                    )
+
+        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+            Text(
+                text = "نوعها",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            when (categoriesState) {
+                AddItemCategoriesState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(TeswaSpacing.sm))
+                    Text("بنجيب الأنواع…")
+                }
+                is AddItemCategoriesState.Error -> Column {
+                    Text(categoriesState.message, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(TeswaSpacing.sm))
+                    TeswaSecondaryAction(text = "إعادة المحاولة", onClick = onRetryCategories)
+                }
+                is AddItemCategoriesState.Ready -> Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                ) {
+                    categoriesState.values.forEach { category ->
+                        TeswaChoiceChip(
+                            label = category.nameAr,
+                            selected = draft.categoryId == category.id,
+                            onClick = { onCategory(category.id) },
+                        )
+                    }
                 }
             }
         }
