@@ -3,6 +3,7 @@ package com.teswa.mobile.feature.dolab
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -37,7 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -355,6 +361,14 @@ internal fun DolabPrivateTraceRail(
                     if (media.isNotEmpty()) add("${media.size} ميديا")
                     if (notes.isNotEmpty()) add("${notes.size} ملاحظات")
                 }.joinToString(" · ").ifBlank { "لسه مفيش أثر إضافي" },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        dolabProvenanceLabel(item)?.let { provenance ->
+            Text(
+                text = provenance,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -736,6 +750,60 @@ internal fun DolabPrivateCollection(
 }
 
 @Composable
+private fun DolabObjectSlotPlaceholder(
+    status: DolabItemStatus,
+    large: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        val lineColor = MaterialTheme.colorScheme.outline.copy(alpha = .36f)
+        val objectColor = when (status) {
+            DolabItemStatus.PUBLISHED -> MaterialTheme.colorScheme.primary
+            DolabItemStatus.EXCHANGED -> MaterialTheme.colorScheme.tertiary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }.copy(alpha = .42f)
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (large) TeswaSpacing.xl else TeswaSpacing.md),
+        ) {
+            val stroke = 1.4.dp.toPx()
+            drawLine(
+                color = lineColor,
+                start = Offset(size.width * .08f, size.height * .76f),
+                end = Offset(size.width * .92f, size.height * .76f),
+                strokeWidth = stroke,
+            )
+            drawLine(
+                color = lineColor.copy(alpha = .65f),
+                start = Offset(size.width * .50f, size.height * .18f),
+                end = Offset(size.width * .50f, size.height * .70f),
+                strokeWidth = stroke,
+            )
+            drawRoundRect(
+                color = objectColor,
+                topLeft = Offset(size.width * .24f, size.height * .40f),
+                size = Size(size.width * .28f, size.height * .29f),
+                cornerRadius = CornerRadius(10.dp.toPx()),
+                style = Stroke(width = 1.8.dp.toPx()),
+            )
+        }
+
+        TeswaMarkIcon(
+            mark = when (status) {
+                DolabItemStatus.PUBLISHED -> TeswaMark.PutIntoPlay
+                DolabItemStatus.EXCHANGED -> TeswaMark.BetweenUs
+                else -> TeswaMark.Mine
+            },
+            color = MaterialTheme.colorScheme.primary.copy(alpha = .65f),
+            size = if (large) 46.dp else 34.dp,
+            modifier = Modifier.align(Alignment.Center),
+        )
+    }
+}
+
+@Composable
 private fun DolabShelfSnapshot(
     holder: DolabStateHolder,
     item: DolabItem,
@@ -777,11 +845,10 @@ private fun DolabShelfSnapshot(
                     modifier = Modifier.fillMaxWidth().height(mediaHeight),
                 )
             } else {
-                TeswaMarkIcon(
-                    mark = TeswaMark.Mine,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = .55f),
-                    size = if (large) 58.dp else 42.dp,
-                    modifier = Modifier.align(Alignment.Center),
+                DolabObjectSlotPlaceholder(
+                    status = item.status,
+                    large = large,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 
@@ -1118,6 +1185,24 @@ internal fun DolabObjectCaptureSheet(
             }
         }
     }
+}
+
+private fun dolabProvenanceLabel(item: DolabItem): String? {
+    val origin = when (item.source) {
+        "camera" -> "اتصورت جوه دولابك"
+        "gallery" -> "جت من صورك"
+        "share_intent" -> "اتحفظت من برّه تِسوى"
+        "voice" -> "اتحفظت كتسجيل"
+        else -> "بدأت في دولابك"
+    }
+    val date = dolabDateLabel(item.createdAt)
+    return listOfNotNull(origin, date).joinToString(" · ").takeIf(String::isNotBlank)
+}
+
+private fun dolabDateLabel(value: String?): String? {
+    val date = value?.take(10)?.split("-") ?: return null
+    if (date.size != 3) return null
+    return "${date[2]}/${date[1]}/${date[0]}"
 }
 
 private fun dolabMastheadSummary(total: Int, ready: Int): String = when {
