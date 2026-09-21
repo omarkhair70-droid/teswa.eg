@@ -133,14 +133,14 @@ class DirectStateHolder(
 
     fun queueAttachments(values: List<DirectPendingAttachment>) {
         val accepted = values.filter { it.validate() == null }
-        val merged = (pendingAttachments + accepted)
-            .distinctBy { it.uri }
-            .take(5)
-        pendingAttachments = merged
-        if (values.any { it.validate() != null }) {
-            showMessage("بعض المرفقات ما اتقبلتش: الحد 50MB لكل ملف.")
-        } else if (pendingAttachments.size == 5 && merged.size < pendingAttachments.size + accepted.size) {
-            showMessage("مسموح بحد أقصى 5 مرفقات في الرسالة.")
+        val unique = (pendingAttachments + accepted).distinctBy { it.uri }
+        val clipped = unique.take(5)
+        pendingAttachments = clipped
+        when {
+            values.any { it.validate() != null } ->
+                showMessage("بعض المرفقات ما اتقبلتش: الحد 50MB لكل ملف.")
+            unique.size > clipped.size ->
+                showMessage("مسموح بحد أقصى 5 مرفقات في الرسالة.")
         }
     }
 
