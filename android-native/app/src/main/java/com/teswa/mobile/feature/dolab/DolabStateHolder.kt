@@ -57,6 +57,11 @@ class DolabStateHolder(
         else -> null
     }
 
+    fun objectItems(): List<DolabItem> {
+        val current = workspace() ?: return emptyList()
+        return current.items.filterNot { it.isLegacyStandaloneTrace(current) }
+    }
+
     fun visibleItems(): List<DolabItem> {
         val current = workspace() ?: return emptyList()
         val needle = query.trim().lowercase()
