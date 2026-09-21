@@ -1,6 +1,7 @@
 package com.teswa.mobile.feature.dolab
 
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -129,6 +130,8 @@ private fun DolabShelf(
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val looseMediaResolver = remember(context) { DolabMediaResolver(context) }
     val workspace = holder.workspace()
     var searchOpen by remember { mutableStateOf(holder.query.isNotBlank()) }
     var showLooseTraces by remember { mutableStateOf(false) }
@@ -252,6 +255,31 @@ private fun DolabShelf(
                     maxLines = 6,
                     enabled = holder.workingId == null,
                 )
+                Text(
+                    text = "أو سجّلها بصوتك",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                VoiceComposer(
+                    enabled = holder.workingId == null,
+                    sending = holder.workingId == "loose-voice",
+                    uploadProgress = holder.mediaUploadProgress
+                        ?.takeIf { it.itemId == "loose-voice" }
+                        ?.percent,
+                    onSend = { voice ->
+                        val pending = looseMediaResolver.resolveVoice(voice)
+                        if (pending == null) {
+                            holder.showError("التسجيل غير صالح أو لم يعد موجودًا.")
+                            false
+                        } else {
+                            val saved = holder.addLooseVoice(pending)
+                            if (saved) showLooseNoteComposer = false
+                            saved
+                        }
+                    },
+                    onError = holder::showError,
+                )
+
                 TeswaPrimaryAction(
                     text = if (holder.workingId == "loose-note") "بنحفظ…" else "خليها على جنب",
                     loading = holder.workingId == "loose-note",
@@ -352,6 +380,22 @@ private fun DolabItemDetail(
                     break
                 }
                 if (!holder.addMedia(item, pending)) break
+            }
+        }
+    }
+
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            scope.launch {
+                val pending = mediaResolver.resolveVideo(uri)
+                if (pending == null) {
+                    holder.showError("الفيديو لازم يكون MP4 أو WebM أو 3GP وبحجم صالح.")
+                } else {
+                    holder.addMedia(item, pending)
+                }
             }
         }
     }
@@ -532,6 +576,14 @@ private fun DolabItemDetail(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                    TeswaSecondaryAction(
+                        text = "ضيف فيديو",
+                        icon = TeswaIcons.Play,
+                        enabled = !busy,
+                        onClick = {
+                            videoPicker.launch(DolabMediaResolver.SUPPORTED_VIDEO_TYPES.toTypedArray())
+                        },
+                    )
                     VoiceComposer(
                         enabled = !busy,
                         sending = holderBusy && uploadProgress != null,
@@ -733,6 +785,8 @@ private fun DolabMediaCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var signedUrl by remember(media.id, media.storagePath) { mutableStateOf<String?>(null) }
     var imageUrlLoading by remember(media.id, media.storagePath) { mutableStateOf(media.mediaType == "image") }
 
@@ -773,10 +827,36 @@ private fun DolabMediaCard(
                     durationMs = media.durationMs?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt(),
                     loadUrl = { holder.mediaUrl(media) },
                 )
-                "video" -> TeswaInlineMessage(
-                    title = "فيديو محفوظ",
-                    body = "الفيديو مرتبط بالحاجة دي ومحفوظ في دولابك.",
-                )
+                "video" -> Column(
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                ) {
+                    TeswaInlineMessage(
+                        title = "فيديو محفوظ مع الحاجة",
+                        body = "يفضل خاص في دولابك. افتحه لما تحتاج تشوفه.",
+                    )
+                    TeswaSecondaryAction(
+                        text = "شغّل الفيديو",
+                        icon = TeswaIcons.Play,
+                        onClick = {
+                            scope.launch {
+                                val url = holder.mediaUrl(media)
+                                if (url == null) {
+                                    holder.showError("الفيديو مش متاح دلوقتي.")
+                                } else {
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(Uri.parse(url), media.mimeType ?: "video/*")
+                                            },
+                                        )
+                                    }.onFailure {
+                                        holder.showError("مفيش مشغّل فيديو متاح على الجهاز.")
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
                 else -> TeswaInlineMessage(
                     title = "ميديا محفوظة",
                     body = "الملف مرتبط بالحاجة دي ومحفوظ في دولابك.",

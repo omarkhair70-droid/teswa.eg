@@ -208,6 +208,58 @@ class DolabStateHolder(
         }
     }
 
+    suspend fun addLooseVoice(pending: DolabPendingMedia): Boolean {
+        if (workingId != null) return false
+        pending.validate()?.let { show(it, error = true); return false }
+        workingId = "loose-voice"
+        mediaUploadProgress = DolabMediaUploadProgress("loose-voice", 0)
+        clearMessage()
+
+        val uploaded = repository.uploadMedia(session, null, pending, 0) { percent ->
+            mediaUploadProgress = DolabMediaUploadProgress("loose-voice", percent)
+        }
+        if (uploaded is DolabResult.Failure) {
+            uploaded.session?.let { session = it }
+            workingId = null
+            mediaUploadProgress = null
+            sessionExpired = uploaded.unauthorized
+            show(uploaded.message, error = true)
+            return false
+        }
+        uploaded as DolabResult.Success
+        session = uploaded.session
+
+        val noted = repository.createNote(
+            session = session,
+            itemId = null,
+            body = "تسجيل صوتي محفوظ في دولابك",
+            noteType = "voice",
+            mediaId = uploaded.value.id,
+        )
+        workingId = null
+        mediaUploadProgress = null
+        return when (noted) {
+            is DolabResult.Success -> {
+                session = noted.session
+                val current = workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
+                state = current.copy(
+                    media = current.media.filterNot { it.id == uploaded.value.id } + uploaded.value,
+                    notes = listOf(noted.value) + current.notes.filterNot { it.id == noted.value.id },
+                ).asUiState()
+                show("التسجيل اتحفظ على جنب.")
+                true
+            }
+            is DolabResult.Failure -> {
+                noted.session?.let { session = it }
+                val rollback = repository.deleteMedia(session, uploaded.value)
+                if (rollback is DolabResult.Success) session = rollback.session
+                sessionExpired = noted.unauthorized
+                show(noted.message, error = true)
+                false
+            }
+        }
+    }
+
     suspend fun addLooseNote(body: String): Boolean {
         if (workingId != null) return false
         workingId = "loose-note"
