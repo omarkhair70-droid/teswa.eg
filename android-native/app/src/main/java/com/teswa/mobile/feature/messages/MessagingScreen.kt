@@ -47,6 +47,7 @@ import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.contextual.ContextualContent
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.contextual.ContextualStateHolder
+import com.teswa.mobile.feature.direct.DirectAttachmentMediaRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectContent
 import com.teswa.mobile.feature.direct.DirectRepository
@@ -96,6 +97,7 @@ fun MessagingScreen(
     repository: MessagingRepository,
     offersRepository: OffersRepository,
     directRepository: DirectRepository,
+    directAttachmentMediaRepository: DirectAttachmentMediaRepository,
     contextualRepository: ContextualRepository,
     dolabRepository: DolabRepository,
     voiceMediaRepository: VoiceMediaRepository,
@@ -115,7 +117,9 @@ fun MessagingScreen(
     val context = LocalContext.current
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
     val offersHolder = remember(initialSession.user.id, offersRepository) { OffersStateHolder(initialSession, offersRepository) }
-    val directHolder = remember(initialSession.user.id, directRepository) { DirectStateHolder(initialSession, directRepository) }
+    val directHolder = remember(initialSession.user.id, directRepository, directAttachmentMediaRepository) {
+        DirectStateHolder(initialSession, directRepository, directAttachmentMediaRepository)
+    }
     val contextualHolder = remember(initialSession.user.id, contextualRepository) { ContextualStateHolder(initialSession, contextualRepository) }
     val dolabDirectBridge = remember(dolabRepository, voiceMediaRepository, context.applicationContext) {
         AndroidDolabDirectMessagingBridge(context.applicationContext, dolabRepository, voiceMediaRepository)
@@ -284,6 +288,7 @@ fun MessagingScreen(
             DirectContent(
                 holder = directHolder,
                 voiceMediaRepository = voiceMediaRepository,
+                attachmentMediaRepository = directAttachmentMediaRepository,
                 dolabBridge = dolabDirectBridge,
                 onReport = onReport,
                 modifier = Modifier.weight(1f),
