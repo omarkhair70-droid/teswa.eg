@@ -386,6 +386,16 @@ private fun DolabItemDetail(
         }
 
         item {
+            DolabPrivateObjectPortrait(
+                holder = holder,
+                item = item,
+                media = media,
+                notesCount = notes.size,
+                modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+            )
+        }
+
+        item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
