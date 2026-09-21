@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -277,6 +280,8 @@ private fun DolabItemDetail(
     var draft by remember(item.id, item.updatedAt, item.status) { mutableStateOf(item.toDraft()) }
     var note by remember(item.id) { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showEditDetails by remember { mutableStateOf(false) }
+    var showAddNote by remember { mutableStateOf(false) }
     var cameraTarget by remember(item.id) { mutableStateOf<DolabCameraTarget?>(null) }
     var continueWorking by remember(item.id) { mutableStateOf(false) }
     val workspace = holder.workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
@@ -372,36 +377,28 @@ private fun DolabItemDetail(
 
         if (item.status.editable) {
             item {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = TeswaLayout.ScreenHorizontal),
-                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
                 ) {
-                    TeswaSectionHeader("تفاصيل الحاجة")
-                    DolabEditFields(draft) { draft = it }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                    ) {
-                        TeswaPrimaryAction(
-                            text = "حفظ",
-                            loading = holderBusy,
-                            enabled = !busy,
-                            onClick = { scope.launch { holder.save(item, draft) } },
-                            modifier = Modifier.weight(1f),
-                        )
-                        TeswaSecondaryAction(
-                            text = if (item.status == DolabItemStatus.READY) "رجّعها مسودة" else "علّمها جاهزة",
-                            enabled = !busy,
-                            onClick = {
-                                scope.launch {
-                                    holder.setReady(item, item.status != DolabItemStatus.READY)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    TeswaSecondaryAction(
+                        text = "عدّل التفاصيل",
+                        enabled = !busy,
+                        onClick = { showEditDetails = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TeswaSecondaryAction(
+                        text = if (item.status == DolabItemStatus.READY) "رجّعها بتتجهز" else "خلّيها جاهزة",
+                        enabled = !busy,
+                        onClick = {
+                            scope.launch {
+                                holder.setReady(item, item.status != DolabItemStatus.READY)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         } else {
@@ -545,77 +542,36 @@ private fun DolabItemDetail(
                     .padding(horizontal = TeswaLayout.ScreenHorizontal),
                 verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
             ) {
-                TeswaSectionHeader("ملاحظاتك")
+                TeswaSectionHeader("أثرها عندك")
                 Text(
-                    text = "مش شات منفصل؛ دي ذاكرة الحاجة نفسها.",
+                    text = "ملاحظات وصوت مرتبطين بالحاجة نفسها؛ يفضلوا خاصين لحد ما تختار غير كده.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        if (notes.isEmpty()) {
-            item {
-                TeswaInlineMessage(
-                    title = "مفيش ملاحظات لسه",
-                    body = "اكتب أي حاجة تحب تفضل فاكرها عن القطعة دي.",
-                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
-                )
-            }
-        } else {
+        if (notes.isNotEmpty()) {
             items(notes, key = { it.id }) { entry ->
-                Surface(
+                DolabLooseNoteRow(
+                    holder = holder,
+                    workspace = workspace,
+                    note = entry,
                     modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(TeswaSpacing.md),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
-                    ) {
-                        Text(
-                            text = entry.body ?: "ملاحظة ${entry.noteType}",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        TextButton(
-                            onClick = { scope.launch { holder.deleteNote(entry) } },
-                            enabled = !busy,
-                        ) {
-                            Text("حذف")
-                        }
-                    }
-                }
+                    onDelete = if (item.status.editable) {
+                        { scope.launch { holder.deleteNote(entry) } }
+                    } else null,
+                )
             }
         }
 
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TeswaLayout.ScreenHorizontal),
-                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
-            ) {
-                TeswaTextField(
-                    value = note,
-                    onValueChange = { note = it.take(8_000) },
-                    label = "اكتب حاجة عايز تفتكرها",
-                    singleLine = false,
-                    minLines = 2,
-                    maxLines = 6,
-                    enabled = item.status.editable && !busy,
-                )
-                TeswaPrimaryAction(
-                    text = "ضيف للمساحة",
-                    enabled = item.status.editable && note.isNotBlank() && !busy,
-                    onClick = {
-                        scope.launch {
-                            if (holder.addNote(item.id, note)) note = ""
-                        }
-                    },
+        if (item.status.editable) {
+            item {
+                TeswaSecondaryAction(
+                    text = "ضيف ملاحظة خاصة",
+                    onClick = { showAddNote = true },
+                    enabled = !busy,
+                    modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
                 )
             }
         }
@@ -631,6 +587,66 @@ private fun DolabItemDetail(
                 Text(
                     text = "شيل الحاجة من الدولاب",
                     color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+
+    if (showEditDetails) {
+        val editorScroll = rememberScrollState()
+        TeswaActionSheet(
+            title = "تفاصيل الحاجة",
+            supporting = "دي هويتها جوه دولابك. الوصف الخاص هنا مش بيتنشر لوحده.",
+            modifier = Modifier
+                .imePadding()
+                .verticalScroll(editorScroll),
+            onDismiss = { if (!holderBusy) showEditDetails = false },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                DolabEditFields(draft) { draft = it }
+                TeswaPrimaryAction(
+                    text = if (holderBusy) "بنحفظ…" else "احفظ التعديلات",
+                    loading = holderBusy,
+                    enabled = !busy,
+                    onClick = {
+                        scope.launch {
+                            if (holder.save(item, draft)) showEditDetails = false
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    if (showAddNote) {
+        TeswaActionSheet(
+            title = "سيب أثر للحاجة",
+            supporting = "حاجة لنفسك: ملاحظة، تفصيلة، أو حاجة عايز تفتكرها بعدين.",
+            modifier = Modifier.imePadding(),
+            onDismiss = { if (!holderBusy) showAddNote = false },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                TeswaTextField(
+                    value = note,
+                    onValueChange = { note = it.take(8_000) },
+                    label = "اكتب ملاحظتك",
+                    singleLine = false,
+                    minLines = 3,
+                    maxLines = 6,
+                    enabled = !busy,
+                )
+                TeswaPrimaryAction(
+                    text = if (holderBusy) "بنحفظ…" else "ضيفها للحاجة",
+                    loading = holderBusy,
+                    enabled = note.isNotBlank() && !busy,
+                    onClick = {
+                        scope.launch {
+                            if (holder.addNote(item.id, note)) {
+                                note = ""
+                                showAddNote = false
+                            }
+                        }
+                    },
                 )
             }
         }
