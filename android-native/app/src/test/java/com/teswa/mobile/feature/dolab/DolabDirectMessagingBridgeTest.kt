@@ -52,6 +52,7 @@ class DolabDirectMessagingBridgeTest {
         assertEquals(2, result.size)
         assertEquals("item:item-1", result.first().id)
         assertTrue(result.first().text.contains("نفسي أبدّلها بـ: كتاب تصوير"))
+        assertFalse(result.first().text.contains("شغالة كويس"))
         assertEquals("ملاحظة — كاميرا فيلم", result.last().title)
         assertFalse(result.any { it.text.contains("ما يظهرش") })
         assertFalse(result.any { it.text.contains("أثر قديم") })
