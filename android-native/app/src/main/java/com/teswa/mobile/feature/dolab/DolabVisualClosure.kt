@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -163,10 +164,11 @@ private fun DolabLifecycleRail(
         horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
         verticalAlignment = Alignment.Bottom,
     ) {
-        filters.forEach { filter ->
+        filters.asReversed().forEach { filter ->
             val active = selected == filter
             Column(
                 modifier = Modifier
+                    .heightIn(min = 48.dp)
                     .clickable { onSelect(filter) }
                     .padding(vertical = TeswaSpacing.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1291,7 +1293,7 @@ private fun dolabMastheadSummary(total: Int, ready: Int): String = when {
 
 private fun dolabFilterLabel(filter: DolabFilter): String = when (filter) {
     DolabFilter.ALL -> "الكل"
-    DolabFilter.IN_PROGRESS -> "بجهزها"
+    DolabFilter.IN_PROGRESS -> "بتتجهز"
     DolabFilter.READY -> "جاهزة"
     DolabFilter.PUBLISHED -> "في اللعب"
     DolabFilter.EXCHANGED -> "اتبدّلت"
