@@ -219,7 +219,6 @@ fun buildDolabDirectShareables(workspace: DolabWorkspace): List<DolabDirectShare
             val title = item.title?.trim().takeUnless { it.isNullOrEmpty() } ?: "حاجة من دولابك"
             val text = buildList {
                 item.title?.trim()?.takeIf(String::isNotEmpty)?.let(::add)
-                item.description?.trim()?.takeIf(String::isNotEmpty)?.let(::add)
                 item.exchangeIntent?.trim()?.takeIf(String::isNotEmpty)?.let { add("نفسي أبدّلها بـ: $it") }
             }.joinToString("\n").trim().take(1_200)
             if (text.isNotEmpty() && seenText.add(text)) {
@@ -229,6 +228,7 @@ fun buildDolabDirectShareables(workspace: DolabWorkspace): List<DolabDirectShare
 
     workspace.notes
         .asSequence()
+        .filter { it.noteType != "voice" }
         .mapNotNull { note -> note.body?.trim()?.takeIf(String::isNotEmpty)?.let { note to it.take(1_200) } }
         .take(6)
         .forEach { (note, text) ->
