@@ -51,11 +51,13 @@ import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectContent
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.direct.DirectStateHolder
+import com.teswa.mobile.feature.direct.DirectUiState
 import com.teswa.mobile.feature.dolab.AndroidDolabDirectMessagingBridge
 import com.teswa.mobile.feature.dolab.DolabRepository
 import com.teswa.mobile.feature.offers.OffersContent
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.offers.OffersStateHolder
+import com.teswa.mobile.feature.offers.OffersUiState
 import com.teswa.mobile.feature.reviews.DealReviewCard
 import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.feature.safety.ReportTarget
