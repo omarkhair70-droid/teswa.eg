@@ -12,6 +12,7 @@ import com.teswa.mobile.feature.additem.EditListingRepository
 import com.teswa.mobile.feature.additem.OracleAddItemRepository
 import com.teswa.mobile.feature.additem.OracleEditListingRepository
 import com.teswa.mobile.feature.contextual.OracleContextualRepository
+import com.teswa.mobile.feature.direct.OracleDirectAttachmentMediaRepository
 import com.teswa.mobile.feature.direct.OracleDirectRepository
 import com.teswa.mobile.feature.discover.OracleDiscoverRepository
 import com.teswa.mobile.feature.dolab.AndroidDolabAddItemHandoff
@@ -96,6 +97,7 @@ class AppContainer(context: Context) {
     val messagingRepository = OracleMessagingRepository(authRepository, oracleTransport, notificationDispatcher, voiceMediaRepository)
     val offersRepository = OracleOffersRepository(authRepository, oracleTransport, notificationDispatcher)
     val directRepository = OracleDirectRepository(authRepository, oracleTransport, voiceMediaRepository)
+    val directAttachmentMediaRepository = OracleDirectAttachmentMediaRepository(authRepository, oracleTransport)
     val contextualRepository = OracleContextualRepository(authRepository, oracleTransport, voiceMediaRepository)
     val storyRepository = OracleStoryRepository(
         authenticator = authRepository,
