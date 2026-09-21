@@ -20,7 +20,8 @@ class DolabAddItemMappingTest {
         assertEquals("electronics", draft.categoryId)
         assertEquals(ItemCondition.ALMOST_NEW, draft.condition)
         assertEquals("", draft.conditionNotes)
-        assertEquals("كتاب أو حاجة موسيقية", draft.desireText)\n        assertEquals("", draft.description)
+        assertEquals("كتاب أو حاجة موسيقية", draft.desireText)
+        assertEquals("", draft.description)
     }
 
     @Test
