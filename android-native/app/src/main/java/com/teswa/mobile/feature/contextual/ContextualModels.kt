@@ -9,9 +9,19 @@ data class ContextualParticipant(
     val avatarUrl: String?,
 )
 
+data class ContextualStoryContext(
+    val storyId: String,
+    val caption: String?,
+    val mediaType: String?,
+    val mediaStoragePath: String?,
+    val authorId: String?,
+    val createdAt: String?,
+)
+
 data class ContextualConversation(
     val id: String,
     val storyId: String,
+    val context: ContextualStoryContext,
     val other: ContextualParticipant,
     val latestBody: String?,
     val latestKind: String?,
