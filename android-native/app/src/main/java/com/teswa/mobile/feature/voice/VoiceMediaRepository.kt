@@ -119,7 +119,12 @@ class OracleVoiceMediaRepository(
     )
 
     override suspend fun signedUrl(session: AuthSession, purpose: String, objectKey: String): VoiceMediaResult<String> {
-        if (purpose !in PURPOSES || objectKey.isBlank()) return VoiceMediaResult.Failure("مسار التسجيل غير صالح.", session)
+        if (purpose !in READ_PURPOSES || objectKey.isBlank()) {
+            return VoiceMediaResult.Failure(
+                if (purpose == "story_media") "مسار القصة غير صالح." else "مسار التسجيل غير صالح.",
+                session,
+            )
+        }
         val body = JSONObject()
             .put("purpose", purpose)
             .put("objectKey", objectKey)
@@ -135,8 +140,15 @@ class OracleVoiceMediaRepository(
                     ?.let { VoiceMediaResult.Success(it, result.session) }
                     ?: VoiceMediaResult.Failure("الخادم أعاد رابط تشغيل غير صالح.", result.session)
                 401 -> expired(result.session)
-                403, 404 -> VoiceMediaResult.Failure("التسجيل غير متاح.", result.session)
-                else -> VoiceMediaResult.Failure("تعذر تشغيل التسجيل (${result.value.status}).", result.session)
+                403, 404 -> VoiceMediaResult.Failure(
+                    if (purpose == "story_media") "وسائط القصة لم تعد متاحة." else "التسجيل غير متاح.",
+                    result.session,
+                )
+                else -> VoiceMediaResult.Failure(
+                    if (purpose == "story_media") "تعذر فتح وسائط القصة (${result.value.status})."
+                    else "تعذر تشغيل التسجيل (${result.value.status}).",
+                    result.session,
+                )
             }
             else -> result.failure("تعذر تشغيل التسجيل الآن.")
         }
@@ -164,6 +176,7 @@ class OracleVoiceMediaRepository(
 
     private companion object {
         val PURPOSES = setOf("deal_voice", "direct_voice", "contextual_voice")
+        val READ_PURPOSES = PURPOSES + "story_media"
         val PREFIX = Regex("^(deals|direct|contextual)/[0-9a-fA-F-]{36}/[0-9a-fA-F-]{36}$")
     }
 }
