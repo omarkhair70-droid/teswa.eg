@@ -68,13 +68,15 @@ fun DolabScreen(
     onSessionExpired: suspend () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    initialItemId: String? = null,
+    onInitialItemConsumed: () -> Unit = {},
     onContinueAsListing: (suspend (DolabItem) -> String?)? = null,
     onOpenPublishedItem: (String) -> Unit = {},
     onFocusedStateChanged: (Boolean) -> Unit = {},
 ) {
     val holder = remember(initialSession.user.id, repository) { DolabStateHolder(initialSession, repository) }
     val scope = rememberCoroutineScope()
-    var selectedItemId by remember { mutableStateOf<String?>(null) }
+    var selectedItemId by remember(initialSession.user.id) { mutableStateOf(initialItemId) }
     var showCreate by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialSession.accessToken) {
@@ -86,6 +88,10 @@ fun DolabScreen(
 
     val selected = selectedItemId?.let { id -> holder.workspace()?.items?.firstOrNull { it.id == id } }
     if (selectedItemId != null && selected == null && holder.workspace() != null) selectedItemId = null
+
+    LaunchedEffect(selected?.id) {
+        if (initialItemId != null && selected?.id == initialItemId) onInitialItemConsumed()
+    }
 
     LaunchedEffect(selected != null) {
         onFocusedStateChanged(selected != null)

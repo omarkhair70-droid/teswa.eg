@@ -116,6 +116,7 @@ fun AppShell(
     var externalDirectTarget by remember { mutableStateOf<DirectComposeTarget?>(null) }
     var externalContextualId by remember { mutableStateOf<String?>(null) }
     var reportTarget by remember { mutableStateOf<ReportTarget?>(null) }
+    var returnDolabItemId by remember { mutableStateOf<String?>(null) }
     var notificationPermissionRequested by remember { mutableStateOf(false) }
 
     fun syncPush() {
@@ -379,6 +380,8 @@ fun AppShell(
                     onSessionExpired = signOutAndDisable,
                     onBack = { selectedRoot = TeswaRootDestination.POSSIBLE },
                     modifier = contentModifier,
+                    initialItemId = returnDolabItemId,
+                    onInitialItemConsumed = { returnDolabItemId = null },
                     onFocusedStateChanged = { suppressRootChrome = it },
                     onOpenPublishedItem = { itemId ->
                         suppressRootChrome = false
@@ -390,6 +393,7 @@ fun AppShell(
                         when (val result = dolabAddItemHandoff.prepareAndPersist(session, item)) {
                             is DolabAddItemHandoffResult.Success -> {
                                 session = result.session
+                                returnDolabItemId = item.id
                                 openAddItem()
                                 null
                             }

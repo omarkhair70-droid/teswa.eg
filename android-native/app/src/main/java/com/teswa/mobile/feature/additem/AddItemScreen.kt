@@ -135,16 +135,9 @@ fun AddItemScreen(
         if (holder.submissionState is AddItemSubmissionState.Success) {
             draftStore.clear()
             haptics.performTeswa(TeswaHapticEvent.Success)
+            onSessionUpdated(holder.session)
+            onPublished()
         }
-    }
-
-    val success = holder.submissionState as? AddItemSubmissionState.Success
-    if (success != null) {
-        AddItemSuccess(
-            modifier = modifier,
-            onReturnToDolab = onPublished,
-        )
-        return
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -733,45 +726,7 @@ private fun AddItemActions(
     }
 }
 
-@Composable
-private fun AddItemSuccess(
-    modifier: Modifier,
-    onReturnToDolab: () -> Unit,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(TeswaLayout.RootContentPadding),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        TeswaMarkIcon(
-            mark = TeswaMark.PutIntoPlay,
-            color = MaterialTheme.colorScheme.primary,
-            size = 72.dp,
-        )
-        Spacer(Modifier.height(TeswaSpacing.xl))
-        TeswaArchiveLabel("في اللعب")
-        Spacer(Modifier.height(TeswaSpacing.md))
-        Text(
-            "عدّت حدود دولابك",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(TeswaSpacing.xs))
-        Text(
-            "نفس الحاجة بقت دلوقتي احتمال عام، ودولابك لسه محتفظ بأصلها وأثرها.",
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(TeswaSpacing.xl))
-        TeswaPrimaryAction(
-            text = "ارجع لدولابي",
-            onClick = onReturnToDolab,
-        )
-    }
-}
+
 
 @Composable
 private fun FormSection(title: String, hint: String, content: @Composable () -> Unit) {
