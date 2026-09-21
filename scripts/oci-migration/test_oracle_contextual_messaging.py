@@ -21,10 +21,13 @@ class Tests(unittest.TestCase):
         db=Db(*values);return ContextualMessagingApi(Auth(),db),db
     def test_inbox_is_identity_bound_and_returns_contract(self):
         api,db=self.api([{'conversationId':CONVERSATION,'contextType':'story_reply','contextEntityId':MESSAGE,
+          'context':{'storyId':MESSAGE,'caption':'لحظة من المعرض','mediaType':'image','mediaStoragePath':'owner/story.jpg','authorId':OTHER,'createdAt':'2026-09-08T00:00:00Z'},
           'otherParticipant':{'id':OTHER,'displayName':'Other','username':'other','avatarUrl':None},
           'latestMessage':None,'unreadCount':0,'lastActivityAt':'2026-09-08T00:00:00Z'}])
         status,body=api.handle('GET','/v1/contextual/conversations?userId='+USER,'Bearer session')
         self.assertEqual(status,200);self.assertEqual(body['items'][0]['conversationId'],CONVERSATION)
+        self.assertEqual(body['items'][0]['context']['caption'],'لحظة من المعرض')
+        self.assertIn('context_caption_snapshot',db.calls[0][1])
         self.assertIn("'%s'::uuid IN"%USER,db.calls[0][1])
         with self.assertRaises(ApiError):api.handle('GET','/v1/contextual/conversations?userId='+OTHER,'Bearer session')
     def test_text_insert_is_actor_bound_and_encoded(self):
