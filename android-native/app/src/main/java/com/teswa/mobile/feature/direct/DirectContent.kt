@@ -1,6 +1,14 @@
 package com.teswa.mobile.feature.direct
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,10 +35,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.teswa.mobile.feature.dolab.DolabDirectMessagingBridge
+import com.teswa.mobile.ui.NetworkImage
 import com.teswa.mobile.feature.dolab.DolabDirectShareable
 import com.teswa.mobile.feature.dolab.DolabResult
 import com.teswa.mobile.feature.safety.ReportTarget
@@ -61,6 +77,7 @@ import kotlinx.coroutines.launch
 fun DirectContent(
     holder: DirectStateHolder,
     voiceMediaRepository: VoiceMediaRepository,
+    attachmentMediaRepository: DirectAttachmentMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
     onReport: (ReportTarget) -> Unit,
     modifier: Modifier = Modifier,
@@ -72,7 +89,15 @@ fun DirectContent(
         return
     }
     holder.selected?.let {
-        DirectThread(holder, it, voiceMediaRepository, dolabBridge, onReport, modifier)
+        DirectThread(
+            holder,
+            it,
+            voiceMediaRepository,
+            attachmentMediaRepository,
+            dolabBridge,
+            onReport,
+            modifier,
+        )
         return
     }
 
@@ -220,6 +245,7 @@ private fun DirectThread(
     holder: DirectStateHolder,
     value: DirectConversation,
     voiceMediaRepository: VoiceMediaRepository,
+    attachmentMediaRepository: DirectAttachmentMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
     onReport: (ReportTarget) -> Unit,
     modifier: Modifier,
@@ -314,13 +340,16 @@ private fun DirectThread(
                     conversation = value,
                     holder = holder,
                     voiceMediaRepository = voiceMediaRepository,
+                    attachmentMediaRepository = attachmentMediaRepository,
                     dolabBridge = dolabBridge,
                     onReport = onReport,
                 )
             }
         }
 
-        if (value.status == "accepted") DirectComposer(holder, dolabBridge)
+        if (value.status == "accepted") {
+            DirectComposer(holder, attachmentMediaRepository, dolabBridge)
+        }
     }
 }
 
@@ -331,6 +360,7 @@ private fun DirectMessageBubble(
     conversation: DirectConversation,
     holder: DirectStateHolder,
     voiceMediaRepository: VoiceMediaRepository,
+    attachmentMediaRepository: DirectAttachmentMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
     onReport: (ReportTarget) -> Unit,
 ) {
@@ -418,24 +448,16 @@ private fun DirectMessageBubble(
                                 }
                             }
                         }
-                        message.attachments.isNotEmpty() -> {
-                            Text(
-                                text = directAttachmentSummary(message.attachments),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
+                        message.attachments.any { it.kind != "audio" } -> {
+                            DirectAttachmentGallery(
+                                holder = holder,
+                                mediaRepository = attachmentMediaRepository,
+                                attachments = message.attachments.filter { it.kind != "audio" },
+                                mine = mine,
                             )
                             message.body
                                 .takeIf { it.isNotBlank() && it !in setOf("صورة", "فيديو", "ملف", "رسالة صوتية") }
                                 ?.let { Text(it) }
-                            Text(
-                                text = "المرفقات موجودة في الرسالة — عارض الصور والفيديو والملفات بيتقفل في الـslice الجاية.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (mine) {
-                                    MaterialTheme.colorScheme.onPrimary.copy(alpha = .75f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
                         }
                         else -> Text(message.body)
                     }
@@ -456,7 +478,10 @@ private fun DirectMessageBubble(
             }
 
             if (!deleted) {
-                Row(horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+                ) {
                     TextButton(onClick = { holder.replyTo(message) }) { Text("رد") }
                     TextButton(onClick = { scope.launch { holder.toggleReaction(message, "love") } }) { Text("❤️") }
                     TextButton(onClick = { scope.launch { holder.toggleReaction(message, "thumbs_up") } }) { Text("👍") }
@@ -481,7 +506,7 @@ private fun DirectMessageBubble(
                         ) { Text(if (saving) "بنحفظ…" else "دولابي") }
                     }
 
-                    if (mine && message.attachments.isEmpty()) {
+                    if (mine && message.messageType != "voice") {
                         TextButton(onClick = { scope.launch { holder.deleteMessage(message) } }) {
                             Text("حذف")
                         }
@@ -505,6 +530,168 @@ private fun DirectMessageBubble(
     }
 }
 
+@Composable
+private fun DirectAttachmentGallery(
+    holder: DirectStateHolder,
+    mediaRepository: DirectAttachmentMediaRepository,
+    attachments: List<DirectAttachment>,
+    mine: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+        attachments.forEach { attachment ->
+            when (attachment.kind) {
+                "image" -> DirectImageAttachment(
+                    holder = holder,
+                    mediaRepository = mediaRepository,
+                    attachment = attachment,
+                )
+                "video", "file" -> DirectOpenAttachment(
+                    holder = holder,
+                    mediaRepository = mediaRepository,
+                    attachment = attachment,
+                    mine = mine,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectImageAttachment(
+    holder: DirectStateHolder,
+    mediaRepository: DirectAttachmentMediaRepository,
+    attachment: DirectAttachment,
+) {
+    var url by remember(attachment.storagePath) { mutableStateOf<String?>(null) }
+    var fullScreen by remember(attachment.storagePath) { mutableStateOf(false) }
+
+    LaunchedEffect(attachment.storagePath) {
+        when (val result = mediaRepository.signedUrl(holder.session, attachment)) {
+            is DirectMediaResult.Success -> {
+                holder.updateSession(result.session)
+                url = result.value
+            }
+            is DirectMediaResult.Failure -> {
+                result.session?.let(holder::updateSession)
+                holder.showMessage(result.message)
+            }
+        }
+    }
+
+    NetworkImage(
+        url = url,
+        contentDescription = attachment.fileName ?: "صورة في المحادثة",
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(210.dp)
+            .clickable(enabled = url != null) { fullScreen = true },
+        contentScale = ContentScale.Crop,
+    )
+
+    if (fullScreen && url != null) {
+        Dialog(
+            onDismissRequest = { fullScreen = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+            ) {
+                NetworkImage(
+                    url = url,
+                    contentDescription = attachment.fileName ?: "صورة في المحادثة",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 64.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                TextButton(
+                    onClick = { fullScreen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(TeswaSpacing.lg),
+                ) {
+                    Text("إغلاق", color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectOpenAttachment(
+    holder: DirectStateHolder,
+    mediaRepository: DirectAttachmentMediaRepository,
+    attachment: DirectAttachment,
+    mine: Boolean,
+) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    Surface(
+        color = if (mine) {
+            MaterialTheme.colorScheme.onPrimary.copy(alpha = .10f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = .72f)
+        },
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                scope.launch {
+                    when (val result = mediaRepository.signedUrl(holder.session, attachment)) {
+                        is DirectMediaResult.Success -> {
+                            holder.updateSession(result.session)
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(
+                                            Uri.parse(result.value),
+                                            attachment.mimeType ?: if (attachment.kind == "video") "video/*" else "*/*",
+                                        )
+                                    },
+                                )
+                            }.onFailure {
+                                holder.showMessage("مفيش تطبيق على الجهاز يفتح المرفق ده.")
+                            }
+                        }
+                        is DirectMediaResult.Failure -> {
+                            result.session?.let(holder::updateSession)
+                            holder.showMessage(result.message)
+                        }
+                    }
+                }
+            },
+    ) {
+        Row(
+            modifier = Modifier.padding(TeswaSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            com.teswa.mobile.ui.system.TeswaMarkIcon(
+                mark = com.teswa.mobile.ui.system.TeswaMark.BetweenUs,
+                color = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                size = 30.dp,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = attachment.fileName ?: if (attachment.kind == "video") "فيديو" else "ملف",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = if (attachment.kind == "video") "افتح الفيديو" else "افتح الملف",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
 private fun directAttachmentSummary(values: List<DirectAttachment>): String {
     val images = values.count { it.kind == "image" }
     val videos = values.count { it.kind == "video" }
@@ -521,9 +708,30 @@ private fun directAttachmentSummary(values: List<DirectAttachment>): String {
 @Composable
 private fun DirectComposer(
     holder: DirectStateHolder,
+    attachmentMediaRepository: DirectAttachmentMediaRepository,
     dolabBridge: DolabDirectMessagingBridge,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val resolver = remember(context) { AndroidDirectAttachmentResolver(context.contentResolver) }
+    val attachmentPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        val resolved = uris.take(5).mapNotNull { uri ->
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            resolver.resolve(uri)
+        }
+        holder.queueAttachments(resolved)
+        if (uris.isNotEmpty() && resolved.isEmpty()) {
+            holder.showMessage("المرفقات دي مش صالحة أو أكبر من الحد المسموح.")
+        }
+    }
+
     Column(
         Modifier
             .fillMaxWidth()
@@ -562,12 +770,68 @@ private fun DirectComposer(
             }
         }
 
-        DolabPickerButton(holder, dolabBridge, Modifier.fillMaxWidth())
+        if (holder.pendingAttachments.isNotEmpty()) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                contentPadding = PaddingValues(horizontal = TeswaSpacing.xxs),
+            ) {
+                items(holder.pendingAttachments, key = { it.uri }) { pending ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(TeswaSpacing.xs),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+                        ) {
+                            Column {
+                                Text(
+                                    text = pending.displayName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                                Text(
+                                    text = directPendingLabel(pending),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            TextButton(
+                                onClick = { holder.removePendingAttachment(pending.uri) },
+                                enabled = !holder.working,
+                            ) { Text("شيل") }
+                        }
+                    }
+                }
+            }
+        }
+
+        holder.attachmentUploadProgress?.let { progress ->
+            TeswaInlineLoading("بنرفع المرفقات… $progress%")
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DolabPickerButton(holder, dolabBridge, Modifier.weight(1f))
+            com.teswa.mobile.ui.system.TeswaIconAction(
+                icon = TeswaIcons.Gallery,
+                contentDescription = "إضافة صورة أو فيديو أو ملف",
+                enabled = !holder.working && holder.pendingAttachments.size < 5,
+                onClick = { attachmentPicker.launch(arrayOf("*/*")) },
+            )
+        }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             VoiceComposer(
-                enabled = holder.replyingTo == null && !holder.working,
-                sending = holder.working,
+                enabled = holder.replyingTo == null &&
+                    holder.pendingAttachments.isEmpty() &&
+                    !holder.working,
+                sending = holder.working && holder.voiceUploadProgress != null,
                 uploadProgress = holder.voiceUploadProgress,
                 onSend = holder::sendVoice,
                 onError = holder::showMessage,
@@ -587,10 +851,21 @@ private fun DirectComposer(
                 icon = TeswaIcons.Send,
                 contentDescription = if (holder.replyingTo == null) "إرسال الرسالة" else "إرسال الرد",
                 onClick = { scope.launch { holder.send() } },
-                enabled = holder.composer.isNotBlank() && !holder.working,
+                enabled = (holder.composer.isNotBlank() || holder.pendingAttachments.isNotEmpty()) &&
+                    !holder.working,
             )
         }
     }
+}
+
+private fun directPendingLabel(value: DirectPendingAttachment): String {
+    val kind = when (value.kind) {
+        "image" -> "صورة"
+        "video" -> "فيديو"
+        else -> "ملف"
+    }
+    val megabytes = value.sizeBytes / (1024.0 * 1024.0)
+    return "$kind · " + String.format(java.util.Locale.US, "%.1f MB", megabytes)
 }
 
 @Composable
