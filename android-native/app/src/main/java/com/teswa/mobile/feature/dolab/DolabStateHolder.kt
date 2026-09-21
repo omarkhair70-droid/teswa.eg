@@ -15,6 +15,8 @@ class DolabStateHolder(
         private set
     var filter by mutableStateOf(DolabFilter.ALL)
         private set
+    var query by mutableStateOf("")
+        private set
     var refreshing by mutableStateOf(false)
         private set
     var workingId by mutableStateOf<String?>(null)
@@ -40,6 +42,10 @@ class DolabStateHolder(
         filter = value
     }
 
+    fun updateQuery(value: String) {
+        query = value.take(120)
+    }
+
     fun clearMessage() {
         message = null
         messageIsError = false
@@ -51,15 +57,59 @@ class DolabStateHolder(
         else -> null
     }
 
-    fun visibleItems(): List<DolabItem> = workspace()?.items.orEmpty().filter { item ->
-        when (filter) {
-            DolabFilter.ALL -> true
-            DolabFilter.IN_PROGRESS -> item.status == DolabItemStatus.DRAFT
-            DolabFilter.READY -> item.status == DolabItemStatus.READY
-            DolabFilter.PUBLISHED -> item.status == DolabItemStatus.PUBLISHED || item.status == DolabItemStatus.EXCHANGED
-            DolabFilter.ARCHIVED -> item.status == DolabItemStatus.ARCHIVED
+    fun objectItems(): List<DolabItem> {
+        val current = workspace() ?: return emptyList()
+        return current.items.filterNot { it.isLegacyStandaloneTrace(current) }
+    }
+
+    fun visibleItems(): List<DolabItem> {
+        val current = workspace() ?: return emptyList()
+        val needle = query.trim().lowercase()
+        return current.items.filter { item ->
+            val statusMatches = when (filter) {
+                DolabFilter.ALL -> true
+                DolabFilter.IN_PROGRESS -> item.status == DolabItemStatus.DRAFT
+                DolabFilter.READY -> item.status == DolabItemStatus.READY
+                DolabFilter.PUBLISHED -> item.status == DolabItemStatus.PUBLISHED
+                DolabFilter.EXCHANGED -> item.status == DolabItemStatus.EXCHANGED
+                DolabFilter.ARCHIVED -> item.status == DolabItemStatus.ARCHIVED
+            }
+            !item.isLegacyStandaloneTrace(current) && statusMatches && item.matches(needle)
         }
     }
+
+    fun visibleLooseNotes(): List<DolabNote> {
+        if (filter != DolabFilter.ALL) return emptyList()
+        val needle = query.trim().lowercase()
+        return workspace()?.notes.orEmpty()
+            .filter { it.dolabItemId == null }
+            .filter { needle.isBlank() || it.body.orEmpty().lowercase().contains(needle) }
+    }
+
+    fun visibleLegacyTraceItems(): List<DolabItem> {
+        if (filter != DolabFilter.ALL) return emptyList()
+        val current = workspace() ?: return emptyList()
+        val needle = query.trim().lowercase()
+        return current.items.filter { it.isLegacyStandaloneTrace(current) && it.matches(needle) }
+    }
+
+    fun hasSearchableContent(): Boolean {
+        val current = workspace() ?: return false
+        return current.items.size + current.notes.size + current.media.size > 4
+    }
+
+    private fun DolabItem.matches(needle: String): Boolean {
+        if (needle.isBlank()) return true
+        return listOf(title, description, category, condition, exchangeIntent)
+            .any { it.orEmpty().lowercase().contains(needle) }
+    }
+
+    private fun DolabItem.isLegacyStandaloneTrace(workspace: DolabWorkspace): Boolean =
+        when {
+            source == "note" -> true
+            source == "voice" && title.orEmpty().startsWith("رسالة") -> true
+            else -> false
+        }
 
     suspend fun load(refresh: Boolean = false) {
         sessionExpired = false
@@ -159,6 +209,83 @@ class DolabStateHolder(
         }
     }
 
+    suspend fun addLooseVoice(pending: DolabPendingMedia): Boolean {
+        if (workingId != null) return false
+        pending.validate()?.let { show(it, error = true); return false }
+        workingId = "loose-voice"
+        mediaUploadProgress = DolabMediaUploadProgress("loose-voice", 0)
+        clearMessage()
+
+        val uploaded = repository.uploadMedia(session, null, pending, 0) { percent ->
+            mediaUploadProgress = DolabMediaUploadProgress("loose-voice", percent)
+        }
+        if (uploaded is DolabResult.Failure) {
+            uploaded.session?.let { session = it }
+            workingId = null
+            mediaUploadProgress = null
+            sessionExpired = uploaded.unauthorized
+            show(uploaded.message, error = true)
+            return false
+        }
+        uploaded as DolabResult.Success
+        session = uploaded.session
+
+        val noted = repository.createNote(
+            session = session,
+            itemId = null,
+            body = "تسجيل صوتي محفوظ في دولابك",
+            noteType = "voice",
+            mediaId = uploaded.value.id,
+        )
+        workingId = null
+        mediaUploadProgress = null
+        return when (noted) {
+            is DolabResult.Success -> {
+                session = noted.session
+                val current = workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
+                state = current.copy(
+                    media = current.media.filterNot { it.id == uploaded.value.id } + uploaded.value,
+                    notes = listOf(noted.value) + current.notes.filterNot { it.id == noted.value.id },
+                ).asUiState()
+                show("التسجيل اتحفظ على جنب.")
+                true
+            }
+            is DolabResult.Failure -> {
+                noted.session?.let { session = it }
+                val rollback = repository.deleteMedia(session, uploaded.value)
+                if (rollback is DolabResult.Success) session = rollback.session
+                sessionExpired = noted.unauthorized
+                show(noted.message, error = true)
+                false
+            }
+        }
+    }
+
+    suspend fun addLooseNote(body: String): Boolean {
+        if (workingId != null) return false
+        workingId = "loose-note"
+        clearMessage()
+        val result = repository.createNote(session, null, body, noteType = "text")
+        workingId = null
+        return when (result) {
+            is DolabResult.Success -> {
+                session = result.session
+                val current = workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
+                state = current.copy(
+                    notes = listOf(result.value) + current.notes.filterNot { it.id == result.value.id },
+                ).asUiState()
+                show("الملاحظة اتحفظت على جنب.")
+                true
+            }
+            is DolabResult.Failure -> {
+                result.session?.let { session = it }
+                sessionExpired = result.unauthorized
+                show(result.message, error = true)
+                false
+            }
+        }
+    }
+
     suspend fun addNote(itemId: String, body: String): Boolean {
         if (workingId != null) return false
         workingId = itemId
@@ -199,6 +326,68 @@ class DolabStateHolder(
                 result.session?.let { session = it }
                 sessionExpired = result.unauthorized
                 show(result.message, error = true)
+                false
+            }
+        }
+    }
+
+    suspend fun addVoiceTrace(item: DolabItem, pending: DolabPendingMedia): Boolean {
+        if (workingId != null) return false
+        pending.validate()?.let { show(it, error = true); return false }
+        if (pending.mediaType != "audio") {
+            show("التسجيل الصوتي غير صالح.", error = true)
+            return false
+        }
+
+        workingId = item.id
+        mediaUploadProgress = DolabMediaUploadProgress(item.id, 0)
+        clearMessage()
+
+        val sortOrder = workspace()?.mediaFor(item.id)?.size ?: 0
+        val uploaded = repository.uploadMedia(session, item.id, pending, sortOrder) { percent ->
+            mediaUploadProgress = DolabMediaUploadProgress(item.id, percent)
+        }
+
+        if (uploaded is DolabResult.Failure) {
+            uploaded.session?.let { session = it }
+            workingId = null
+            mediaUploadProgress = null
+            sessionExpired = uploaded.unauthorized
+            show(uploaded.message, error = true)
+            return false
+        }
+
+        uploaded as DolabResult.Success
+        session = uploaded.session
+
+        val note = repository.createNote(
+            session = session,
+            itemId = item.id,
+            body = "تسجيل صوتي محفوظ مع الحاجة",
+            noteType = "voice",
+            mediaId = uploaded.value.id,
+        )
+
+        workingId = null
+        mediaUploadProgress = null
+
+        return when (note) {
+            is DolabResult.Success -> {
+                session = note.session
+                val current = workspace() ?: DolabWorkspace(emptyList(), emptyList(), emptyList())
+                state = current.copy(
+                    media = current.media.filterNot { it.id == uploaded.value.id } + uploaded.value,
+                    notes = listOf(note.value) + current.notes.filterNot { it.id == note.value.id },
+                ).asUiState()
+                show("التسجيل اتحفظ مع الحاجة.")
+                true
+            }
+            is DolabResult.Failure -> {
+                note.session?.let { session = it }
+                val rollback = repository.deleteMedia(session, uploaded.value)
+                if (rollback is DolabResult.Success) session = rollback.session
+                sessionExpired = note.unauthorized
+                show(note.message, error = true)
                 false
             }
         }

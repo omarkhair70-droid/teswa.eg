@@ -88,6 +88,19 @@ class MediaTests(unittest.TestCase):
                 'POST','/v1/media/signed-url','Bearer valid',dict(body))
         self.assertEqual(error.exception.status,403)
 
+    def test_story_media_authorizer_preserves_contextual_snapshot_access(self):
+        class Db:
+            def __init__(self): self.statement = None
+            def query(self, user_id, statement):
+                self.statement = statement
+                return {'allowed': True}
+        db = Db()
+        allowed = media.StoryMediaAuthorizer(db).can_read(UID, '22222222-2222-4222-8222-222222222222/story.jpg')
+        self.assertTrue(allowed)
+        self.assertIn('contextual_conversations', db.statement)
+        self.assertIn('context_media_storage_path_snapshot', db.statement)
+        self.assertIn(UID, db.statement)
+
     def test_conversation_voice_reads_require_rls_authorized_participant(self):
         owner='22222222-2222-4222-8222-222222222222'
         conversation='33333333-3333-4333-8333-333333333333'
@@ -96,6 +109,7 @@ class MediaTests(unittest.TestCase):
             def can_read(self,user_id,object_key): return self.value and user_id==UID and object_key==self.expected
         for purpose,prefix,slot in (
             ('direct_voice','direct',4),
+            ('direct_chat_media','direct',4),
             ('contextual_voice','contextual',5),
         ):
             with self.subTest(purpose=purpose):

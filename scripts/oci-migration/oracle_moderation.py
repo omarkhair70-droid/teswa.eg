@@ -9,7 +9,7 @@ from oracle_marketplace_write import PgWriteRunner
 
 REASONS=('misleading_item','inappropriate_content','spam_offer','unsafe_behavior','no_show','harassment','fraud','other')
 STATUSES=('open','reviewing','actioned','dismissed')
-TYPES=('all','user','item','story','deal','direct_message','deal_message')
+TYPES=('all','user','item','story','deal','direct_message','deal_message','contextual_message')
 PROFILE="json_build_object('id',p.id,'displayName',p.display_name,'username',p.username,'avatarUrl',p.avatar_url)"
 
 def exact(value,keys,code):
@@ -51,6 +51,7 @@ class ModerationApi:
     'story':(('storyId',),'public.report_story(%s,%s,%s)'),
     'deal-message':(('dealId','dealMessageId'),'public.report_deal_message(%s,%s,%s,%s)'),
     'direct-message':(('conversationId','messageId','reportedUserId'),'public.report_direct_message(%s,%s,%s,%s,%s)'),
+    'contextual-message':(('conversationId','contextualMessageId'),'public.report_contextual_message(%s,%s,%s,%s)'),
    }
    if kind not in specs:raise ApiError(404,'not_found')
    keys,template=specs[kind];ids,reason,details=report_input(body,keys)
@@ -84,6 +85,27 @@ class ModerationApi:
       WHEN nullif(btrim(body),'') IS NULL THEN 'رسالة داخل المحادثة المباشرة.' ELSE left(body,120) END FROM m)) END) FROM x"""%(conversation,sql_text(message),conversation,user_id,reported,user_id,user_id,reported,reported,conversation,sql_text(message),PROFILE,reported)
    return self.context_result(self.db.query(user_id,statement))
 
+  if method=='POST' and parsed.path=='/v1/moderation/contextual-context':
+   value=exact(body,('conversationId','messageId','reportedUserId','currentUserId'),'invalid_context');actor(value['currentUserId'],user_id)
+   conversation=valid_uuid(value['conversationId']);message=valid_uuid(value['messageId']);reported=valid_uuid(value['reportedUserId'])
+   statement="""WITH c AS(SELECT * FROM public.contextual_conversations WHERE id='%s'::uuid),
+    m AS(SELECT * FROM public.contextual_messages WHERE id='%s'::uuid AND conversation_id='%s'::uuid),
+    x AS(SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM c) THEN 'not_found'
+      WHEN NOT EXISTS(SELECT 1 FROM c WHERE '%s'::uuid IN(starter_id,recipient_id)) THEN 'unauthorized'
+      WHEN NOT EXISTS(SELECT 1 FROM c WHERE '%s'::uuid IN(starter_id,recipient_id) AND '%s'::uuid<> '%s'::uuid) THEN 'invalid_target'
+      WHEN NOT EXISTS(SELECT 1 FROM m) THEN 'not_found'
+      WHEN EXISTS(SELECT 1 FROM m WHERE sender_id='%s'::uuid) THEN 'self_target'
+      WHEN NOT EXISTS(SELECT 1 FROM m WHERE sender_id='%s'::uuid) THEN 'invalid_target'
+      WHEN NOT EXISTS(SELECT 1 FROM public.profiles p WHERE p.id='%s'::uuid) THEN 'invalid_target'
+      ELSE 'ok' END state)
+    SELECT json_build_object('state',x.state,'context',CASE WHEN x.state='ok' THEN json_build_object(
+      'conversationId','%s','messageId','%s','reportedUser',(SELECT %s FROM public.profiles p WHERE p.id='%s'::uuid),
+      'preview',(SELECT CASE WHEN message_kind='voice' THEN 'رسالة صوتية داخل ردود القصة.'
+        WHEN nullif(btrim(body),'') IS NULL THEN 'رسالة داخل ردود القصة.' ELSE left(body,120) END FROM m)) END) FROM x"""%(
+      conversation,message,conversation,user_id,reported,reported,user_id,user_id,reported,reported,
+      conversation,message,PROFILE,reported)
+   return self.context_result(self.db.query(user_id,statement))
+
   if method=='POST' and parsed.path=='/v1/moderation/deal-context':
    value=exact(body,('dealId','currentUserId'),'invalid_context');actor(value['currentUserId'],user_id);deal=valid_uuid(value['dealId'])
    statement="""WITH d AS(SELECT * FROM public.swap_deals WHERE id='%s'::uuid),x AS(SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM d) THEN 'not_found'
@@ -114,13 +136,14 @@ class ModerationApi:
    if not admin or not admin.get('admin'):raise ApiError(403,'unauthorized')
    where=[]
    if status!='all':where.append('r.status=%s'%sql_text(status))
-   filters={'user':'r.reported_user_id IS NOT NULL AND r.reported_item_id IS NULL AND r.story_id IS NULL AND r.reported_deal_id IS NULL AND r.reported_direct_conversation_id IS NULL AND r.reported_stream_message_id IS NULL AND r.reported_deal_message_id IS NULL','item':'r.reported_item_id IS NOT NULL','story':'r.story_id IS NOT NULL','deal':'r.reported_deal_id IS NOT NULL AND r.reported_deal_message_id IS NULL','direct_message':'(r.reported_direct_conversation_id IS NOT NULL OR r.reported_stream_message_id IS NOT NULL)','deal_message':'r.reported_deal_message_id IS NOT NULL'}
+   filters={'user':'r.reported_user_id IS NOT NULL AND r.reported_item_id IS NULL AND r.story_id IS NULL AND r.reported_deal_id IS NULL AND r.reported_direct_conversation_id IS NULL AND r.reported_stream_message_id IS NULL AND r.reported_deal_message_id IS NULL AND r.reported_contextual_message_id IS NULL','item':'r.reported_item_id IS NOT NULL','story':'r.story_id IS NOT NULL','deal':'r.reported_deal_id IS NOT NULL AND r.reported_deal_message_id IS NULL','direct_message':'(r.reported_direct_conversation_id IS NOT NULL OR r.reported_stream_message_id IS NOT NULL)','deal_message':'r.reported_deal_message_id IS NOT NULL','contextual_message':'r.reported_contextual_message_id IS NOT NULL'}
    if kind!='all':where.append(filters[kind])
    clause=' WHERE '+' AND '.join(where) if where else ''
    statement="""SELECT coalesce(json_agg(json_build_object('id',r.id,'reporterId',r.reporter_id,'reportedUserId',r.reported_user_id,
     'reportedItemId',r.reported_item_id,'reportedOfferId',r.reported_offer_id,'reportedDealId',r.reported_deal_id,
     'reportedDirectConversationId',r.reported_direct_conversation_id,'reportedStreamMessageId',r.reported_stream_message_id,
-    'reportedDealMessageId',r.reported_deal_message_id,'storyId',r.story_id,'reason',r.reason,'details',r.details,'status',r.status,
+    'reportedDealMessageId',r.reported_deal_message_id,'reportedContextualConversationId',r.reported_contextual_conversation_id,
+    'reportedContextualMessageId',r.reported_contextual_message_id,'storyId',r.story_id,'reason',r.reason,'details',r.details,'status',r.status,
     'actionTaken',r.action_taken,'adminNotes',r.admin_notes,'reviewedBy',r.reviewed_by,'reviewedAt',r.reviewed_at,'createdAt',r.created_at,
     'reporterName',coalesce(pr.display_name,pr.username,r.reporter_id::text),'reportedUserName',coalesce(pt.display_name,pt.username,r.reported_user_id::text),
     'itemTitle',i.title) ORDER BY r.created_at DESC,r.id),'[]'::json) FROM (SELECT * FROM public.reports r%s ORDER BY created_at DESC LIMIT 100)r

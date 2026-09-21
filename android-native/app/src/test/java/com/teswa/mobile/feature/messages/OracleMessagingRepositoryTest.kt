@@ -47,7 +47,7 @@ class OracleMessagingRepositoryTest {
             ),
             OracleTransportResult.Response(
                 OracleResponse(200, JSONObject("""{
-                  "items":[{"id":"$requestedId","title":"كاميرا"},{"id":"$offeredId","title":"كتاب"}]
+                  "items":[{"id":"$requestedId","title":"كاميرا","imageUrl":"https://img.test/camera.jpg"},{"id":"$offeredId","title":"كتاب","imageUrl":"https://img.test/book.jpg"}]
                 }""")),
             ),
         )
@@ -60,6 +60,8 @@ class OracleMessagingRepositoryTest {
         val row = result.value.items.single()
         assertEquals("كاميرا", row.requestedItemTitle)
         assertEquals("كتاب", row.offeredItemTitle)
+        assertEquals("https://img.test/camera.jpg", row.requestedItemImageUrl)
+        assertEquals("https://img.test/book.jpg", row.offeredItemImageUrl)
         assertEquals(2, row.unreadCount)
         assertEquals(
             "/v1/deals/inbox?userId=$userId&limit=50&offset=0",

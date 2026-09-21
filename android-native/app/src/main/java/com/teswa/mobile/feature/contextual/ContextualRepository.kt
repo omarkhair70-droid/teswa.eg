@@ -188,13 +188,14 @@ class OracleContextualRepository(
         val activity = row.optString("lastActivityAt").trim().takeIf(String::isNotEmpty) ?: return null
         val latest = row.optJSONObject("latestMessage")
         return ContextualConversation(
-            id,
-            storyId,
-            other,
-            latest?.let { nullable(it, "body") },
-            latest?.let { nullable(it, "kind") },
-            row.optInt("unreadCount", 0).coerceAtLeast(0),
-            activity,
+            id = id,
+            storyId = storyId,
+            context = parseStoryContext(row.optJSONObject("context"), storyId),
+            other = other,
+            latestBody = latest?.let { nullable(it, "body") },
+            latestKind = latest?.let { nullable(it, "kind") },
+            unreadCount = row.optInt("unreadCount", 0).coerceAtLeast(0),
+            lastActivityAt = activity,
         )
     }
 
@@ -209,10 +210,34 @@ class OracleContextualRepository(
             for (index in 0 until raw.length()) raw.optJSONObject(index)?.let(::parseMessage)?.let(::add)
         }
         return ContextualThread(
-            ContextualConversation(id, storyId, other, messages.lastOrNull()?.body, messages.lastOrNull()?.kind, 0, messages.lastOrNull()?.createdAt ?: ""),
+            ContextualConversation(
+                id = id,
+                storyId = storyId,
+                context = parseStoryContext(row.optJSONObject("context"), storyId),
+                other = other,
+                latestBody = messages.lastOrNull()?.body,
+                latestKind = messages.lastOrNull()?.kind,
+                unreadCount = 0,
+                lastActivityAt = messages.lastOrNull()?.createdAt ?: "",
+            ),
             starter,
             recipient,
             messages,
+        )
+    }
+
+    private fun parseStoryContext(
+        row: JSONObject?,
+        fallbackStoryId: String,
+    ): ContextualStoryContext {
+        val storyId = row?.let { nullable(it, "storyId")?.validId() } ?: fallbackStoryId
+        return ContextualStoryContext(
+            storyId = storyId,
+            caption = row?.let { nullable(it, "caption") },
+            mediaType = row?.let { nullable(it, "mediaType") }?.takeIf { it in setOf("image", "video") },
+            mediaStoragePath = row?.let { nullable(it, "mediaStoragePath") },
+            authorId = row?.let { nullable(it, "authorId")?.validId() },
+            createdAt = row?.let { nullable(it, "createdAt") },
         )
     }
 

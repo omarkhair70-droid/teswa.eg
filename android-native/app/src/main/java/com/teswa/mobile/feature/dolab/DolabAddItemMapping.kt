@@ -24,7 +24,8 @@ fun mapDolabToAddItemDraft(
         categoryId = matchedCategory?.id,
         condition = mappedCondition,
         conditionNotes = if (ItemCondition.entries.any { it.apiValue == normalizedCondition }) "" else rawCondition.take(1_000),
-        description = item.description.orEmpty().take(4_000),
+        // Dolab description is private memory. Public copy is written explicitly in Add Item.
+        description = "",
         desireText = item.exchangeIntent.orEmpty().take(1_000),
     )
 }

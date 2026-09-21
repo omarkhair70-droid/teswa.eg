@@ -1,42 +1,50 @@
 package com.teswa.mobile.feature.offers
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
-import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaActionSheet
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
+import com.teswa.mobile.ui.system.TeswaBottomCommitBar
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaEmptyField
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaHapticEvent
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
+import com.teswa.mobile.ui.system.TeswaObjectIdentity
+import com.teswa.mobile.ui.system.TeswaObjectRow
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,6 +63,7 @@ fun OfferCreationScreen(
         OfferCreationStateHolder(initialSession, requestedItemId, repository)
     }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(requestedItemId, initialSession.accessToken) {
         holder.updateSession(initialSession)
@@ -64,139 +73,173 @@ fun OfferCreationScreen(
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
     when (val state = holder.state) {
-        OfferCreationUiState.Loading -> CreationCenter("بنجهز عرض التبديل…", loading = true, modifier = modifier)
+        OfferCreationUiState.Loading -> CreationCenter(
+            message = "بنجيب الحاجتين اللي هيبدأ بينهم العرض…",
+            loading = true,
+            modifier = modifier,
+        )
         is OfferCreationUiState.Error -> CreationCenter(
-            state.message,
+            message = state.message,
             modifier = modifier,
             primary = "حاول تاني" to { scope.launch { holder.load() } },
             secondary = "رجوع" to onBack,
         )
-        is OfferCreationUiState.Sent -> OfferSentState(modifier, onOfferSent)
-        is OfferCreationUiState.Ready -> LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = onBack) { Text("رجوع") }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("قدّم عرض تبديل", style = MaterialTheme.typography.headlineSmall)
-                        Text("اختار حاجة واحدة من عندك", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            item { RequestedItemCard(state.context.requestedItem) }
-            if (state.context.myActiveItems.isEmpty()) {
-                item {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
-                        Column(Modifier.padding(18.dp)) {
-                            Text("محتاج تعرض حاجة الأول", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(6.dp))
-                            Text("عرض التبديل لازم يربط بين عنصر نشط من عندك والعنصر اللي اخترته.")
-                            Spacer(Modifier.height(14.dp))
-                            Button(onClick = onAddItem, modifier = Modifier.fillMaxWidth()) { Text("اعرض عنصر جديد") }
-                        }
-                    }
-                }
-            } else {
-                item {
-                    Text("هتقدم إيه؟", style = MaterialTheme.typography.titleLarge)
-                    Text("اختيارك مش نهائي غير بعد الضغط على إرسال.", style = MaterialTheme.typography.bodySmall)
-                }
-                items(state.context.myActiveItems, key = { it.id }) { item ->
-                    SelectableOfferItem(item, selected = holder.selectedItemId == item.id) { holder.select(item.id) }
-                }
-                item {
-                    OutlinedTextField(
-                        value = holder.message,
-                        onValueChange = holder::updateMessage,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("رسالة قصيرة — اختياري") },
-                        placeholder = { Text("مثلاً: حالته ممتازة ومتاح أقابلك في…") },
-                        minLines = 3,
-                        maxLines = 5,
-                        supportingText = { Text("${holder.message.length} / 500") },
-                    )
-                }
-                holder.submitError?.let { error ->
+        is OfferCreationUiState.Sent -> {
+            LaunchedEffect(state) { haptics.performTeswa(TeswaHapticEvent.Success) }
+            OfferSentState(modifier, onOfferSent)
+        }
+        is OfferCreationUiState.Ready -> {
+            var showSelector by remember { mutableStateOf(false) }
+            val selected = state.context.myActiveItems.firstOrNull { it.id == holder.selectedItemId }
+            Column(modifier.fillMaxSize()) {
+                TeswaFocusedHeader(title = "قدّم عرض", onBack = onBack)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = TeswaLayout.FocusedContentPadding,
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.lg),
+                ) {
                     item {
-                        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.error.copy(alpha = .1f)) {
-                            Text(error, Modifier.fillMaxWidth().padding(14.dp), color = MaterialTheme.colorScheme.error)
+                        Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                            TeswaExchangeMemoryPair(
+                                requestedTitle = state.context.requestedItem.title,
+                                requestedImageUrl = state.context.requestedItem.imageUrl,
+                                offeredTitle = selected?.title,
+                                offeredImageUrl = selected?.imageUrl,
+                                state = "عرض جديد",
+                                emptyOfferedLabel = "اختار حاجة من دولابك",
+                            )
+                            if (state.context.myActiveItems.isNotEmpty()) {
+                                TextButton(onClick = { showSelector = true }) {
+                                    Text(if (selected == null) "اختار الحاجة التانية" else "غيّر الحاجة اللي هتقدمها")
+                                }
+                            }
+                        }
+                    }
+                    if (state.context.myActiveItems.isEmpty()) {
+                        item {
+                            TeswaEmptyField(
+                                title = "مفيش حاجة نشطة تقدمها",
+                                body = "العرض لازم يربط حاجة واحدة نشطة من دولابك بالحاجة اللي اخترتها.",
+                                actionLabel = "روح لدولابي",
+                                actionIcon = TeswaIcons.Mine,
+                                onAction = onAddItem,
+                            )
+                        }
+                    } else {
+                        item {
+                            TeswaTraceNote("العرض هنا علاقة بين حاجتين، مش سعر ولا تقييم عدالة. كل حاجة تفضل محتفظة بهويتها.")
+                        }
+                        item {
+                            TeswaTextField(
+                                value = holder.message,
+                                onValueChange = holder::updateMessage,
+                                label = "سياق إضافي — اختياري",
+                                placeholder = "مثلاً: حالتها ممتازة ومتاح أقابلك في…",
+                                supportingText = "${holder.message.length} / 500",
+                                singleLine = false,
+                                minLines = 3,
+                                maxLines = 5,
+                                enabled = !holder.submitting,
+                            )
+                        }
+                        item {
+                            TeswaInlineMessage(
+                                title = "إيه اللي هيحصل؟",
+                                body = "القبول هيحوّل العلاقة دي لصفقة مشتركة للتنسيق. مش معناه إن التبديل حصل في الواقع.",
+                                icon = TeswaIcons.Exchange,
+                            )
+                        }
+                        holder.submitError?.let { error ->
+                            item {
+                                TeswaInlineMessage(
+                                    title = "العرض ما اتبعتش",
+                                    body = error,
+                                    icon = TeswaIcons.Refresh,
+                                    emphasis = TeswaEmphasis.Strong,
+                                )
+                            }
                         }
                     }
                 }
-                item {
-                    Button(
-                        onClick = { scope.launch { holder.submit() } },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = holder.selectedItemId != null && !holder.submitting,
-                    ) {
-                        if (holder.submitting) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Text(if (holder.submitting) "جاري الإرسال…" else "إرسال عرض التبديل")
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "العرض رسمي لكنه مش قبول تلقائي؛ صاحب العنصر يقدر يقبل أو يطلب وقت أو يرفض.",
-                        modifier = Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (state.context.myActiveItems.isNotEmpty()) {
+                    TeswaBottomCommitBar(
+                        primaryLabel = "ابعت العرض",
+                        primaryIcon = TeswaIcons.Send,
+                        primaryEnabled = holder.selectedItemId != null,
+                        primaryLoading = holder.submitting,
+                        onPrimary = {
+                            haptics.performTeswa(TeswaHapticEvent.Commit)
+                            scope.launch { holder.submit() }
+                        },
                     )
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun RequestedItemCard(item: OfferItemSummary) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f)) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(
-                item.imageUrl,
-                item.title,
-                Modifier.size(82.dp).clip(MaterialTheme.shapes.medium),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("الحاجة اللي عجبتك", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(4.dp))
-                Text(item.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (showSelector) {
+                TeswaActionSheet(
+                    title = "اختار حاجة واحدة من دولابك",
+                    supporting = "دي حاجاتك النشطة المؤهلة تدخل العلاقة دلوقتي.",
+                    onDismiss = { showSelector = false },
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xs)) {
+                        state.context.myActiveItems.forEach { item ->
+                            TeswaObjectRow(
+                                item = item.toIdentity(),
+                                state = if (item.id == holder.selectedItemId) "اختيارك" else null,
+                                stateEmphasis = TeswaEmphasis.Strong,
+                                onClick = {
+                                    holder.select(item.id)
+                                    haptics.performTeswa(TeswaHapticEvent.Selection)
+                                    showSelector = false
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+private fun OfferItemSummary.toIdentity() = TeswaObjectIdentity(
+    title = title,
+    imageUrl = imageUrl,
+)
+
 @Composable
-private fun SelectableOfferItem(item: OfferItemSummary, selected: Boolean, onSelect: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onSelect),
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = .25f)),
+private fun OfferSentState(
+    modifier: Modifier,
+    onOfferSent: () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            NetworkImage(item.imageUrl, item.title, Modifier.size(68.dp).clip(MaterialTheme.shapes.small))
-            Spacer(Modifier.width(12.dp))
-            Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.width(8.dp))
-            Surface(shape = CircleShape, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant) {
-                Text(if (selected) "✓" else "○", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        TeswaMarkIcon(
+            mark = TeswaMark.BetweenUs,
+            color = MaterialTheme.colorScheme.primary,
+            size = TeswaSpacing.xxl + TeswaSpacing.xxl,
+        )
+        Spacer(Modifier.height(TeswaSpacing.lg))
+        TeswaArchiveLabel("العرض خرج من عندك")
+        Spacer(Modifier.height(TeswaSpacing.lg))
+        Text(
+            text = "بقت فيه علاقة مستنية قرار الطرف التاني",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(TeswaSpacing.sm))
+        TeswaTraceNote("العرض هيفضل في «بيننا». القبول بس هو اللي ينقله لصفقة؛ لسه مفيش تبديل حصل في الواقع.")
+        Spacer(Modifier.height(TeswaSpacing.xl))
+        TeswaPrimaryAction(
+            text = "روح للعلاقة",
+            icon = TeswaIcons.Exchange,
+            onClick = onOfferSent,
+        )
     }
-}
-
-@Composable
-private fun OfferSentState(modifier: Modifier, onOfferSent: () -> Unit) {
-    CreationCenter(
-        "عرضك اتبعت. هتلاقي حالته في مركز الرسائل والعروض.",
-        modifier = modifier,
-        primary = "متابعة العرض" to onOfferSent,
-    )
 }
 
 @Composable
@@ -208,13 +251,29 @@ private fun CreationCenter(
     secondary: Pair<String, () -> Unit>? = null,
 ) {
     Column(
-        modifier.fillMaxSize().padding(28.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(14.dp)) }
-        Text(message, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-        primary?.let { (label, action) -> Spacer(Modifier.height(18.dp)); Button(onClick = action, modifier = Modifier.fillMaxWidth()) { Text(label) } }
-        secondary?.let { (label, action) -> Spacer(Modifier.height(8.dp)); OutlinedButton(onClick = action, modifier = Modifier.fillMaxWidth()) { Text(label) } }
+        if (loading) {
+            TeswaInlineLoading(message)
+        } else {
+            TeswaInlineMessage(
+                title = "العرض وقف هنا",
+                body = message,
+                emphasis = TeswaEmphasis.Strong,
+                actionLabel = primary?.first,
+                onAction = primary?.second,
+            )
+            secondary?.let {
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = it.first,
+                    onClick = it.second,
+                )
+            }
+        }
     }
 }

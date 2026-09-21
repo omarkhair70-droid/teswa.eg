@@ -15,6 +15,7 @@ sealed interface DirectUiState {
 class DirectStateHolder(
     initialSession: AuthSession,
     private val repository: DirectRepository,
+    private val attachmentMediaRepository: DirectAttachmentMediaRepository? = null,
 ) {
     var session by mutableStateOf(initialSession)
         private set
@@ -31,6 +32,14 @@ class DirectStateHolder(
     var working by mutableStateOf(false)
         private set
     var voiceUploadProgress by mutableStateOf<Int?>(null)
+        private set
+    var pendingAttachments by mutableStateOf<List<DirectPendingAttachment>>(emptyList())
+        private set
+    var attachmentUploadProgress by mutableStateOf<Int?>(null)
+        private set
+    var replyingTo by mutableStateOf<DirectMessage?>(null)
+        private set
+    var otherTyping by mutableStateOf(false)
         private set
     var message by mutableStateOf<String?>(null)
         private set
@@ -58,6 +67,10 @@ class DirectStateHolder(
         composeTarget = null
         selected = value
         composer = ""
+        pendingAttachments = emptyList()
+        attachmentUploadProgress = null
+        replyingTo = null
+        otherTyping = false
         message = null
         messageIsError = true
         when (val result = repository.loadMessages(session, value.id)) {
@@ -98,6 +111,10 @@ class DirectStateHolder(
         selected = null
         messages = emptyList()
         composer = ""
+        pendingAttachments = emptyList()
+        attachmentUploadProgress = null
+        replyingTo = null
+        otherTyping = false
         composeTarget = target
     }
 
@@ -106,8 +123,105 @@ class DirectStateHolder(
         composeTarget = null
         messages = emptyList()
         composer = ""
+        pendingAttachments = emptyList()
+        attachmentUploadProgress = null
+        replyingTo = null
+        otherTyping = false
         message = null
         messageIsError = true
+    }
+
+    fun queueAttachments(values: List<DirectPendingAttachment>) {
+        val accepted = values.filter { it.validate() == null }
+        val unique = (pendingAttachments + accepted).distinctBy { it.uri }
+        val clipped = unique.take(5)
+        pendingAttachments = clipped
+        when {
+            values.any { it.validate() != null } ->
+                showMessage("بعض المرفقات ما اتقبلتش: الحد 50MB لكل ملف.")
+            unique.size > clipped.size ->
+                showMessage("مسموح بحد أقصى 5 مرفقات في الرسالة.")
+        }
+    }
+
+    fun removePendingAttachment(uri: String) {
+        pendingAttachments = pendingAttachments.filterNot { it.uri == uri }
+    }
+
+    fun clearPendingAttachments() {
+        pendingAttachments = emptyList()
+        attachmentUploadProgress = null
+    }
+
+    fun replyTo(value: DirectMessage) {
+        if (value.deletedAt == null) replyingTo = value
+    }
+
+    fun clearReply() {
+        replyingTo = null
+    }
+
+    suspend fun setTyping(active: Boolean) {
+        val conversation = selected ?: return
+        if (conversation.status != "accepted") return
+        when (val result = repository.setTyping(session, conversation.id, active)) {
+            is DirectResult.Success -> session = result.session
+            is DirectResult.Failure -> result.session?.let { session = it }
+        }
+    }
+
+    suspend fun refreshTyping() {
+        val conversation = selected ?: return
+        if (conversation.status != "accepted") {
+            otherTyping = false
+            return
+        }
+        when (val result = repository.loadTyping(session, conversation.id)) {
+            is DirectResult.Success -> {
+                session = result.session
+                otherTyping = conversation.otherUserId in result.value
+            }
+            is DirectResult.Failure -> result.session?.let { session = it }
+        }
+    }
+
+    suspend fun toggleReaction(value: DirectMessage, reaction: String) {
+        if (value.deletedAt != null) return
+        when (val result = repository.toggleReaction(session, value.id, reaction)) {
+            is DirectResult.Success -> {
+                session = result.session
+                reloadMessages()
+            }
+            is DirectResult.Failure -> fail(result)
+        }
+    }
+
+    suspend fun deleteMessage(value: DirectMessage) {
+        if (value.senderId != session.user.id || value.deletedAt != null) return
+        when (val result = repository.deleteMessage(session, value.id)) {
+            is DirectResult.Success -> {
+                session = result.session
+                attachmentMediaRepository?.let { media ->
+                    if (result.value.storagePaths.isNotEmpty()) {
+                        session = media.discardPaths(session, result.value.storagePaths)
+                    }
+                }
+                if (replyingTo?.id == value.id) replyingTo = null
+                reloadMessages()
+            }
+            is DirectResult.Failure -> fail(result)
+        }
+    }
+
+    private suspend fun reloadMessages() {
+        val conversation = selected ?: return
+        when (val result = repository.loadMessages(session, conversation.id)) {
+            is DirectResult.Success -> {
+                session = result.session
+                messages = result.value
+            }
+            is DirectResult.Failure -> fail(result)
+        }
     }
 
     fun compose(value: String) {
@@ -139,16 +253,84 @@ class DirectStateHolder(
 
     suspend fun send() {
         val conversation = selected ?: return
-        val body = composer.trim()
-        if (working || body.isEmpty()) return
+        val body = composer.trim().takeIf(String::isNotEmpty)
+        val queued = pendingAttachments
+        if (working || (body == null && queued.isEmpty())) return
+
+        val mediaRepository = attachmentMediaRepository
+        if (queued.isNotEmpty() && mediaRepository == null) {
+            showMessage("إرسال المرفقات مش متاح في النسخة دي.")
+            return
+        }
+
         working = true
-        when (val result = repository.send(session, conversation, body)) {
+        attachmentUploadProgress = if (queued.isEmpty()) null else 0
+        val uploaded = mutableListOf<DirectAttachment>()
+        var failed: DirectMediaResult.Failure? = null
+
+        if (mediaRepository != null) {
+            queued.forEachIndexed { index, pending ->
+                if (failed != null) return@forEachIndexed
+                when (
+                    val result = mediaRepository.upload(
+                        session = session,
+                        conversationId = conversation.id,
+                        pending = pending,
+                        onProgress = { itemProgress ->
+                            attachmentUploadProgress =
+                                (((index * 100) + itemProgress) / queued.size).coerceIn(0, 100)
+                        },
+                    )
+                ) {
+                    is DirectMediaResult.Success -> {
+                        session = result.session
+                        uploaded += result.value
+                    }
+                    is DirectMediaResult.Failure -> {
+                        result.session?.let { session = it }
+                        failed = result
+                    }
+                }
+            }
+        }
+
+        if (failed != null) {
+            if (mediaRepository != null) {
+                uploaded.forEach { session = mediaRepository.discard(session, it) }
+            }
+            attachmentUploadProgress = null
+            working = false
+            val error = requireNotNull(failed)
+            sessionExpired = error.unauthorized
+            showMessage(error.message)
+            return
+        }
+
+        val result = repository.sendRich(
+            session = session,
+            conversation = conversation,
+            body = body,
+            replyToMessageId = replyingTo?.id,
+            attachments = uploaded,
+        )
+
+        when (result) {
             is DirectResult.Success -> {
                 session = result.session
                 composer = ""
-                open(conversation)
+                replyingTo = null
+                pendingAttachments = emptyList()
+                attachmentUploadProgress = null
+                reloadMessages()
             }
-            is DirectResult.Failure -> fail(result)
+            is DirectResult.Failure -> {
+                result.session?.let { session = it }
+                if (mediaRepository != null) {
+                    uploaded.forEach { session = mediaRepository.discard(session, it) }
+                }
+                attachmentUploadProgress = null
+                fail(result.copy(session = session))
+            }
         }
         working = false
     }

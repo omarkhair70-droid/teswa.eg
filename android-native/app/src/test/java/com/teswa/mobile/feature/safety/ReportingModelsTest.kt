@@ -40,6 +40,25 @@ class ReportingModelsTest {
     }
 
     @Test
+    fun contextualMessageUsesContextualMessageEndpoint() {
+        val request = requireNotNull(
+            reportRequest(
+                ReportTarget.ContextualMessage("conversation-3", "message-4", "user-5"),
+                ReportReason.HARASSMENT,
+                "  إساءة داخل رد القصة  ",
+            ),
+        )
+        assertEquals("/v1/moderation/reports/contextual-message", request.path)
+        assertEquals("conversation-3", request.body?.optString("conversationId"))
+        assertEquals("message-4", request.body?.optString("contextualMessageId"))
+        assertEquals("harassment", request.body?.optString("reason"))
+        assertEquals("إساءة داخل رد القصة", request.body?.optString("details"))
+        assertTrue(ReportReason.INAPPROPRIATE_CONTENT in reasonsFor(
+            ReportTarget.ContextualMessage("c", "m", "u"),
+        ))
+    }
+
+    @Test
     fun dealMessageUsesDealMessageEndpoint() {
         val request = requireNotNull(
             reportRequest(

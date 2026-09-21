@@ -34,6 +34,7 @@ class OracleReportingRepository(
             is ReportTarget.Item -> prepareItem(session, target)
             is ReportTarget.Story -> prepareStory(session, target)
             is ReportTarget.DirectMessage -> prepareDirect(session, target)
+            is ReportTarget.ContextualMessage -> prepareContextual(session, target)
             is ReportTarget.Deal -> prepareDeal(session, target.dealId, target.fallbackSubject)
             is ReportTarget.DealMessage -> prepareDeal(session, target.dealId, target.fallbackSubject)
         }
@@ -137,6 +138,34 @@ class OracleReportingRepository(
         return prepareContext(
             session,
             OracleRequest(OracleHttpMethod.POST, "/v1/moderation/direct-context", body),
+            target.fallbackSubject,
+        ) { item ->
+            val user = item.optJSONObject("reportedUser")
+            PreparedReportContext(
+                participantName(user) ?: target.fallbackSubject,
+                item.optString("preview").trim().takeIf(String::isNotEmpty),
+            )
+        }
+    }
+
+    private suspend fun prepareContextual(
+        session: AuthSession,
+        target: ReportTarget.ContextualMessage,
+    ): ReportingResult<PreparedReportContext> {
+        if (target.conversationId.isBlank() || target.messageId.isBlank() || target.reportedUserId.isBlank()) {
+            return ReportingResult.Failure("بيانات الرسالة غير مكتملة.", session)
+        }
+        if (target.reportedUserId == session.user.id) {
+            return ReportingResult.Failure("لا يمكنك الإبلاغ عن رسالتك.", session)
+        }
+        val body = JSONObject()
+            .put("conversationId", target.conversationId)
+            .put("messageId", target.messageId)
+            .put("reportedUserId", target.reportedUserId)
+            .put("currentUserId", session.user.id)
+        return prepareContext(
+            session,
+            OracleRequest(OracleHttpMethod.POST, "/v1/moderation/contextual-context", body),
             target.fallbackSubject,
         ) { item ->
             val user = item.optJSONObject("reportedUser")
@@ -296,6 +325,12 @@ internal fun reportRequest(
                 .put("messageId", target.messageId)
                 .put("reportedUserId", target.reportedUserId)
             "/v1/moderation/reports/direct-message"
+        }
+        is ReportTarget.ContextualMessage -> {
+            if (target.conversationId.isBlank() || target.messageId.isBlank() || target.reportedUserId.isBlank()) return null
+            body.put("conversationId", target.conversationId)
+                .put("contextualMessageId", target.messageId)
+            "/v1/moderation/reports/contextual-message"
         }
         is ReportTarget.Deal -> {
             if (target.dealId.isBlank()) return null

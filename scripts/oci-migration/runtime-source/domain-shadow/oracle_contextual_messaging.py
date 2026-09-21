@@ -43,6 +43,13 @@ def _message_insert(conversation_id, user_id, body, kind='text', path=None, dura
 def summaries_sql(user_id):
     return """SELECT coalesce(json_agg(json_build_object(
       'conversationId',c.id,'contextType','story_reply','contextEntityId',c.context_entity_id,
+      'context',json_build_object(
+        'storyId',c.context_entity_id,
+        'caption',c.context_caption_snapshot,
+        'mediaType',c.context_media_type_snapshot,
+        'mediaStoragePath',c.context_media_storage_path_snapshot,
+        'authorId',c.context_author_id_snapshot,
+        'createdAt',c.context_created_at_snapshot),
       'otherParticipant',json_build_object('id',other.id,'displayName',p.display_name,
         'username',p.username,'avatarUrl',p.avatar_url),
       'latestMessage',CASE WHEN latest.id IS NULL THEN NULL ELSE json_build_object(
@@ -67,6 +74,13 @@ def summaries_sql(user_id):
 def thread_sql(user_id, conversation_id):
     return """SELECT CASE WHEN c.id IS NULL THEN NULL ELSE json_build_object(
       'id',c.id,'contextType','story_reply','contextEntityId',c.context_entity_id,
+      'context',json_build_object(
+        'storyId',c.context_entity_id,
+        'caption',c.context_caption_snapshot,
+        'mediaType',c.context_media_type_snapshot,
+        'mediaStoragePath',c.context_media_storage_path_snapshot,
+        'authorId',c.context_author_id_snapshot,
+        'createdAt',c.context_created_at_snapshot),
       'starterId',c.starter_id,'recipientId',c.recipient_id,
       'otherParticipant',json_build_object('id',other.id,'displayName',p.display_name,
         'username',p.username,'avatarUrl',p.avatar_url),

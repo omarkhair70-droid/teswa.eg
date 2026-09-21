@@ -236,16 +236,28 @@ class MessagingStateHolder(
         return sent
     }
 
-    suspend fun confirmCompletion() {
-        val conversation = selectedConversation ?: return
-        if (confirmingCompletion || session.user.id in confirmationUserIds) return
+    suspend fun confirmCompletion(): Boolean {
+        val conversation = selectedConversation ?: return false
+        if (confirmingCompletion || session.user.id in confirmationUserIds) return false
         confirmingCompletion = true
         banner = null
+        var confirmed = false
         when (val result = repository.confirmCompletion(session, conversation)) {
             is MessagingResult.Success -> {
                 session = result.session
                 confirmationUserIds = confirmationUserIds + session.user.id
-                selectedConversation = conversation.copy(status = if (result.value) "completed" else "completed_pending_confirmation")
+                val nextStatus = if (result.value) "completed" else "completed_pending_confirmation"
+                val updated = conversation.copy(status = nextStatus)
+                selectedConversation = updated
+                val inbox = inboxState as? InboxUiState.Content
+                if (inbox != null) {
+                    inboxState = inbox.copy(
+                        items = inbox.items.map { item ->
+                            if (item.dealId == conversation.dealId) item.copy(status = nextStatus) else item
+                        },
+                    )
+                }
+                confirmed = true
             }
             is MessagingResult.Failure -> {
                 result.session?.let { session = it }
@@ -254,6 +266,7 @@ class MessagingStateHolder(
             }
         }
         confirmingCompletion = false
+        return confirmed
     }
 
     private fun markSelectedRead(dealId: String) {

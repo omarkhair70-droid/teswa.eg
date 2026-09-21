@@ -1,5 +1,10 @@
 package com.teswa.mobile.feature.messages
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,15 +20,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,15 +47,18 @@ import com.teswa.mobile.auth.AuthSession
 import com.teswa.mobile.feature.contextual.ContextualContent
 import com.teswa.mobile.feature.contextual.ContextualRepository
 import com.teswa.mobile.feature.contextual.ContextualStateHolder
+import com.teswa.mobile.feature.direct.DirectAttachmentMediaRepository
 import com.teswa.mobile.feature.direct.DirectComposeTarget
 import com.teswa.mobile.feature.direct.DirectContent
 import com.teswa.mobile.feature.direct.DirectRepository
 import com.teswa.mobile.feature.direct.DirectStateHolder
+import com.teswa.mobile.feature.direct.DirectUiState
 import com.teswa.mobile.feature.dolab.AndroidDolabDirectMessagingBridge
 import com.teswa.mobile.feature.dolab.DolabRepository
 import com.teswa.mobile.feature.offers.OffersContent
 import com.teswa.mobile.feature.offers.OffersRepository
 import com.teswa.mobile.feature.offers.OffersStateHolder
+import com.teswa.mobile.feature.offers.OffersUiState
 import com.teswa.mobile.feature.reviews.DealReviewCard
 import com.teswa.mobile.feature.reviews.ReviewRepository
 import com.teswa.mobile.feature.safety.ReportTarget
@@ -62,6 +67,26 @@ import com.teswa.mobile.feature.voice.VoiceMediaRepository
 import com.teswa.mobile.feature.voice.VoiceMediaResult
 import com.teswa.mobile.feature.voice.VoiceMessagePlayer
 import com.teswa.mobile.ui.NetworkImage
+import com.teswa.mobile.ui.system.TeswaArchiveLabel
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
+import com.teswa.mobile.ui.system.TeswaFocusedHeader
+import com.teswa.mobile.ui.system.TeswaHapticEvent
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
+import com.teswa.mobile.ui.system.TeswaMotion
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
+import com.teswa.mobile.ui.system.TeswaTextField
+import com.teswa.mobile.ui.system.TeswaTraceNote
+import com.teswa.mobile.ui.system.performTeswa
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -72,12 +97,14 @@ fun MessagingScreen(
     repository: MessagingRepository,
     offersRepository: OffersRepository,
     directRepository: DirectRepository,
+    directAttachmentMediaRepository: DirectAttachmentMediaRepository,
     contextualRepository: ContextualRepository,
     dolabRepository: DolabRepository,
     voiceMediaRepository: VoiceMediaRepository,
     reviewRepository: ReviewRepository,
     onSessionUpdated: (AuthSession) -> Unit,
     onSessionExpired: suspend () -> Unit,
+    modifier: Modifier = Modifier,
     initialDealId: String? = null,
     initialOffers: Boolean = false,
     initialDirectId: String? = null,
@@ -85,26 +112,51 @@ fun MessagingScreen(
     initialContextualId: String? = null,
     onExternalTargetConsumed: () -> Unit = {},
     onReport: (ReportTarget) -> Unit = {},
-    modifier: Modifier = Modifier,
+    onFocusedStateChanged: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val holder = remember(initialSession.user.id, repository) { MessagingStateHolder(initialSession, repository) }
     val offersHolder = remember(initialSession.user.id, offersRepository) { OffersStateHolder(initialSession, offersRepository) }
-    val directHolder = remember(initialSession.user.id, directRepository) { DirectStateHolder(initialSession, directRepository) }
+    val directHolder = remember(initialSession.user.id, directRepository, directAttachmentMediaRepository) {
+        DirectStateHolder(initialSession, directRepository, directAttachmentMediaRepository)
+    }
     val contextualHolder = remember(initialSession.user.id, contextualRepository) { ContextualStateHolder(initialSession, contextualRepository) }
     val dolabDirectBridge = remember(dolabRepository, voiceMediaRepository, context.applicationContext) {
         AndroidDolabDirectMessagingBridge(context.applicationContext, dolabRepository, voiceMediaRepository)
     }
     val scope = rememberCoroutineScope()
-    var mode by remember { mutableStateOf(InboxMode.MESSAGES) }
+    var mode by remember { mutableStateOf(InboxMode.OVERVIEW) }
+    var offerDirection by remember { mutableStateOf(com.teswa.mobile.feature.offers.OfferDirection.INCOMING) }
+    var selectedOfferId by remember { mutableStateOf<String?>(null) }
+    val focusedState = holder.selectedConversation != null ||
+        directHolder.selected != null ||
+        directHolder.composeTarget != null ||
+        contextualHolder.thread != null
+
+    LaunchedEffect(focusedState) { onFocusedStateChanged(focusedState) }
+    BackHandler(enabled = focusedState || mode != InboxMode.OVERVIEW) {
+        when {
+            holder.selectedConversation != null -> holder.closeThread()
+            directHolder.selected != null || directHolder.composeTarget != null -> directHolder.close()
+            contextualHolder.thread != null -> contextualHolder.close()
+            mode != InboxMode.OVERVIEW -> {
+                selectedOfferId = null
+                mode = InboxMode.OVERVIEW
+            }
+        }
+    }
 
     LaunchedEffect(initialSession.accessToken) {
         holder.updateSession(initialSession)
         offersHolder.updateSession(initialSession)
         directHolder.updateSession(initialSession)
         contextualHolder.updateSession(initialSession)
-        holder.load()
-        offersHolder.load()
+        kotlinx.coroutines.coroutineScope {
+            launch { holder.load() }
+            launch { offersHolder.load() }
+            launch { directHolder.load() }
+            launch { contextualHolder.load() }
+        }
     }
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(offersHolder.session.accessToken) { onSessionUpdated(offersHolder.session) }
@@ -128,6 +180,7 @@ fun MessagingScreen(
                 onExternalTargetConsumed()
             }
             initialOffers -> {
+                selectedOfferId = null
                 mode = InboxMode.OFFERS
                 onExternalTargetConsumed()
             }
@@ -171,42 +224,72 @@ fun MessagingScreen(
     }
 
     Column(modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column {
-                Text("الرسائل", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    when (mode) {
-                        InboxMode.MESSAGES -> unreadLabel(holder.inboxState)
-                        InboxMode.OFFERS -> offerLabel(offersHolder.state)
-                        InboxMode.DIRECT -> "طلبات ومحادثات خارج الصفقات"
-                        InboxMode.CONTEXTUAL -> "ردود بدأت من قصة"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        BetweenUsMasthead(
+            mode = mode,
+            supporting = when (mode) {
+                InboxMode.OVERVIEW -> betweenUsRootSummary(
+                    holder.inboxState,
+                    offersHolder.state,
+                    directHolder.state,
                 )
-            }
-            OutlinedButton(onClick = {
+                InboxMode.MESSAGES -> unreadLabel(holder.inboxState)
+                InboxMode.OFFERS -> offerLabel(offersHolder.state)
+                InboxMode.DIRECT -> "كلام مباشر بدأ بطلب واضح، مش صندوق رسائل مفتوح."
+                InboxMode.CONTEXTUAL -> "ردود شايلة معاها السبب اللي بدأ الكلام."
+            },
+            onRefresh = {
                 scope.launch {
                     when (mode) {
+                        InboxMode.OVERVIEW -> kotlinx.coroutines.coroutineScope {
+                            launch { holder.load(silent = true) }
+                            launch { offersHolder.load(silent = true) }
+                            launch { directHolder.load() }
+                            launch { contextualHolder.load(silent = true) }
+                        }
                         InboxMode.MESSAGES -> holder.load(silent = true)
                         InboxMode.OFFERS -> offersHolder.load(silent = true)
                         InboxMode.DIRECT -> directHolder.load()
                         InboxMode.CONTEXTUAL -> contextualHolder.load()
                     }
                 }
-            }) { Text("تحديث") }
+            },
+        )
+        if (mode != InboxMode.OVERVIEW) {
+            BetweenUsDrillDownBack(
+                mode = mode,
+                onBack = {
+                    selectedOfferId = null
+                    mode = InboxMode.OVERVIEW
+                },
+            )
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
-        InboxModePicker(mode) { mode = it }
+
+        if (mode == InboxMode.OVERVIEW) {
+            BetweenUsOverview(
+                dealsState = holder.inboxState,
+                offersState = offersHolder.state,
+                directState = directHolder.state,
+                contextualState = contextualHolder.state,
+                onOpenDeal = { conversation -> scope.launch { holder.open(conversation) } },
+                onOpenOffer = { offer ->
+                    offerDirection = offer.direction
+                    selectedOfferId = offer.id
+                    mode = InboxMode.OFFERS
+                },
+                onOpenDirect = { conversation -> mode = InboxMode.DIRECT; scope.launch { directHolder.open(conversation) } },
+                onOpenContextual = { conversation -> mode = InboxMode.CONTEXTUAL; scope.launch { contextualHolder.open(conversation) } },
+                modifier = Modifier.weight(1f),
+            )
+            return@Column
+        }
         if (mode == InboxMode.OFFERS) {
             OffersContent(
                 holder = offersHolder,
+                initialDirection = offerDirection,
+                initialOfferId = selectedOfferId,
                 onOpenDeal = { dealId ->
                     scope.launch {
+                        selectedOfferId = null
                         mode = InboxMode.MESSAGES
                         holder.openDeal(dealId)
                     }
@@ -219,6 +302,7 @@ fun MessagingScreen(
             DirectContent(
                 holder = directHolder,
                 voiceMediaRepository = voiceMediaRepository,
+                attachmentMediaRepository = directAttachmentMediaRepository,
                 dolabBridge = dolabDirectBridge,
                 onReport = onReport,
                 modifier = Modifier.weight(1f),
@@ -226,33 +310,48 @@ fun MessagingScreen(
             return@Column
         }
         if (mode == InboxMode.CONTEXTUAL) {
-            ContextualContent(contextualHolder, voiceMediaRepository, Modifier.weight(1f))
+            ContextualContent(
+                holder = contextualHolder,
+                voiceMediaRepository = voiceMediaRepository,
+                onReport = onReport,
+                modifier = Modifier.weight(1f),
+            )
             return@Column
         }
-        holder.banner?.let { OfflineBanner(it) { scope.launch { holder.load(silent = true) } } }
+
+        holder.banner?.let { message ->
+            TeswaInlineMessage(
+                title = "الاتصال اتقطع",
+                body = message,
+                emphasis = TeswaEmphasis.Quiet,
+                actionLabel = "حاول تاني",
+                onAction = { scope.launch { holder.load(silent = true) } },
+                modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+            )
+        }
 
         when (val state = holder.inboxState) {
-            InboxUiState.Loading -> CenterState("بنحمّل محادثاتك…", loading = true)
+            InboxUiState.Loading -> CenterState("بنجمع الصفقات اللي بينكم…", loading = true)
             is InboxUiState.Empty -> CenterState(state.message)
             is InboxUiState.Error -> CenterState(state.message, action = { scope.launch { holder.load() } })
             is InboxUiState.Content -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(
+                    horizontal = TeswaLayout.ScreenHorizontal,
+                    vertical = TeswaSpacing.sm,
+                ),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
             ) {
                 items(state.items, key = { it.dealId }) { conversation ->
-                    ConversationRow(conversation) { scope.launch { holder.open(conversation) } }
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 66.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = .13f),
-                    )
+                    DealConversationRow(conversation) { scope.launch { holder.open(conversation) } }
                 }
                 if (state.hasMore) {
                     item {
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        TeswaSecondaryAction(
+                            text = if (state.loadingMore) "بنفتح أثر أقدم…" else "صفقات أقدم",
                             enabled = !state.loadingMore,
                             onClick = { scope.launch { holder.loadMore() } },
-                        ) { Text(if (state.loadingMore) "جاري التحميل…" else "محادثات أقدم") }
+                        )
                     }
                 }
             }
@@ -260,93 +359,180 @@ fun MessagingScreen(
     }
 }
 
-private enum class InboxMode { MESSAGES, OFFERS, DIRECT, CONTEXTUAL }
+private enum class InboxMode { OVERVIEW, MESSAGES, OFFERS, DIRECT, CONTEXTUAL }
 
 @Composable
-private fun InboxModePicker(selected: InboxMode, onSelect: (InboxMode) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+private fun BetweenUsMasthead(
+    mode: InboxMode,
+    supporting: String,
+    onRefresh: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
     ) {
-        HubModeChip("محادثات الصفقات", selected == InboxMode.MESSAGES, Modifier.weight(1f)) { onSelect(InboxMode.MESSAGES) }
-        HubModeChip("العروض", selected == InboxMode.OFFERS, Modifier.weight(1f)) { onSelect(InboxMode.OFFERS) }
-        HubModeChip("مباشر", selected == InboxMode.DIRECT, Modifier.weight(1f)) { onSelect(InboxMode.DIRECT) }
-        HubModeChip("ردود", selected == InboxMode.CONTEXTUAL, Modifier.weight(1f)) { onSelect(InboxMode.CONTEXTUAL) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .45f),
+                shape = MaterialTheme.shapes.large,
+            ) {
+                TeswaMarkIcon(
+                    mark = TeswaMark.BetweenUs,
+                    color = MaterialTheme.colorScheme.secondary,
+                    size = 42.dp,
+                    modifier = Modifier.padding(TeswaSpacing.sm),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                Text(
+                    text = "بيننا",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = supporting,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            com.teswa.mobile.ui.system.TeswaIconAction(
+                icon = TeswaIcons.Refresh,
+                contentDescription = "تحديث بيننا",
+                onClick = onRefresh,
+            )
+        }
     }
 }
 
 @Composable
-private fun HubModeChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Text(label, Modifier.padding(horizontal = 12.dp, vertical = 11.dp), fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun ConversationRow(conversation: DealConversation, onOpen: () -> Unit) {
-    val unread = conversation.unreadCount > 0
+private fun BetweenUsDrillDownBack(
+    mode: InboxMode,
+    onBack: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .background(
-                if (unread) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .24f)
-                else MaterialTheme.colorScheme.background,
-                MaterialTheme.shapes.medium,
-            )
-            .padding(horizontal = 10.dp, vertical = 13.dp),
+            .padding(horizontal = TeswaLayout.ScreenHorizontal),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(conversation.otherAvatarUrl, conversation.otherDisplayName)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    conversation.otherDisplayName ?: "مستخدم تِسوى",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(shortDate(conversation.lastActivityAt), style = MaterialTheme.typography.labelMedium)
-            }
-            Spacer(Modifier.height(3.dp))
-            Text(
-                when {
-                    conversation.latestMessage == null -> "ابدأوا تنسيق التبديل"
-                    conversation.latestMessage.messageType == "voice" -> "رسالة صوتية"
-                    else -> conversation.latestMessage.body
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (unread) FontWeight.Medium else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        TextButton(onClick = onBack) {
+            Text("رجوع لبيننا")
+        }
+        Text(
+            text = when (mode) {
+                InboxMode.MESSAGES -> "الصفقات"
+                InboxMode.OFFERS -> "العروض"
+                InboxMode.DIRECT -> "مباشر"
+                InboxMode.CONTEXTUAL -> "ردود"
+                InboxMode.OVERVIEW -> "بيننا"
+            },
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun betweenUsRootSummary(
+    dealsState: InboxUiState,
+    offersState: OffersUiState,
+    directState: DirectUiState,
+): String {
+    val deals = (dealsState as? InboxUiState.Content)?.items.orEmpty()
+    val offers = (offersState as? OffersUiState.Content)?.inbox
+    val direct = (directState as? DirectUiState.Ready)?.items.orEmpty()
+
+    val needsYou = offers?.incoming.orEmpty().count { it.status in setOf("pending", "thinking") } +
+        direct.count { it.requiresAction }
+    val active = deals.count { it.status in setOf("coordinating", "completed_pending_confirmation") }
+    val waiting = offers?.sent.orEmpty().count { it.status in setOf("pending", "thinking") }
+
+    return when {
+        needsYou == 1 -> "حاجة واحدة محتاجاك"
+        needsYou > 1 -> "$needsYou حاجات محتاجينك"
+        active == 1 -> "علاقة شغالة بينكم دلوقتي"
+        active > 1 -> "$active علاقات شغالة بينكم"
+        waiting == 1 -> "علاقة واحدة مستنية رد"
+        waiting > 1 -> "$waiting علاقات مستنية رد"
+        else -> "العلاقات اللي بتتكوّن بينك وبين الناس"
+    }
+}
+
+@Composable
+private fun DealConversationRow(
+    conversation: DealConversation,
+    onOpen: () -> Unit,
+) {
+    val unread = conversation.unreadCount > 0
+    val archived = conversation.status !in setOf("coordinating", "completed_pending_confirmation")
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        color = if (archived) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .18f)
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .24f)
+        },
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            TeswaExchangeMemoryPair(
+                requestedTitle = conversation.requestedItemTitle,
+                requestedImageUrl = conversation.requestedItemImageUrl,
+                offeredTitle = conversation.offeredItemTitle,
+                offeredImageUrl = conversation.offeredItemImageUrl,
+                state = dealStatusPill(conversation.status),
             )
-            Spacer(Modifier.height(3.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${conversation.requestedItemTitle} ↔ ${conversation.offeredItemTitle}",
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaPersonIdentity(
+                    name = conversation.otherDisplayName ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.otherAvatarUrl,
+                    supporting = when {
+                        archived -> "علاقة محفوظة · ${shortDate(conversation.lastActivityAt)}"
+                        conversation.status == "completed_pending_confirmation" ->
+                            "الواقع مستني التأكيد التاني"
+                        conversation.latestMessage?.messageType == "voice" ->
+                            "آخر أثر: رسالة صوتية"
+                        !conversation.latestMessage?.body.isNullOrBlank() ->
+                            conversation.latestMessage?.body.orEmpty()
+                        else -> "لسه التنسيق بيبدأ"
+                    },
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.primary,
                 )
-                if (unread) {
-                    Spacer(Modifier.width(8.dp))
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary) {
+                Column(horizontalAlignment = Alignment.End) {
+                    TeswaStatePill(
+                        text = dealStatusPill(conversation.status),
+                        emphasis = when {
+                            archived -> TeswaEmphasis.Quiet
+                            conversation.status == "completed_pending_confirmation" -> TeswaEmphasis.Strong
+                            else -> TeswaEmphasis.Commitment
+                        },
+                    )
+                    if (unread) {
                         Text(
-                            conversation.unreadCount.coerceAtMost(99).toString(),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            style = MaterialTheme.typography.labelMedium,
+                            text = "${conversation.unreadCount.coerceAtMost(99)} جديد",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -372,53 +558,68 @@ private fun DealThreadScreen(
     LaunchedEffect(messageCount) {
         if (messageCount > 0) listState.animateScrollToItem(messageCount - 1)
     }
+
     Column(modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(onClick = holder::closeThread) { Text("رجوع") }
-            Spacer(Modifier.width(10.dp))
-            Avatar(conversation.otherAvatarUrl, conversation.otherDisplayName, 42)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(conversation.otherDisplayName ?: "مستخدم تِسوى", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "${conversation.requestedItemTitle} ↔ ${conversation.offeredItemTitle}",
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        TeswaFocusedHeader(
+            title = "الصفقة",
+            onBack = holder::closeThread,
+            actionIcon = TeswaIcons.Report,
+            actionDescription = "الإبلاغ عن الصفقة",
+            onAction = {
+                onReport(
+                    ReportTarget.Deal(
+                        conversation.dealId,
+                        "صفقة مع ${conversation.otherDisplayName ?: "الطرف الآخر"}",
+                    ),
                 )
-            }
-            OutlinedButton(
-                onClick = {
-                    onReport(
-                        ReportTarget.Deal(
-                            conversation.dealId,
-                            "صفقة مع ${conversation.otherDisplayName ?: "الطرف الآخر"}",
-                        ),
-                    )
-                },
-            ) { Text("بلاغ") }
+            },
+        )
+
+        holder.banner?.let { message ->
+            TeswaInlineMessage(
+                title = "الاتصال وقف",
+                body = message,
+                emphasis = TeswaEmphasis.Quiet,
+                actionLabel = "حاول تاني",
+                onAction = { scope.launch { holder.reloadThread() } },
+                modifier = Modifier.padding(horizontal = TeswaLayout.ScreenHorizontal),
+            )
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .15f))
-        holder.banner?.let { OfflineBanner(it) { scope.launch { holder.reloadThread() } } }
+
         when (val state = holder.threadState) {
-            ThreadUiState.Idle, ThreadUiState.Loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            ThreadUiState.Idle, ThreadUiState.Loading -> Box(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                TeswaInlineLoading("بنفتح العلاقة بين الحاجتين…")
             }
-            is ThreadUiState.Error -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+
+            is ThreadUiState.Error -> Box(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
                 CenterState(state.message, action = { scope.launch { holder.reloadThread() } })
             }
-            is ThreadUiState.Content -> LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item { DealCompletionCard(holder, conversation) }
+
+            is ThreadUiState.Content -> {
+                DealRelationshipHeader(
+                    conversation = conversation,
+                    holder = holder,
+                )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(
+                        horizontal = TeswaLayout.ScreenHorizontal,
+                        vertical = TeswaSpacing.md,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+                ) {
+                    item { DealCompletionCard(holder, conversation) }
                 if (conversation.status == "completed") {
+                    item {
+                        TeswaTraceNote("العلاقة دي خرجت من الشاشة، حصلت في الواقع، واتقفلت بتأكيد الطرفين. من هنا بقت جزء من الدليل.")
+                    }
                     item {
                         DealReviewCard(
                             dealId = conversation.dealId,
@@ -430,25 +631,29 @@ private fun DealThreadScreen(
                     }
                 }
                 if (state.messages.isEmpty()) item { ThreadWelcome(conversation) }
-                items(state.messages, key = { it.id }) { message ->
-                    MessageBubble(
-                        message = message,
-                        mine = message.senderId == holder.session.user.id,
-                        holder = holder,
-                        voiceMediaRepository = voiceMediaRepository,
-                        dealId = conversation.dealId,
-                        otherDisplayName = conversation.otherDisplayName,
-                        onReport = onReport,
-                    )
+                    items(state.messages, key = { it.id }) { message ->
+                        MessageBubble(
+                            message = message,
+                            mine = message.senderId == holder.session.user.id,
+                            holder = holder,
+                            voiceMediaRepository = voiceMediaRepository,
+                            dealId = conversation.dealId,
+                            otherDisplayName = conversation.otherDisplayName,
+                            onReport = onReport,
+                        )
+                    }
                 }
             }
         }
+
         if (holder.threadState is ThreadUiState.Content && conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
-            Surface(shadowElevation = 8.dp) {
+            Surface(tonalElevation = 2.dp) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.sm),
                     verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.xs),
                 ) {
                     VoiceComposer(
                         enabled = true,
@@ -457,19 +662,149 @@ private fun DealThreadScreen(
                         onSend = holder::sendVoice,
                         onError = holder::showBanner,
                     )
-                    OutlinedTextField(
+                    TeswaTextField(
                         value = holder.composer,
                         onValueChange = holder::updateComposer,
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("اكتب رسالة واضحة…") },
+                        label = "رسالة تنسيق",
+                        placeholder = "اتفقوا على المكان أو الوقت…",
+                        singleLine = false,
                         minLines = 1,
-                        maxLines = 4,
+                        maxLines = 3,
                     )
-                    Button(
+                    com.teswa.mobile.ui.system.TeswaIconAction(
+                        icon = TeswaIcons.Send,
+                        contentDescription = "إرسال الرسالة",
                         enabled = holder.composer.isNotBlank() && !holder.sending,
                         onClick = { scope.launch { holder.send() } },
-                    ) { Text(if (holder.sending) "…" else "إرسال") }
+                    )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DealRelationshipHeader(
+    conversation: DealConversation,
+    holder: MessagingStateHolder,
+) {
+    val mine = holder.session.user.id in holder.confirmationUserIds
+    val other = conversation.otherParticipantId in holder.confirmationUserIds
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = TeswaSpacing.xxs,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TeswaLayout.ScreenHorizontal, vertical = TeswaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            TeswaExchangeMemoryPair(
+                requestedTitle = conversation.requestedItemTitle,
+                requestedImageUrl = conversation.requestedItemImageUrl,
+                offeredTitle = conversation.offeredItemTitle,
+                offeredImageUrl = conversation.offeredItemImageUrl,
+                state = dealStatusPill(conversation.status),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaPersonIdentity(
+                    name = conversation.otherDisplayName ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.otherAvatarUrl,
+                    supporting = dealRoomNextAction(conversation.status, mine, other),
+                    modifier = Modifier.weight(1f),
+                )
+                TeswaStatePill(
+                    text = dealStatusPill(conversation.status),
+                    emphasis = when (conversation.status) {
+                        "completed" -> TeswaEmphasis.Commitment
+                        "cancelled", "disputed" -> TeswaEmphasis.Quiet
+                        else -> TeswaEmphasis.Strong
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun dealRoomNextAction(status: String, mine: Boolean, other: Boolean): String = when (status) {
+    "coordinating" -> "اتفقوا على المكان والوقت، وبعد التنفيذ كل طرف يأكد"
+    "completed_pending_confirmation" -> when {
+        mine && !other -> "إنت أكدت · مستنيين الطرف التاني"
+        !mine && other -> "الطرف التاني أكد · محتاجين تأكيدك"
+        else -> "مستنيين التأكيدين"
+    }
+    "completed" -> "التبديل اتأكد من الطرفين وبقى جزء من السجل"
+    "cancelled" -> "العلاقة اتقفلت"
+    "disputed" -> "التنسيق متوقف لحين المراجعة"
+    else -> "شوف الخطوة الجاية في العلاقة"
+}
+
+@Composable
+private fun DealConfirmationBridge(
+    mineConfirmed: Boolean,
+    otherConfirmed: Boolean,
+    otherName: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.weight(1f),
+            color = if (mineConfirmed) {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .55f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)
+            },
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Column(
+                modifier = Modifier.padding(TeswaSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                Text("إنت", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    if (mineConfirmed) "أكدت" else "لسه",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        TeswaMarkIcon(
+            mark = TeswaMark.BetweenUs,
+            color = if (mineConfirmed && otherConfirmed) {
+                MaterialTheme.colorScheme.secondary
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+            size = 30.dp,
+        )
+        Surface(
+            modifier = Modifier.weight(1f),
+            color = if (otherConfirmed) {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .55f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)
+            },
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Column(
+                modifier = Modifier.padding(TeswaSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+            ) {
+                Text(otherName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    if (otherConfirmed) "أكد" else "لسه",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -478,48 +813,71 @@ private fun DealThreadScreen(
 @Composable
 private fun DealCompletionCard(holder: MessagingStateHolder, conversation: DealConversation) {
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val mine = holder.session.user.id in holder.confirmationUserIds
     val other = conversation.otherParticipantId in holder.confirmationUserIds
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = if (conversation.status == "completed") MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(dealStatusTitle(conversation.status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(dealStatusDescription(conversation.status), style = MaterialTheme.typography.bodySmall)
-            if (conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (mine) "✓ أنت أكدت" else "○ تأكيدك مستني", style = MaterialTheme.typography.labelMedium)
-                    Text(if (other) "✓ الطرف التاني أكد" else "○ تأكيده مستني", style = MaterialTheme.typography.labelMedium)
-                }
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = { scope.launch { holder.confirmCompletion() } },
-                    enabled = !mine && !holder.confirmingCompletion,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (holder.confirmingCompletion) "جاري التأكيد…" else if (mine) "تم تسجيل تأكيدك" else "أكد إن المقايضة تمت") }
-            }
+
+    Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm)) {
+        AnimatedContent(
+            targetState = conversation.status,
+            transitionSpec = { fadeIn(TeswaMotion.emphasized()) togetherWith fadeOut(TeswaMotion.standard()) },
+            label = "deal-completion-state",
+        ) { status ->
+            TeswaInlineMessage(
+                title = dealStatusTitle(status),
+                body = dealStatusDescription(status),
+                icon = when (status) {
+                    "completed" -> TeswaIcons.Accepted
+                    "cancelled", "disputed" -> TeswaIcons.Safety
+                    else -> TeswaIcons.Waiting
+                },
+                emphasis = if (status == "completed") TeswaEmphasis.Normal else TeswaEmphasis.Quiet,
+            )
+        }
+        if (conversation.status in setOf("coordinating", "completed_pending_confirmation")) {
+            DealConfirmationBridge(
+                mineConfirmed = mine,
+                otherConfirmed = other,
+                otherName = conversation.otherDisplayName ?: "الطرف التاني",
+            )
+            TeswaPrimaryAction(
+                text = if (mine) "تم تسجيل تأكيدك" else "أكد إن التبديل تم",
+                icon = TeswaIcons.Accepted,
+                onClick = {
+                    scope.launch {
+                        if (holder.confirmCompletion()) haptics.performTeswa(TeswaHapticEvent.Success)
+                    }
+                },
+                enabled = !mine,
+                loading = holder.confirmingCompletion,
+            )
         }
     }
 }
 
+private fun dealStatusPill(status: String) = when (status) {
+    "coordinating" -> "بينكم دلوقتي"
+    "completed_pending_confirmation" -> "مستني تأكيد"
+    "completed" -> "اكتمل"
+    "cancelled" -> "اتلغى"
+    "disputed" -> "قيد المراجعة"
+    else -> "صفقة"
+}
+
 private fun dealStatusTitle(status: String) = when (status) {
-    "coordinating" -> "الصفقة قيد التنسيق"
-    "completed_pending_confirmation" -> "مستنيين تأكيد الطرفين"
-    "completed" -> "المقايضة تمت"
+    "coordinating" -> "العلاقة دخلت مرحلة التنفيذ"
+    "completed_pending_confirmation" -> "الواقع محتاج التأكيد التاني"
+    "completed" -> "التبديل بقى دليل"
     "cancelled" -> "الصفقة اتلغت"
     "disputed" -> "الصفقة محل مراجعة"
     else -> "حالة الصفقة"
 }
 
 private fun dealStatusDescription(status: String) = when (status) {
-    "coordinating" -> "اتفقوا على التسليم، وبعد التنفيذ كل طرف يأكد من هنا."
-    "completed_pending_confirmation" -> "طرف أكد الإتمام، ومستنيين التأكيد التاني."
-    "completed" -> "الطرفين أكدوا التبديل وتم إغلاق الصفقة بنجاح."
-    "cancelled" -> "المحادثة محفوظة كسجل، لكن الصفقة لم تعد نشطة."
+    "coordinating" -> "القبول عمل التزام بينكم. اتفقوا على التسليم، وبعد التنفيذ كل طرف يأكد من هنا."
+    "completed_pending_confirmation" -> "طرف أكد إن التبديل حصل فعلًا، ولسه محتاجين التأكيد التاني."
+    "completed" -> "الطرفين أكدوا اللي حصل في الواقع، فالعلاقة اتقفلت كنتيجة مكتملة."
+    "cancelled" -> "الكلام محفوظ كسجل، لكن العلاقة لم تعد نشطة."
     "disputed" -> "التنسيق متوقف لحين مراجعة الحالة."
     else -> status
 }
@@ -542,16 +900,25 @@ private fun MessageBubble(
                 color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             ) {
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Column(Modifier.padding(horizontal = TeswaSpacing.md, vertical = TeswaSpacing.sm)) {
                     if (message.messageType == "voice" && message.audioStoragePath != null) {
                         VoiceMessagePlayer(message.audioDurationMs) {
                             when (val result = voiceMediaRepository.signedUrl(holder.session, "deal_voice", message.audioStoragePath)) {
-                                is VoiceMediaResult.Success -> { holder.updateSession(result.session); result.value }
-                                is VoiceMediaResult.Failure -> { result.session?.let(holder::updateSession); holder.showBanner(result.message); null }
+                                is VoiceMediaResult.Success -> {
+                                    holder.updateSession(result.session)
+                                    result.value
+                                }
+                                is VoiceMediaResult.Failure -> {
+                                    result.session?.let(holder::updateSession)
+                                    holder.showBanner(result.message)
+                                    null
+                                }
                             }
                         }
-                    } else Text(message.body)
-                    Spacer(Modifier.height(3.dp))
+                    } else {
+                        Text(message.body)
+                    }
+                    Spacer(Modifier.height(TeswaSpacing.xxs))
                     Text(shortDate(message.createdAt), style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -574,66 +941,52 @@ private fun MessageBubble(
 
 @Composable
 private fun ThreadWelcome(conversation: DealConversation) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .5f)) {
-        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("اتفقوا بهدوء ووضوح", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(5.dp))
-            Text(
-                "المحادثة دي مخصصة لتنسيق تبديل ${conversation.requestedItemTitle} مع ${conversation.offeredItemTitle}.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    }
+    TeswaInlineMessage(
+        title = "الكلام هنا لخدمة العلاقة",
+        body = "نسّقوا تبديل ${conversation.requestedItemTitle} مع ${conversation.offeredItemTitle}. أي اتفاق في الرسائل ما يعتبرش تأكيد إن التبديل حصل.",
+        icon = TeswaIcons.Conversation,
+    )
 }
 
 @Composable
-private fun Avatar(url: String?, name: String?, size: Int = 52) {
-    val modifier = Modifier.size(size.dp).clip(CircleShape)
-    if (url != null) {
-        NetworkImage(url, name, modifier)
-    } else {
-        Box(modifier.background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
-            Text(name?.trim()?.take(1) ?: "ت", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun CenterState(message: String, loading: Boolean = false, action: (() -> Unit)? = null) {
+private fun CenterState(
+    message: String,
+    loading: Boolean = false,
+    action: (() -> Unit)? = null,
+) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(TeswaLayout.RootContentPadding),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (loading) { CircularProgressIndicator(); Spacer(Modifier.height(14.dp)) }
-        Text(message, style = MaterialTheme.typography.bodyLarge)
-        if (action != null) { Spacer(Modifier.height(14.dp)); Button(onClick = action) { Text("حاول تاني") } }
-    }
-}
-
-@Composable
-private fun OfflineBanner(message: String, retry: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.error.copy(alpha = .09f)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(message, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            Text("إعادة", Modifier.clickable(onClick = retry).padding(8.dp), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        if (loading) {
+            TeswaInlineLoading(message)
+        } else {
+            TeswaInlineMessage(
+                title = "مفيش علاقة مفتوحة هنا دلوقتي",
+                body = message,
+                actionLabel = if (action != null) "حاول تاني" else null,
+                onAction = action,
+            )
         }
     }
 }
 
 private fun unreadLabel(state: InboxUiState): String {
     val count = (state as? InboxUiState.Content)?.items?.sumOf { it.unreadCount } ?: 0
-    return if (count > 0) "$count غير مقروء" else "تنسيق صفقاتك في مكان واحد"
+    return if (count > 0) "$count رسالة جديدة جوه صفقاتك" else "الصفقة تفضل علاقة بين حاجتين، مش شات منفصل"
 }
 
 private fun offerLabel(state: com.teswa.mobile.feature.offers.OffersUiState): String {
     val count = (state as? com.teswa.mobile.feature.offers.OffersUiState.Content)?.inbox?.incoming?.size ?: 0
-    return if (count > 0) "$count عرض مستني ردك" else "تابع عروض التبديل"
+    return if (count > 0) "$count عرض مستني قرارك" else "العرض هو أول التزام واضح بين حاجتين"
 }
 
 private fun shortDate(value: String): String {
     val clean = value.trim()
     val date = clean.substringBefore('T')
     val time = clean.substringAfter('T', "").take(5)
-    return if (date.isNotBlank() && time.isNotBlank()) "$date  $time" else clean.take(16)
+    return if (date.isNotBlank() && time.isNotBlank()) "$date · $time" else clean.take(16)
 }

@@ -21,6 +21,7 @@ class DolabAddItemMappingTest {
         assertEquals(ItemCondition.ALMOST_NEW, draft.condition)
         assertEquals("", draft.conditionNotes)
         assertEquals("كتاب أو حاجة موسيقية", draft.desireText)
+        assertEquals("", draft.description)
     }
 
     @Test

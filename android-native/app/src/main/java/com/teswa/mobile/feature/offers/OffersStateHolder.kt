@@ -62,8 +62,26 @@ class OffersStateHolder(
         when (val result = repository.act(session, offer, action)) {
             is OffersResult.Success -> {
                 session = result.session
-                acceptedDealId = result.value.dealId
-                load(silent = false)
+                val dealId = result.value.dealId
+                acceptedDealId = dealId
+                if (action == OfferAction.ACCEPT && dealId != null) {
+                    val current = state as? OffersUiState.Content
+                    if (current != null) {
+                        fun settle(rows: List<OfferSummary>) = rows.map { row ->
+                            if (row.id == offer.id) row.copy(status = "accepted", dealId = dealId) else row
+                        }
+                        state = OffersUiState.Content(
+                            current.inbox.copy(
+                                incoming = settle(current.inbox.incoming),
+                                sent = settle(current.inbox.sent),
+                            ),
+                        )
+                    } else {
+                        load(silent = false)
+                    }
+                } else {
+                    load(silent = false)
+                }
             }
             is OffersResult.Failure -> {
                 result.session?.let { session = it }

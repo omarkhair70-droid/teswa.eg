@@ -1,0 +1,38 @@
+name: Between Us Oracle Contracts
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/oci-migration/oracle_media.py'
+      - 'scripts/oci-migration/oracle_contextual_messaging.py'
+      - 'scripts/oci-migration/oracle_moderation.py'
+      - 'scripts/oci-migration/runtime-source/domain-shadow/oracle_media.py'
+      - 'scripts/oci-migration/runtime-source/domain-shadow/oracle_contextual_messaging.py'
+      - 'scripts/oci-migration/runtime-source/domain-shadow/oracle_moderation.py'
+      - 'scripts/oci-migration/test_oracle_domain_media.py'
+      - 'scripts/oci-migration/test_oracle_contextual_messaging.py'
+      - 'scripts/oci-migration/test_oracle_moderation.py'
+      - 'supabase/migrations/20260921051500_contextual_story_snapshot.sql'
+      - 'supabase/migrations/20260921052500_contextual_message_reporting.sql'
+      - '.github/workflows/between-us-oracle-contracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Compile Between Us Oracle modules
+        run: |
+          python -m py_compile             scripts/oci-migration/oracle_media.py             scripts/oci-migration/oracle_contextual_messaging.py             scripts/oci-migration/oracle_moderation.py             scripts/oci-migration/runtime-source/domain-shadow/oracle_media.py             scripts/oci-migration/runtime-source/domain-shadow/oracle_contextual_messaging.py             scripts/oci-migration/runtime-source/domain-shadow/oracle_moderation.py
+      - name: Run Between Us Oracle contract tests
+        run: |
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_domain_media.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_contextual_messaging.py -v
+          python -m unittest discover -s scripts/oci-migration -p test_oracle_moderation.py -v

@@ -1,0 +1,388 @@
+package com.teswa.mobile.feature.messages
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.teswa.mobile.feature.contextual.ContextualConversation
+import com.teswa.mobile.feature.contextual.ContextualUiState
+import com.teswa.mobile.feature.direct.DirectConversation
+import com.teswa.mobile.feature.direct.DirectUiState
+import com.teswa.mobile.feature.offers.OfferSummary
+import com.teswa.mobile.feature.offers.OffersUiState
+import com.teswa.mobile.feature.offers.offerStatusLabel
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaExchangeMemoryPair
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaMark
+import com.teswa.mobile.ui.system.TeswaMarkIcon
+import com.teswa.mobile.ui.system.TeswaPersonIdentity
+import com.teswa.mobile.ui.system.TeswaSectionHeader
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaStatePill
+
+@Composable
+fun BetweenUsOverview(
+    dealsState: InboxUiState,
+    offersState: OffersUiState,
+    directState: DirectUiState,
+    contextualState: ContextualUiState,
+    onOpenDeal: (DealConversation) -> Unit,
+    onOpenOffer: (OfferSummary) -> Unit,
+    onOpenDirect: (DirectConversation) -> Unit,
+    onOpenContextual: (ContextualConversation) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val deals = (dealsState as? InboxUiState.Content)?.items.orEmpty()
+    val offers = (offersState as? OffersUiState.Content)?.inbox
+    val direct = (directState as? DirectUiState.Ready)?.items.orEmpty()
+    val contextual = (contextualState as? ContextualUiState.Ready)?.items.orEmpty()
+
+    val incoming = offers?.incoming.orEmpty()
+    val sent = offers?.sent.orEmpty()
+    val needsYouOffers = incoming.filter { it.status in actionableOfferStatuses }
+    val needsYouDirect = direct.filter { it.requiresAction }
+    val waitingOffers = sent.filter { it.status in actionableOfferStatuses }
+    val activeDeals = deals.filter { it.status in activeDealStatuses }
+    val conversationDirect = direct.filterNot { it.requiresAction || it.status in terminalDirectStatuses }
+    val historyDeals = deals.filterNot { it.status in activeDealStatuses }
+    val historyOffers = (incoming + sent).filterNot { it.status in actionableOfferStatuses }
+    val loading = dealsState is InboxUiState.Loading ||
+        offersState is OffersUiState.Loading ||
+        directState is DirectUiState.Loading ||
+        contextualState is ContextualUiState.Loading
+    val hasContent = needsYouOffers.isNotEmpty() || needsYouDirect.isNotEmpty() ||
+        waitingOffers.isNotEmpty() || activeDeals.isNotEmpty() ||
+        conversationDirect.isNotEmpty() || contextual.isNotEmpty() ||
+        historyDeals.isNotEmpty() || historyOffers.isNotEmpty()
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = TeswaSpacing.page,
+            vertical = TeswaSpacing.sm,
+        ),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
+    ) {
+        if (loading && !hasContent) {
+            item { TeswaInlineLoading("بنجمع اللي بينكم…") }
+        }
+
+        if (!loading && !hasContent) {
+            item { BetweenUsEmptyRelation() }
+        }
+
+        if (needsYouOffers.isNotEmpty() || needsYouDirect.isNotEmpty()) {
+            item { TeswaSectionHeader("محتاجك") }
+            items(needsYouOffers, key = { "needs-offer:${it.id}" }) { offer ->
+                OfferActivityMoment(offer, "عرض مستني قرارك") { onOpenOffer(offer) }
+            }
+            items(needsYouDirect, key = { "needs-direct:${it.id}" }) { conversation ->
+                ConversationActivityRow(
+                    title = conversation.otherDisplayName ?: conversation.otherUsername ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.otherAvatarUrl,
+                    supporting = "طلب كلام مستني ردك",
+                    contextLabel = "طلب مباشر",
+                    state = directActivityLabel(conversation.status),
+                    unreadCount = conversation.unreadCount,
+                    strong = true,
+                    onClick = { onOpenDirect(conversation) },
+                )
+            }
+        }
+
+        if (waitingOffers.isNotEmpty()) {
+            item { TeswaSectionHeader("مستني") }
+            items(waitingOffers, key = { "waiting-offer:${it.id}" }) { offer ->
+                OfferActivityMoment(offer, "عرضك عند الطرف التاني") { onOpenOffer(offer) }
+            }
+        }
+
+        if (activeDeals.isNotEmpty()) {
+            item { TeswaSectionHeader("بينكم دلوقتي") }
+            items(activeDeals, key = { "active-deal:${it.dealId}" }) { deal ->
+                DealActivityMoment(deal, onClick = { onOpenDeal(deal) })
+            }
+        }
+
+        if (conversationDirect.isNotEmpty() || contextual.isNotEmpty()) {
+            item { TeswaSectionHeader("الكلام") }
+            items(conversationDirect, key = { "direct:${it.id}" }) { conversation ->
+                ConversationActivityRow(
+                    title = conversation.otherDisplayName ?: conversation.otherUsername ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.otherAvatarUrl,
+                    supporting = conversation.lastMessageBody ?: "محادثة مباشرة",
+                    contextLabel = "مباشر",
+                    state = directActivityLabel(conversation.status),
+                    unreadCount = conversation.unreadCount,
+                    onClick = { onOpenDirect(conversation) },
+                )
+            }
+            items(contextual, key = { "contextual:${it.id}" }) { conversation ->
+                ConversationActivityRow(
+                    title = conversation.other.displayName ?: conversation.other.username ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.other.avatarUrl,
+                    supporting = conversation.latestBody
+                        ?: conversation.context.caption
+                        ?: when (conversation.context.mediaType) {
+                            "video" -> "كلام بدأ من فيديو"
+                            "image" -> "كلام بدأ من صورة"
+                            else -> "كلام بدأ من قصة"
+                        },
+                    contextLabel = when {
+                        !conversation.context.caption.isNullOrBlank() ->
+                            "من قصة: ${conversation.context.caption.take(28)}"
+                        conversation.context.mediaType == "video" -> "بدأ من فيديو"
+                        conversation.context.mediaType == "image" -> "بدأ من صورة"
+                        else -> "بدأ من قصة"
+                    },
+                    state = "رد على قصة",
+                    unreadCount = conversation.unreadCount,
+                    onClick = { onOpenContextual(conversation) },
+                )
+            }
+        }
+
+        if (historyDeals.isNotEmpty() || historyOffers.isNotEmpty()) {
+            item { TeswaSectionHeader("أثر اللي حصل") }
+            items(historyDeals.take(4), key = { "history-deal:${it.dealId}" }) { deal ->
+                DealActivityMoment(deal, onClick = { onOpenDeal(deal) }, archived = true)
+            }
+            items(historyOffers.take(4), key = { "history-offer:${it.direction}:${it.id}" }) { offer ->
+                OfferActivityMoment(offer, "عرض محفوظ في السجل") { onOpenOffer(offer) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfferActivityMoment(
+    offer: OfferSummary,
+    supporting: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+    ) {
+        TeswaExchangeMemoryPair(
+            requestedTitle = offer.requestedItem.title,
+            requestedImageUrl = offer.requestedItem.imageUrl,
+            offeredTitle = offer.offeredItem.title,
+            offeredImageUrl = offer.offeredItem.imageUrl,
+            state = offerStatusLabel(offer.status),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = supporting,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TeswaStatePill(
+                text = offerStatusLabel(offer.status),
+                emphasis = if (offer.status == "accepted") TeswaEmphasis.Commitment else TeswaEmphasis.Normal,
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f))
+    }
+}
+
+@Composable
+private fun DealActivityMoment(
+    deal: DealConversation,
+    onClick: () -> Unit,
+    archived: Boolean = false,
+) {
+    val state = dealActivityLabel(deal.status)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        color = if (archived) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .22f)
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .32f)
+        },
+        tonalElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(if (archived) TeswaSpacing.sm else TeswaSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+        ) {
+            TeswaExchangeMemoryPair(
+                requestedTitle = deal.requestedItemTitle,
+                requestedImageUrl = deal.requestedItemImageUrl,
+                offeredTitle = deal.offeredItemTitle,
+                offeredImageUrl = deal.offeredItemImageUrl,
+                state = state,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeswaPersonIdentity(
+                    name = deal.otherDisplayName ?: "مستخدم تِسوى",
+                    avatarUrl = deal.otherAvatarUrl,
+                    supporting = if (archived) "علاقة محفوظة في السجل" else dealNextAction(deal.status),
+                    modifier = Modifier.weight(1f),
+                )
+                TeswaStatePill(
+                    text = state,
+                    emphasis = when {
+                        archived -> TeswaEmphasis.Quiet
+                        deal.status == "completed_pending_confirmation" -> TeswaEmphasis.Strong
+                        else -> TeswaEmphasis.Commitment
+                    },
+                )
+            }
+
+            if (!archived) {
+                val attention = when {
+                    deal.unreadCount > 0 -> "${deal.unreadCount} جديد · افتح العلاقة نفسها"
+                    deal.status == "completed_pending_confirmation" -> "التبديل مش مكتمل بصريًا قبل التأكيدين"
+                    else -> null
+                }
+                attention?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            } else {
+                Text(
+                    text = deal.lastActivityAt.take(10),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationActivityRow(
+    title: String,
+    avatarUrl: String?,
+    supporting: String,
+    contextLabel: String,
+    state: String,
+    unreadCount: Int,
+    strong: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = TeswaSpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TeswaPersonIdentity(
+            name = title,
+            avatarUrl = avatarUrl,
+            supporting = supporting,
+            evidence = contextLabel,
+            modifier = Modifier.weight(1f),
+        )
+        Column(horizontalAlignment = Alignment.End) {
+            TeswaStatePill(
+                text = state,
+                emphasis = if (strong) TeswaEmphasis.Strong else TeswaEmphasis.Quiet,
+            )
+            if (unreadCount > 0) {
+                Text(
+                    "$unreadCount جديد",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BetweenUsEmptyRelation() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .18f),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
+        ) {
+            TeswaMarkIcon(
+                mark = TeswaMark.BetweenUs,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .55f),
+                size = 58.dp,
+            )
+            Text(
+                text = "لسه مفيش حاجة بينكم",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "أول عرض يعمل أول جسر. لما يتقبل، نفس العلاقة تكمل كصفقة بدل ما تبدأ شاشة جديدة.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private val actionableOfferStatuses = setOf("pending", "thinking")
+private val activeDealStatuses = setOf("coordinating", "completed_pending_confirmation")
+private val terminalDirectStatuses = setOf("ignored", "blocked")
+
+private fun dealNextAction(status: String): String = when (status) {
+    "coordinating" -> "نسّقوا التبديل واتفقوا على اللي جاي"
+    "completed_pending_confirmation" -> "الواقع مستني التأكيد التاني"
+    "completed" -> "العلاقة اكتملت واتحفظ أثرها"
+    "cancelled" -> "العلاقة اتقفلت"
+    "disputed" -> "المراجعة محتاجة انتباه"
+    else -> "افتح العلاقة وشوف الخطوة الجاية"
+}
+
+private fun dealActivityLabel(status: String): String = when (status) {
+    "coordinating" -> "بينكم دلوقتي"
+    "completed_pending_confirmation" -> "مستني تأكيد"
+    "completed" -> "اكتمل"
+    "cancelled" -> "اتلغى"
+    "disputed" -> "قيد المراجعة"
+    else -> "صفقة"
+}
+
+private fun directActivityLabel(status: String): String = when (status) {
+    "requested" -> "طلب كلام"
+    "accepted" -> "مباشر"
+    "ignored" -> "اتقفل"
+    "blocked" -> "محظور"
+    else -> "مباشر"
+}

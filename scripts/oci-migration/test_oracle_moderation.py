@@ -17,6 +17,24 @@ class Tests(unittest.TestCase):
   self.assertEqual((status,result),(200,{'ok':True}));self.assertIn('public.report_item',db.calls[0][1]);self.assertNotIn("it's wrong",db.calls[0][1])
   with self.assertRaises(ApiError) as error:api.handle('POST','/v1/moderation/reports/item','Bearer session',{'itemId':ITEM,'reason':'invalid','details':None})
   self.assertEqual(error.exception.code,'invalid_reason');self.assertEqual(len(db.calls),1)
+ def test_contextual_message_report_calls_bound_rpc(self):
+  api,db=self.api({'ok':True})
+  status,result=api.handle('POST','/v1/moderation/reports/contextual-message','Bearer session',{
+   'conversationId':ITEM,'contextualMessageId':REPORT,'reason':'harassment','details':'abuse'})
+  self.assertEqual((status,result),(200,{'ok':True}))
+  self.assertIn('public.report_contextual_message',db.calls[0][1])
+  self.assertNotIn('abuse',db.calls[0][1])
+ def test_contextual_context_is_participant_and_sender_bound(self):
+  api,db=self.api({'state':'ok','context':{
+   'conversationId':ITEM,'messageId':REPORT,
+   'reportedUser':{'id':OTHER,'displayName':'Other','username':'other','avatarUrl':None},
+   'preview':'رسالة مسيئة'}})
+  status,result=api.handle('POST','/v1/moderation/contextual-context','Bearer session',{
+   'conversationId':ITEM,'messageId':REPORT,'reportedUserId':OTHER,'currentUserId':USER})
+  self.assertEqual(status,200);self.assertTrue(result['ok'])
+  self.assertEqual(result['item']['preview'],'رسالة مسيئة')
+  self.assertIn('contextual_messages',db.calls[0][1])
+  self.assertIn('sender_id',db.calls[0][1])
  def test_context_actor_spoofing_never_queries(self):
   api,db=self.api()
   with self.assertRaises(ApiError):api.handle('POST','/v1/moderation/deal-context','Bearer session',{'dealId':ITEM,'currentUserId':OTHER})

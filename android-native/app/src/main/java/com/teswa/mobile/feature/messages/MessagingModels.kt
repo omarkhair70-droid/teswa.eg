@@ -13,6 +13,8 @@ data class DealConversation(
     val latestMessage: DealMessagePreview?,
     val unreadCount: Int,
     val lastActivityAt: String,
+    val requestedItemImageUrl: String? = null,
+    val offeredItemImageUrl: String? = null,
 )
 
 data class DealMessagePreview(

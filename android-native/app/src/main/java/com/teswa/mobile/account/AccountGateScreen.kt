@@ -4,14 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,8 +19,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaLayout
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSecondaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
 import kotlinx.coroutines.launch
 
 @Composable
@@ -59,13 +61,13 @@ fun AccountGateScreen(
     if (current is AccountGateState.Error && current.sessionExpired) {
         LaunchedEffect(current.session.accessToken) { onSignOut() }
         Column(
-            modifier = modifier.fillMaxSize(),
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = TeswaLayout.ScreenHorizontal),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(14.dp))
-            Text("انتهت الجلسة. بنرجعك لتسجيل الدخول…")
+            TeswaInlineLoading("انتهت الجلسة. بنرجعك لتسجيل الدخول…")
         }
         return
     }
@@ -73,7 +75,10 @@ fun AccountGateScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 28.dp, vertical = 36.dp),
+            .padding(
+                horizontal = TeswaLayout.ScreenHorizontal,
+                vertical = TeswaSpacing.xxl,
+            ),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -82,92 +87,106 @@ fun AccountGateScreen(
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(TeswaSpacing.lg))
 
         when (current) {
-            AccountGateState.Checking -> {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(14.dp))
-                Text("جاري التحقق من حسابك…")
-            }
+            AccountGateState.Checking -> TeswaInlineLoading("بنتأكد إن حسابك جاهز…")
 
             is AccountGateState.NeedsProfile -> {
+                val cleanName = displayName.trim()
+                val cleanUsername = username.trim().lowercase()
+                val nameError = if (displayName.isNotEmpty() && cleanName.isBlank()) "الاسم الظاهر مطلوب" else null
+                val usernameError = when {
+                    username.isEmpty() -> null
+                    !USERNAME_PATTERN.matches(cleanUsername) -> "3–30: حروف إنجليزية صغيرة أو أرقام أو _"
+                    else -> null
+                }
+                val canSubmit = cleanName.isNotBlank() && USERNAME_PATTERN.matches(cleanUsername)
+
                 Text(
-                    text = "كمّل ملفك",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = "كمّل هويتك",
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                 )
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
+                Spacer(Modifier.height(TeswaSpacing.xs))
+                Text(
+                    text = "دي البيانات اللي الناس هتشوفها لما حاجة بينكم تبدأ.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(TeswaSpacing.xl))
+
+                TeswaTextField(
                     value = displayName,
-                    onValueChange = { displayName = it },
-                    label = { Text("الاسم الظاهر") },
-                    singleLine = true,
+                    onValueChange = { displayName = it.take(60) },
+                    label = "الاسم الظاهر",
+                    errorText = nameError,
                 )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaTextField(
                     value = username,
-                    onValueChange = { username = it.lowercase() },
-                    label = { Text("اسم المستخدم") },
-                    supportingText = { Text("3–30: حروف إنجليزية صغيرة أو أرقام أو _") },
-                    singleLine = true,
+                    onValueChange = { username = it.lowercase().take(30) },
+                    label = "اسم المستخدم",
+                    supportingText = "3–30: حروف إنجليزية صغيرة أو أرقام أو _",
+                    errorText = usernameError,
                 )
-                Spacer(Modifier.height(16.dp))
-                Button(
+                Spacer(Modifier.height(TeswaSpacing.lg))
+                TeswaPrimaryAction(
+                    text = "حفظ والمتابعة",
+                    enabled = canSubmit,
                     onClick = {
                         state = AccountGateState.Checking
                         scope.launch {
-                            state = repository.saveProfile(current.session, displayName, username)
+                            state = repository.saveProfile(current.session, cleanName, cleanUsername)
                         }
                     },
-                ) {
-                    Text("حفظ والمتابعة")
-                }
+                )
             }
 
             is AccountGateState.NeedsPolicies -> {
                 Text(
                     text = "قبل ما تكمل",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "لازم توافق على شروط الاستخدام وإرشادات المجتمع الحالية (${RequiredPolicies.VERSION}).",
                     textAlign = TextAlign.Center,
                 )
-                Spacer(Modifier.height(16.dp))
-                Button(
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                Text(
+                    text = "لازم توافق على شروط الاستخدام وإرشادات المجتمع الحالية (${RequiredPolicies.VERSION}).",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(TeswaSpacing.xl))
+                TeswaPrimaryAction(
+                    text = "أوافق وأكمل",
                     onClick = {
                         state = AccountGateState.Checking
                         scope.launch { state = repository.acceptPolicies(current.session) }
                     },
-                ) {
-                    Text("أوافق وأكمل")
-                }
+                )
             }
 
             is AccountGateState.Error -> {
-                Text(
-                    text = current.message,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
+                TeswaInlineMessage(
+                    title = "الحساب لسه مش جاهز",
+                    body = current.message,
+                    emphasis = TeswaEmphasis.Strong,
+                    actionLabel = "حاول تاني",
+                    onAction = ::refresh,
                 )
-                Spacer(Modifier.height(14.dp))
-                Button(onClick = ::refresh) {
-                    Text("إعادة المحاولة")
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
+                Spacer(Modifier.height(TeswaSpacing.sm))
+                TeswaSecondaryAction(
+                    text = "تسجيل الخروج",
                     onClick = { scope.launch { onSignOut() } },
-                ) {
-                    Text("تسجيل الخروج")
-                }
+                )
             }
 
             is AccountGateState.Ready -> Unit
         }
     }
 }
+
+private val USERNAME_PATTERN = Regex("^[a-z0-9_]{3,30}$")

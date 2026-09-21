@@ -33,6 +33,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.teswa.mobile.auth.AuthSession
+import com.teswa.mobile.ui.system.TeswaActionSheet
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaInlineLoading
+import com.teswa.mobile.ui.system.TeswaInlineMessage
+import com.teswa.mobile.ui.system.TeswaPrimaryAction
+import com.teswa.mobile.ui.system.TeswaSpacing
+import com.teswa.mobile.ui.system.TeswaTextField
 import kotlinx.coroutines.launch
 
 private sealed interface ReportingUiState {
@@ -138,85 +146,81 @@ fun ReportingDialog(
     LaunchedEffect(holder.session.accessToken) { onSessionUpdated(holder.session) }
     LaunchedEffect(holder.sessionExpired) { if (holder.sessionExpired) onSessionExpired() }
 
-    AlertDialog(
-        onDismissRequest = { if (!holder.working) onDismiss() },
-        title = { Text(if (holder.state is ReportingUiState.Submitted) "تم إرسال البلاغ" else "إرسال بلاغ") },
-        text = {
-            when (val state = holder.state) {
-                ReportingUiState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator()
-                    Spacer(Modifier.padding(6.dp))
-                    Text("بنتأكد من سياق البلاغ…")
-                }
-                is ReportingUiState.Error -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(state.message, color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = { scope.launch { holder.prepare() } }) { Text("حاول تاني") }
-                }
-                ReportingUiState.Submitted -> Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f),
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("وصل البلاغ لفريق المراجعة.", fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(5.dp))
-                        Text("مش محتاج تعمل أي خطوة إضافية دلوقتي.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                is ReportingUiState.Ready -> Column(
-                    Modifier.fillMaxWidth().heightIn(max = 470.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(state.context.subject, fontWeight = FontWeight.Bold)
-                    state.context.preview?.takeIf(String::isNotBlank)?.let { preview ->
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f),
-                        ) {
-                            Text(preview, Modifier.fillMaxWidth().padding(10.dp), style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Text("إيه السبب؟", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    reasonsFor(target).forEach { option ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable(enabled = !holder.working) { holder.selectReason(option) },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = holder.reason == option,
-                                onClick = { holder.selectReason(option) },
-                                enabled = !holder.working,
-                            )
-                            Text(option.labelAr, Modifier.weight(1f))
-                        }
-                    }
-                    OutlinedTextField(
-                        value = holder.details,
-                        onValueChange = holder::updateDetails,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("تفاصيل إضافية — اختياري") },
-                        minLines = 3,
-                        maxLines = 6,
-                        enabled = !holder.working,
-                        supportingText = { Text("${holder.details.length} / 1000") },
-                    )
-                    holder.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                }
+    TeswaActionSheet(
+        title = if (holder.state is ReportingUiState.Submitted) "تم إرسال البلاغ" else "إرسال بلاغ",
+        supporting = if (holder.state is ReportingUiState.Ready) "اختار السبب الأقرب للسياق. البلاغ بيروح للمراجعة ومش بيظهر للطرف التاني." else null,
+        onDismiss = { if (!holder.working) onDismiss() },
+    ) {
+        when (val state = holder.state) {
+            ReportingUiState.Loading -> TeswaInlineLoading("بنتأكد من سياق البلاغ…")
+            is ReportingUiState.Error -> TeswaInlineMessage(
+                title = "مش قادرين نجهز البلاغ",
+                body = state.message,
+                icon = TeswaIcons.Refresh,
+                emphasis = TeswaEmphasis.Strong,
+                actionLabel = "حاول تاني",
+                onAction = { scope.launch { holder.prepare() } },
+            )
+            ReportingUiState.Submitted -> Column(verticalArrangement = Arrangement.spacedBy(TeswaSpacing.md)) {
+                TeswaInlineMessage(
+                    title = "البلاغ وصل للمراجعة",
+                    body = "مش محتاج تعمل خطوة إضافية دلوقتي.",
+                    icon = TeswaIcons.Safety,
+                    emphasis = TeswaEmphasis.Normal,
+                )
+                TeswaPrimaryAction(text = "تم", onClick = onDismiss)
             }
-        },
-        confirmButton = {
-            when (holder.state) {
-                ReportingUiState.Submitted -> Button(onClick = onDismiss) { Text("تم") }
-                is ReportingUiState.Ready -> Button(
+            is ReportingUiState.Ready -> Column(
+                Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            ) {
+                TeswaInlineMessage(
+                    title = state.context.subject,
+                    body = state.context.preview?.takeIf(String::isNotBlank) ?: "البلاغ مرتبط بالسياق اللي فتحته منه.",
+                    icon = TeswaIcons.Report,
+                )
+                Text("إيه السبب؟", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                reasonsFor(target).forEach { option ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable(enabled = !holder.working) { holder.selectReason(option) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = holder.reason == option,
+                            onClick = { holder.selectReason(option) },
+                            enabled = !holder.working,
+                        )
+                        Text(option.labelAr, Modifier.weight(1f))
+                    }
+                }
+                TeswaTextField(
+                    value = holder.details,
+                    onValueChange = holder::updateDetails,
+                    label = "تفاصيل إضافية — اختياري",
+                    supportingText = "${holder.details.length} / 1000",
+                    singleLine = false,
+                    minLines = 3,
+                    maxLines = 6,
                     enabled = !holder.working,
+                )
+                holder.message?.let { message ->
+                    TeswaInlineMessage(
+                        title = "البلاغ ما اتبعتش",
+                        body = message,
+                        emphasis = TeswaEmphasis.Strong,
+                    )
+                }
+                TeswaPrimaryAction(
+                    text = "إرسال البلاغ",
+                    icon = TeswaIcons.Report,
+                    enabled = holder.reason != null,
+                    loading = holder.working,
                     onClick = { scope.launch { holder.submit() } },
-                ) { Text(if (holder.working) "جاري الإرسال…" else "إرسال البلاغ") }
-                else -> Unit
+                )
+                TextButton(onClick = onDismiss, enabled = !holder.working, modifier = Modifier.fillMaxWidth()) {
+                    Text("إلغاء")
+                }
             }
-        },
-        dismissButton = {
-            if (holder.state !is ReportingUiState.Submitted) {
-                TextButton(onClick = onDismiss, enabled = !holder.working) { Text("إلغاء") }
-            }
-        },
-    )
+        }
+    }
 }

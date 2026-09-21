@@ -59,12 +59,23 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="teswa" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="teswa.eg" />
-                <data android:scheme="https" android:host="www.teswa.eg" />
+                <data
+                    android:scheme="https"
+                    android:host="teswa.eg"
+                    android:pathPrefix="/item/" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="www.teswa.eg"
+                    android:pathPrefix="/item/" />
             </intent-filter>
         </activity>
     </application>

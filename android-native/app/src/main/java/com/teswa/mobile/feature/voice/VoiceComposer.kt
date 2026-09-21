@@ -25,6 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.teswa.mobile.ui.system.TeswaEmphasis
+import com.teswa.mobile.ui.system.TeswaIconAction
+import com.teswa.mobile.ui.system.TeswaIcons
+import com.teswa.mobile.ui.system.TeswaStatePill
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -74,7 +78,11 @@ fun VoiceComposer(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         when {
             recording -> {
-                Text("● ${formatDuration(elapsedMs)}")
+                TeswaStatePill(
+                    text = "تسجيل ${formatDuration(elapsedMs)}",
+                    icon = TeswaIcons.Voice,
+                    emphasis = TeswaEmphasis.Strong,
+                )
                 OutlinedButton(onClick = {
                     recorder.cancel()
                     recording = false
@@ -87,26 +95,45 @@ fun VoiceComposer(
                 }) { Text("إيقاف") }
             }
             draft != null -> {
-                Text(formatDuration(requireNotNull(draft).durationMs))
-                OutlinedButton(enabled = !sending, onClick = {
+                TeswaStatePill(
+                    text = "صوت ${formatDuration(requireNotNull(draft).durationMs)}",
+                    icon = TeswaIcons.Voice,
+                )
+                TeswaIconAction(
+                    icon = TeswaIcons.Delete,
+                    contentDescription = "حذف التسجيل",
+                    enabled = !sending,
+                    onClick = {
                     draft?.discard()
                     draft = null
-                }) { Text("حذف") }
-                Button(enabled = !sending, onClick = {
-                    val value = draft ?: return@Button
-                    scope.launch {
-                        if (onSend(value)) {
-                            value.discard()
-                            if (draft === value) draft = null
+                })
+                TeswaIconAction(
+                    icon = TeswaIcons.Send,
+                    contentDescription = if (sending) "جاري إرسال الصوت" else "إرسال الصوت",
+                    enabled = !sending,
+                    onClick = {
+                    val value = draft
+                    if (value != null) {
+                        scope.launch {
+                            if (onSend(value)) {
+                                value.discard()
+                                if (draft === value) draft = null
+                            }
                         }
                     }
-                }) { Text(if (sending) uploadProgress?.let { "$it%" } ?: "…" else "إرسال الصوت") }
+                })
+                if (sending) Text(uploadProgress?.let { "$it%" } ?: "…")
             }
             else -> {
-                OutlinedButton(enabled = enabled && !sending, onClick = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) begin()
-                    else permission.launch(Manifest.permission.RECORD_AUDIO)
-                }) { Text("صوت") }
+                TeswaIconAction(
+                    icon = TeswaIcons.Voice,
+                    contentDescription = "رسالة صوتية",
+                    enabled = enabled && !sending,
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) begin()
+                        else permission.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                )
                 Spacer(Modifier.width(2.dp))
             }
         }
