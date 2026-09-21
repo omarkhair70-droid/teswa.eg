@@ -127,6 +127,7 @@ fun MessagingScreen(
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf(InboxMode.OVERVIEW) }
     var offerDirection by remember { mutableStateOf(com.teswa.mobile.feature.offers.OfferDirection.INCOMING) }
+    var selectedOfferId by remember { mutableStateOf<String?>(null) }
     val focusedState = holder.selectedConversation != null ||
         directHolder.selected != null ||
         directHolder.composeTarget != null ||
@@ -138,7 +139,10 @@ fun MessagingScreen(
             holder.selectedConversation != null -> holder.closeThread()
             directHolder.selected != null || directHolder.composeTarget != null -> directHolder.close()
             contextualHolder.thread != null -> contextualHolder.close()
-            mode != InboxMode.OVERVIEW -> mode = InboxMode.OVERVIEW
+            mode != InboxMode.OVERVIEW -> {
+                selectedOfferId = null
+                mode = InboxMode.OVERVIEW
+            }
         }
     }
 
@@ -176,6 +180,7 @@ fun MessagingScreen(
                 onExternalTargetConsumed()
             }
             initialOffers -> {
+                selectedOfferId = null
                 mode = InboxMode.OFFERS
                 onExternalTargetConsumed()
             }
@@ -252,7 +257,10 @@ fun MessagingScreen(
         if (mode != InboxMode.OVERVIEW) {
             BetweenUsDrillDownBack(
                 mode = mode,
-                onBack = { mode = InboxMode.OVERVIEW },
+                onBack = {
+                    selectedOfferId = null
+                    mode = InboxMode.OVERVIEW
+                },
             )
         }
 
@@ -263,7 +271,11 @@ fun MessagingScreen(
                 directState = directHolder.state,
                 contextualState = contextualHolder.state,
                 onOpenDeal = { conversation -> scope.launch { holder.open(conversation) } },
-                onOpenOffer = { direction -> offerDirection = direction; mode = InboxMode.OFFERS },
+                onOpenOffer = { offer ->
+                    offerDirection = offer.direction
+                    selectedOfferId = offer.id
+                    mode = InboxMode.OFFERS
+                },
                 onOpenDirect = { conversation -> mode = InboxMode.DIRECT; scope.launch { directHolder.open(conversation) } },
                 onOpenContextual = { conversation -> mode = InboxMode.CONTEXTUAL; scope.launch { contextualHolder.open(conversation) } },
                 modifier = Modifier.weight(1f),
@@ -274,8 +286,10 @@ fun MessagingScreen(
             OffersContent(
                 holder = offersHolder,
                 initialDirection = offerDirection,
+                initialOfferId = selectedOfferId,
                 onOpenDeal = { dealId ->
                     scope.launch {
+                        selectedOfferId = null
                         mode = InboxMode.MESSAGES
                         holder.openDeal(dealId)
                     }

@@ -55,15 +55,22 @@ fun OffersContent(
     onOpenDeal: (String) -> Unit,
     modifier: Modifier = Modifier,
     initialDirection: OfferDirection = OfferDirection.INCOMING,
+    initialOfferId: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     var direction by remember(initialDirection) { mutableStateOf(initialDirection) }
+    var focusedOfferId by remember(initialOfferId) { mutableStateOf(initialOfferId) }
     var confirmation by remember { mutableStateOf<Pair<String, OfferAction>?>(null) }
 
     Column(modifier.fillMaxSize()) {
-        OfferLaneHeader(direction)
-        DirectionPicker(direction) { direction = it }
+        OfferLaneHeader(direction, focused = focusedOfferId != null)
+        if (focusedOfferId == null) {
+            DirectionPicker(direction) { selected ->
+                direction = selected
+                focusedOfferId = null
+            }
+        }
         holder.message?.let { message ->
             TeswaInlineMessage(
                 title = "العروض ما اتحدثتش",
@@ -80,7 +87,8 @@ fun OffersContent(
             is OffersUiState.Error -> OfferCenterState(state.message) { scope.launch { holder.load() } }
             is OffersUiState.Content -> {
                 val rows = if (direction == OfferDirection.INCOMING) state.inbox.incoming else state.inbox.sent
-                if (rows.isEmpty()) {
+                val visibleRows = focusedOfferId?.let { id -> rows.filter { it.id == id } } ?: rows
+                if (visibleRows.isEmpty()) {
                     OfferCenterState(
                         if (direction == OfferDirection.INCOMING) {
                             "مفيش علاقات مستنية قرارك دلوقتي."
@@ -97,7 +105,7 @@ fun OffersContent(
                         ),
                         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xl),
                     ) {
-                        items(rows, key = { "${it.direction}:${it.id}" }) { offer ->
+                        items(visibleRows, key = { "${it.direction}:${it.id}" }) { offer ->
                             OfferMoment(
                                 offer = offer,
                                 working = holder.actingOfferId == offer.id,
@@ -159,7 +167,7 @@ fun OffersContent(
 }
 
 @Composable
-private fun OfferLaneHeader(direction: OfferDirection) {
+private fun OfferLaneHeader(direction: OfferDirection, focused: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -174,12 +182,22 @@ private fun OfferLaneHeader(direction: OfferDirection) {
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (direction == OfferDirection.INCOMING) "علاقات محتاجة قرارك" else "علاقات مستنية الطرف التاني",
+                text = if (focused) {
+                    "العرض اللي بينكم"
+                } else if (direction == OfferDirection.INCOMING) {
+                    "علاقات محتاجة قرارك"
+                } else {
+                    "علاقات مستنية الطرف التاني"
+                },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "كل عرض هنا حاجتين اتقابلوا لأول مرة.",
+                text = if (focused) {
+                    "دي نفس العلاقة اللي ضغطت عليها من بينا."
+                } else {
+                    "كل عرض هنا حاجتين اتقابلوا لأول مرة."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

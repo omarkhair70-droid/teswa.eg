@@ -22,7 +22,6 @@ import com.teswa.mobile.feature.contextual.ContextualConversation
 import com.teswa.mobile.feature.contextual.ContextualUiState
 import com.teswa.mobile.feature.direct.DirectConversation
 import com.teswa.mobile.feature.direct.DirectUiState
-import com.teswa.mobile.feature.offers.OfferDirection
 import com.teswa.mobile.feature.offers.OfferSummary
 import com.teswa.mobile.feature.offers.OffersUiState
 import com.teswa.mobile.feature.offers.offerStatusLabel
@@ -43,7 +42,7 @@ fun BetweenUsOverview(
     directState: DirectUiState,
     contextualState: ContextualUiState,
     onOpenDeal: (DealConversation) -> Unit,
-    onOpenOffer: (OfferDirection) -> Unit,
+    onOpenOffer: (OfferSummary) -> Unit,
     onOpenDirect: (DirectConversation) -> Unit,
     onOpenContextual: (ContextualConversation) -> Unit,
     modifier: Modifier = Modifier,
@@ -90,7 +89,7 @@ fun BetweenUsOverview(
         if (needsYouOffers.isNotEmpty() || needsYouDirect.isNotEmpty()) {
             item { TeswaSectionHeader("محتاجك") }
             items(needsYouOffers, key = { "needs-offer:${it.id}" }) { offer ->
-                OfferActivityMoment(offer, "عرض مستني قرارك") { onOpenOffer(OfferDirection.INCOMING) }
+                OfferActivityMoment(offer, "عرض مستني قرارك") { onOpenOffer(offer) }
             }
             items(needsYouDirect, key = { "needs-direct:${it.id}" }) { conversation ->
                 ConversationActivityRow(
@@ -109,7 +108,7 @@ fun BetweenUsOverview(
         if (waitingOffers.isNotEmpty()) {
             item { TeswaSectionHeader("مستني") }
             items(waitingOffers, key = { "waiting-offer:${it.id}" }) { offer ->
-                OfferActivityMoment(offer, "عرضك عند الطرف التاني") { onOpenOffer(OfferDirection.SENT) }
+                OfferActivityMoment(offer, "عرضك عند الطرف التاني") { onOpenOffer(offer) }
             }
         }
 
@@ -164,7 +163,7 @@ fun BetweenUsOverview(
                 DealActivityMoment(deal, onClick = { onOpenDeal(deal) }, archived = true)
             }
             items(historyOffers.take(4), key = { "history-offer:${it.direction}:${it.id}" }) { offer ->
-                OfferActivityMoment(offer, "عرض محفوظ في السجل") { onOpenOffer(offer.direction) }
+                OfferActivityMoment(offer, "عرض محفوظ في السجل") { onOpenOffer(offer) }
             }
         }
     }
