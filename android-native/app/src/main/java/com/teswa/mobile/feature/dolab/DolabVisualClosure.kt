@@ -161,9 +161,10 @@ internal fun DolabPrivateTraceRail(
     item: DolabItem,
     notes: List<DolabNote>,
     media: List<DolabMedia>,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
     ) {
         Row(
@@ -257,9 +258,10 @@ internal fun DolabPublishThreshold(
     working: Boolean,
     enabled: Boolean,
     onPublish: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .38f),
         shape = RoundedCornerShape(TeswaRadius.hero),
     ) {
