@@ -44,7 +44,7 @@ class AndroidDolabDirectMessagingBridge(
         session: AuthSession,
         conversation: DirectConversation,
         message: DirectMessage,
-    ): DolabResult<DolabItem> =
+    ): DolabResult<Unit> =
         if (message.messageType == "voice" && !message.audioStoragePath.isNullOrBlank()) {
             saveVoice(session, conversation, message)
         } else {
