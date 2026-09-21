@@ -451,82 +451,74 @@ private fun betweenUsRootSummary(
 }
 
 @Composable
-private fun DealConversationRow(conversation: DealConversation, onOpen: () -> Unit) {
+private fun DealConversationRow(
+    conversation: DealConversation,
+    onOpen: () -> Unit,
+) {
     val unread = conversation.unreadCount > 0
-    Column(
+    val archived = conversation.status !in setOf("coordinating", "completed_pending_confirmation")
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .padding(vertical = TeswaSpacing.xs),
-        verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+            .clickable(onClick = onOpen),
+        color = if (archived) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .18f)
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .24f)
+        },
+        shape = MaterialTheme.shapes.large,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.md),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.padding(TeswaSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
         ) {
-            TeswaMarkIcon(
-                mark = TeswaMark.BetweenUs,
-                color = if (conversation.status == "completed") {
-                    MaterialTheme.colorScheme.secondary
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                size = 34.dp,
+            TeswaExchangeMemoryPair(
+                requestedTitle = conversation.requestedItemTitle,
+                requestedImageUrl = conversation.requestedItemImageUrl,
+                offeredTitle = conversation.offeredItemTitle,
+                offeredImageUrl = conversation.offeredItemImageUrl,
+                state = dealStatusPill(conversation.status),
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(TeswaSpacing.xxs),
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(TeswaSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "${conversation.requestedItemTitle} ↔ ${conversation.offeredItemTitle}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = buildString {
-                        append(conversation.otherDisplayName ?: "مستخدم تِسوى")
-                        append(" · ")
-                        append(
-                            when {
-                                conversation.latestMessage == null -> "لسه مفيش تنسيق"
-                                conversation.latestMessage.messageType == "voice" -> "آخر أثر رسالة صوتية"
-                                else -> conversation.latestMessage.body
-                            },
-                        )
+                TeswaPersonIdentity(
+                    name = conversation.otherDisplayName ?: "مستخدم تِسوى",
+                    avatarUrl = conversation.otherAvatarUrl,
+                    supporting = when {
+                        archived -> "علاقة محفوظة · ${shortDate(conversation.lastActivityAt)}"
+                        conversation.status == "completed_pending_confirmation" ->
+                            "الواقع مستني التأكيد التاني"
+                        conversation.latestMessage?.messageType == "voice" ->
+                            "آخر أثر: رسالة صوتية"
+                        !conversation.latestMessage?.body.isNullOrBlank() ->
+                            conversation.latestMessage!!.body
+                        else -> "لسه التنسيق بيبدأ"
                     },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-            }
-            TeswaStatePill(
-                text = dealStatusPill(conversation.status),
-                emphasis = when (conversation.status) {
-                    "completed" -> TeswaEmphasis.Commitment
-                    "cancelled", "disputed" -> TeswaEmphasis.Quiet
-                    else -> TeswaEmphasis.Strong
-                },
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = shortDate(conversation.lastActivityAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (unread) {
-                TeswaArchiveLabel("${conversation.unreadCount.coerceAtMost(99)} جديد")
+                Column(horizontalAlignment = Alignment.End) {
+                    TeswaStatePill(
+                        text = dealStatusPill(conversation.status),
+                        emphasis = when {
+                            archived -> TeswaEmphasis.Quiet
+                            conversation.status == "completed_pending_confirmation" -> TeswaEmphasis.Strong
+                            else -> TeswaEmphasis.Commitment
+                        },
+                    )
+                    if (unread) {
+                        Text(
+                            text = "${conversation.unreadCount.coerceAtMost(99)} جديد",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
     }
 }
 
