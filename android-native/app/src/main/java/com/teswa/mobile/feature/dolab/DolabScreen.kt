@@ -212,8 +212,20 @@ private fun DolabShelf(
                     item {
                         DolabPrivateCollection(
                             holder = holder,
-                            items = visible,
+                            items = visible.take(3),
                             onOpen = onOpen,
+                        )
+                    }
+                    items(
+                        items = visible.drop(3),
+                        key = { "dolab-object-${it.id}" },
+                    ) { objectItem ->
+                        DolabDenseObject(
+                            holder = holder,
+                            item = objectItem,
+                            media = state.workspace.mediaFor(objectItem.id),
+                            notesCount = state.workspace.notesFor(objectItem.id).size,
+                            onOpen = { onOpen(objectItem) },
                         )
                     }
                 }

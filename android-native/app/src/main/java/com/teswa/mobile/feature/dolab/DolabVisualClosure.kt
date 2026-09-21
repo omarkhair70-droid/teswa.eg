@@ -815,15 +815,6 @@ internal fun DolabPrivateCollection(
             }
         }
 
-        items.drop(3).forEach { item ->
-            DolabDenseObject(
-                holder = holder,
-                item = item,
-                media = workspace?.mediaFor(item.id).orEmpty(),
-                notesCount = workspace?.notesFor(item.id)?.size ?: 0,
-                onOpen = { onOpen(item) },
-            )
-        }
     }
 }
 
@@ -981,7 +972,7 @@ private fun DolabShelfSnapshot(
 }
 
 @Composable
-private fun DolabDenseObject(
+internal fun DolabDenseObject(
     holder: DolabStateHolder,
     item: DolabItem,
     media: List<DolabMedia>,
